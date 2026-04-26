@@ -10,6 +10,15 @@ interface TidalTokens {
 
 const KV_KEY = 'tidal:session';
 const AUTH_URL = 'https://auth.tidal.com/v1/oauth2/token';
+const DEFAULT_COUNTRY_CODE = 'BR';
+const DEFAULT_LOCALE = 'en_US';
+const DEFAULT_CLIENT_VERSION = '2026.4.23';
+
+interface TidalJwtPayload {
+  uid?: number;
+  cc?: string;
+  exp?: number;
+}
 
 export class TidalAuth {
   constructor(private env: Env) {}
@@ -26,6 +35,10 @@ export class TidalAuth {
     }
 
     if (this.env.TIDAL_SESSION_TOKEN) {
+      const payload = this.decodeJwtPayload(this.env.TIDAL_SESSION_TOKEN);
+      if (payload?.exp && payload.exp <= Date.now() / 1000 + 60) {
+        throw new Error('Сессия Tidal истекла. Обновите TIDAL_SESSION_TOKEN.');
+      }
       return this.env.TIDAL_SESSION_TOKEN;
     }
 
@@ -34,7 +47,16 @@ export class TidalAuth {
 
   async getCountryCode(): Promise<string> {
     const cached = await this.getCachedSession();
-    return cached?.countryCode ?? 'US';
+    const tokenCountry = this.decodeJwtPayload(cached?.accessToken ?? this.env.TIDAL_SESSION_TOKEN)?.cc;
+    return cached?.countryCode ?? tokenCountry ?? this.env.TIDAL_COUNTRY_CODE ?? DEFAULT_COUNTRY_CODE;
+  }
+
+  getLocale(): string {
+    return this.env.TIDAL_LOCALE ?? DEFAULT_LOCALE;
+  }
+
+  getClientVersion(): string {
+    return this.env.TIDAL_CLIENT_VERSION ?? DEFAULT_CLIENT_VERSION;
   }
 
   async initSession(accessToken: string, refreshToken: string): Promise<TidalTokens> {
@@ -93,16 +115,43 @@ export class TidalAuth {
   }
 
   private async fetchSessionInfo(accessToken: string): Promise<{ userId: number; countryCode: string }> {
-    const res = await fetch('https://api.tidal.com/v1/sessions', {
-      headers: { Authorization: `Bearer ${accessToken}` },
+    const fallback = this.decodeJwtPayload(accessToken);
+    const fallbackCountry = fallback?.cc ?? this.env.TIDAL_COUNTRY_CODE ?? DEFAULT_COUNTRY_CODE;
+    const res = await fetch('https://tidal.com/v1/sessions', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        'x-tidal-client-version': this.getClientVersion(),
+      },
     });
 
     if (!res.ok) {
-      return { userId: 0, countryCode: 'US' };
+      return { userId: fallback?.uid ?? 0, countryCode: fallbackCountry };
     }
 
     const data = await res.json<{ userId: number; countryCode: string }>();
     return { userId: data.userId, countryCode: data.countryCode };
+  }
+
+  private decodeJwtPayload(token?: string): TidalJwtPayload | null {
+    if (!token) return null;
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+
+    try {
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, '=');
+      const parsed = JSON.parse(atob(padded)) as unknown;
+      if (typeof parsed !== 'object' || parsed === null) return null;
+      const record = parsed as Record<string, unknown>;
+      return {
+        uid: typeof record.uid === 'number' ? record.uid : undefined,
+        cc: typeof record.cc === 'string' ? record.cc : undefined,
+        exp: typeof record.exp === 'number' ? record.exp : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private async getCachedSession(): Promise<TidalTokens | null> {

@@ -2,6 +2,19 @@ import { useAuthStore } from '@/store/auth';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
+function parseErrorMessage(text: string): string {
+  try {
+    const data = JSON.parse(text) as unknown;
+    if (typeof data === 'object' && data !== null && 'error' in data) {
+      const error = (data as { error?: unknown }).error;
+      if (typeof error === 'string') return error;
+    }
+  } catch {
+    return text;
+  }
+  return text;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().accessToken;
   const headers: Record<string, string> = {
@@ -20,14 +33,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (refreshed) {
       headers['Authorization'] = `Bearer ${useAuthStore.getState().accessToken}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
-      if (!retry.ok) throw new Error(await retry.text());
+      if (!retry.ok) throw new Error(parseErrorMessage(await retry.text()));
       return retry.json() as Promise<T>;
     }
     useAuthStore.getState().logout();
-    throw new Error('Unauthorized');
+    throw new Error('Требуется повторный вход');
   }
 
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(parseErrorMessage(await res.text()));
   return res.json() as Promise<T>;
 }
 

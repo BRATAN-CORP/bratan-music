@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
 interface SearchBarProps {
   value: string;
@@ -37,23 +38,21 @@ export function SearchBar({ value, onChange, placeholder = 'Поиск трек�
 
   return (
     <div
-      className="flex items-center gap-2 px-4 py-3 rounded-xl"
-      style={{ backgroundColor: 'var(--color-bg-subtle)', border: '1px solid var(--color-border)' }}
+      className="glass-panel group flex items-center gap-3 rounded-[2rem] px-5 py-3 transition-all duration-300 focus-within:shadow-[var(--shadow-glow)]"
     >
-      <Search size={18} style={{ color: 'var(--color-text-subtle)', flexShrink: 0 }} />
+      <Search size={20} className="shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary" />
       <input
         ref={inputRef}
         type="text"
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 bg-transparent outline-none text-sm"
-        style={{ color: 'var(--color-text)' }}
+        className="h-10 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
       />
       {local && (
-        <button onClick={handleClear} className="hover:opacity-70">
-          <X size={16} style={{ color: 'var(--color-text-subtle)' }} />
-        </button>
+        <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="h-9 w-9">
+          <X size={16} />
+        </Button>
       )}
     </div>
   );

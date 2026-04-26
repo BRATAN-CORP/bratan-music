@@ -1,6 +1,6 @@
 import { TidalAuth } from './TidalAuth';
 
-const API_BASE = 'https://api.tidal.com/v1';
+const API_BASE = 'https://tidal.com/v1';
 
 interface PlaybackInfo {
   trackId: number;
@@ -46,6 +46,7 @@ export class TidalWeb {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
+        'x-tidal-client-version': this.auth.getClientVersion(),
       },
     });
 

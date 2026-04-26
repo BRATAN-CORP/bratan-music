@@ -19,9 +19,14 @@ search.get('/', async (c) => {
     return c.json({ error: 'Допустимые значения filter: all, tracks, albums, artists' }, 400);
   }
 
-  const tidal = new TidalService(c.env);
-  const results = await tidal.search(query.trim(), filter);
-  return c.json(results);
+  try {
+    const tidal = new TidalService(c.env);
+    const results = await tidal.search(query.trim(), filter);
+    return c.json(results);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Ошибка Tidal API';
+    return c.json({ error: message }, 502);
+  }
 });
 
 export { search };

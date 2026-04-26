@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useCreatePlaylist } from '@/hooks/useLibrary';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 
 interface CreatePlaylistDialogProps {
   open: boolean;
@@ -23,46 +26,33 @@ export function CreatePlaylistDialog({ open, onClose }: CreatePlaylistDialogProp
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
       style={{ backgroundColor: 'var(--color-overlay)' }}
       onClick={onClose}
     >
-      <div
-        className="w-full max-w-sm mx-4 p-6 rounded-2xl"
-        style={{ backgroundColor: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">Новый плейлист</h2>
-          <button onClick={onClose} className="p-1 hover:opacity-70">
-            <X size={20} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Название плейлиста"
-            autoFocus
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none mb-4"
-            style={{
-              backgroundColor: 'var(--color-bg-subtle)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text)',
-            }}
-          />
-          <button
-            type="submit"
-            disabled={!name.trim() || createPlaylist.isPending}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)' }}
-          >
-            <Plus size={16} />
-            Создать
-          </button>
-        </form>
-      </div>
+      <Card className="animate-enter w-full max-w-sm bg-card/95 shadow-[var(--shadow-lg)]" onClick={(e) => e.stopPropagation()}>
+        <CardContent>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-xl font-black">Новый плейлист</h2>
+            <Button onClick={onClose} variant="ghost" size="icon" className="h-9 w-9">
+              <X size={20} />
+            </Button>
+          </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Название плейлиста"
+              autoFocus
+            />
+            <Button type="submit" disabled={!name.trim() || createPlaylist.isPending} className="w-full">
+              <Plus size={16} />
+              Создать
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

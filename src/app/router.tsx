@@ -15,11 +15,11 @@ import { NotFoundPage } from '@/app/not-found/page';
 
 function AppLayout() {
   return (
-    <div className="flex flex-col min-h-dvh">
+    <div className="flex min-h-dvh flex-col">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto pb-36 lg:pb-24">
+        <main className="flex-1 overflow-y-auto pb-44 lg:pb-32">
           <Outlet />
         </main>
       </div>

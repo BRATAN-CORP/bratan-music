@@ -7,36 +7,41 @@ import { TidalWeb } from './TidalWeb';
 
 const IMG_BASE = 'https://resources.tidal.com/images';
 
-function coverUrl(coverId: string | null, size: number = 640): string | undefined {
+function coverUrl(coverId: string | null | undefined, size: number = 640): string | undefined {
   if (!coverId) return undefined;
   return `${IMG_BASE}/${coverId.replace(/-/g, '/')}/${size}x${size}.jpg`;
 }
 
-function artistImageUrl(pictureId: string | null, size: number = 480): string | undefined {
+function artistImageUrl(pictureId: string | null | undefined, size: number = 480): string | undefined {
   if (!pictureId) return undefined;
   return `${IMG_BASE}/${pictureId.replace(/-/g, '/')}/${size}x${size}.jpg`;
 }
 
 function mapTrack(raw: TidalTrackRaw): Track {
+  const mainArtist = raw.artist ?? raw.artists?.[0];
   return {
     id: String(raw.id),
     source: 'tidal',
     title: raw.title + (raw.version ? ` (${raw.version})` : ''),
-    artist: raw.artists.map(a => a.name).join(', '),
-    album: raw.album?.title,
+    artist: raw.artists?.map(a => a.name).join(', ') || mainArtist?.name || 'Unknown Artist',
+    artistId: mainArtist ? String(mainArtist.id) : undefined,
+    album: raw.album?.title ?? '',
+    albumId: raw.album ? String(raw.album.id) : undefined,
     duration: raw.duration,
     coverUrl: coverUrl(raw.album?.cover),
-    explicit: raw.explicit,
-    quality: raw.audioQuality,
+    explicit: raw.explicit ?? false,
+    quality: raw.audioQuality ?? 'HIGH',
   };
 }
 
 function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = []): Album {
+  const mainArtist = raw.artist ?? raw.artists?.[0];
   return {
     id: String(raw.id),
     source: 'tidal',
     title: raw.title,
-    artist: raw.artist.name,
+    artist: mainArtist?.name ?? 'Unknown Artist',
+    artistId: mainArtist ? String(mainArtist.id) : undefined,
     coverUrl: coverUrl(raw.cover),
     releaseDate: raw.releaseDate,
     tracks,
@@ -73,9 +78,9 @@ export class TidalService implements MusicService {
     const data = await this.api.search(query, typeMap[filter]);
 
     return {
-      tracks: (data.tracks?.items ?? []).map(mapTrack),
-      albums: (data.albums?.items ?? []).map(a => mapAlbum(a)),
-      artists: (data.artists?.items ?? []).map(mapArtist),
+      tracks: this.api.unwrapSearchItems(data.tracks).map(mapTrack),
+      albums: this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)),
+      artists: this.api.unwrapSearchItems(data.artists).map(mapArtist),
     };
   }
 
