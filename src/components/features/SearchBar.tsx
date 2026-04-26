@@ -37,21 +37,19 @@ export function SearchBar({ value, onChange, placeholder = 'Поиск трек�
   }, [value]);
 
   return (
-    <div
-      className="glass-panel group flex items-center gap-3 rounded-[2rem] px-5 py-3 transition-all duration-300 focus-within:shadow-[var(--shadow-glow)]"
-    >
-      <Search size={20} className="shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary" />
+    <div className="group relative flex items-center gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card px-4 transition-all duration-300 focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_0_4px_var(--color-accent-soft)]">
+      <Search size={16} className="shrink-0 text-muted-foreground transition-colors group-focus-within:text-[var(--color-accent)]" />
       <input
         ref={inputRef}
         type="text"
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        className="h-10 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+        className="h-12 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
       />
       {local && (
-        <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="h-9 w-9">
-          <X size={16} />
+        <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="h-7 w-7" aria-label="Очистить">
+          <X size={14} />
         </Button>
       )}
     </div>

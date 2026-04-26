@@ -15,21 +15,22 @@ export function Sidebar() {
   if (!sidebarOpen) return null;
 
   return (
-    <aside
-      className="hidden w-64 flex-col border-r border-border/70 bg-card/55 py-5 backdrop-blur-2xl lg:flex"
-    >
-      <nav className="flex flex-col gap-2 px-3">
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-background py-6 lg:flex">
+      <nav className="flex flex-col gap-0.5 px-3">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
+            end={to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
-                isActive ? 'bg-primary text-primary-foreground shadow-[var(--shadow-glow)]' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              `flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-secondary text-foreground'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`
             }
           >
-            <Icon size={20} />
+            <Icon size={16} />
             {label}
           </NavLink>
         ))}

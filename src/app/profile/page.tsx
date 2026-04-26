@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
 
 interface UserProfile {
   id: string;
@@ -30,72 +29,61 @@ export function ProfilePage() {
 
   return (
     <AuthGuard>
-      <div className="mx-auto flex max-w-md flex-col gap-6 p-4 sm:p-6 lg:p-8">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary">Аккаунт</p>
-          <h1 className="hero-gradient-text text-4xl font-black">Профиль</h1>
+      <div className="mx-auto flex max-w-md flex-col gap-6 p-4 sm:p-6 lg:p-10">
+        <div className="flex flex-col gap-1 border-b border-border pb-4">
+          <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Аккаунт</span>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Профиль</h1>
         </div>
 
-        <Card className="animate-enter bg-card/70">
-          <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-black text-primary-foreground shadow-[var(--shadow-glow)]">
+        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background text-base font-semibold">
               {(user?.name ?? user?.username ?? '?')[0]?.toUpperCase()}
             </div>
-            <div>
-              <p className="font-semibold">{user?.name ?? user?.username ?? 'Пользователь'}</p>
-              {user?.username && (
-                <p className="text-sm text-muted-foreground">@{user.username}</p>
-              )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{user?.name ?? user?.username ?? 'Пользователь'}</p>
+              {user?.username && <p className="truncate text-xs text-muted-foreground">@{user.username}</p>}
             </div>
           </div>
-
           {profile?.isAdmin && (
-            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-              <Shield size={16} /> Администратор
+            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-xs font-medium text-foreground">
+              <Shield size={14} /> Администратор
             </div>
           )}
-          </CardContent>
-        </Card>
+        </section>
 
-        <Card className="animate-enter bg-card/70">
-          <CardContent className="flex flex-col gap-2">
-          <h2 className="flex items-center gap-2 font-semibold">
-            <Crown size={16} className="text-primary" />
+        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
+          <h2 className="flex items-center gap-2 text-sm font-medium">
+            <Crown size={14} className="text-muted-foreground" />
             Подписка
           </h2>
           {profile?.subscription ? (
             <>
-              <p className="text-sm font-semibold text-primary">Активна</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="mt-3 text-sm font-medium">Активна</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 До {new Date(profile.subscription.expiresAt * 1000).toLocaleDateString('ru-RU')}
               </p>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Не активна. 3 трека в день бесплатно.
-            </p>
+            <p className="mt-3 text-sm text-muted-foreground">Не активна. 3 трека в день бесплатно.</p>
           )}
-          </CardContent>
-        </Card>
+        </section>
 
         {limits && (
-          <Card className="animate-enter bg-card/70">
-            <CardContent className="flex flex-col gap-2">
-            <h2 className="font-semibold">Лимиты</h2>
+          <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
+            <h2 className="text-sm font-medium">Лимиты</h2>
             {limits.daily.unlimited ? (
-              <p className="text-sm font-semibold text-primary">Безлимитный доступ</p>
+              <p className="mt-3 text-sm font-medium">Безлимитный доступ</p>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground">
                 Использовано: {limits.daily.used} / {limits.daily.limit}
               </p>
             )}
-            </CardContent>
-          </Card>
+          </section>
         )}
 
         <Button onClick={logout} variant="danger" className="w-full">
-          <LogOut size={16} />
+          <LogOut size={14} />
           Выйти
         </Button>
       </div>

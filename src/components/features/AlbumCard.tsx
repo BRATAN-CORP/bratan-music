@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Disc3 } from 'lucide-react';
+import { Disc3, Play } from 'lucide-react';
+import { motion } from 'motion/react';
 import type { Album } from '@/types';
-import { Card, CardContent } from '@/components/ui/Card';
 
 interface AlbumCardProps {
   album: Album;
@@ -9,29 +9,33 @@ interface AlbumCardProps {
 
 export function AlbumCard({ album }: AlbumCardProps) {
   return (
-    <Link
-      to={`/album/${album.id}`}
-      className="group block transition-transform duration-300 hover:-translate-y-1"
-    >
-      <Card className="overflow-hidden border-transparent bg-card/80 transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-[var(--shadow-glow)]">
-        <div className="p-3 pb-0">
-          {album.coverUrl ? (
-            <img
-              src={album.coverUrl}
-              alt={album.title}
-              className="aspect-square w-full rounded-2xl object-cover shadow-[var(--shadow-md)] transition-transform duration-500 group-hover:scale-[1.03]"
-            />
-          ) : (
-            <div className="flex aspect-square w-full items-center justify-center rounded-2xl bg-secondary">
-              <Disc3 size={34} className="text-muted-foreground" />
-            </div>
-          )}
+    <Link to={`/album/${album.id}`} className="group flex flex-col gap-2.5">
+      <motion.div
+        whileHover={{ y: -3 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+        className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary"
+      >
+        {album.coverUrl ? (
+          <img
+            src={album.coverUrl}
+            alt={album.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Disc3 size={28} className="text-muted-foreground" />
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="absolute bottom-2 right-2 flex h-9 w-9 translate-y-3 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] opacity-0 shadow-lg transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+          <Play size={14} fill="currentColor" />
         </div>
-        <CardContent className="min-w-0 p-4">
-          <p className="truncate text-sm font-semibold">{album.title}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{album.artist}</p>
-        </CardContent>
-      </Card>
+      </motion.div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{album.title}</p>
+        <p className="truncate text-xs text-muted-foreground">{album.artist}</p>
+      </div>
     </Link>
   );
 }

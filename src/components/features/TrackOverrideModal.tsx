@@ -2,7 +2,6 @@ import { useState, useRef } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
 
 interface TrackOverrideModalProps {
   open: boolean;
@@ -53,27 +52,26 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ backgroundColor: 'var(--color-overlay)' }}
       onClick={onClose}
+      role="dialog"
     >
-      <Card className="animate-enter w-full max-w-sm bg-card/95 shadow-[var(--shadow-lg)]" onClick={(e) => e.stopPropagation()}>
-        <CardContent>
+      <div
+        className="w-full max-w-sm rounded-[var(--radius-md)] border border-border bg-card p-6 shadow-[var(--shadow-lg)]"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-black">Перезалив</h2>
-          <Button onClick={onClose} variant="ghost" size="icon" className="h-9 w-9">
-            <X size={20} />
+          <h2 className="text-base font-semibold tracking-tight">Перезалив</h2>
+          <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label="Закрыть">
+            <X size={16} />
           </Button>
         </div>
 
-        <p className="mb-4 text-sm text-muted-foreground">
-          {trackTitle}
-        </p>
+        <p className="mb-5 truncate text-xs text-muted-foreground">{trackTitle}</p>
 
         {success ? (
-          <p className="py-4 text-center text-sm font-semibold text-primary">
-            Файл загружен!
-          </p>
+          <p className="py-4 text-center text-sm font-medium">Файл загружен.</p>
         ) : (
           <>
             <input
@@ -90,16 +88,16 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               className="w-full"
-              variant="secondary"
+              variant="outline"
             >
               {uploading ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Loader2 size={14} className="animate-spin" />
                   Загрузка...
                 </>
               ) : (
                 <>
-                  <Upload size={16} />
+                  <Upload size={14} />
                   Выбрать файл
                 </>
               )}
@@ -108,12 +106,9 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
         )}
 
         {error && (
-          <p className="mt-3 text-center text-xs text-[var(--color-danger)]">
-            {error}
-          </p>
+          <p className="mt-3 text-center text-xs text-[var(--color-danger)]">{error}</p>
         )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

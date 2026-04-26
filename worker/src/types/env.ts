@@ -6,6 +6,7 @@ export interface Env {
   TIDAL_CLIENT_ID: string;
   TIDAL_CLIENT_SECRET: string;
   TIDAL_SESSION_TOKEN: string;
+  TIDAL_REFRESH_TOKEN?: string;
   TIDAL_CLIENT_VERSION?: string;
   TIDAL_COUNTRY_CODE?: string;
   TIDAL_LOCALE?: string;

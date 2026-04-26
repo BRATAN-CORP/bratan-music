@@ -23,21 +23,27 @@ interface TidalJwtPayload {
 export class TidalAuth {
   constructor(private env: Env) {}
 
-  async getAccessToken(): Promise<string> {
-    const cached = await this.getCachedSession();
-    if (cached && cached.expiresAt > Date.now() / 1000 + 60) {
-      return cached.accessToken;
+  async getAccessToken(opts: { force?: boolean } = {}): Promise<string> {
+    const force = opts.force === true;
+
+    if (!force) {
+      const cached = await this.getCachedSession();
+      if (cached && cached.expiresAt > Date.now() / 1000 + 60) {
+        return cached.accessToken;
+      }
     }
 
-    if (cached?.refreshToken) {
-      const refreshed = await this.refreshSession(cached.refreshToken);
+    const cached = await this.getCachedSession();
+    const refreshToken = cached?.refreshToken ?? this.env.TIDAL_REFRESH_TOKEN;
+    if (refreshToken && this.env.TIDAL_CLIENT_ID && this.env.TIDAL_CLIENT_SECRET) {
+      const refreshed = await this.refreshSession(refreshToken);
       if (refreshed) return refreshed.accessToken;
     }
 
     if (this.env.TIDAL_SESSION_TOKEN) {
       const payload = this.decodeJwtPayload(this.env.TIDAL_SESSION_TOKEN);
       if (payload?.exp && payload.exp <= Date.now() / 1000 + 60) {
-        throw new Error('Сессия Tidal истекла. Обновите TIDAL_SESSION_TOKEN.');
+        throw new Error('Сессия Tidal истекла. Обновите TIDAL_SESSION_TOKEN или настройте TIDAL_REFRESH_TOKEN.');
       }
       return this.env.TIDAL_SESSION_TOKEN;
     }
@@ -117,10 +123,11 @@ export class TidalAuth {
   private async fetchSessionInfo(accessToken: string): Promise<{ userId: number; countryCode: string }> {
     const fallback = this.decodeJwtPayload(accessToken);
     const fallbackCountry = fallback?.cc ?? this.env.TIDAL_COUNTRY_CODE ?? DEFAULT_COUNTRY_CODE;
-    const res = await fetch('https://tidal.com/v1/sessions', {
+    const res = await fetch('https://api.tidal.com/v1/sessions', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
+        'User-Agent': 'TIDAL/2026.4.23 CFNetwork/1494.0.7 Darwin/23.4.0',
         'x-tidal-client-version': this.getClientVersion(),
       },
     });

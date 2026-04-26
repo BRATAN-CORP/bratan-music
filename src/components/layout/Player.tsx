@@ -2,6 +2,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1,
 } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
@@ -22,20 +23,24 @@ export function Player() {
   } = usePlayerStore();
 
   const { progress, seek } = useAudioPlayer();
-
-  if (!currentTrack) return null;
+  const reduce = useReducedMotion();
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
 
   return (
-    <div
-      className="fixed bottom-16 left-3 right-3 z-30 flex flex-col rounded-[1.75rem] border border-border/70 bg-card/90 shadow-[var(--shadow-lg)] backdrop-blur-2xl lg:bottom-4 lg:left-72 lg:right-4"
-      style={{
-        height: 'var(--player-height)',
-      }}
-    >
+    <AnimatePresence>
+      {currentTrack && (
+        <motion.div
+          key="player"
+          initial={reduce ? false : { y: 80, opacity: 0 }}
+          animate={reduce ? undefined : { y: 0, opacity: 1 }}
+          exit={reduce ? undefined : { y: 80, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+          className="fixed bottom-14 left-0 right-0 z-30 flex flex-col border-t border-border glass lg:bottom-0 lg:left-60"
+          style={{ height: 'var(--player-height)' }}
+        >
       <div
-        className="h-1.5 cursor-pointer rounded-t-[1.75rem] bg-secondary"
+        className="group/progress relative h-1 cursor-pointer bg-[var(--color-bg-muted)]"
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           const pct = (e.clientX - rect.left) / rect.width;
@@ -43,46 +48,53 @@ export function Player() {
         }}
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-150"
+          className="h-full bg-foreground transition-[width] duration-100"
           style={{ width: `${progressPct}%` }}
+        />
+        <div
+          className="absolute top-1/2 h-3 w-3 -translate-y-1/2 -translate-x-1/2 rounded-full bg-foreground opacity-0 transition-opacity group-hover/progress:opacity-100"
+          style={{ left: `${progressPct}%` }}
         />
       </div>
 
       <div className="flex items-center gap-4 px-4 flex-1">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {currentTrack.coverUrl && (
-            <img
+            <motion.img
               src={currentTrack.coverUrl}
               alt={currentTrack.title}
-              className="h-12 w-12 rounded-2xl object-cover shadow-[var(--shadow-md)]"
+              className="h-11 w-11 rounded-[var(--radius-sm)] border border-border object-cover"
+              initial={reduce ? false : { scale: 0.8, opacity: 0 }}
+              animate={reduce ? undefined : { scale: 1, opacity: 1 }}
+              key={currentTrack.id}
             />
           )}
           <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{currentTrack.title}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {currentTrack.artist}
-            </p>
+            <p className="truncate text-sm font-medium">{currentTrack.title}</p>
+            <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-1">
-          <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex">
-            <Shuffle size={16} className={shuffle ? 'text-primary' : 'text-muted-foreground'} />
+          <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Перемешать">
+            <Shuffle size={15} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
           </Button>
-          <Button onClick={previous} variant="ghost" size="icon">
-            <SkipBack size={18} />
+          <Button onClick={previous} variant="ghost" size="icon" aria-label="Предыдущий">
+            <SkipBack size={16} />
           </Button>
-          <Button onClick={togglePlay} size="icon" className="h-11 w-11">
-            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+          <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
+            <Button onClick={togglePlay} size="icon" className="h-10 w-10" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
+              {isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
+            </Button>
+          </motion.div>
+          <Button onClick={next} variant="ghost" size="icon" aria-label="Следующий">
+            <SkipForward size={16} />
           </Button>
-          <Button onClick={next} variant="ghost" size="icon">
-            <SkipForward size={18} />
-          </Button>
-          <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex">
+          <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Повтор">
             {repeat === 'one' ? (
-              <Repeat1 size={16} className="text-primary" />
+              <Repeat1 size={15} className="text-[var(--color-accent)]" />
             ) : (
-              <Repeat size={16} className={repeat === 'all' ? 'text-primary' : 'text-muted-foreground'} />
+              <Repeat size={15} className={repeat === 'all' ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
             )}
           </Button>
         </div>
@@ -91,8 +103,8 @@ export function Player() {
           <span className="text-xs text-muted-foreground">
             {formatTime(progress)} / {formatTime(duration)}
           </span>
-          <Button onClick={toggleMute} variant="ghost" size="icon" className="h-9 w-9">
-            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          <Button onClick={toggleMute} variant="ghost" size="icon" className="h-9 w-9" aria-label="Звук">
+            {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </Button>
           <input
             type="range"
@@ -102,9 +114,12 @@ export function Player() {
             value={muted ? 0 : volume}
             onChange={(e) => setVolume(Number(e.target.value))}
             className="w-20 accent-[var(--color-accent)]"
+            aria-label="Громкость"
           />
         </div>
       </div>
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
