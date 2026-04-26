@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { Play, Heart, Radio } from 'lucide-react';
+import { Play, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useTrack, useTrackRadio } from '@/hooks/useTrack';
@@ -7,7 +7,6 @@ import { useLikeTrack } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
 
 export function TrackPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,50 +33,43 @@ export function TrackPage() {
 
   return (
     <AuthGuard>
-      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-muted-foreground">Загрузка...</p>
+          <p className="text-sm text-muted-foreground">Загрузка...</p>
         ) : track ? (
           <>
-            <Card className="animate-enter mb-8 border-primary/20 bg-card/70">
-              <CardContent className="flex flex-col gap-6 p-6 sm:flex-row">
+            <div className="mb-10 flex flex-col gap-6 border-b border-border pb-10 sm:flex-row">
               {track.coverUrl && (
-                <img src={track.coverUrl} alt={track.title} className="h-56 w-56 rounded-[1.75rem] object-cover shadow-[var(--shadow-lg)]" />
+                <img
+                  src={track.coverUrl}
+                  alt={track.title}
+                  className="h-48 w-48 rounded-[var(--radius-md)] border border-border object-cover"
+                />
               )}
               <div className="flex flex-col justify-end gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary">Трек</p>
-                <h1 className="hero-gradient-text text-4xl font-black tracking-tight sm:text-6xl">{track.title}</h1>
-                <Link
-                  to={`/artist/${track.artistId}`}
-                  className="text-lg text-muted-foreground hover:text-foreground"
-                >
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Трек</span>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{track.title}</h1>
+                <Link to={`/artist/${track.artistId}`} className="text-sm text-muted-foreground hover:text-foreground">
                   {track.artist}
                 </Link>
-                <Link
-                  to={`/album/${track.albumId}`}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
+                <Link to={`/album/${track.albumId}`} className="text-xs text-muted-foreground hover:text-foreground">
                   {track.album}
                 </Link>
-                <div className="flex gap-2 mt-2">
+                <div className="flex gap-2 pt-2">
                   <Button onClick={handlePlay}>
-                    <Play size={16} fill="currentColor" /> Слушать
+                    <Play size={14} fill="currentColor" /> Слушать
                   </Button>
-                  <Button onClick={() => like.mutate(track.id)} variant="secondary" size="icon">
-                    <Heart size={18} />
+                  <Button onClick={() => like.mutate(track.id)} variant="outline" size="icon" aria-label="Лайк">
+                    <Heart size={16} />
                   </Button>
                 </div>
               </div>
-              </CardContent>
-            </Card>
+            </div>
 
             {radio?.items && radio.items.length > 0 && (
-              <section className="animate-enter">
-                <h2 className="mb-4 flex items-center gap-2 text-2xl font-bold">
-                  <Radio size={20} className="text-primary" />
-                  Похожие треки
-                </h2>
-                <div className="glass-panel flex flex-col rounded-[var(--radius-xl)] p-2">
+              <section>
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Похожие треки</h2>
+                <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
                   {radio.items.map((t, i) => (
                     <TrackItem key={t.id} track={t} index={i} onPlay={handlePlayRadioTrack} />
                   ))}
@@ -86,7 +78,7 @@ export function TrackPage() {
             )}
           </>
         ) : (
-          <p className="text-muted-foreground">Трек не найден</p>
+          <p className="text-sm text-muted-foreground">Трек не найден</p>
         )}
       </div>
     </AuthGuard>

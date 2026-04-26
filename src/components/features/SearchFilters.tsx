@@ -14,15 +14,15 @@ const filters: { value: SearchFilter; label: string }[] = [
 
 export function SearchFilters({ active, onChange }: SearchFiltersProps) {
   return (
-    <div className="glass-panel flex w-fit max-w-full gap-1 overflow-x-auto rounded-full p-1">
+    <div className="flex w-fit max-w-full gap-6 overflow-x-auto border-b border-border">
       {filters.map(({ value, label }) => (
         <button
           key={value}
           onClick={() => onChange(value)}
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+          className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
             active === value
-              ? 'bg-primary text-primary-foreground shadow-[var(--shadow-glow)]'
-              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           {label}
