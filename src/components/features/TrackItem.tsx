@@ -1,14 +1,17 @@
-import { Heart, MoreHorizontal, Play } from 'lucide-react';
-import { motion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import { Heart, MoreHorizontal, Play, Trash2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { useToggleLike } from '@/hooks/useLibrary';
+import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
 
 interface TrackItemProps {
   track: Track;
   index?: number;
   onPlay?: (track: Track) => void;
+  /** When set, renders an action menu with "Удалить из плейлиста" */
+  playlistId?: string;
 }
 
 function formatDuration(seconds: number): string {
@@ -17,15 +20,44 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function TrackItem({ track, index, onPlay }: TrackItemProps) {
+export function TrackItem({ track, index, onPlay, playlistId }: TrackItemProps) {
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const removeFromPlaylist = useRemoveTrackFromPlaylist();
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: Event) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('touchstart', onClick);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('touchstart', onClick);
+    };
+  }, [menuOpen]);
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!playlistId) return;
+    setMenuOpen(false);
+    removeFromPlaylist.mutate({ playlistId, trackId: track.id });
+  };
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min((index ?? 0) * 0.025, 0.4) }}
       className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
       onClick={() => onPlay?.(track)}
@@ -54,7 +86,7 @@ export function TrackItem({ track, index, onPlay }: TrackItemProps) {
         {formatDuration(track.duration)}
       </span>
 
-      <div className={"flex items-center gap-0.5 transition-opacity " + (liked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
+      <div className={"flex items-center gap-0.5 transition-opacity " + (liked || menuOpen ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100')}>
         <Button
           variant="ghost"
           size="icon"
@@ -64,9 +96,48 @@ export function TrackItem({ track, index, onPlay }: TrackItemProps) {
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} aria-label="Ещё">
-          <MoreHorizontal size={14} />
-        </Button>
+        {playlistId ? (
+          <div ref={menuRef} className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+              aria-label="Ещё"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <MoreHorizontal size={14} />
+            </Button>
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                  transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                  role="menu"
+                  className="absolute right-0 top-8 z-20 w-52 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card shadow-[var(--shadow-lg)]"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleRemove}
+                    disabled={removeFromPlaylist.isPending}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)] disabled:opacity-60"
+                  >
+                    <Trash2 size={14} />
+                    Удалить из плейлиста
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} aria-label="Ещё">
+            <MoreHorizontal size={14} />
+          </Button>
+        )}
       </div>
     </motion.div>
   );
