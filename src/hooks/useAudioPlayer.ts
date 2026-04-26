@@ -44,6 +44,29 @@ async function safePause(audio: HTMLAudioElement) {
 let bundle: AudioBundle | null = null;
 
 export const EQ_BANDS = [60, 170, 350, 1000, 3500, 10000] as const;
+export const EQ_STORAGE_KEY = 'bratan-eq';
+
+function readSavedEqGains(): number[] | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(EQ_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as { gains?: unknown }).gains)
+    ) {
+      const gains = (parsed as { gains: unknown[] }).gains;
+      if (gains.length === EQ_BANDS.length && gains.every((g) => typeof g === 'number')) {
+        return gains as number[];
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 function getBundle(): AudioBundle {
   if (!bundle) {
@@ -80,10 +103,11 @@ function ensureAudioGraph(): AudioBundle {
     const ctx = new Ctx();
     const source = ctx.createMediaElementSource(b.audio);
 
+    const saved = readSavedEqGains();
     const filters = EQ_BANDS.map((freq, i) => {
       const f = ctx.createBiquadFilter();
       f.frequency.value = freq;
-      f.gain.value = 0;
+      f.gain.value = saved?.[i] ?? 0;
       f.Q.value = 1;
       f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
       return f;

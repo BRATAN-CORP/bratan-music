@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
-import { Sliders, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { Sliders, RotateCcw, Save, Check } from 'lucide-react';
 import { EQ_BANDS, setEqGain, isEqAvailable } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 
@@ -13,16 +13,59 @@ const PRESETS: Record<string, number[]> = {
   'Классика': [3, 2, 0, 0, 2, 3],
 };
 
+const STORAGE_KEY = 'bratan-eq';
+
+function readStoredGains(bandCount: number): number[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as { gains?: unknown }).gains)
+    ) {
+      const gains = (parsed as { gains: unknown[] }).gains;
+      if (gains.length === bandCount && gains.every((g) => typeof g === 'number')) {
+        return gains as number[];
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function gainsEqual(a: number[], b: number[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (Math.abs((a[i] ?? 0) - (b[i] ?? 0)) > 0.0001) return false;
+  }
+  return true;
+}
+
 function freqLabel(hz: number): string {
   return hz >= 1000 ? `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)}k` : String(hz);
 }
 
 export function Equalizer() {
   const [gains, setGains] = useState<number[]>(() => Array.from({ length: EQ_BANDS.length }, () => 0));
+  const [savedGains, setSavedGains] = useState<number[] | null>(null);
   const [available, setAvailable] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const savedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setAvailable(isEqAvailable());
+    const stored = readStoredGains(EQ_BANDS.length);
+    if (stored) {
+      setGains(stored);
+      setSavedGains(stored);
+      stored.forEach((g, i) => setEqGain(i, g));
+    }
+    return () => {
+      if (savedTimerRef.current) window.clearTimeout(savedTimerRef.current);
+    };
   }, []);
 
   const updateBand = (i: number, value: number) => {
@@ -38,6 +81,22 @@ export function Equalizer() {
     setGains(preset);
     preset.forEach((g, i) => setEqGain(i, g));
   };
+
+  const saveCurrent = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ gains }));
+      setSavedGains([...gains]);
+      setShowSaved(true);
+      if (savedTimerRef.current) window.clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = window.setTimeout(() => setShowSaved(false), 1800);
+    } catch {
+      // ignore
+    }
+  };
+
+  const isDirty = !savedGains
+    ? gains.some((g) => g !== 0)
+    : !gainsEqual(gains, savedGains);
 
   const reduce = useReducedMotion();
 
@@ -65,14 +124,41 @@ export function Equalizer() {
             Эквалайзер
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => applyPreset([0, 0, 0, 0, 0, 0])}
-          aria-label="Сбросить"
-        >
-          <RotateCcw size={12} /> Сброс
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => applyPreset([0, 0, 0, 0, 0, 0])}
+            aria-label="Сбросить"
+          >
+            <RotateCcw size={12} /> Сброс
+          </Button>
+          <div className="relative">
+            <Button
+              variant={isDirty ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={saveCurrent}
+              disabled={!isDirty}
+              aria-label="Сохранить настройки"
+            >
+              <Save size={12} /> Сохранить
+            </Button>
+            <AnimatePresence>
+              {showSaved && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.96 }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  className="pointer-events-none absolute -bottom-9 right-0 inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-foreground shadow-[var(--shadow-md)]"
+                >
+                  <Check size={11} className="text-[var(--color-accent)]" />
+                  Сохранено
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </motion.div>
 
       {!available && (
