@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { Search, Library, User, Home } from 'lucide-react';
+import { Search, Library, User, Home, Heart, ListMusic, Pin } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
+import { usePlaylistsList } from '@/hooks/useLibrary';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -11,8 +12,20 @@ const navItems = [
 
 export function Sidebar() {
   const { sidebarOpen } = useUiStore();
+  const { data: playlists } = usePlaylistsList();
 
   if (!sidebarOpen) return null;
+
+  // Pinned: ordered by recency (newest pinned first). "Liked" auto-pins so it's
+  // always reachable in the sidebar even before the user pins it manually.
+  const pinned = (playlists ?? [])
+    .filter((p) => p.pinnedAt != null || p.isLiked)
+    .sort((a, b) => {
+      // Liked playlist always at the very top of the pinned list.
+      if (a.isLiked) return -1;
+      if (b.isLiked) return 1;
+      return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0);
+    });
 
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-background py-6 lg:flex">
@@ -35,6 +48,39 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {pinned.length > 0 && (
+        <div className="mt-4 flex flex-col gap-1 px-3">
+          <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
+            <Pin size={10} />
+            Закреплённые
+          </div>
+          {pinned.map((p) => (
+            <NavLink
+              key={p.id}
+              to={`/playlist/${p.id}`}
+              className={({ isActive }) =>
+                `group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-1.5 text-sm transition-colors ${
+                  isActive
+                    ? 'bg-secondary text-foreground'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`
+              }
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] bg-secondary">
+                {p.isLiked ? (
+                  <Heart size={12} className="fill-[var(--color-accent)] text-[var(--color-accent)]" />
+                ) : p.coverUrl ? (
+                  <img src={p.coverUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <ListMusic size={12} className="text-muted-foreground" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{p.isLiked ? 'Любимое' : p.name}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
     </aside>
   );
 }

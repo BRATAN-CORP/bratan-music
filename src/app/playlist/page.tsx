@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Reorder } from 'motion/react';
-import { ChevronLeft, Heart, ListMusic, Pencil } from 'lucide-react';
+import { ChevronLeft, Heart, ListMusic, Pencil, Pin, PinOff } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
 import { RenamePlaylistDialog } from '@/components/features/RenamePlaylistDialog';
 import { PlaylistCoverButton } from '@/components/features/PlaylistCoverButton';
-import { usePlaylist, useReorderPlaylistTracks } from '@/hooks/useLibrary';
+import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 
@@ -15,6 +15,8 @@ export function PlaylistPage() {
   const navigate = useNavigate();
   const { data: playlist, isLoading } = usePlaylist(id ?? '');
   const reorderMutation = useReorderPlaylistTracks();
+  const pinPlaylist = usePinPlaylist();
+  const isPinned = playlist ? (playlist.pinnedAt != null || playlist.isLiked) : false;
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
 
@@ -110,6 +112,21 @@ export function PlaylistPage() {
                       title="Переименовать"
                     >
                       <Pencil size={16} />
+                    </button>
+                  )}
+                  {playlist && !playlist.isLiked && (
+                    <button
+                      type="button"
+                      onClick={() => pinPlaylist.mutate({ id: playlist.id, pinned: !isPinned })}
+                      className={`mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-colors lg:inline-flex ${
+                        isPinned
+                          ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
+                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      }`}
+                      aria-label={isPinned ? 'Открепить' : 'Закрепить в навбаре'}
+                      title={isPinned ? 'Открепить из навбара' : 'Закрепить в навбаре'}
+                    >
+                      {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
                     </button>
                   )}
                 </div>

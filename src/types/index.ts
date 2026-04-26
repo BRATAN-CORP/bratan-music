@@ -41,6 +41,7 @@ export interface Playlist {
   trackCount: number;
   isLiked: boolean;
   coverUrl?: string | null;
+  pinnedAt?: number | null;
   updatedAt: number;
 }
 

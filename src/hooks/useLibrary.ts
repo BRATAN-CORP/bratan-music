@@ -105,6 +105,15 @@ export function useSetPlaylistCover() {
   });
 }
 
+export function usePinPlaylist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
+      api.put<{ ok: boolean; pinnedAt: number | null }>(`/playlists/${id}/pin`, { pinned }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+  });
+}
+
 export function useRemovePlaylistCover() {
   const qc = useQueryClient();
   return useMutation({

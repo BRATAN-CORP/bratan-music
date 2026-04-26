@@ -31,9 +31,11 @@ CREATE TABLE playlists (
     name        TEXT NOT NULL,
     is_liked    INTEGER NOT NULL DEFAULT 0,
     cover_url   TEXT,
+    pinned_at   INTEGER,
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_playlists_user_pinned ON playlists(user_id, pinned_at);
 
 CREATE TABLE playlist_tracks (
     playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,

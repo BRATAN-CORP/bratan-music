@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2, Pencil } from 'lucide-react';
+import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2, Pencil, Pin, PinOff } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Playlist } from '@/types';
-import { useDeletePlaylist } from '@/hooks/useLibrary';
+import { useDeletePlaylist, usePinPlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
 import { RenamePlaylistDialog } from './RenamePlaylistDialog';
 
@@ -17,6 +17,8 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const [renameOpen, setRenameOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const deletePlaylist = useDeletePlaylist();
+  const pinPlaylist = usePinPlaylist();
+  const isPinned = playlist.pinnedAt != null || playlist.isLiked;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -108,6 +110,20 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                     >
                       <Pencil size={14} />
                       Переименовать
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMenuOpen(false);
+                        pinPlaylist.mutate({ id: playlist.id, pinned: !isPinned });
+                      }}
+                      disabled={playlist.isLiked}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                      {isPinned ? 'Открепить' : 'Закрепить в навбаре'}
                     </button>
                     <button
                       type="button"

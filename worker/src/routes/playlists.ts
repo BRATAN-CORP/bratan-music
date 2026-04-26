@@ -34,6 +34,7 @@ interface PlaylistRow {
   name: string;
   is_liked: number;
   cover_url?: string | null;
+  pinned_at?: number | null;
   created_at: number;
   updated_at: number;
   track_count?: number | null;
@@ -66,6 +67,7 @@ function rowToPlaylist(r: PlaylistRow) {
     name: r.name,
     isLiked: Boolean(r.is_liked),
     coverUrl: r.cover_url ?? null,
+    pinnedAt: r.pinned_at ?? null,
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),
@@ -218,6 +220,36 @@ playlists.delete('/:id/cover', async (c) => {
   ).bind(now, id).run();
 
   return c.json({ ok: true });
+});
+
+/**
+ * Pin / unpin a playlist to the desktop sidebar. We store a timestamp so the
+ * UI can sort by "most recently pinned" without an explicit position column.
+ */
+playlists.put('/:id/pin', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ pinned: boolean }>().catch(() => ({ pinned: true }));
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string }>();
+  if (!existing) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (body.pinned) {
+    await c.env.DB.prepare(
+      'UPDATE playlists SET pinned_at = ?, updated_at = ? WHERE id = ?'
+    ).bind(now, now, id).run();
+    return c.json({ ok: true, pinnedAt: now });
+  } else {
+    await c.env.DB.prepare(
+      'UPDATE playlists SET pinned_at = NULL, updated_at = ? WHERE id = ?'
+    ).bind(now, id).run();
+    return c.json({ ok: true, pinnedAt: null });
+  }
 });
 
 playlists.post('/:id/tracks', async (c) => {
