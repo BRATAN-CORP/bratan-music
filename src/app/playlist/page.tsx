@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom';
+import { AnimatePresence } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { usePlaylist } from '@/hooks/useLibrary';
@@ -47,9 +48,17 @@ export function PlaylistPage() {
               </p>
             </div>
             <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
-              {playlist.tracks.map((track, i) => (
-                <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayTrack} />
-              ))}
+              <AnimatePresence initial={false}>
+                {playlist.tracks.map((track, i) => (
+                  <TrackItem
+                    key={track.id}
+                    track={track}
+                    index={i}
+                    onPlay={handlePlayTrack}
+                    playlistId={playlist.id}
+                  />
+                ))}
+              </AnimatePresence>
             </div>
           </>
         ) : (

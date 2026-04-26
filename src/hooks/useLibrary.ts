@@ -117,6 +117,9 @@ export function useRemoveTrackFromPlaylist() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['playlist', vars.playlistId] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
+      // If user removed a track from the system "Мне нравится" playlist,
+      // refresh liked-state queries too.
+      qc.invalidateQueries({ queryKey: ['liked'] });
     },
   });
 }
