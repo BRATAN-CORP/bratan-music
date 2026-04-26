@@ -26,6 +26,25 @@ interface NonceResponse {
   };
 }
 
+interface TelegramWebApp {
+  initData?: string;
+  ready?: () => void;
+  expand?: () => void;
+}
+
+export function getTelegramWebApp(): TelegramWebApp | undefined {
+  return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
+}
+
+function consumeQueryParam(name: string): string | null {
+  const url = new URL(window.location.href);
+  const value = url.searchParams.get(name);
+  if (!value) return null;
+  url.searchParams.delete(name);
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  return value;
+}
+
 export function useAuth() {
   const { user, accessToken, setAuth, logout, isAuthenticated } = useAuthStore();
   const [loading, setLoading] = useState(false);
@@ -83,17 +102,22 @@ export function useAuth() {
 }
 
 export function useAutoAuth() {
-  const { loginWithInitData, isAuthenticated } = useAuth();
+  const { loginWithInitData, isAuthenticated, pollNonce } = useAuth();
   const attempted = useRef(false);
 
   useEffect(() => {
     if (attempted.current || isAuthenticated) return;
     attempted.current = true;
 
-    const tg = (window as unknown as Record<string, unknown>).Telegram as { WebApp?: { initData?: string } } | undefined;
-    const initData = tg?.WebApp?.initData;
+    const initData = getTelegramWebApp()?.initData;
     if (initData) {
       loginWithInitData(initData);
+      return;
     }
-  }, [loginWithInitData, isAuthenticated]);
+
+    const nonce = consumeQueryParam('auth_nonce');
+    if (nonce) {
+      void pollNonce(nonce);
+    }
+  }, [loginWithInitData, isAuthenticated, pollNonce]);
 }

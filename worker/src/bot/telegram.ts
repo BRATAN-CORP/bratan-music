@@ -45,6 +45,17 @@ export class TelegramClient {
     });
   }
 
+  async setChatMenuButton(chatId: number, appUrl: string): Promise<void> {
+    await this.call('setChatMenuButton', {
+      chat_id: chatId,
+      menu_button: {
+        type: 'web_app',
+        text: 'Открыть BRATAN MUSIC',
+        web_app: { url: appUrl },
+      },
+    });
+  }
+
   async setWebhook(url: string, secret: string): Promise<void> {
     await this.call('setWebhook', {
       url,
