@@ -61,29 +61,32 @@ export function Player() {
   const handleShare = async () => {
     if (!currentTrack) return;
     const url = buildShareUrl(currentTrack.id);
-    const shareData = {
-      title: currentTrack.title,
-      text: `${currentTrack.artist} — ${currentTrack.title}`,
-      url,
-    };
-    if (typeof navigator.share === 'function' && navigator.canShare?.(shareData)) {
-      try {
-        await navigator.share(shareData);
-        setMenuOpen(false);
-        return;
-      } catch {
-        // user cancelled or share failed → fall through to clipboard
-      }
-    }
     try {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 1500);
     } catch {
-      // clipboard might be blocked — last-ditch fallback
-      window.prompt('Скопируйте ссылку:', url);
+      // Clipboard API unavailable (insecure context, permissions denied, …).
+      // Fall back to a textarea+execCommand copy before resorting to a prompt.
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 1500);
+      } catch {
+        window.prompt('Скопируйте ссылку:', url);
+      } finally {
+        document.body.removeChild(textarea);
+      }
     }
-    setMenuOpen(false);
+    // Keep the menu open briefly so the "Ссылка скопирована" confirmation is visible.
+    setTimeout(() => setMenuOpen(false), 900);
   };
 
   const handleGoToArtist = () => {

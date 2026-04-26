@@ -4,15 +4,20 @@ import { Loader2, Mic2, X } from 'lucide-react';
 import { useLyrics, parseLrc, type LyricLine } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/store/player';
 
-interface LyricsPanelProps {
+interface LyricsContentProps {
   trackId: string;
-  open: boolean;
-  onClose: () => void;
+  onClose?: () => void;
+  /** Drops the close button (used when the parent renders its own toggle). */
+  showHeader?: boolean;
 }
 
-export function LyricsPanel({ trackId, open, onClose }: LyricsPanelProps) {
-  const { data, isLoading, isError } = useLyrics(open ? trackId : undefined);
-  const reduce = useReducedMotion();
+/**
+ * Inner lyrics view — fetches, parses, and renders the (possibly synced)
+ * lyrics. Has no positioning of its own so it can be embedded as a side
+ * panel on desktop or as a full-screen overlay on mobile.
+ */
+function LyricsContent({ trackId, onClose, showHeader = true }: LyricsContentProps) {
+  const { data, isLoading, isError } = useLyrics(trackId);
   const progress = usePlayerStore((s) => s.progress);
 
   const lines: LyricLine[] = useMemo(() => {
@@ -39,28 +44,19 @@ export function LyricsPanel({ trackId, open, onClose }: LyricsPanelProps) {
   }, [lines, progress]);
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={reduce ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.22 }}
-          className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-md"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Текст песни"
-        >
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
-              <Mic2 size={16} className="text-[var(--color-accent)]" />
-              <span>Текст песни</span>
-              {data?.provider && (
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  {data.provider}
-                </span>
-              )}
-            </div>
+    <div className="flex h-full flex-col">
+      {showHeader && (
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+          <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
+            <Mic2 size={16} className="text-[var(--color-accent)]" />
+            <span>Текст песни</span>
+            {data?.provider && (
+              <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                {data.provider}
+              </span>
+            )}
+          </div>
+          {onClose && (
             <button
               type="button"
               onClick={onClose}
@@ -69,16 +65,71 @@ export function LyricsPanel({ trackId, open, onClose }: LyricsPanelProps) {
             >
               <X size={16} />
             </button>
-          </div>
+          )}
+        </div>
+      )}
+      <LyricsBody
+        isLoading={isLoading}
+        isError={isError}
+        data={data}
+        lines={lines}
+        activeIndex={activeIndex}
+        isRtl={Boolean(data?.isRightToLeft)}
+      />
+    </div>
+  );
+}
 
-          <LyricsBody
-            isLoading={isLoading}
-            isError={isError}
-            data={data}
-            lines={lines}
-            activeIndex={activeIndex}
-            isRtl={Boolean(data?.isRightToLeft)}
-          />
+interface LyricsPanelProps {
+  trackId: string;
+  open: boolean;
+  onClose: () => void;
+  /**
+   * 'overlay' = covers the whole player (mobile-first, used for < md viewports).
+   * 'side'    = inline side pane (used inside a flex row on md+).
+   */
+  mode?: 'overlay' | 'side';
+}
+
+export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: LyricsPanelProps) {
+  const reduce = useReducedMotion();
+
+  if (mode === 'side') {
+    // The parent already gates rendering; we just animate the slide-in.
+    return (
+      <AnimatePresence>
+        {open && (
+          <motion.aside
+            key="lyrics-side"
+            initial={reduce ? false : { opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 40 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="hidden h-full w-full overflow-hidden border-l border-border/40 bg-background/40 backdrop-blur-md md:block"
+            aria-label="Текст песни"
+          >
+            <LyricsContent trackId={trackId} onClose={onClose} />
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="lyrics-overlay"
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22 }}
+          className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-md md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Текст песни"
+        >
+          <LyricsContent trackId={trackId} onClose={onClose} />
         </motion.div>
       )}
     </AnimatePresence>
@@ -142,7 +193,7 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
       ref={containerRef}
       onWheel={() => setAutoScroll(false)}
       onTouchMove={() => setAutoScroll(false)}
-      className="flex-1 overflow-y-auto px-6 py-8"
+      className="relative flex-1 overflow-y-auto px-6 py-8"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <div className="mx-auto flex max-w-2xl flex-col gap-3 text-center text-lg leading-relaxed sm:text-xl">
@@ -155,14 +206,15 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
                 key={i}
                 ref={(el) => { lineRefs.current[i] = el; }}
                 animate={{
-                  opacity: isActive ? 1 : isPast ? 0.4 : 0.55,
-                  scale: isActive ? 1.04 : 1,
-                  filter: isActive ? 'blur(0px)' : 'blur(0.3px)',
+                  opacity: isActive ? 1 : isPast ? 0.35 : 0.55,
+                  scale: isActive ? 1.05 : 1,
+                  y: isActive ? -1 : 0,
+                  filter: isActive ? 'blur(0px)' : 'blur(0.4px)',
                 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 className={
                   isActive
-                    ? 'font-semibold text-foreground'
+                    ? 'font-semibold text-foreground drop-shadow-[0_2px_8px_var(--color-accent-soft)]'
                     : 'font-medium text-muted-foreground'
                 }
               >
@@ -182,7 +234,7 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
         <button
           type="button"
           onClick={() => setAutoScroll(true)}
-          className="fixed bottom-24 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 text-xs font-medium shadow-[var(--shadow-md)]"
+          className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 text-xs font-medium shadow-[var(--shadow-md)]"
         >
           Прокручивать вместе с песней
         </button>

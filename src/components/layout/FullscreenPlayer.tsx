@@ -128,6 +128,7 @@ export function FullscreenPlayer() {
             </div>
           </div>
 
+          <div className="relative flex flex-1 overflow-hidden">
           <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8">
             <motion.div
               key={currentTrack.id}
@@ -316,11 +317,26 @@ export function FullscreenPlayer() {
             )}
           </div>
 
+          {/* Desktop side-panel: takes ~half the row when open. */}
+          {currentTrack && lyricsOpen && (
+            <div className="hidden md:flex md:basis-[44%] lg:basis-[42%] xl:basis-2/5">
+              <LyricsPanel
+                trackId={currentTrack.id}
+                open={lyricsOpen}
+                onClose={() => setLyricsOpen(false)}
+                mode="side"
+              />
+            </div>
+          )}
+          </div>
+
+          {/* Mobile overlay: covers the whole player surface. */}
           {currentTrack && (
             <LyricsPanel
               trackId={currentTrack.id}
               open={lyricsOpen}
               onClose={() => setLyricsOpen(false)}
+              mode="overlay"
             />
           )}
 
