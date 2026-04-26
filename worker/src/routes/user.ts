@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { UserService } from '../services/UserService';
+import { SubscriptionService } from '../services/SubscriptionService';
 import { jwtAuth } from '../middleware/auth';
 
 const user = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -16,10 +17,8 @@ user.get('/me', async (c) => {
     return c.json({ error: 'Пользователь не найден' }, 404);
   }
 
-  const now = Math.floor(Date.now() / 1000);
-  const subscription = await c.env.DB.prepare(
-    'SELECT * FROM subscriptions WHERE user_id = ? AND status = ? AND expires_at > ? ORDER BY expires_at DESC LIMIT 1'
-  ).bind(userId, 'active', now).first();
+  const subService = new SubscriptionService(c.env);
+  const subscription = await subService.getActive(userId);
 
   return c.json({
     id: userData.id,
@@ -29,7 +28,7 @@ user.get('/me', async (c) => {
     subscription: subscription
       ? {
           status: 'active' as const,
-          expiresAt: subscription.expires_at as number,
+          expiresAt: subscription.expires_at,
         }
       : null,
   });
@@ -43,12 +42,10 @@ user.get('/limits', async (c) => {
     return c.json({ daily: { used: 0, limit: -1, unlimited: true } });
   }
 
-  const now = Math.floor(Date.now() / 1000);
-  const subscription = await c.env.DB.prepare(
-    'SELECT id FROM subscriptions WHERE user_id = ? AND status = ? AND expires_at > ? LIMIT 1'
-  ).bind(userId, 'active', now).first();
+  const subService = new SubscriptionService(c.env);
+  const hasSub = await subService.hasActiveSubscription(userId);
 
-  if (subscription) {
+  if (hasSub) {
     return c.json({ daily: { used: 0, limit: -1, unlimited: true } });
   }
 
