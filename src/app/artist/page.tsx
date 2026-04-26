@@ -16,10 +16,10 @@ export function ArtistPage() {
   const setQueue = usePlayerStore((s) => s.setQueue);
 
   const handlePlayTrack = (track: Track) => {
-    setTrack({ id: track.id, title: track.title, artist: track.artist, coverUrl: track.coverUrl, duration: track.duration });
+    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, duration: track.duration });
     if (artist?.topTracks) {
       setQueue(
-        artist.topTracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, coverUrl: t.coverUrl, duration: t.duration }))
+        artist.topTracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, duration: t.duration }))
       );
     }
   };

@@ -4,6 +4,10 @@ interface Track {
   id: string;
   title: string;
   artist: string;
+  /** Tidal artist id — needed for the 'go to artist' action in the
+   * player. Optional because some legacy callsites don't pass it
+   * (liked tracks loaded from older snapshots, etc.). */
+  artistId?: string;
   coverUrl?: string;
   duration: number;
 }
