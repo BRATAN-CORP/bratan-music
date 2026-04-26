@@ -195,6 +195,35 @@ playlists.post('/:id/tracks', async (c) => {
   return c.json({ ok: true }, 201);
 });
 
+playlists.put('/:id/reorder', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ trackIds: string[] }>();
+
+  if (!Array.isArray(body.trackIds)) {
+    return c.json({ error: 'trackIds must be an array' }, 400);
+  }
+
+  const playlist = await c.env.DB.prepare(
+    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first();
+
+  if (!playlist) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const stmt = c.env.DB.prepare(
+    'UPDATE playlist_tracks SET position = ? WHERE playlist_id = ? AND track_id = ?'
+  );
+  const batch = body.trackIds.map((trackId, idx) => stmt.bind(idx, id, trackId));
+  if (batch.length > 0) {
+    await c.env.DB.batch(batch);
+  }
+  await c.env.DB.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').bind(now, id).run();
+  return c.json({ ok: true });
+});
+
 playlists.delete('/:id/tracks/:trackId', async (c) => {
   const userId = c.get('userId');
   const id = c.req.param('id');

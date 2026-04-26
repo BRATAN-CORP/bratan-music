@@ -39,7 +39,7 @@ export function Player() {
           animate={reduce ? undefined : { y: 0, opacity: 1 }}
           exit={reduce ? undefined : { y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-          className="fixed bottom-14 left-0 right-0 z-30 flex flex-col border-t border-border glass lg:bottom-0 lg:left-60"
+          className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 flex flex-col border-t border-border glass lg:bottom-0 lg:left-60"
           style={{ height: 'var(--player-height)' }}
         >
           {error && (

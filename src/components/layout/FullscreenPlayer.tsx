@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import {
-  ChevronDown, Heart, Pause, Play, Repeat, Repeat1, Shuffle,
-  SkipBack, SkipForward, Sliders, Volume2, VolumeX,
+  ChevronDown, Download, Heart, ListPlus, Pause, Play, Repeat, Repeat1, Shuffle,
+  SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
+import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
+import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
+import { api } from '@/lib/api';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -29,9 +32,12 @@ export function FullscreenPlayer() {
   const { progress, seek } = useAudioPlayer();
   const reduce = useReducedMotion();
   const [eqOpen, setEqOpen] = useState(false);
-  const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying);
-  // amp is 0..~0.6, normalize to a calm pulse range
-  const pulse = Math.min(1, amp * 2.4);
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
+  // amp is 0..~0.6 from the bass band; scale into a calm pulse range
+  const pulse = Math.min(1, amp * 1.8);
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const coarse = useCoarsePointer();
@@ -54,6 +60,29 @@ export function FullscreenPlayer() {
   }, [fullscreen, closeFullscreen, togglePlay]);
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
+
+  const handleDownload = async () => {
+    if (!currentTrack || downloading) return;
+    setDownloading(true);
+    try {
+      const data = await api.get<{ url: string }>(`/tracks/${currentTrack.id}/download`);
+      const a = document.createElement('a');
+      a.href = data.url;
+      const safeName = `${currentTrack.artist} — ${currentTrack.title}`
+        .replace(/[\\/:*?"<>|]/g, '_')
+        .slice(0, 180);
+      a.download = `${safeName}.flac`;
+      a.rel = 'noopener';
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('[download]', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -89,7 +118,7 @@ export function FullscreenPlayer() {
               size="icon"
               onClick={() => setEqOpen((v) => !v)}
               aria-label="Эквалайзер"
-              className={eqOpen ? 'text-[var(--color-accent)]' : ''}
+              className={eqOpen ? 'text-foreground' : ''}
             >
               <Sliders size={18} />
             </Button>
@@ -109,11 +138,11 @@ export function FullscreenPlayer() {
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10"
                   animate={reduce ? undefined : {
-                    scale: 1.05 + pulse * 0.18,
-                    opacity: 0.55 + pulse * 0.35,
-                    filter: `blur(${72 + pulse * 36}px) saturate(${1.4 + pulse * 0.6})`,
+                    scale: 1.04 + pulse * 0.07,
+                    opacity: 0.5 + pulse * 0.18,
+                    filter: `blur(${80 + pulse * 14}px) saturate(${1.35 + pulse * 0.2})`,
                   }}
-                  transition={{ type: 'spring', stiffness: 80, damping: 18, mass: 0.6 }}
+                  transition={{ type: 'spring', stiffness: 26, damping: 24, mass: 0.9 }}
                   style={{
                     backgroundImage: `url(${currentTrack.coverUrl})`,
                     backgroundSize: 'cover',
@@ -133,27 +162,49 @@ export function FullscreenPlayer() {
               </TiltCard>
             </motion.div>
 
-            <div className="flex w-full max-w-md flex-col items-center gap-2 text-center">
-              <motion.h1
-                key={currentTrack.id + '-title'}
-                initial={reduce ? false : { opacity: 0, y: 8 }}
-                animate={reduce ? undefined : { opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+            <div className="flex w-full max-w-md items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Добавить в плейлист"
+                onClick={() => currentTrack && setAddToPlaylistOpen(true)}
+                className="shrink-0 h-10 w-10 text-muted-foreground hover:text-foreground"
               >
-                {currentTrack.title}
-              </motion.h1>
-              <p className="text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
-              {error && (
-                <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
-                  {error}
-                </p>
-              )}
+                <ListPlus size={20} />
+              </Button>
+
+              <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
+                <motion.h1
+                  key={currentTrack.id + '-title'}
+                  initial={reduce ? false : { opacity: 0, y: 8 }}
+                  animate={reduce ? undefined : { opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                  className="line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+                >
+                  {currentTrack.title}
+                </motion.h1>
+                <p className="truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
+                {error && (
+                  <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
+                    {error}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                onClick={() => currentTrack && toggle(currentTrack)}
+                className={'shrink-0 h-10 w-10 ' + (liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
+              >
+                <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
+              </Button>
             </div>
 
             <div className="flex w-full max-w-md flex-col gap-2">
               <div
-                className="group/progress relative h-2 cursor-pointer touch-none rounded-full bg-[var(--color-bg-muted)] sm:h-1.5"
+                className="group/progress relative flex h-6 cursor-pointer touch-none items-center select-none"
                 onPointerDown={(e) => {
                   e.currentTarget.setPointerCapture(e.pointerId);
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -176,14 +227,16 @@ export function FullscreenPlayer() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
-                  style={{ width: `${progressPct}%` }}
-                />
-                <div
-                  className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-100 transition-opacity"
-                  style={{ left: `${progressPct}%` }}
-                />
+                <div className="relative h-1 w-full rounded-full bg-white/15 transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+                  <div
+                    className="h-full rounded-full bg-white/85 transition-[width] duration-100"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
+                    style={{ left: `${progressPct}%` }}
+                  />
+                </div>
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
                 <span>{formatTime(progress)}</span>
@@ -193,7 +246,7 @@ export function FullscreenPlayer() {
 
             <div className="flex w-full max-w-md items-center justify-between">
               <Button variant="ghost" size="icon" onClick={toggleShuffle} aria-label="Перемешать">
-                <Shuffle size={18} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
+                <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
               <Button variant="ghost" size="icon" onClick={previous} aria-label="Назад" className="h-12 w-12">
                 <SkipBack size={22} />
@@ -208,47 +261,65 @@ export function FullscreenPlayer() {
               </Button>
               <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label="Повтор">
                 {repeat === 'one' ? (
-                  <Repeat1 size={18} className="text-[var(--color-accent)]" />
+                  <Repeat1 size={18} className="text-foreground" />
                 ) : (
-                  <Repeat size={18} className={repeat === 'all' ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
+                  <Repeat size={18} className={repeat === 'all' ? 'text-foreground' : 'text-muted-foreground'} />
                 )}
               </Button>
             </div>
 
-            <div className="flex w-full max-w-md items-center gap-3">
-              {coarse ? (
-                <p className="flex flex-1 items-center gap-2 text-[11px] text-muted-foreground">
-                  <Volume2 size={14} className="shrink-0" />
-                  Громкость регулируется кнопками устройства
-                </p>
-              ) : (
-                <>
-                  <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
-                    {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                  </Button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={muted ? 0 : volume}
-                    onChange={(e) => setVolume(Number(e.target.value))}
-                    className="flex-1 accent-[var(--color-accent)]"
-                    aria-label="Громкость"
-                  />
-                </>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
-                className={liked ? 'text-[var(--color-accent)]' : ''}
-                onClick={() => currentTrack && toggle(currentTrack)}
-              >
-                <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
-              </Button>
-            </div>
+            {!coarse && (
+              <div className="flex w-full max-w-md items-center gap-3">
+                <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
+                  {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                </Button>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={muted ? 0 : volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  className="flex-1 accent-white"
+                  aria-label="Громкость"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Скачать"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Download size={16} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Загрузить свою версию"
+                  onClick={() => setOverrideOpen(true)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Upload size={16} />
+                </Button>
+              </div>
+            )}
           </div>
+
+          <AddToPlaylistDialog
+            open={addToPlaylistOpen}
+            onClose={() => setAddToPlaylistOpen(false)}
+            track={currentTrack}
+          />
+
+          {currentTrack && (
+            <TrackOverrideModal
+              open={overrideOpen}
+              onClose={() => setOverrideOpen(false)}
+              trackId={currentTrack.id}
+              trackTitle={`${currentTrack.artist} — ${currentTrack.title}`}
+            />
+          )}
 
           <AnimatePresence>
             {eqOpen && (

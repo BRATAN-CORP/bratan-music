@@ -111,11 +111,6 @@ export function LandingPage() {
             ) : (
               <TelegramLoginButton />
             )}
-            <Link to="/search">
-              <Button size="lg" variant="outline">
-                Попробовать без входа
-              </Button>
-            </Link>
           </motion.div>
 
           <Stagger className="grid w-full max-w-3xl grid-cols-3 gap-4 pt-12 sm:gap-8" delay={0.35}>

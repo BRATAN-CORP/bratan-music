@@ -12,6 +12,8 @@ interface TrackItemProps {
   onPlay?: (track: Track) => void;
   /** When set, renders an action menu with "Удалить из плейлиста" */
   playlistId?: string;
+  /** When true, the action menu is suppressed (the heart already removes the track). */
+  hideRemoveMenu?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -20,7 +22,7 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function TrackItem({ track, index, onPlay, playlistId }: TrackItemProps) {
+export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: TrackItemProps) {
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
@@ -96,7 +98,7 @@ export function TrackItem({ track, index, onPlay, playlistId }: TrackItemProps) 
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
-        {playlistId ? (
+        {playlistId && !hideRemoveMenu ? (
           <div ref={menuRef} className="relative">
             <Button
               variant="ghost"

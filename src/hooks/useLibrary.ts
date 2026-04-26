@@ -109,6 +109,30 @@ export function useAddTrackToPlaylist() {
   });
 }
 
+export function useReorderPlaylistTracks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ playlistId, trackIds }: { playlistId: string; trackIds: string[] }) =>
+      api.put(`/playlists/${playlistId}/reorder`, { trackIds }),
+    onMutate: async ({ playlistId, trackIds }) => {
+      await qc.cancelQueries({ queryKey: ['playlist', playlistId] });
+      const prev = qc.getQueryData<PlaylistWithTracks>(['playlist', playlistId]);
+      if (prev) {
+        const byId = new Map(prev.tracks.map((t) => [t.id, t]));
+        const reordered = trackIds.map((id) => byId.get(id)).filter((t): t is Track => Boolean(t));
+        qc.setQueryData<PlaylistWithTracks>(['playlist', playlistId], { ...prev, tracks: reordered });
+      }
+      return { prev };
+    },
+    onError: (_e, vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['playlist', vars.playlistId], ctx.prev);
+    },
+    onSettled: (_d, _e, vars) => {
+      qc.invalidateQueries({ queryKey: ['playlist', vars.playlistId] });
+    },
+  });
+}
+
 export function useRemoveTrackFromPlaylist() {
   const qc = useQueryClient();
   return useMutation({
