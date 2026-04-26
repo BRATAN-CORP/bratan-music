@@ -28,6 +28,16 @@ interface PtRow {
   snapshot?: string | null;
 }
 
+interface PlaylistRow {
+  id: string;
+  user_id: string;
+  name: string;
+  is_liked: number;
+  created_at: number;
+  updated_at: number;
+  track_count?: number | null;
+}
+
 function rowToTrack(r: PtRow) {
   const snap = safeJson<TrackSnapshot>(r.snapshot);
   return {
@@ -43,13 +53,24 @@ function rowToTrack(r: PtRow) {
   };
 }
 
+function rowToPlaylist(r: PlaylistRow) {
+  return {
+    id: r.id,
+    name: r.name,
+    isLiked: Boolean(r.is_liked),
+    trackCount: Number(r.track_count ?? 0),
+    updatedAt: Number(r.updated_at ?? 0),
+    createdAt: Number(r.created_at ?? 0),
+  };
+}
+
 playlists.get('/', async (c) => {
   const userId = c.get('userId');
   const items = await c.env.DB.prepare(
-    'SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC'
-  ).bind(userId).all();
+    'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC'
+  ).bind(userId).all<PlaylistRow>();
 
-  return c.json({ items: items.results });
+  return c.json({ items: (items.results ?? []).map(rowToPlaylist) });
 });
 
 playlists.post('/', async (c) => {
@@ -67,8 +88,10 @@ playlists.post('/', async (c) => {
     'INSERT INTO playlists (id, user_id, name, is_liked, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)'
   ).bind(id, userId, body.name.trim(), now, now).run();
 
-  const playlist = await c.env.DB.prepare('SELECT * FROM playlists WHERE id = ?').bind(id).first();
-  return c.json(playlist, 201);
+  const playlist = await c.env.DB.prepare(
+    'SELECT p.*, 0 as track_count FROM playlists p WHERE p.id = ?'
+  ).bind(id).first<PlaylistRow>();
+  return c.json(playlist ? rowToPlaylist(playlist) : { id, name: body.name.trim(), isLiked: false, trackCount: 0, updatedAt: now, createdAt: now }, 201);
 });
 
 playlists.get('/:id', async (c) => {
@@ -76,8 +99,8 @@ playlists.get('/:id', async (c) => {
   const id = c.req.param('id');
 
   const playlist = await c.env.DB.prepare(
-    'SELECT * FROM playlists WHERE id = ? AND user_id = ?'
-  ).bind(id, userId).first();
+    'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.id = ? AND p.user_id = ?'
+  ).bind(id, userId).first<PlaylistRow>();
 
   if (!playlist) {
     return c.json({ error: 'Плейлист не найден' }, 404);
@@ -87,7 +110,7 @@ playlists.get('/:id', async (c) => {
     'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
   ).bind(id).all<PtRow>();
 
-  return c.json({ ...playlist, tracks: (tracks.results ?? []).map(rowToTrack) });
+  return c.json({ ...rowToPlaylist(playlist), tracks: (tracks.results ?? []).map(rowToTrack) });
 });
 
 playlists.put('/:id', async (c) => {
@@ -112,8 +135,10 @@ playlists.put('/:id', async (c) => {
     'UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?'
   ).bind(body.name.trim(), now, id).run();
 
-  const updated = await c.env.DB.prepare('SELECT * FROM playlists WHERE id = ?').bind(id).first();
-  return c.json(updated);
+  const updated = await c.env.DB.prepare(
+    'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.id = ?'
+  ).bind(id).first<PlaylistRow>();
+  return c.json(updated ? rowToPlaylist(updated) : { ok: true });
 });
 
 playlists.delete('/:id', async (c) => {

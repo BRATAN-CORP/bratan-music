@@ -139,6 +139,7 @@ export function useLikeTrack() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['liked'] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist'] });
     },
   });
 }
@@ -161,6 +162,7 @@ export function useUnlikeTrack() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['liked'] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist'] });
     },
   });
 }

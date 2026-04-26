@@ -28,6 +28,16 @@ interface DbRow {
   snapshot?: string | null;
 }
 
+interface PlaylistRow {
+  id: string;
+  user_id: string;
+  name: string;
+  is_liked: number;
+  created_at: number;
+  updated_at: number;
+  track_count?: number | null;
+}
+
 function rowToTrack(r: DbRow) {
   const snap = safeJson<TrackSnapshot>(r.snapshot);
   return {
@@ -39,6 +49,17 @@ function rowToTrack(r: DbRow) {
     album: snap?.album ?? '',
     coverUrl: snap?.coverUrl ?? '',
     duration: snap?.duration ?? 0,
+  };
+}
+
+function rowToPlaylist(r: PlaylistRow) {
+  return {
+    id: r.id,
+    name: r.name,
+    isLiked: Boolean(r.is_liked),
+    trackCount: Number(r.track_count ?? 0),
+    updatedAt: Number(r.updated_at ?? 0),
+    createdAt: Number(r.created_at ?? 0),
   };
 }
 
@@ -162,9 +183,9 @@ library.get('/playlists', async (c) => {
 
   const items = await c.env.DB.prepare(
     'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC'
-  ).bind(userId).all();
+  ).bind(userId).all<PlaylistRow>();
 
-  return c.json({ items: items.results });
+  return c.json({ items: (items.results ?? []).map(rowToPlaylist) });
 });
 
 export { library };
