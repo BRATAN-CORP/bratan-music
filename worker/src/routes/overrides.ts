@@ -92,19 +92,54 @@ overrides.get('/:id/override/stream', async (c) => {
     return c.json({ error: 'Перезалив не найден' }, 404);
   }
 
-  const storageService = new StorageService(c.env);
-  const object = await storageService.getObject(override.r2_key);
+  // Honor HTTP Range requests so the <audio> element can seek inside the
+  // uploaded file. Without this, R2 returns the full body and the browser
+  // refuses to scrub backward (or forward past what's buffered).
+  const rangeHeader = c.req.header('Range');
+  let rangeOpt: { offset: number; length?: number } | undefined;
+  if (rangeHeader) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+    if (match) {
+      const start = match[1] ? parseInt(match[1], 10) : NaN;
+      const end = match[2] ? parseInt(match[2], 10) : NaN;
+      if (!Number.isNaN(start)) {
+        rangeOpt = { offset: start };
+        if (!Number.isNaN(end)) rangeOpt.length = end - start + 1;
+      } else if (!Number.isNaN(end)) {
+        // suffix-byte-range like "bytes=-N" — ask R2 for the last N bytes
+        rangeOpt = { offset: -end };
+      }
+    }
+  }
+
+  const object = await c.env.TRACKS.get(
+    override.r2_key,
+    rangeOpt ? { range: rangeOpt } : undefined
+  );
 
   if (!object) {
     return c.json({ error: 'Файл не найден в хранилище' }, 404);
   }
 
-  return new Response(object.body, {
-    headers: {
-      'Content-Type': override.mime_type,
-      'Cache-Control': 'private, max-age=3600',
-    },
-  });
+  const total = object.size;
+  const headers = new Headers();
+  headers.set('Content-Type', override.mime_type);
+  headers.set('Accept-Ranges', 'bytes');
+  headers.set('Cache-Control', 'private, max-age=3600');
+
+  if (rangeOpt) {
+    const start = rangeOpt.offset >= 0
+      ? rangeOpt.offset
+      : Math.max(0, total + rangeOpt.offset);
+    const length = rangeOpt.length ?? (total - start);
+    const end = Math.min(total - 1, start + length - 1);
+    headers.set('Content-Range', `bytes ${start}-${end}/${total}`);
+    headers.set('Content-Length', String(end - start + 1));
+    return new Response(object.body, { status: 206, headers });
+  }
+
+  headers.set('Content-Length', String(total));
+  return new Response(object.body, { status: 200, headers });
 });
 
 export { overrides };

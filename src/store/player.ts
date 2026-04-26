@@ -22,6 +22,10 @@ interface PlayerState {
   duration: number;
   error: string | null;
   fullscreen: boolean;
+  /** Bumped to force the audio hook to re-fetch the stream URL for the
+   * current track (used after replacing or deleting an override). */
+  streamVersion: number;
+  bumpStream: () => void;
   setTrack: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
   addToQueue: (track: Track) => void;
@@ -53,6 +57,9 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   duration: 0,
   error: null,
   fullscreen: false,
+  streamVersion: 0,
+
+  bumpStream: () => set((s) => ({ streamVersion: s.streamVersion + 1, progress: 0 })),
 
   setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0, error: null }),
   setQueue: (tracks) => set({ queue: tracks }),
