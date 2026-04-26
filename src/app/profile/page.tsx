@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
 
 interface GrantResponse {
   ok: boolean;
@@ -161,6 +162,7 @@ export function ProfilePage() {
         )}
 
         {profile?.isAdmin && <AdminGrantPanel />}
+        {profile?.isAdmin && <AdminTidalPanel />}
 
         <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
           <h2 className="text-sm font-medium">Настройки</h2>

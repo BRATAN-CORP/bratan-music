@@ -251,6 +251,28 @@ export class TidalAuth {
     }
   }
 
+  /** Public wrapper around the cached KV session, used by the admin UI. */
+  async readSession(): Promise<TidalTokens | null> {
+    return this.getCachedSession();
+  }
+
+  /** Wipes the cached Tidal session from KV (admin "logout"). */
+  async clearSession(): Promise<void> {
+    await this.env.SESSIONS.delete(KV_KEY);
+  }
+
+  /**
+   * Stores a refresh token (and optional access token) and validates by
+   * refreshing immediately. Used by the admin "swap account" form.
+   */
+  async installRefreshToken(refreshToken: string): Promise<TidalTokens> {
+    const refreshed = await this.refreshSession(refreshToken);
+    if (!refreshed) {
+      throw new Error('Tidal отверг refresh token. Проверьте корректность или client_id/secret.');
+    }
+    return refreshed;
+  }
+
   private async getCachedSession(): Promise<TidalTokens | null> {
     const raw = await this.env.SESSIONS.get(KV_KEY);
     if (!raw) return null;
