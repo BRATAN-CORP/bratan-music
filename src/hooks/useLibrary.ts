@@ -89,7 +89,21 @@ export function useRenamePlaylist() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => api.put(`/playlists/${id}`, { name }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist', id] });
+    },
+  });
+}
+
+export function useDeletePlaylistCover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/playlists/${id}/cover`),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist', id] });
+    },
   });
 }
 

@@ -37,6 +37,10 @@ export interface Playlist {
   trackCount: number;
   isLiked: boolean;
   updatedAt: number;
+  /** Path under the API (e.g. /playlists/<id>/cover?v=…) when the user
+   * has uploaded a cover, otherwise null. Frontend prefixes with
+   * API_BASE before rendering in <img>. */
+  coverUrl?: string | null;
 }
 
 export interface UserLimits {

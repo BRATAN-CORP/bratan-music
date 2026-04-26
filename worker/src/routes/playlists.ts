@@ -4,6 +4,31 @@ import { jwtAuth } from '../middleware/auth';
 
 const playlists = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+// Public cover endpoint — registered BEFORE jwtAuth so <img> tags can
+// load it without an Authorization header. The R2 key is namespaced by
+// the random playlist UUID, which is effectively unguessable.
+playlists.get('/:id/cover', async (c) => {
+  const id = c.req.param('id');
+  const row = await c.env.DB.prepare(
+    'SELECT cover_r2_key FROM playlists WHERE id = ?'
+  ).bind(id).first<{ cover_r2_key: string | null }>();
+
+  if (!row?.cover_r2_key) {
+    return c.json({ error: 'Обложка не найдена' }, 404);
+  }
+
+  const object = await c.env.TRACKS.get(row.cover_r2_key);
+  if (!object) {
+    return c.json({ error: 'Файл не найден в хранилище' }, 404);
+  }
+
+  const headers = new Headers();
+  headers.set('Content-Type', object.httpMetadata?.contentType ?? 'image/jpeg');
+  headers.set('Cache-Control', 'public, max-age=86400, immutable');
+  headers.set('Content-Length', String(object.size));
+  return new Response(object.body, { status: 200, headers });
+});
+
 playlists.use('/*', jwtAuth);
 
 interface TrackSnapshot {
@@ -36,7 +61,17 @@ interface PlaylistRow {
   created_at: number;
   updated_at: number;
   track_count?: number | null;
+  cover_r2_key?: string | null;
+  cover_updated_at?: number | null;
 }
+
+const COVER_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const COVER_ALLOWED_MIME = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
 
 function rowToTrack(r: PtRow) {
   const snap = safeJson<TrackSnapshot>(r.snapshot);
@@ -54,6 +89,7 @@ function rowToTrack(r: PtRow) {
 }
 
 function rowToPlaylist(r: PlaylistRow) {
+  const hasCover = Boolean(r.cover_r2_key);
   return {
     id: r.id,
     name: r.name,
@@ -61,6 +97,7 @@ function rowToPlaylist(r: PlaylistRow) {
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),
+    coverUrl: hasCover ? `/playlists/${r.id}/cover?v=${r.cover_updated_at ?? 0}` : null,
   };
 }
 
@@ -116,7 +153,12 @@ playlists.get('/:id', async (c) => {
 playlists.put('/:id', async (c) => {
   const userId = c.get('userId');
   const id = c.req.param('id');
-  const body = await c.req.json<{ name: string }>();
+  const body = await c.req.json<{ name?: string }>().catch(() => ({}) as { name?: string });
+  const name = body.name?.trim();
+
+  if (!name) {
+    return c.json({ error: 'Название обязательно' }, 400);
+  }
 
   const existing = await c.env.DB.prepare(
     'SELECT id, is_liked FROM playlists WHERE id = ? AND user_id = ?'
@@ -133,7 +175,7 @@ playlists.put('/:id', async (c) => {
   const now = Math.floor(Date.now() / 1000);
   await c.env.DB.prepare(
     'UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?'
-  ).bind(body.name.trim(), now, id).run();
+  ).bind(name, now, id).run();
 
   const updated = await c.env.DB.prepare(
     'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.id = ?'
@@ -247,6 +289,76 @@ playlists.delete('/:id/tracks/:trackId', async (c) => {
 
   const now = Math.floor(Date.now() / 1000);
   await c.env.DB.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').bind(now, id).run();
+  return c.json({ ok: true });
+});
+
+// Cover upload: PUT /playlists/:id/cover with raw image bytes (max 2 MB).
+playlists.put('/:id/cover', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id, is_liked, cover_r2_key FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; is_liked: number; cover_r2_key: string | null }>();
+
+  if (!existing) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+  if (existing.is_liked === 1) {
+    return c.json({ error: 'Системный плейлист нельзя редактировать' }, 400);
+  }
+
+  const contentType = c.req.header('Content-Type') ?? 'image/jpeg';
+  if (!COVER_ALLOWED_MIME.has(contentType)) {
+    return c.json({ error: 'Неподдерживаемый формат изображения' }, 400);
+  }
+
+  const contentLength = parseInt(c.req.header('Content-Length') ?? '0', 10);
+  if (!contentLength || contentLength > COVER_MAX_BYTES) {
+    return c.json({ error: 'Файл слишком большой (макс. 2 МБ)' }, 400);
+  }
+
+  if (!c.req.raw.body) {
+    return c.json({ error: 'Тело запроса обязательно' }, 400);
+  }
+
+  const r2Key = `playlist-covers/${userId}/${id}`;
+  await c.env.TRACKS.put(r2Key, c.req.raw.body, {
+    httpMetadata: { contentType },
+  });
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    'UPDATE playlists SET cover_r2_key = ?, cover_updated_at = ?, updated_at = ? WHERE id = ?'
+  ).bind(r2Key, now, now, id).run();
+
+  return c.json({
+    ok: true,
+    coverUrl: `/playlists/${id}/cover?v=${now}`,
+  });
+});
+
+playlists.delete('/:id/cover', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id, cover_r2_key FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; cover_r2_key: string | null }>();
+
+  if (!existing) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+  if (!existing.cover_r2_key) {
+    return c.json({ error: 'Обложка не установлена' }, 404);
+  }
+
+  await c.env.TRACKS.delete(existing.cover_r2_key);
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    'UPDATE playlists SET cover_r2_key = NULL, cover_updated_at = NULL, updated_at = ? WHERE id = ?'
+  ).bind(now, id).run();
+
   return c.json({ ok: true });
 });
 

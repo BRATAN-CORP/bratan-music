@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/store/auth';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
+export const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 function parseErrorMessage(text: string): string {
   try {

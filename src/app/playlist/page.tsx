@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Reorder } from 'motion/react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Pencil, ListMusic } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
+import { PlaylistEditModal } from '@/components/features/PlaylistEditModal';
 import { usePlaylist, useReorderPlaylistTracks } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { Button } from '@/components/ui/Button';
+import { API_BASE } from '@/lib/api';
 import type { Track } from '@/types';
 
 export function PlaylistPage() {
@@ -20,6 +23,9 @@ export function PlaylistPage() {
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
   const ownPlaylist = useMemo(() => Boolean(playlist && id), [playlist, id]);
   const hideRemoveMenu = Boolean(playlist?.isLiked);
+  const [editOpen, setEditOpen] = useState(false);
+  const canEdit = Boolean(playlist && !playlist.isLiked);
+  const coverHref = playlist?.coverUrl ? `${API_BASE}${playlist.coverUrl}` : null;
 
   useEffect(() => {
     setLocalTracks(tracks);
@@ -79,13 +85,39 @@ export function PlaylistPage() {
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         ) : playlist ? (
           <>
-            <div className="mb-8 flex flex-col gap-2 border-b border-border pb-6">
-              <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Плейлист</span>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
-              <p className="text-xs text-muted-foreground">
-                {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
-              </p>
+            <div className="mb-8 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end">
+              <div className="h-32 w-32 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary sm:h-44 sm:w-44">
+                {coverHref ? (
+                  <img src={coverHref} alt={playlist.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                    <ListMusic size={36} />
+                  </div>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Плейлист</span>
+                <h1 className="break-words text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
+                <p className="text-xs text-muted-foreground">
+                  {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
+                </p>
+                {canEdit && (
+                  <div className="mt-1">
+                    <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                      <Pencil size={14} />
+                      Редактировать
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
+            {canEdit && (
+              <PlaylistEditModal
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                playlist={playlist}
+              />
+            )}
             {ownPlaylist && !hideRemoveMenu ? (
               <Reorder.Group
                 axis="y"

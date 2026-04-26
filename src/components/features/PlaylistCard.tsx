@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2 } from 'lucide-react';
+import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2, Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Playlist } from '@/types';
 import { useDeletePlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
+import { PlaylistEditModal } from '@/components/features/PlaylistEditModal';
+import { API_BASE } from '@/lib/api';
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -13,8 +15,10 @@ interface PlaylistCardProps {
 export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const deletePlaylist = useDeletePlaylist();
+  const coverHref = playlist.coverUrl ? `${API_BASE}${playlist.coverUrl}` : null;
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -51,8 +55,14 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           to={`/playlist/${playlist.id}`}
           className="flex items-center gap-4 border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary rounded-[var(--radius-md)]"
         >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
-            {playlist.isLiked ? <Heart size={18} fill="currentColor" /> : <ListMusic size={18} />}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
+            {coverHref ? (
+              <img src={coverHref} alt={playlist.name} className="h-full w-full object-cover" />
+            ) : playlist.isLiked ? (
+              <Heart size={18} fill="currentColor" />
+            ) : (
+              <ListMusic size={18} />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{playlist.name}</p>
@@ -83,6 +93,19 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                     transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
                     className="absolute right-0 top-9 z-20 w-48 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card shadow-[var(--shadow-lg)]"
                   >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMenuOpen(false);
+                        setEditOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                    >
+                      <Pencil size={14} />
+                      Переименовать / обложка
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -155,6 +178,12 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PlaylistEditModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        playlist={playlist}
+      />
     </>
   );
 }
