@@ -1,22 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Loader2, Mic2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useLyrics, parseLrc, type LyricLine } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/store/player';
 
 interface LyricsContentProps {
   trackId: string;
-  onClose?: () => void;
-  /** Drops the close button (used when the parent renders its own toggle). */
-  showHeader?: boolean;
 }
 
 /**
- * Inner lyrics view — fetches, parses, and renders the (possibly synced)
- * lyrics. Has no positioning of its own so it can be embedded as a side
- * panel on desktop or as a full-screen overlay on mobile.
+ * Inner lyrics view — fetches, parses and renders the (possibly synced)
+ * lyrics in Apple-Music style. Has no positioning of its own so it can be
+ * embedded as a side panel on desktop or as a full-screen overlay on mobile.
  */
-function LyricsContent({ trackId, onClose, showHeader = true }: LyricsContentProps) {
+function LyricsContent({ trackId }: LyricsContentProps) {
   const { data, isLoading, isError } = useLyrics(trackId);
   const progress = usePlayerStore((s) => s.progress);
 
@@ -44,39 +41,15 @@ function LyricsContent({ trackId, onClose, showHeader = true }: LyricsContentPro
   }, [lines, progress]);
 
   return (
-    <div className="flex h-full flex-col">
-      {showHeader && (
-        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-          <div className="flex items-center gap-2 text-sm font-medium tracking-tight">
-            <Mic2 size={16} className="text-[var(--color-accent)]" />
-            <span>Текст песни</span>
-            {data?.provider && (
-              <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                {data.provider}
-              </span>
-            )}
-          </div>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="Закрыть текст"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-      )}
-      <LyricsBody
-        isLoading={isLoading}
-        isError={isError}
-        data={data}
-        lines={lines}
-        activeIndex={activeIndex}
-        isRtl={Boolean(data?.isRightToLeft)}
-      />
-    </div>
+    <LyricsBody
+      isLoading={isLoading}
+      isError={isError}
+      data={data}
+      lines={lines}
+      activeIndex={activeIndex}
+      progress={progress}
+      isRtl={Boolean(data?.isRightToLeft)}
+    />
   );
 }
 
@@ -95,20 +68,21 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: Lyrics
   const reduce = useReducedMotion();
 
   if (mode === 'side') {
-    // The parent already gates rendering; we just animate the slide-in.
+    // Side pane on md+. Borderless and transparent so it visually merges
+    // with the fullscreen player background and doesn't look like a card.
     return (
       <AnimatePresence>
         {open && (
           <motion.aside
             key="lyrics-side"
-            initial={reduce ? false : { opacity: 0, x: 40 }}
+            initial={reduce ? false : { opacity: 0, x: 32 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 40 }}
+            exit={{ opacity: 0, x: 32 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="hidden h-full w-full overflow-hidden border-l border-border/40 bg-background/40 backdrop-blur-md md:block"
+            className="hidden h-full w-full overflow-hidden md:block"
             aria-label="Текст песни"
           >
-            <LyricsContent trackId={trackId} onClose={onClose} />
+            <LyricsContent trackId={trackId} />
           </motion.aside>
         )}
       </AnimatePresence>
@@ -124,12 +98,17 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: Lyrics
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
-          className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-md md:hidden"
+          // No card chrome — full-bleed background that visually replaces the
+          // player surface on mobile. Tap anywhere closes.
+          className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-xl md:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Текст песни"
+          onClick={onClose}
         >
-          <LyricsContent trackId={trackId} onClose={onClose} />
+          <div className="flex-1 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <LyricsContent trackId={trackId} />
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -142,10 +121,13 @@ interface LyricsBodyProps {
   data: ReturnType<typeof useLyrics>['data'];
   lines: LyricLine[];
   activeIndex: number;
+  progress: number;
   isRtl: boolean;
 }
 
-function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: LyricsBodyProps) {
+const SCROLL_MASK = 'linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)';
+
+function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, isRtl }: LyricsBodyProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -164,7 +146,7 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
         <Loader2 size={16} className="animate-spin" />
         Загружаем текст…
       </div>
@@ -172,14 +154,14 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
   }
   if (isError) {
     return (
-      <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         Не удалось загрузить текст. Попробуйте позже.
       </div>
     );
   }
   if (!data?.available) {
     return (
-      <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         Для этого трека текст недоступен.
       </div>
     );
@@ -188,43 +170,58 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
   const synced = lines.length > 0;
   const plain = data.lyrics?.split(/\r?\n/).map((l) => l.trim()) ?? [];
 
+  // Pre-roll dots: shown before the very first synced line lands. Track how
+  // close we are to that first line so the dots can fill in (Apple Music's
+  // "instrumental ●●●" indicator).
+  const firstLineTime = synced ? lines[0]?.time ?? 0 : 0;
+  const showPreRoll = synced && activeIndex < 0 && firstLineTime > 2;
+  const preRollProgress = showPreRoll
+    ? Math.max(0, Math.min(1, progress / firstLineTime))
+    : 0;
+
   return (
     <div
       ref={containerRef}
       onWheel={() => setAutoScroll(false)}
       onTouchMove={() => setAutoScroll(false)}
-      className="relative flex-1 overflow-y-auto px-6 py-8"
+      className="relative h-full overflow-y-auto px-5 py-10 sm:px-8"
+      style={{
+        WebkitMaskImage: SCROLL_MASK,
+        maskImage: SCROLL_MASK,
+      }}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
-      <div className="mx-auto flex max-w-2xl flex-col gap-3 text-center text-lg leading-relaxed sm:text-xl">
+      <div className="mx-auto flex max-w-2xl flex-col gap-5 text-2xl font-bold leading-snug tracking-tight sm:text-[28px] md:text-[26px] lg:text-[30px]">
         {synced ? (
-          lines.map((l, i) => {
-            const isActive = i === activeIndex;
-            const isPast = i < activeIndex;
-            return (
-              <motion.p
-                key={i}
-                ref={(el) => { lineRefs.current[i] = el; }}
-                animate={{
-                  opacity: isActive ? 1 : isPast ? 0.35 : 0.55,
-                  scale: isActive ? 1.05 : 1,
-                  y: isActive ? -1 : 0,
-                  filter: isActive ? 'blur(0px)' : 'blur(0.4px)',
-                }}
-                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className={
-                  isActive
-                    ? 'font-semibold text-foreground drop-shadow-[0_2px_8px_var(--color-accent-soft)]'
-                    : 'font-medium text-muted-foreground'
-                }
-              >
-                {l.text || '\u00a0'}
-              </motion.p>
-            );
-          })
+          <>
+            {showPreRoll && <PreRollDots progress={preRollProgress} />}
+            {lines.map((l, i) => {
+              const isActive = i === activeIndex;
+              const isPast = i < activeIndex;
+              return (
+                <motion.p
+                  key={i}
+                  ref={(el) => { lineRefs.current[i] = el; }}
+                  animate={{
+                    opacity: isActive ? 1 : isPast ? 0.22 : 0.34,
+                    scale: isActive ? 1.04 : 1,
+                    filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
+                  }}
+                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  className={
+                    isActive
+                      ? 'origin-left text-foreground drop-shadow-[0_2px_18px_var(--color-accent-soft)]'
+                      : 'origin-left text-muted-foreground'
+                  }
+                >
+                  {l.text || '\u00a0'}
+                </motion.p>
+              );
+            })}
+          </>
         ) : (
           plain.map((line, i) => (
-            <p key={i} className="font-medium text-foreground/80">
+            <p key={i} className="text-foreground/70">
               {line || '\u00a0'}
             </p>
           ))
@@ -234,11 +231,45 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, isRtl }: Lyr
         <button
           type="button"
           onClick={() => setAutoScroll(true)}
-          className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 text-xs font-medium shadow-[var(--shadow-md)]"
+          className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/80 px-4 py-2 text-xs font-medium shadow-[var(--shadow-md)] backdrop-blur"
         >
           Прокручивать вместе с песней
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Pulsing pre-roll indicator shown between the start of the song and the
+ * first lyric line. Three dots that fade in / scale up as we approach the
+ * first line, mirroring Apple Music's instrumental hint.
+ */
+function PreRollDots({ progress }: { progress: number }) {
+  const reduce = useReducedMotion();
+  return (
+    <div className="flex items-center gap-2 py-2" aria-hidden>
+      {[0, 1, 2].map((i) => {
+        // Dots light up sequentially as progress moves from 0 → 1.
+        const threshold = (i + 1) / 4; // 0.25, 0.5, 0.75
+        const lit = Math.max(0, Math.min(1, (progress - threshold + 0.25) / 0.25));
+        return (
+          <motion.span
+            key={i}
+            className="inline-block h-3 w-3 rounded-full bg-foreground"
+            initial={false}
+            animate={
+              reduce
+                ? { opacity: 0.25 + 0.6 * lit, scale: 1 }
+                : {
+                  opacity: 0.25 + 0.6 * lit,
+                  scale: 0.85 + 0.25 * lit,
+                }
+            }
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          />
+        );
+      })}
     </div>
   );
 }

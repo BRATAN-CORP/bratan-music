@@ -127,7 +127,10 @@ export function FullscreenPlayer() {
                 style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
                 aria-hidden
               />
-              <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-black/60 to-black/80" aria-hidden />
+              {/* Smooth bg darkener — the previous from/via/to with three
+                  stops produced a visible band at the via point that read as
+                  a hard shadow line under the "Сейчас играет" header. */}
+              <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 to-black/80" aria-hidden />
             </>
           )}
 

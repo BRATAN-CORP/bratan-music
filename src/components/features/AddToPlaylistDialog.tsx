@@ -92,17 +92,23 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
             and the modal ends up anchored top-left (or, on mobile, off-screen
             below the player).
           */}
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+          {/* Bottom-sheet on mobile (anchored to the bottom of the viewport,
+              respecting safe-area + the persistent player + tab-bar so it
+              never lands behind them), centered modal on md+. */}
+          <div
+            className="fixed inset-0 z-[60] flex items-end justify-center md:items-center md:p-4 pointer-events-none"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--player-height, 0px) + 4rem)' }}
+          >
             <motion.div
               key="atp-panel"
               role="dialog"
               aria-modal="true"
               aria-label="Добавить в плейлист"
-              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              initial={{ opacity: 0, y: 32, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 24, scale: 0.97, transition: { duration: 0.18 } }}
+              exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="pointer-events-auto w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-[var(--radius-lg)] border border-border/60 bg-[var(--color-surface-elevated)]/80 shadow-[var(--shadow-xl)] backdrop-blur-xl ring-1 ring-white/5"
+              className="pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-t-[var(--radius-xl)] border border-border/60 bg-[var(--color-surface-elevated)]/85 shadow-[var(--shadow-xl)] backdrop-blur-xl ring-1 ring-white/5 md:rounded-[var(--radius-lg)]"
             >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
