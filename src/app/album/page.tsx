@@ -14,7 +14,7 @@ export function AlbumPage() {
   const setQueue = usePlayerStore((s) => s.setQueue);
 
   const handlePlayTrack = (track: Track) => {
-    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, duration: track.duration });
+    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
     if (album?.tracks) {
       setQueue(
         album.tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, duration: t.duration }))

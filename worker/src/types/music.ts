@@ -8,6 +8,8 @@ export interface Track {
   albumId?: string;
   duration: number;
   coverUrl?: string;
+  /** Animated cover (mp4) when the source provides one. */
+  coverVideoUrl?: string;
   explicit: boolean;
   quality?: string;
 }
@@ -19,6 +21,7 @@ export interface Album {
   artist: string;
   artistId?: string;
   coverUrl?: string;
+  coverVideoUrl?: string;
   releaseDate?: string;
   tracks: Track[];
 }

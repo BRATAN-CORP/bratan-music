@@ -9,6 +9,8 @@ interface Track {
    * (liked tracks loaded from older snapshots, etc.). */
   artistId?: string;
   coverUrl?: string;
+  /** Animated cover (mp4). Used in the fullscreen player as a tasteful loop. */
+  coverVideoUrl?: string;
   duration: number;
 }
 

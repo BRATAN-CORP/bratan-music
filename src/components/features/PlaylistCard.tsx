@@ -94,7 +94,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: -4 }}
                     transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute right-0 top-9 z-20 w-48 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card shadow-[var(--shadow-lg)]"
+                    className="absolute right-0 top-9 z-50 w-48 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/85 supports-[backdrop-filter]:backdrop-blur-xl"
                   >
                     <button
                       type="button"

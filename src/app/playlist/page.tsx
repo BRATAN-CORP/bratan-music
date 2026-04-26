@@ -43,7 +43,7 @@ export function PlaylistPage() {
       title: track.title,
       artist: track.artist,
       artistId: track.artistId,
-      coverUrl: track.coverUrl,
+      coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl,
       duration: track.duration,
     });
     setQueue(

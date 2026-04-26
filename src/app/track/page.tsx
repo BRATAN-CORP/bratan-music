@@ -22,10 +22,10 @@ export function TrackPage() {
 
   const handlePlay = () => {
     if (!track) return;
-    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, duration: track.duration });
+    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
     if (radio?.items) {
       setQueue([
-        { id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, duration: track.duration },
+        { id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration },
         ...radio.items.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, duration: t.duration })),
       ]);
     }

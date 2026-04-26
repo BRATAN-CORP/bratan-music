@@ -23,7 +23,7 @@ export interface TidalTrackRaw {
   audioModes?: string[];
   artist?: { id: number; name: string };
   artists?: { id: number; name: string; type?: string }[];
-  album?: { id: number; title: string; cover: string | null };
+  album?: { id: number; title: string; cover: string | null; videoCover?: string | null };
 }
 
 export interface TidalAlbumRaw {
@@ -33,6 +33,8 @@ export interface TidalAlbumRaw {
   numberOfTracks?: number;
   releaseDate?: string;
   cover?: string | null;
+  /** UUID of an animated mp4 cover (only some albums). */
+  videoCover?: string | null;
   artist?: { id: number; name: string };
   artists?: { id: number; name: string; type?: string }[];
   audioQuality?: string;

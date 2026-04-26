@@ -15,7 +15,7 @@ export function Sidebar() {
   if (!sidebarOpen) return null;
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-background py-6 lg:flex">
+    <aside className="hidden h-full w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-background py-6 lg:flex">
       <nav className="flex flex-col gap-0.5 px-3">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink

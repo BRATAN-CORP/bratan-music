@@ -226,7 +226,32 @@ export function FullscreenPlayer() {
                 glare
                 className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
               >
-                {currentTrack.coverUrl ? (
+                {currentTrack.coverVideoUrl ? (
+                  // Animated cover (Tidal mp4). Falls back gracefully — the
+                  // <img> stays under the <video> as a poster so even if the
+                  // mp4 fails to load we still see a static cover.
+                  <div className="relative h-full w-full">
+                    {currentTrack.coverUrl && (
+                      <img
+                        src={currentTrack.coverUrl}
+                        alt={currentTrack.title}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    )}
+                    <video
+                      key={currentTrack.coverVideoUrl}
+                      src={currentTrack.coverVideoUrl}
+                      poster={currentTrack.coverUrl}
+                      className="relative z-[1] h-full w-full object-cover"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      preload="auto"
+                      aria-hidden
+                    />
+                  </div>
+                ) : currentTrack.coverUrl ? (
                   <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">

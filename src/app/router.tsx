@@ -19,11 +19,11 @@ import { NotFoundPage } from '@/app/not-found/page';
 function AppLayout() {
   useAutoAuth();
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <Header />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto pb-44 lg:pb-32">
+        <main className="min-w-0 flex-1 overflow-y-auto pb-44 lg:pb-32">
           <PageTransition>
             <Outlet />
           </PageTransition>

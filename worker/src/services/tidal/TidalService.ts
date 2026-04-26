@@ -12,6 +12,18 @@ function coverUrl(coverId: string | null | undefined, size: number = 640): strin
   return `${IMG_BASE}/${coverId.replace(/-/g, '/')}/${size}x${size}.jpg`;
 }
 
+const VIDEO_BASE = 'https://resources.tidal.com/videos';
+
+/**
+ * Construct the URL for an animated cover (mp4) at the given size. Only some
+ * Tidal albums expose this — when present the API returns a UUID under
+ * `videoCover`, identical encoding to image covers (dashes → slashes).
+ */
+function videoCoverUrl(videoId: string | null | undefined, size: number = 1280): string | undefined {
+  if (!videoId) return undefined;
+  return `${VIDEO_BASE}/${videoId.replace(/-/g, '/')}/${size}x${size}.mp4`;
+}
+
 function artistImageUrl(pictureId: string | null | undefined, size: number = 480): string | undefined {
   if (!pictureId) return undefined;
   return `${IMG_BASE}/${pictureId.replace(/-/g, '/')}/${size}x${size}.jpg`;
@@ -29,6 +41,7 @@ function mapTrack(raw: TidalTrackRaw): Track {
     albumId: raw.album ? String(raw.album.id) : undefined,
     duration: raw.duration,
     coverUrl: coverUrl(raw.album?.cover),
+    coverVideoUrl: videoCoverUrl(raw.album?.videoCover),
     explicit: raw.explicit ?? false,
     quality: raw.audioQuality ?? 'HIGH',
   };
@@ -43,6 +56,7 @@ function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = []): Album {
     artist: mainArtist?.name ?? 'Unknown Artist',
     artistId: mainArtist ? String(mainArtist.id) : undefined,
     coverUrl: coverUrl(raw.cover),
+    coverVideoUrl: videoCoverUrl(raw.videoCover),
     releaseDate: raw.releaseDate,
     tracks,
   };
