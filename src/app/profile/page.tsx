@@ -4,6 +4,8 @@ import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent } from '@/components/ui/Card';
 
 interface UserProfile {
   id: string;
@@ -28,81 +30,74 @@ export function ProfilePage() {
 
   return (
     <AuthGuard>
-      <div className="p-6 max-w-md mx-auto flex flex-col gap-6">
-        <h1 className="text-2xl font-bold">Профиль</h1>
+      <div className="mx-auto flex max-w-md flex-col gap-6 p-4 sm:p-6 lg:p-8">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary">Аккаунт</p>
+          <h1 className="hero-gradient-text text-4xl font-black">Профиль</h1>
+        </div>
 
-        <div
-          className="p-4 rounded-xl flex flex-col gap-3"
-          style={{ backgroundColor: 'var(--color-surface-raised)' }}
-        >
+        <Card className="animate-enter bg-card/70">
+          <CardContent className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold"
-              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)' }}
-            >
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-black text-primary-foreground shadow-[var(--shadow-glow)]">
               {(user?.name ?? user?.username ?? '?')[0]?.toUpperCase()}
             </div>
             <div>
-              <p className="font-medium">{user?.name ?? user?.username ?? 'Пользователь'}</p>
+              <p className="font-semibold">{user?.name ?? user?.username ?? 'Пользователь'}</p>
               {user?.username && (
-                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>@{user.username}</p>
+                <p className="text-sm text-muted-foreground">@{user.username}</p>
               )}
             </div>
           </div>
 
           {profile?.isAdmin && (
-            <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-accent)' }}>
+            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
               <Shield size={16} /> Администратор
             </div>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
-        <div
-          className="p-4 rounded-xl flex flex-col gap-2"
-          style={{ backgroundColor: 'var(--color-surface-raised)' }}
-        >
-          <h2 className="font-medium flex items-center gap-2">
-            <Crown size={16} style={{ color: 'var(--color-accent)' }} />
+        <Card className="animate-enter bg-card/70">
+          <CardContent className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Crown size={16} className="text-primary" />
             Подписка
           </h2>
           {profile?.subscription ? (
             <>
-              <p className="text-sm" style={{ color: 'var(--color-accent)' }}>Активна</p>
-              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-sm font-semibold text-primary">Активна</p>
+              <p className="text-xs text-muted-foreground">
                 До {new Date(profile.subscription.expiresAt * 1000).toLocaleDateString('ru-RU')}
               </p>
             </>
           ) : (
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            <p className="text-sm text-muted-foreground">
               Не активна. 3 трека в день бесплатно.
             </p>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {limits && (
-          <div
-            className="p-4 rounded-xl flex flex-col gap-2"
-            style={{ backgroundColor: 'var(--color-surface-raised)' }}
-          >
-            <h2 className="font-medium">Лимиты</h2>
+          <Card className="animate-enter bg-card/70">
+            <CardContent className="flex flex-col gap-2">
+            <h2 className="font-semibold">Лимиты</h2>
             {limits.daily.unlimited ? (
-              <p className="text-sm" style={{ color: 'var(--color-accent)' }}>Безлимитный доступ</p>
+              <p className="text-sm font-semibold text-primary">Безлимитный доступ</p>
             ) : (
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-sm text-muted-foreground">
                 Использовано: {limits.daily.used} / {limits.daily.limit}
               </p>
             )}
-          </div>
+            </CardContent>
+          </Card>
         )}
 
-        <button
-          onClick={logout}
-          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ backgroundColor: 'var(--color-danger-muted)', color: 'var(--color-danger)' }}
-        >
+        <Button onClick={logout} variant="danger" className="w-full">
           <LogOut size={16} />
           Выйти
-        </button>
+        </Button>
       </div>
     </AuthGuard>
   );

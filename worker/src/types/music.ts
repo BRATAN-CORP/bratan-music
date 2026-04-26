@@ -3,7 +3,9 @@ export interface Track {
   source: 'tidal' | 'soundcloud' | 'youtube';
   title: string;
   artist: string;
+  artistId?: string;
   album?: string;
+  albumId?: string;
   duration: number;
   coverUrl?: string;
   explicit: boolean;
@@ -15,6 +17,7 @@ export interface Album {
   source: string;
   title: string;
   artist: string;
+  artistId?: string;
   coverUrl?: string;
   releaseDate?: string;
   tracks: Track[];

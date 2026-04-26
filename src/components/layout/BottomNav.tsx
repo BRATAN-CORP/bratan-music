@@ -11,10 +11,8 @@ const navItems = [
 export function BottomNav() {
   return (
     <nav
-      className="lg:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around h-14 border-t z-40"
+      className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-border/70 bg-card/85 backdrop-blur-2xl lg:hidden"
       style={{
-        backgroundColor: 'var(--color-surface)',
-        borderColor: 'var(--color-border)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
@@ -22,10 +20,11 @@ export function BottomNav() {
         <NavLink
           key={to}
           to={to}
-          className="flex flex-col items-center gap-0.5 py-1 px-3 text-xs"
-          style={({ isActive }) => ({
-            color: isActive ? 'var(--color-accent)' : 'var(--color-text-subtle)',
-          })}
+          className={({ isActive }) =>
+            `flex min-w-16 flex-col items-center gap-0.5 rounded-2xl px-3 py-2 text-xs font-semibold transition-colors ${
+              isActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground'
+            }`
+          }
         >
           <Icon size={20} />
           {label}
