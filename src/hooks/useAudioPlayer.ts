@@ -90,8 +90,8 @@ function ensureAudioGraph(): AudioBundle {
     });
 
     const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.85;
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.92;
 
     const chain: AudioNode[] = [source, ...filters, analyser, ctx.destination];
     for (let i = 0; i < chain.length - 1; i++) {
@@ -307,7 +307,9 @@ export function isEqAvailable(): boolean {
   return Boolean(b.ctx && !b.ctxFailed && b.filters.length > 0);
 }
 
-export function useAnalyserAmplitude(active: boolean): number {
+export type AmplitudeBand = 'full' | 'bass';
+
+export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'full'): number {
   const [amp, setAmp] = useState(0);
   useEffect(() => {
     if (!active) {
@@ -315,27 +317,49 @@ export function useAnalyserAmplitude(active: boolean): number {
       return;
     }
     const b = ensureAudioGraph();
-    if (!b.analyser) return;
+    if (!b.analyser || !b.ctx) return;
     const analyser = b.analyser;
+    const sampleRate = b.ctx.sampleRate || 44100;
+    const binHz = sampleRate / analyser.fftSize;
+    // Bass: ~30..180 Hz, focused on the kick/sub-bass region.
+    const bassLo = Math.max(1, Math.floor(30 / binHz));
+    const bassHi = Math.max(bassLo + 1, Math.ceil(180 / binHz));
     const buffer = new Uint8Array(analyser.frequencyBinCount);
     let raf = 0;
     let last = 0;
-    const tick = () => {
+    let lastAt = performance.now();
+    const tick = (now: number) => {
       analyser.getByteFrequencyData(buffer);
-      let sumSq = 0;
-      for (let i = 0; i < buffer.length; i++) {
-        const v = (buffer[i] ?? 0) / 255;
-        sumSq += v * v;
+      let value: number;
+      if (band === 'bass') {
+        let sum = 0;
+        let count = 0;
+        for (let i = bassLo; i < bassHi && i < buffer.length; i++) {
+          sum += (buffer[i] ?? 0) / 255;
+          count++;
+        }
+        value = count > 0 ? sum / count : 0;
+      } else {
+        let sumSq = 0;
+        for (let i = 0; i < buffer.length; i++) {
+          const v = (buffer[i] ?? 0) / 255;
+          sumSq += v * v;
+        }
+        value = Math.sqrt(sumSq / buffer.length);
       }
-      const rms = Math.sqrt(sumSq / buffer.length);
-      // smooth
-      last = last * 0.7 + rms * 0.3;
+      // Heavier exponential smoothing on top of analyser's own smoothing.
+      // dt-aware so the perceived speed is stable across frame rates.
+      const dt = Math.min(64, now - lastAt);
+      lastAt = now;
+      const tau = band === 'bass' ? 220 : 90; // ms; higher = slower
+      const k = 1 - Math.exp(-dt / tau);
+      last = last + (value - last) * k;
       setAmp(last);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [active]);
+  }, [active, band]);
   return amp;
 }
 

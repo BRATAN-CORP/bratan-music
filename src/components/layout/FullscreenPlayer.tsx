@@ -31,9 +31,9 @@ export function FullscreenPlayer() {
   const reduce = useReducedMotion();
   const [eqOpen, setEqOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
-  const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying);
-  // amp is 0..~0.6, normalize to a calm pulse range
-  const pulse = Math.min(1, amp * 2.4);
+  const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
+  // amp is 0..~0.6 from the bass band; scale into a calm pulse range
+  const pulse = Math.min(1, amp * 1.8);
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const coarse = useCoarsePointer();
@@ -111,11 +111,11 @@ export function FullscreenPlayer() {
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10"
                   animate={reduce ? undefined : {
-                    scale: 1.05 + pulse * 0.18,
-                    opacity: 0.55 + pulse * 0.35,
-                    filter: `blur(${72 + pulse * 36}px) saturate(${1.4 + pulse * 0.6})`,
+                    scale: 1.04 + pulse * 0.07,
+                    opacity: 0.5 + pulse * 0.18,
+                    filter: `blur(${80 + pulse * 14}px) saturate(${1.35 + pulse * 0.2})`,
                   }}
-                  transition={{ type: 'spring', stiffness: 80, damping: 18, mass: 0.6 }}
+                  transition={{ type: 'spring', stiffness: 26, damping: 24, mass: 0.9 }}
                   style={{
                     backgroundImage: `url(${currentTrack.coverUrl})`,
                     backgroundSize: 'cover',
