@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronDown, Download, Heart, ListPlus, Loader2, Mic2, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
+  ChevronDown, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -10,6 +10,7 @@ import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
+import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel } from '@/components/features/LyricsPanel';
 import { TiltCard } from '@/components/ui/TiltCard';
@@ -44,6 +45,7 @@ export function FullscreenPlayer() {
   };
   const [eqOpen, setEqOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -169,6 +171,14 @@ export function FullscreenPlayer() {
                 title="Запустить волну на основе этого трека"
               >
                 {radioBusy ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setQueueOpen(true)}
+                aria-label="Очередь"
+              >
+                <ListOrdered size={18} />
               </Button>
               <Button
                 variant="ghost"
@@ -455,6 +465,8 @@ export function FullscreenPlayer() {
             onClose={() => setAddToPlaylistOpen(false)}
             track={currentTrack}
           />
+
+          <QueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
 
           {currentTrack && (
             <TrackOverrideModal

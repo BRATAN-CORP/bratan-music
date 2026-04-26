@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { usePlayerStore } from '@/store/player';
+import { useSettingsStore } from '@/store/settings';
 import { api } from '@/lib/api';
 
 interface StreamResponse {
@@ -7,66 +8,102 @@ interface StreamResponse {
   source: string;
 }
 
+type Slot = 'a' | 'b';
+
+/**
+ * The audio engine is a singleton with two HTMLAudioElement slots feeding a
+ * shared post-source signal chain (filters → analyser → destination). Each
+ * slot has its own GainNode so we can ramp volumes independently for
+ * crossfades. Outside of a crossfade only one slot is "active"; the other is
+ * paused with gain=0.
+ */
 interface AudioBundle {
-  audio: HTMLAudioElement;
+  audios: Record<Slot, HTMLAudioElement>;
+  sources: Record<Slot, MediaElementAudioSourceNode | null>;
+  gains: Record<Slot, GainNode | null>;
+  loaded: Record<Slot, string | null>;
   ctx: AudioContext | null;
   analyser: AnalyserNode | null;
   filters: BiquadFilterNode[];
-  source: MediaElementAudioSourceNode | null;
   ctxFailed: boolean;
-  playPromise: Promise<void> | null;
-}
-
-async function safePlay(audio: HTMLAudioElement) {
-  const b = getBundle();
-  // wait for any pending play promise to settle before issuing pause/play
-  if (b.playPromise) {
-    try { await b.playPromise; } catch { /* ignore */ }
-  }
-  const p = audio.play();
-  b.playPromise = p;
-  try { await p; } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') return;
-    throw err;
-  } finally {
-    if (b.playPromise === p) b.playPromise = null;
-  }
-}
-
-async function safePause(audio: HTMLAudioElement) {
-  const b = getBundle();
-  if (b.playPromise) {
-    try { await b.playPromise; } catch { /* ignore */ }
-  }
-  audio.pause();
+  active: Slot;
+  /** When non-null, a crossfade ramp is in flight. */
+  crossfadingInto: Slot | null;
+  playPromises: Record<Slot, Promise<void> | null>;
 }
 
 let bundle: AudioBundle | null = null;
+let corsRetried: Record<Slot, boolean> = { a: false, b: false };
 
 export const EQ_BANDS = [60, 170, 350, 1000, 3500, 10000] as const;
 
+function makeAudio(): HTMLAudioElement {
+  const a = new Audio();
+  a.preload = 'auto';
+  a.crossOrigin = 'anonymous';
+  return a;
+}
+
 function getBundle(): AudioBundle {
   if (!bundle) {
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audio.crossOrigin = 'anonymous';
-    bundle = { audio, ctx: null, analyser: null, filters: [], source: null, ctxFailed: false, playPromise: null };
+    bundle = {
+      audios: { a: makeAudio(), b: makeAudio() },
+      sources: { a: null, b: null },
+      gains: { a: null, b: null },
+      loaded: { a: null, b: null },
+      ctx: null,
+      analyser: null,
+      filters: [],
+      ctxFailed: false,
+      active: 'a',
+      crossfadingInto: null,
+      playPromises: { a: null, b: null },
+    };
   }
   return bundle;
 }
 
-let corsRetried = false;
-function reloadWithoutCors(audio: HTMLAudioElement) {
-  if (corsRetried || !audio.src) return;
-  corsRetried = true;
+function reloadWithoutCors(slot: Slot) {
+  const b = getBundle();
+  const audio = b.audios[slot];
+  if (corsRetried[slot] || !audio.src) return;
+  corsRetried[slot] = true;
   const src = audio.src;
   audio.crossOrigin = null;
   audio.src = '';
   audio.src = src;
   audio.load();
-  safePlay(audio).catch(() => {});
+  safePlay(slot).catch(() => {});
 }
 
+async function safePlay(slot: Slot) {
+  const b = getBundle();
+  const audio = b.audios[slot];
+  if (b.playPromises[slot]) {
+    try { await b.playPromises[slot]; } catch { /* ignore */ }
+  }
+  const p = audio.play();
+  b.playPromises[slot] = p;
+  try { await p; } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return;
+    throw err;
+  } finally {
+    if (b.playPromises[slot] === p) b.playPromises[slot] = null;
+  }
+}
+
+async function safePause(slot: Slot) {
+  const b = getBundle();
+  if (b.playPromises[slot]) {
+    try { await b.playPromises[slot]; } catch { /* ignore */ }
+  }
+  b.audios[slot].pause();
+}
+
+/**
+ * Build the shared signal chain lazily on first user interaction. Both slots
+ * route source → gain → filter[0] → … → filter[N] → analyser → destination.
+ */
 function ensureAudioGraph(): AudioBundle {
   const b = getBundle();
   if (b.ctx || b.ctxFailed) return b;
@@ -78,7 +115,6 @@ function ensureAudioGraph(): AudioBundle {
       return b;
     }
     const ctx = new Ctx();
-    const source = ctx.createMediaElementSource(b.audio);
 
     const filters = EQ_BANDS.map((freq, i) => {
       const f = ctx.createBiquadFilter();
@@ -93,21 +129,85 @@ function ensureAudioGraph(): AudioBundle {
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.92;
 
-    const chain: AudioNode[] = [source, ...filters, analyser, ctx.destination];
-    for (let i = 0; i < chain.length - 1; i++) {
-      const a = chain[i];
-      const b = chain[i + 1];
-      if (a && b) a.connect(b);
+    // Build filter chain: filters[0] -> filters[1] -> ... -> analyser -> destination
+    for (let i = 0; i < filters.length - 1; i++) {
+      filters[i]!.connect(filters[i + 1]!);
+    }
+    filters[filters.length - 1]!.connect(analyser);
+    analyser.connect(ctx.destination);
+
+    // Wire each slot: source -> gain -> filters[0]
+    for (const slot of ['a', 'b'] as const) {
+      const src = ctx.createMediaElementSource(b.audios[slot]);
+      const gain = ctx.createGain();
+      // Inactive slot starts muted.
+      gain.gain.value = slot === b.active ? 1 : 0;
+      src.connect(gain);
+      gain.connect(filters[0]!);
+      b.sources[slot] = src;
+      b.gains[slot] = gain;
     }
 
     b.ctx = ctx;
     b.analyser = analyser;
     b.filters = filters;
-    b.source = source;
   } catch {
     b.ctxFailed = true;
   }
   return b;
+}
+
+function inactiveSlot(b: AudioBundle): Slot {
+  return b.active === 'a' ? 'b' : 'a';
+}
+
+/**
+ * Set the gain node value (when graph is up) AND the underlying element
+ * volume (fallback for when AudioContext failed to start). Used for the
+ * crossfade ramp.
+ */
+function setSlotGain(slot: Slot, value: number) {
+  const b = getBundle();
+  const g = b.gains[slot];
+  const v = Math.max(0, Math.min(1, value));
+  if (g) {
+    try { g.gain.value = v; } catch { /* ignore */ }
+  }
+  // We always also nudge .volume so the inactive slot is silent even when the
+  // AudioContext path failed to come up (e.g. CORS retry path with no graph).
+  b.audios[slot].volume = v;
+}
+
+let activeRamp: number | null = null;
+
+function cancelRamp() {
+  if (activeRamp != null) {
+    cancelAnimationFrame(activeRamp);
+    activeRamp = null;
+  }
+}
+
+/**
+ * Animate gain from `fromValue` to `toValue` over `durationMs` for the given
+ * slot. Returns a promise that resolves when the ramp finishes (or is
+ * cancelled).
+ */
+function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const start = performance.now();
+    setSlotGain(slot, fromValue);
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const v = fromValue + (toValue - fromValue) * t;
+      setSlotGain(slot, v);
+      if (t >= 1) {
+        resolve();
+        return;
+      }
+      activeRamp = requestAnimationFrame(tick);
+    };
+    activeRamp = requestAnimationFrame(tick);
+  });
 }
 
 export function useAudioPlayer() {
@@ -119,36 +219,46 @@ export function useAudioPlayer() {
     repeat,
     progress,
     streamVersion,
+    queue,
     setProgress,
     setDuration,
     setError,
     pause,
     next,
+    setTrack,
   } = usePlayerStore();
 
-  const loadingRef = useRef<string | null>(null);
-  const loadedTrackRef = useRef<string | null>(null);
+  const crossfade = useSettingsStore((s) => s.crossfade);
+  const crossfadeDuration = useSettingsStore((s) => s.crossfadeDuration);
+  const tidalQuality = useSettingsStore((s) => s.tidalQuality);
 
+  const loadingRef = useRef<string | null>(null);
+  const crossfadingRef = useRef(false);
+
+  /** Load `trackId` into the active slot and start playback from 0. */
   const loadTrack = useCallback(async (trackId: string) => {
-    const { audio } = getBundle();
+    const b = getBundle();
     loadingRef.current = trackId;
     setError(null);
     try {
-      const { url } = await api.get<StreamResponse>(`/tracks/${trackId}/stream`);
+      const { url } = await api.get<StreamResponse>(`/tracks/${trackId}/stream?quality=${encodeURIComponent(tidalQuality)}`);
       if (loadingRef.current !== trackId) return;
-      // wait for any in-flight play to settle before swapping src
-      const b0 = getBundle();
-      if (b0.playPromise) { try { await b0.playPromise; } catch { /* ignore */ } }
+      const slot = b.active;
+      const audio = b.audios[slot];
+      if (b.playPromises[slot]) {
+        try { await b.playPromises[slot]; } catch { /* ignore */ }
+      }
       audio.pause();
       audio.src = url;
       audio.load();
-      loadedTrackRef.current = trackId;
+      b.loaded[slot] = trackId;
       ensureAudioGraph();
-      const b = getBundle();
+      setSlotGain(slot, 1);
+      setSlotGain(inactiveSlot(b), 0);
       if (b.ctx && b.ctx.state === 'suspended') {
         await b.ctx.resume().catch(() => {});
       }
-      await safePlay(audio);
+      await safePlay(slot);
     } catch (err) {
       if (loadingRef.current !== trackId) return;
       const message = err instanceof Error ? err.message : String(err);
@@ -156,18 +266,51 @@ export function useAudioPlayer() {
       setError(message);
       pause();
     }
-  }, [pause, setError]);
+  }, [pause, setError, tidalQuality]);
 
+  // Reload when track id changes (or stream version bumped).
   const lastStreamVersionRef = useRef(streamVersion);
   useEffect(() => {
     if (!currentTrack) return;
     const versionBumped = lastStreamVersionRef.current !== streamVersion;
     lastStreamVersionRef.current = streamVersion;
-    const trackChanged =
-      currentTrack.id !== loadedTrackRef.current && currentTrack.id !== loadingRef.current;
+    const b = getBundle();
+
+    // If the requested track is already loaded into the inactive slot (the
+    // crossfade preloaded it and finished) we just promote that slot — no
+    // need to refetch / restart.
+    if (b.loaded[inactiveSlot(b)] === currentTrack.id && !versionBumped) {
+      // Promote the inactive (now-playing) slot.
+      const newActive = inactiveSlot(b);
+      // Make sure old slot is silent + paused.
+      safePause(b.active);
+      b.active = newActive;
+      setSlotGain(newActive, 1);
+      setSlotGain(inactiveSlot(b), 0);
+      crossfadingRef.current = false;
+      b.crossfadingInto = null;
+      // Update mediaSession metadata.
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          artwork: currentTrack.coverUrl
+            ? [{ src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' }]
+            : [],
+        });
+      }
+      return;
+    }
+
+    const trackChanged = currentTrack.id !== b.loaded[b.active] && currentTrack.id !== loadingRef.current;
     if (trackChanged || versionBumped) {
-      // Force re-load by clearing the loaded ref so loadTrack runs.
-      if (versionBumped) loadedTrackRef.current = null;
+      // Cancel any in-flight crossfade so we don't keep two audios alive.
+      cancelRamp();
+      crossfadingRef.current = false;
+      b.crossfadingInto = null;
+      safePause(inactiveSlot(b));
+      b.loaded[inactiveSlot(b)] = null;
+      if (versionBumped) b.loaded[b.active] = null;
       loadTrack(currentTrack.id);
 
       if ('mediaSession' in navigator) {
@@ -182,71 +325,174 @@ export function useAudioPlayer() {
     }
   }, [currentTrack, loadTrack, streamVersion]);
 
+  // Play / pause toggle on the active slot.
   useEffect(() => {
-    const { audio } = getBundle();
-    if (!audio.src || loadedTrackRef.current !== currentTrack?.id) return;
+    const b = getBundle();
+    const slot = b.active;
+    const audio = b.audios[slot];
+    if (!audio.src || b.loaded[slot] !== currentTrack?.id) return;
     if (isPlaying) {
-      const b = ensureAudioGraph();
-      if (b.ctx && b.ctx.state === 'suspended') {
-        b.ctx.resume().catch(() => {});
+      const ctxBundle = ensureAudioGraph();
+      if (ctxBundle.ctx && ctxBundle.ctx.state === 'suspended') {
+        ctxBundle.ctx.resume().catch(() => {});
       }
-      safePlay(audio).catch((err) => {
+      safePlay(slot).catch((err) => {
         setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
         pause();
       });
     } else {
-      safePause(audio);
+      safePause(slot);
+      // If a crossfade was in flight, cancel it: pause the incoming slot too.
+      if (crossfadingRef.current) {
+        cancelRamp();
+        crossfadingRef.current = false;
+        b.crossfadingInto = null;
+        safePause(inactiveSlot(b));
+        setSlotGain(inactiveSlot(b), 0);
+        b.loaded[inactiveSlot(b)] = null;
+      }
     }
   }, [isPlaying, currentTrack?.id, pause, setError]);
 
+  // Volume / mute always apply to whichever slot is active. The opposite slot
+  // is held at gain=0 except during a crossfade when both are ramped.
   useEffect(() => {
-    const { audio } = getBundle();
-    audio.volume = muted ? 0 : volume;
+    const b = getBundle();
+    if (crossfadingRef.current) return;
+    setSlotGain(b.active, muted ? 0 : volume);
+    setSlotGain(inactiveSlot(b), 0);
   }, [volume, muted]);
 
+  /**
+   * Crossfade trigger: when the active slot is within `crossfadeDuration`
+   * seconds of the end, start preloading the next queue track into the
+   * inactive slot and ramp gains. Once the ramp finishes we promote the
+   * inactive slot via setTrack(nextTrack), which the load effect short-
+   * circuits (since the slot is already loaded).
+   */
+  const startCrossfade = useCallback(async () => {
+    const b = getBundle();
+    if (crossfadingRef.current) return;
+    if (!currentTrack) return;
+    const idx = queue.findIndex((t) => t.id === currentTrack.id);
+    if (idx < 0) return;
+    const nextTrack = queue[idx + 1];
+    if (!nextTrack) return;
+
+    crossfadingRef.current = true;
+    const incoming = inactiveSlot(b);
+    b.crossfadingInto = incoming;
+    try {
+      const { url } = await api.get<StreamResponse>(`/tracks/${nextTrack.id}/stream?quality=${encodeURIComponent(tidalQuality)}`);
+      if (!crossfadingRef.current) return;
+      const audio = b.audios[incoming];
+      if (b.playPromises[incoming]) {
+        try { await b.playPromises[incoming]; } catch { /* ignore */ }
+      }
+      audio.pause();
+      audio.src = url;
+      audio.load();
+      audio.currentTime = 0;
+      b.loaded[incoming] = nextTrack.id;
+      ensureAudioGraph();
+      setSlotGain(incoming, 0);
+      if (b.ctx && b.ctx.state === 'suspended') {
+        await b.ctx.resume().catch(() => {});
+      }
+      await safePlay(incoming);
+      const target = muted ? 0 : volume;
+      const durMs = Math.max(500, crossfadeDuration * 1000);
+      // Run both ramps in parallel.
+      await Promise.all([
+        rampGain(b.active, target, 0, durMs),
+        rampGain(incoming, 0, target, durMs),
+      ]);
+      if (!crossfadingRef.current) return;
+      // Ramp done → switch the active slot.
+      safePause(b.active);
+      const oldActive = b.active;
+      b.loaded[oldActive] = null;
+      b.active = incoming;
+      b.crossfadingInto = null;
+      crossfadingRef.current = false;
+      // Tell the store the playing track has changed without triggering a
+      // reload. Our load effect detects 'slot already loaded' and skips.
+      setTrack(nextTrack);
+    } catch (err) {
+      console.warn('[crossfade] failed, falling back to hard switch', err);
+      crossfadingRef.current = false;
+      b.crossfadingInto = null;
+    }
+  }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, tidalQuality]);
+
+  // Time updates + ended + error + crossfade trigger.
   useEffect(() => {
-    const { audio } = getBundle();
-
-    const onTimeUpdate = () => setProgress(audio.currentTime);
-    const onDurationChange = () => setDuration(audio.duration || 0);
-    const onEnded = () => {
-      if (repeat === 'one') {
-        audio.currentTime = 0;
-        safePlay(audio).catch(() => {});
-      } else {
-        next();
-      }
-    };
-    const onError = () => {
-      const code = audio.error?.code;
-      if (audio.crossOrigin && !corsRetried) {
-        reloadWithoutCors(audio);
-        return;
-      }
-      const messages: Record<number, string> = {
-        1: 'Загрузка прервана',
-        2: 'Сетевая ошибка',
-        3: 'Не удалось декодировать',
-        4: 'Формат не поддерживается',
+    const b = getBundle();
+    const wireSlot = (slot: Slot) => {
+      const audio = b.audios[slot];
+      const onTimeUpdate = () => {
+        if (slot !== b.active) return;
+        setProgress(audio.currentTime);
+        const dur = audio.duration;
+        if (
+          crossfade
+          && !crossfadingRef.current
+          && isFinite(dur)
+          && dur > 0
+          && dur - audio.currentTime <= crossfadeDuration
+        ) {
+          startCrossfade();
+        }
       };
-      setError(messages[code ?? 0] ?? 'Ошибка плеера');
+      const onDurationChange = () => {
+        if (slot !== b.active) return;
+        setDuration(audio.duration || 0);
+      };
+      const onEnded = () => {
+        if (slot !== b.active) return;
+        if (repeat === 'one') {
+          audio.currentTime = 0;
+          safePlay(slot).catch(() => {});
+        } else {
+          // If we're already crossfading, the active slot has been swapped or
+          // is about to be — let that flow finish; otherwise advance.
+          if (!crossfadingRef.current) next();
+        }
+      };
+      const onError = () => {
+        if (slot !== b.active) return;
+        const code = audio.error?.code;
+        if (audio.crossOrigin && !corsRetried[slot]) {
+          reloadWithoutCors(slot);
+          return;
+        }
+        const messages: Record<number, string> = {
+          1: 'Загрузка прервана',
+          2: 'Сетевая ошибка',
+          3: 'Не удалось декодировать',
+          4: 'Формат не поддерживается',
+        };
+        setError(messages[code ?? 0] ?? 'Ошибка плеера');
+      };
+      audio.addEventListener('timeupdate', onTimeUpdate);
+      audio.addEventListener('durationchange', onDurationChange);
+      audio.addEventListener('ended', onEnded);
+      audio.addEventListener('error', onError);
+      return () => {
+        audio.removeEventListener('timeupdate', onTimeUpdate);
+        audio.removeEventListener('durationchange', onDurationChange);
+        audio.removeEventListener('ended', onEnded);
+        audio.removeEventListener('error', onError);
+      };
     };
-
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('durationchange', onDurationChange);
-    audio.addEventListener('ended', onEnded);
-    audio.addEventListener('error', onError);
-
-    return () => {
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('durationchange', onDurationChange);
-      audio.removeEventListener('ended', onEnded);
-      audio.removeEventListener('error', onError);
-    };
-  }, [repeat, next, setProgress, setDuration, setError]);
+    const offA = wireSlot('a');
+    const offB = wireSlot('b');
+    return () => { offA(); offB(); };
+  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade]);
 
   const seek = useCallback((time: number) => {
-    const { audio } = getBundle();
+    const b = getBundle();
+    const audio = b.audios[b.active];
     audio.currentTime = time;
     setProgress(time);
   }, [setProgress]);
@@ -278,7 +524,8 @@ export function useAudioPlayer() {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     if (!('setPositionState' in navigator.mediaSession)) return;
-    const { audio } = getBundle();
+    const b = getBundle();
+    const audio = b.audios[b.active];
     const dur = audio.duration;
     if (!dur || !isFinite(dur)) return;
     try {
@@ -329,7 +576,6 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
     const analyser = b.analyser;
     const sampleRate = b.ctx.sampleRate || 44100;
     const binHz = sampleRate / analyser.fftSize;
-    // Bass: ~30..180 Hz, focused on the kick/sub-bass region.
     const bassLo = Math.max(1, Math.floor(30 / binHz));
     const bassHi = Math.max(bassLo + 1, Math.ceil(180 / binHz));
     const buffer = new Uint8Array(analyser.frequencyBinCount);
@@ -355,11 +601,9 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
         }
         value = Math.sqrt(sumSq / buffer.length);
       }
-      // Heavier exponential smoothing on top of analyser's own smoothing.
-      // dt-aware so the perceived speed is stable across frame rates.
       const dt = Math.min(64, now - lastAt);
       lastAt = now;
-      const tau = band === 'bass' ? 110 : 90; // ms; higher = slower
+      const tau = band === 'bass' ? 110 : 90;
       const k = 1 - Math.exp(-dt / tau);
       last = last + (value - last) * k;
       setAmp(last);

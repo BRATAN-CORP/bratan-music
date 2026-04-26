@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
-  MoreHorizontal, ListPlus, Share2, User as UserIcon, Check, Radio, Loader2,
+  MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -11,6 +11,7 @@ import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
+import { QueueDialog } from '@/components/features/QueueDialog';
 import { startTrackRadio } from '@/lib/trackRadio';
 import type { Track } from '@/types';
 
@@ -44,6 +45,7 @@ export function Player() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -285,6 +287,15 @@ export function Player() {
                       <button
                         type="button"
                         role="menuitem"
+                        onClick={() => { setQueueOpen(true); setMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                      >
+                        <ListOrdered size={14} />
+                        Очередь
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
                         onClick={() => { setAddToPlaylistOpen(true); setMenuOpen(false); }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
                       >
@@ -357,6 +368,8 @@ export function Player() {
               onClose={() => setAddToPlaylistOpen(false)}
             />
           )}
+
+          <QueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
         </motion.div>
       )}
     </AnimatePresence>

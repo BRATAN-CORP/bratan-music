@@ -44,6 +44,6 @@ export interface MusicService {
   getTrack(id: string): Promise<Track>;
   getAlbum(id: string): Promise<Album>;
   getArtist(id: string): Promise<Artist>;
-  getStreamUrl(trackId: string): Promise<string>;
+  getStreamUrl(trackId: string, quality?: string): Promise<string>;
   getDownloadUrl(trackId: string): Promise<string>;
 }

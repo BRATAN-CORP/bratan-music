@@ -132,9 +132,14 @@ tracks.get('/:id/stream', async (c) => {
   }
 
   const tidal = new TidalService(c.env);
-  const direct = await tidal.getStreamUrl(id);
+  // Per-call quality preference. The provider hierarchy is documented on
+  // TidalWeb#getStreamUrl; unknown values fall back to the service default.
+  const allowedQuality = ['LOW', 'HIGH', 'LOSSLESS', 'HI_RES_LOSSLESS', 'HI_RES'];
+  const requested = c.req.query('quality');
+  const quality = requested && allowedQuality.includes(requested) ? requested : undefined;
+  const direct = await tidal.getStreamUrl(id, quality);
   const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(direct)}`;
-  return c.json({ url: proxied, direct, source: 'tidal' });
+  return c.json({ url: proxied, direct, source: 'tidal', quality: quality ?? 'HIGH' });
 });
 
 tracks.get('/:id/download', async (c) => {

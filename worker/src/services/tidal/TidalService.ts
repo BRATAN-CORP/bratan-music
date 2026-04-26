@@ -136,8 +136,8 @@ export class TidalService implements MusicService {
     return res.items.map(mapTrack);
   }
 
-  async getStreamUrl(trackId: string): Promise<string> {
-    return this.web.getStreamUrl(trackId, 'HIGH');
+  async getStreamUrl(trackId: string, quality?: string): Promise<string> {
+    return this.web.getStreamUrl(trackId, quality ?? 'HIGH');
   }
 
   async getDownloadUrl(trackId: string): Promise<string> {

@@ -35,6 +35,13 @@ interface PlayerState {
   setTrack: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
   addToQueue: (track: Track) => void;
+  /** Insert a track immediately after the currently-playing one. */
+  playNext: (track: Track) => void;
+  removeFromQueue: (trackId: string) => void;
+  /** Move a track inside the queue from one index to another. */
+  reorderQueue: (from: number, to: number) => void;
+  /** Jump straight to the given queue index. */
+  jumpToQueue: (index: number) => void;
   play: () => void;
   pause: () => void;
   togglePlay: () => void;
@@ -70,6 +77,35 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0, error: null }),
   setQueue: (tracks) => set({ queue: tracks }),
   addToQueue: (track) => set((s) => ({ queue: [...s.queue, track] })),
+  playNext: (track) => set((s) => {
+    const idx = s.queue.findIndex((t) => t.id === s.currentTrack?.id);
+    const next = [...s.queue];
+    // Skip if it's already the very next item.
+    if (next[idx + 1]?.id === track.id) return s;
+    // Drop any earlier copy so playNext doesn't create duplicates.
+    const filtered = next.filter((t) => t.id !== track.id);
+    const insertAt = idx >= 0 ? idx + 1 : filtered.length;
+    filtered.splice(insertAt, 0, track);
+    return { queue: filtered };
+  }),
+  removeFromQueue: (trackId) => set((s) => ({
+    queue: s.queue.filter((t) => t.id !== trackId),
+  })),
+  reorderQueue: (from, to) => set((s) => {
+    if (from === to) return s;
+    if (from < 0 || from >= s.queue.length) return s;
+    if (to < 0 || to >= s.queue.length) return s;
+    const next = [...s.queue];
+    const [moved] = next.splice(from, 1);
+    if (!moved) return s;
+    next.splice(to, 0, moved);
+    return { queue: next };
+  }),
+  jumpToQueue: (index) => set((s) => {
+    const target = s.queue[index];
+    if (!target) return s;
+    return { currentTrack: target, isPlaying: true, progress: 0 };
+  }),
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
