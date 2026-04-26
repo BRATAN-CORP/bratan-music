@@ -2,6 +2,8 @@ import { Heart, MoreHorizontal, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { useToggleLike } from '@/hooks/useLibrary';
+import { useAuthStore } from '@/store/auth';
 
 interface TrackItemProps {
   track: Track;
@@ -16,6 +18,9 @@ function formatDuration(seconds: number): string {
 }
 
 export function TrackItem({ track, index, onPlay }: TrackItemProps) {
+  const isAuthed = useAuthStore((s) => Boolean(s.user));
+  const { isLiked, toggle } = useToggleLike();
+  const liked = isAuthed && isLiked(track.id);
   return (
     <motion.div
       layout
@@ -49,9 +54,15 @@ export function TrackItem({ track, index, onPlay }: TrackItemProps) {
         {formatDuration(track.duration)}
       </span>
 
-      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} aria-label="Лайк">
-          <Heart size={14} />
+      <div className={"flex items-center gap-0.5 transition-opacity " + (liked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={"h-7 w-7 " + (liked ? 'opacity-100 text-[var(--color-accent)]' : '')}
+          onClick={(e) => { e.stopPropagation(); if (isAuthed) toggle(track); }}
+          aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+        >
+          <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} aria-label="Ещё">
           <MoreHorizontal size={14} />

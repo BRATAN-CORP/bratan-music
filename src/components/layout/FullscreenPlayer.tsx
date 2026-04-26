@@ -5,11 +5,11 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
-import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
-import { Visualizer } from '@/components/features/Visualizer';
 import { Equalizer } from '@/components/features/Equalizer';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { useToggleLike } from '@/hooks/useLibrary';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -28,6 +28,11 @@ export function FullscreenPlayer() {
   const { progress, seek } = useAudioPlayer();
   const reduce = useReducedMotion();
   const [eqOpen, setEqOpen] = useState(false);
+  const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying);
+  // amp is 0..~0.6, normalize to a calm pulse range
+  const pulse = Math.min(1, amp * 2.4);
+  const { isLiked, toggle } = useToggleLike();
+  const liked = currentTrack ? isLiked(currentTrack.id) : false;
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -96,6 +101,25 @@ export function FullscreenPlayer() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative w-full max-w-md"
             >
+              {/* glow: duplicated cover behind, blurred + pulsed by audio amplitude */}
+              {currentTrack.coverUrl && (
+                <motion.div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 -z-10"
+                  animate={reduce ? undefined : {
+                    scale: 1.05 + pulse * 0.18,
+                    opacity: 0.55 + pulse * 0.35,
+                    filter: `blur(${72 + pulse * 36}px) saturate(${1.4 + pulse * 0.6})`,
+                  }}
+                  transition={{ type: 'spring', stiffness: 80, damping: 18, mass: 0.6 }}
+                  style={{
+                    backgroundImage: `url(${currentTrack.coverUrl})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: 'var(--radius-xl)',
+                  }}
+                />
+              )}
               <TiltCard intensity={10} glare className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl">
                 {currentTrack.coverUrl ? (
                   <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
@@ -104,12 +128,6 @@ export function FullscreenPlayer() {
                     Без обложки
                   </div>
                 )}
-                {isPlaying && (
-                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
-                )}
-                <div className="absolute bottom-3 left-3 right-3" style={{ transform: 'translateZ(40px)' }}>
-                  <Visualizer active={isPlaying} bars={48} height={36} />
-                </div>
               </TiltCard>
             </motion.div>
 
@@ -193,8 +211,14 @@ export function FullscreenPlayer() {
                 className="flex-1 accent-[var(--color-accent)]"
                 aria-label="Громкость"
               />
-              <Button variant="ghost" size="icon" aria-label="Лайк">
-                <Heart size={16} />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                className={liked ? 'text-[var(--color-accent)]' : ''}
+                onClick={() => currentTrack && toggle(currentTrack)}
+              >
+                <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </Button>
             </div>
           </div>

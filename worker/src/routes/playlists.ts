@@ -6,6 +6,43 @@ const playlists = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 playlists.use('/*', jwtAuth);
 
+interface TrackSnapshot {
+  title?: string;
+  artist?: string;
+  album?: string;
+  coverUrl?: string;
+  duration?: number;
+}
+
+function safeJson<T = unknown>(s: string | null | undefined): T | null {
+  if (!s) return null;
+  try { return JSON.parse(s) as T; } catch { return null; }
+}
+
+interface PtRow {
+  playlist_id: string;
+  track_id: string;
+  source: string;
+  position: number;
+  added_at: number;
+  snapshot?: string | null;
+}
+
+function rowToTrack(r: PtRow) {
+  const snap = safeJson<TrackSnapshot>(r.snapshot);
+  return {
+    id: r.track_id,
+    source: r.source,
+    addedAt: r.added_at,
+    position: r.position,
+    title: snap?.title ?? '',
+    artist: snap?.artist ?? '',
+    album: snap?.album ?? '',
+    coverUrl: snap?.coverUrl ?? '',
+    duration: snap?.duration ?? 0,
+  };
+}
+
 playlists.get('/', async (c) => {
   const userId = c.get('userId');
   const items = await c.env.DB.prepare(
@@ -48,9 +85,9 @@ playlists.get('/:id', async (c) => {
 
   const tracks = await c.env.DB.prepare(
     'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
-  ).bind(id).all();
+  ).bind(id).all<PtRow>();
 
-  return c.json({ ...playlist, tracks: tracks.results });
+  return c.json({ ...playlist, tracks: (tracks.results ?? []).map(rowToTrack) });
 });
 
 playlists.put('/:id', async (c) => {
@@ -102,7 +139,7 @@ playlists.delete('/:id', async (c) => {
 playlists.post('/:id/tracks', async (c) => {
   const userId = c.get('userId');
   const id = c.req.param('id');
-  const body = await c.req.json<{ trackId: string; source?: string }>();
+  const body = await c.req.json<{ trackId: string; source?: string; snapshot?: TrackSnapshot }>();
 
   const playlist = await c.env.DB.prepare(
     'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
@@ -118,10 +155,16 @@ playlists.post('/:id/tracks', async (c) => {
 
   const position = (maxPos?.max_pos ?? -1) + 1;
   const now = Math.floor(Date.now() / 1000);
+  const snapJson = body.snapshot ? JSON.stringify(body.snapshot) : null;
 
   await c.env.DB.prepare(
-    'INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, source, position, added_at) VALUES (?, ?, ?, ?, ?)'
-  ).bind(id, body.trackId, body.source ?? 'tidal', position, now).run();
+    'INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, source, position, added_at, snapshot) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, body.trackId, body.source ?? 'tidal', position, now, snapJson).run();
+  if (snapJson) {
+    await c.env.DB.prepare(
+      'UPDATE playlist_tracks SET snapshot = COALESCE(snapshot, ?) WHERE playlist_id = ? AND track_id = ?'
+    ).bind(snapJson, id, body.trackId).run();
+  }
 
   await c.env.DB.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').bind(now, id).run();
   return c.json({ ok: true }, 201);
