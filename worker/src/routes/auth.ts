@@ -55,20 +55,13 @@ auth.post('/telegram', async (c) => {
 
 auth.get('/nonce/:nonce', async (c) => {
   const nonce = c.req.param('nonce');
-  const wait = c.req.query('wait') === '1';
-  // Long-poll up to ~25 s on the worker side so the client receives the
-  // confirmation immediately after the user taps Start in Telegram, without
-  // having to wait for the next client-side polling tick.
-  const deadline = Date.now() + (wait ? 25_000 : 0);
-
-  let userId: string | null = null;
-  while (true) {
-    userId = await c.env.SESSIONS.get(`auth_nonce:${nonce}`);
-    if (userId) break;
-    if (!wait || Date.now() >= deadline) {
-      return c.json({ status: 'pending' });
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+  // Server-side long-poll was removed: it kept many concurrent connections
+  // open and, combined with rate-limit KV writes, blew through the
+  // Cloudflare KV daily quota. The client polls this endpoint once per
+  // second and the response is fast and cheap.
+  const userId = await c.env.SESSIONS.get(`auth_nonce:${nonce}`);
+  if (!userId) {
+    return c.json({ status: 'pending' });
   }
 
   await c.env.SESSIONS.delete(`auth_nonce:${nonce}`);
