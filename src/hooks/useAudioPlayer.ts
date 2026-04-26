@@ -118,6 +118,7 @@ export function useAudioPlayer() {
     muted,
     repeat,
     progress,
+    streamVersion,
     setProgress,
     setDuration,
     setError,
@@ -157,9 +158,16 @@ export function useAudioPlayer() {
     }
   }, [pause, setError]);
 
+  const lastStreamVersionRef = useRef(streamVersion);
   useEffect(() => {
     if (!currentTrack) return;
-    if (currentTrack.id !== loadedTrackRef.current && currentTrack.id !== loadingRef.current) {
+    const versionBumped = lastStreamVersionRef.current !== streamVersion;
+    lastStreamVersionRef.current = streamVersion;
+    const trackChanged =
+      currentTrack.id !== loadedTrackRef.current && currentTrack.id !== loadingRef.current;
+    if (trackChanged || versionBumped) {
+      // Force re-load by clearing the loaded ref so loadTrack runs.
+      if (versionBumped) loadedTrackRef.current = null;
       loadTrack(currentTrack.id);
 
       if ('mediaSession' in navigator) {
@@ -172,7 +180,7 @@ export function useAudioPlayer() {
         });
       }
     }
-  }, [currentTrack, loadTrack]);
+  }, [currentTrack, loadTrack, streamVersion]);
 
   useEffect(() => {
     const { audio } = getBundle();
@@ -351,7 +359,7 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
       // dt-aware so the perceived speed is stable across frame rates.
       const dt = Math.min(64, now - lastAt);
       lastAt = now;
-      const tau = band === 'bass' ? 220 : 90; // ms; higher = slower
+      const tau = band === 'bass' ? 110 : 90; // ms; higher = slower
       const k = 1 - Math.exp(-dt / tau);
       last = last + (value - last) * k;
       setAmp(last);
