@@ -78,3 +78,24 @@ CREATE INDEX idx_pt_playlist  ON playlist_tracks(playlist_id, position);
 CREATE INDEX idx_ovr_user     ON track_overrides(user_id);
 CREATE INDEX idx_sess_user    ON sessions(user_id);
 CREATE INDEX idx_dl_user_date ON daily_listens(user_id, date);
+
+CREATE TABLE tidal_session (
+    id              INTEGER PRIMARY KEY,
+    access_token    TEXT NOT NULL,
+    refresh_token   TEXT NOT NULL,
+    expires_at      INTEGER NOT NULL,
+    user_id         INTEGER NOT NULL,
+    country_code    TEXT NOT NULL,
+    client_id       TEXT,
+    client_secret   TEXT,
+    updated_at      INTEGER NOT NULL
+);
+
+CREATE TABLE tidal_device_codes (
+    device_code   TEXT PRIMARY KEY,
+    client_id     TEXT NOT NULL,
+    client_secret TEXT NOT NULL,
+    expires_at    INTEGER NOT NULL
+);
+
+CREATE INDEX idx_tidal_device_codes_expires_at ON tidal_device_codes(expires_at);

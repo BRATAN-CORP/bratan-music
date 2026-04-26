@@ -233,11 +233,27 @@ export class TidalAuth {
         interval: number;
       };
       // Remember which client minted this device code so poll can use it.
-      await this.env.SESSIONS.put(
-        `tidal:device:${data.deviceCode}`,
-        JSON.stringify({ clientId: c.id, clientSecret: c.secret }),
-        { expirationTtl: Math.max(60, data.expiresIn || 300) }
-      );
+      // We use D1 here instead of KV because the free KV plan caps writes at
+      // 1000/day for the whole worker, and a polling device-flow can burn
+      // through that quickly.
+      const expiresAt = Math.floor(Date.now() / 1000) + Math.max(60, data.expiresIn || 300);
+      await this.env.DB
+        .prepare(
+          `INSERT INTO tidal_device_codes (device_code, client_id, client_secret, expires_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(device_code) DO UPDATE SET
+             client_id = excluded.client_id,
+             client_secret = excluded.client_secret,
+             expires_at = excluded.expires_at`
+        )
+        .bind(data.deviceCode, c.id, c.secret, expiresAt)
+        .run();
+      // Opportunistic GC of stale device codes (keeps the table small).
+      await this.env.DB
+        .prepare('DELETE FROM tidal_device_codes WHERE expires_at < ?')
+        .bind(Math.floor(Date.now() / 1000))
+        .run()
+        .catch(() => null);
       return data;
     }
     throw new Error(`tidal device_authorization failed: ${lastError ?? 'no candidate clients'}`);
@@ -249,15 +265,14 @@ export class TidalAuth {
   > {
     // Look up which client minted this device code (saved by startDeviceAuth).
     // Fall back to the configured client when the lookup is missing.
-    const stored = await this.env.SESSIONS.get(`tidal:device:${deviceCode}`).catch(() => null);
+    const row = await this.env.DB
+      .prepare('SELECT client_id, client_secret FROM tidal_device_codes WHERE device_code = ?')
+      .bind(deviceCode)
+      .first<{ client_id: string; client_secret: string }>()
+      .catch(() => null);
     let client: ClientPair | null = null;
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as { clientId?: string; clientSecret?: string };
-        if (parsed.clientId && parsed.clientSecret) {
-          client = { id: parsed.clientId, secret: parsed.clientSecret, supportsDevice: true };
-        }
-      } catch { /* fallthrough */ }
+    if (row?.client_id && row?.client_secret) {
+      client = { id: row.client_id, secret: row.client_secret, supportsDevice: true };
     }
     if (!client) {
       client = { id: this.clientId(), secret: this.clientSecret(), supportsDevice: true };
@@ -291,7 +306,11 @@ export class TidalAuth {
         clientSecret: client.secret,
       };
       await this.cacheSession(tokens);
-      await this.env.SESSIONS.delete(`tidal:device:${deviceCode}`).catch(() => {});
+      await this.env.DB
+        .prepare('DELETE FROM tidal_device_codes WHERE device_code = ?')
+        .bind(deviceCode)
+        .run()
+        .catch(() => null);
       return { ok: true, refreshToken, accessToken, expiresIn };
     }
     const err = typeof data.error === 'string' ? data.error : `http ${res.status}`;
@@ -344,9 +363,11 @@ export class TidalAuth {
     return this.getCachedSession();
   }
 
-  /** Wipes the cached Tidal session from KV (admin "logout"). */
+  /** Wipes the cached Tidal session (admin "logout"). */
   async clearSession(): Promise<void> {
-    await this.env.SESSIONS.delete(KV_KEY);
+    await this.env.DB.prepare('DELETE FROM tidal_session WHERE id = 1').run().catch(() => null);
+    // Best-effort KV cleanup so legacy data doesn't shadow D1.
+    await this.env.SESSIONS.delete(KV_KEY).catch(() => {});
   }
 
   /**
@@ -362,14 +383,68 @@ export class TidalAuth {
   }
 
   private async getCachedSession(): Promise<TidalTokens | null> {
-    const raw = await this.env.SESSIONS.get(KV_KEY);
+    // Primary: D1. Fallback: legacy KV blob from before the migration.
+    const row = await this.env.DB
+      .prepare(
+        `SELECT access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret
+         FROM tidal_session WHERE id = 1`
+      )
+      .first<{
+        access_token: string;
+        refresh_token: string;
+        expires_at: number;
+        user_id: number;
+        country_code: string;
+        client_id: string | null;
+        client_secret: string | null;
+      }>()
+      .catch(() => null);
+    if (row) {
+      return {
+        accessToken: row.access_token,
+        refreshToken: row.refresh_token,
+        expiresAt: row.expires_at,
+        userId: row.user_id,
+        countryCode: row.country_code,
+        clientId: row.client_id ?? undefined,
+        clientSecret: row.client_secret ?? undefined,
+      };
+    }
+    const raw = await this.env.SESSIONS.get(KV_KEY).catch(() => null);
     if (!raw) return null;
-    return JSON.parse(raw) as TidalTokens;
+    try {
+      return JSON.parse(raw) as TidalTokens;
+    } catch {
+      return null;
+    }
   }
 
   private async cacheSession(tokens: TidalTokens): Promise<void> {
-    await this.env.SESSIONS.put(KV_KEY, JSON.stringify(tokens), {
-      expirationTtl: 60 * 60 * 24 * 30,
-    });
+    const updatedAt = Math.floor(Date.now() / 1000);
+    await this.env.DB
+      .prepare(
+        `INSERT INTO tidal_session (id, access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret, updated_at)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           access_token = excluded.access_token,
+           refresh_token = excluded.refresh_token,
+           expires_at = excluded.expires_at,
+           user_id = excluded.user_id,
+           country_code = excluded.country_code,
+           client_id = excluded.client_id,
+           client_secret = excluded.client_secret,
+           updated_at = excluded.updated_at`
+      )
+      .bind(
+        tokens.accessToken,
+        tokens.refreshToken,
+        tokens.expiresAt,
+        tokens.userId,
+        tokens.countryCode,
+        tokens.clientId ?? null,
+        tokens.clientSecret ?? null,
+        updatedAt
+      )
+      .run();
   }
 }
