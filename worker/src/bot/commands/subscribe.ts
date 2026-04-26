@@ -34,7 +34,7 @@ export async function handleSuccessfulPayment(env: Env, message: TelegramMessage
   await subService.activate(userId, 'telegram_stars', payment.telegram_payment_charge_id);
 
   await tg.sendMessage(message.chat.id,
-    '🎉 <b>Подписка активирована!</b>\n\n' +
+    '<b>Подписка активирована!</b>\n\n' +
     'Безлимитный стриминг на 30 дней. Наслаждайтесь музыкой!'
   );
 }
