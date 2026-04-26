@@ -20,6 +20,25 @@ app.use('*', rateLimit);
 
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: Date.now() }));
 
+app.get('/health/tidal', async (c) => {
+  try {
+    const { TidalAuth } = await import('./services/tidal/TidalAuth');
+    const auth = new TidalAuth(c.env);
+    const token = await auth.getAccessToken();
+    return c.json({
+      status: 'ok',
+      hasToken: Boolean(token),
+      tokenPrefix: token ? `${token.slice(0, 12)}...` : null,
+      countryCode: await auth.getCountryCode(),
+    });
+  } catch (err) {
+    return c.json(
+      { status: 'error', message: err instanceof Error ? err.message : String(err) },
+      503
+    );
+  }
+});
+
 app.route('/auth', auth);
 app.route('/user', user);
 app.route('/search', search);
