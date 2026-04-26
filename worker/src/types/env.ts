@@ -6,6 +6,9 @@ export interface Env {
   TIDAL_CLIENT_ID: string;
   TIDAL_CLIENT_SECRET: string;
   TIDAL_SESSION_TOKEN: string;
+  TIDAL_CLIENT_VERSION?: string;
+  TIDAL_COUNTRY_CODE?: string;
+  TIDAL_LOCALE?: string;
 
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_BOT_USERNAME: string;

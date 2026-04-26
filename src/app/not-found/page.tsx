@@ -1,21 +1,20 @@
 import { Link } from 'react-router-dom';
 import { Home } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
 export function NotFoundPage() {
   return (
-    <div className="flex flex-col items-center justify-center flex-1 p-8 text-center gap-4">
-      <p className="text-6xl font-bold" style={{ color: 'var(--color-accent)' }}>404</p>
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+      <p className="hero-gradient-text text-7xl font-black">404</p>
       <h1 className="text-2xl font-bold">Страница не найдена</h1>
-      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+      <p className="text-sm text-muted-foreground">
         Возможно, она была удалена или вы ввели неверный адрес
       </p>
-      <Link
-        to="/"
-        className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium mt-2"
-        style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)' }}
-      >
-        <Home size={16} />
-        На главную
+      <Link to="/" className="mt-2">
+        <Button>
+          <Home size={16} />
+          На главную
+        </Button>
       </Link>
     </div>
   );

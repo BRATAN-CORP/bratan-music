@@ -16,26 +16,18 @@ export function Sidebar() {
 
   return (
     <aside
-      className="hidden lg:flex flex-col w-56 border-r py-4"
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        borderColor: 'var(--color-border)',
-      }}
+      className="hidden w-64 flex-col border-r border-border/70 bg-card/55 py-5 backdrop-blur-2xl lg:flex"
     >
-      <nav className="flex flex-col gap-1 px-2">
+      <nav className="flex flex-col gap-2 px-3">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                isActive ? 'font-medium' : ''
+              `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                isActive ? 'bg-primary text-primary-foreground shadow-[var(--shadow-glow)]' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`
             }
-            style={({ isActive }) => ({
-              backgroundColor: isActive ? 'var(--color-accent-muted)' : 'transparent',
-              color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
-            })}
           >
             <Icon size={20} />
             {label}
