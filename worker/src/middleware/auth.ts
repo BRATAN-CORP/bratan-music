@@ -4,11 +4,18 @@ import { AuthService } from '../services/AuthService';
 
 export const jwtAuth = createMiddleware<{ Bindings: Env; Variables: Variables }>(async (c, next) => {
   const authorization = c.req.header('Authorization');
-  if (!authorization?.startsWith('Bearer ')) {
+  // Fall back to ?token=... so endpoints used by <audio>/<video> elements
+  // (which can't attach custom Authorization headers) can still be auth'd.
+  const queryToken = c.req.query('token');
+  let token: string | undefined;
+  if (authorization?.startsWith('Bearer ')) {
+    token = authorization.slice(7);
+  } else if (queryToken) {
+    token = queryToken;
+  } else {
     return c.json({ error: 'Требуется авторизация' }, 401);
   }
 
-  const token = authorization.slice(7);
   const authService = new AuthService(c.env);
   const payload = await authService.verifyAccessToken(token);
 

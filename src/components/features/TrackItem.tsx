@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Heart, MoreHorizontal, Play, Trash2 } from 'lucide-react';
+import { Download, Heart, MoreHorizontal, Play, Trash2, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
+import { useCoarsePointer } from '@/hooks/useCoarsePointer';
+import { downloadTrack } from '@/lib/trackActions';
+import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 
 interface TrackItemProps {
   track: Track;
@@ -26,10 +29,31 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
+  const coarse = useCoarsePointer();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const removeFromPlaylist = useRemoveTrackFromPlaylist();
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTrack(track);
+    } catch (err) {
+      console.error('[download]', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleOpenOverride = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOverrideOpen(true);
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -98,6 +122,31 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
+        {isAuthed && !coarse && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleDownload}
+              disabled={downloading}
+              aria-label="Скачать"
+              title="Скачать"
+            >
+              <Download size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleOpenOverride}
+              aria-label="Загрузить свою версию"
+              title="Загрузить свою версию"
+            >
+              <Upload size={14} />
+            </Button>
+          </>
+        )}
         {playlistId && !hideRemoveMenu ? (
           <div ref={menuRef} className="relative">
             <Button
@@ -141,6 +190,13 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
           </Button>
         )}
       </div>
+
+      <TrackOverrideModal
+        open={overrideOpen}
+        onClose={() => setOverrideOpen(false)}
+        trackId={track.id}
+        trackTitle={`${track.artist} — ${track.title}`}
+      />
     </motion.div>
   );
 }

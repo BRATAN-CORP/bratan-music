@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ListMusic, Plus, X, Check, Loader2, Heart } from 'lucide-react';
+import { ListMusic, Plus, X, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
   useAddTrackToPlaylist,
@@ -16,12 +16,17 @@ interface AddToPlaylistDialogProps {
 }
 
 export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialogProps) {
-  const { data: playlists, isLoading } = usePlaylistsList();
+  const { data: allPlaylists, isLoading } = usePlaylistsList();
+  // Hide the system "Liked" playlist from the picker. Adding to liked is
+  // already exposed everywhere as a heart button; the dialog is for real
+  // user-created playlists.
+  const playlists = allPlaylists?.filter((p) => !p.isLiked);
   const addTrack = useAddTrackToPlaylist();
   const createPlaylist = useCreatePlaylist();
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [addedId, setAddedId] = useState<string | null>(null);
+  const [errorId, setErrorId] = useState<{ id: string; message: string } | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -42,12 +47,14 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
 
   const handleAdd = async (playlistId: string) => {
     if (!track) return;
+    setErrorId(null);
     try {
       await addTrack.mutateAsync({ playlistId, track });
       setAddedId(playlistId);
       window.setTimeout(() => onClose(), 600);
-    } catch {
-      // mutation surfaces error; keep dialog open
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Ошибка';
+      setErrorId({ id: playlistId, message });
     }
   };
 
@@ -122,16 +129,14 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                         >
                           <div className="flex min-w-0 items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-card text-muted-foreground">
-                              {p.isLiked ? (
-                                <Heart size={14} fill="currentColor" />
-                              ) : (
-                                <ListMusic size={14} />
-                              )}
+                              <ListMusic size={14} />
                             </span>
                             <div className="flex min-w-0 flex-col">
                               <span className="truncate font-medium">{p.name}</span>
                               <span className="text-[11px] text-muted-foreground">
-                                {p.trackCount} {p.trackCount === 1 ? 'трек' : 'треков'}
+                                {errorId?.id === p.id
+                                  ? errorId.message
+                                  : `${p.trackCount} ${p.trackCount === 1 ? 'трек' : 'треков'}`}
                               </span>
                             </div>
                           </div>

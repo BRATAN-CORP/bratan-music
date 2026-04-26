@@ -97,13 +97,20 @@ tracks.get('/:id/stream', async (c) => {
     'SELECT r2_key, mime_type FROM track_overrides WHERE user_id = ? AND track_id = ? LIMIT 1'
   ).bind(userId, id).first<{ r2_key: string; mime_type: string }>();
 
+  const origin = new URL(c.req.url).origin;
+
   if (override) {
-    return c.json({ url: override.r2_key, mimeType: override.mime_type, source: 'override' });
+    // The audio element can't send Authorization headers, so we hand it
+    // the override-stream endpoint with the user's access token in the
+    // query string. The middleware accepts ?token= as a fallback.
+    const auth = c.req.header('Authorization');
+    const token = auth?.startsWith('Bearer ') ? auth.slice(7) : '';
+    const url = `${origin}/tracks/${id}/override/stream?token=${encodeURIComponent(token)}`;
+    return c.json({ url, mimeType: override.mime_type, source: 'override' });
   }
 
   const tidal = new TidalService(c.env);
   const direct = await tidal.getStreamUrl(id);
-  const origin = new URL(c.req.url).origin;
   const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(direct)}`;
   return c.json({ url: proxied, direct, source: 'tidal' });
 });

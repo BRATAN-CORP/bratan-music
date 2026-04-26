@@ -174,6 +174,15 @@ playlists.post('/:id/tracks', async (c) => {
     return c.json({ error: 'Плейлист не найден' }, 404);
   }
 
+  const source = body.source ?? 'tidal';
+  const existing = await c.env.DB.prepare(
+    'SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ? AND source = ? LIMIT 1'
+  ).bind(id, body.trackId, source).first();
+
+  if (existing) {
+    return c.json({ error: 'Этот трек уже в плейлисте', code: 'duplicate' }, 409);
+  }
+
   const maxPos = await c.env.DB.prepare(
     'SELECT MAX(position) as max_pos FROM playlist_tracks WHERE playlist_id = ?'
   ).bind(id).first<{ max_pos: number | null }>();
@@ -183,13 +192,8 @@ playlists.post('/:id/tracks', async (c) => {
   const snapJson = body.snapshot ? JSON.stringify(body.snapshot) : null;
 
   await c.env.DB.prepare(
-    'INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, source, position, added_at, snapshot) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(id, body.trackId, body.source ?? 'tidal', position, now, snapJson).run();
-  if (snapJson) {
-    await c.env.DB.prepare(
-      'UPDATE playlist_tracks SET snapshot = COALESCE(snapshot, ?) WHERE playlist_id = ? AND track_id = ?'
-    ).bind(snapJson, id, body.trackId).run();
-  }
+    'INSERT INTO playlist_tracks (playlist_id, track_id, source, position, added_at, snapshot) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(id, body.trackId, source, position, now, snapJson).run();
 
   await c.env.DB.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').bind(now, id).run();
   return c.json({ ok: true }, 201);
