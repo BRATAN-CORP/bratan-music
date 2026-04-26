@@ -14,6 +14,31 @@ interface AudioBundle {
   filters: BiquadFilterNode[];
   source: MediaElementAudioSourceNode | null;
   ctxFailed: boolean;
+  playPromise: Promise<void> | null;
+}
+
+async function safePlay(audio: HTMLAudioElement) {
+  const b = getBundle();
+  // wait for any pending play promise to settle before issuing pause/play
+  if (b.playPromise) {
+    try { await b.playPromise; } catch { /* ignore */ }
+  }
+  const p = audio.play();
+  b.playPromise = p;
+  try { await p; } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') return;
+    throw err;
+  } finally {
+    if (b.playPromise === p) b.playPromise = null;
+  }
+}
+
+async function safePause(audio: HTMLAudioElement) {
+  const b = getBundle();
+  if (b.playPromise) {
+    try { await b.playPromise; } catch { /* ignore */ }
+  }
+  audio.pause();
 }
 
 let bundle: AudioBundle | null = null;
@@ -25,7 +50,7 @@ function getBundle(): AudioBundle {
     const audio = new Audio();
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
-    bundle = { audio, ctx: null, analyser: null, filters: [], source: null, ctxFailed: false };
+    bundle = { audio, ctx: null, analyser: null, filters: [], source: null, ctxFailed: false, playPromise: null };
   }
   return bundle;
 }
@@ -39,7 +64,7 @@ function reloadWithoutCors(audio: HTMLAudioElement) {
   audio.src = '';
   audio.src = src;
   audio.load();
-  audio.play().catch(() => {});
+  safePlay(audio).catch(() => {});
 }
 
 function ensureAudioGraph(): AudioBundle {
@@ -110,6 +135,10 @@ export function useAudioPlayer() {
     try {
       const { url } = await api.get<StreamResponse>(`/tracks/${trackId}/stream`);
       if (loadingRef.current !== trackId) return;
+      // wait for any in-flight play to settle before swapping src
+      const b0 = getBundle();
+      if (b0.playPromise) { try { await b0.playPromise; } catch { /* ignore */ } }
+      audio.pause();
       audio.src = url;
       audio.load();
       loadedTrackRef.current = trackId;
@@ -118,7 +147,7 @@ export function useAudioPlayer() {
       if (b.ctx && b.ctx.state === 'suspended') {
         await b.ctx.resume().catch(() => {});
       }
-      await audio.play();
+      await safePlay(audio);
     } catch (err) {
       if (loadingRef.current !== trackId) return;
       const message = err instanceof Error ? err.message : String(err);
@@ -153,12 +182,12 @@ export function useAudioPlayer() {
       if (b.ctx && b.ctx.state === 'suspended') {
         b.ctx.resume().catch(() => {});
       }
-      audio.play().catch((err) => {
+      safePlay(audio).catch((err) => {
         setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
         pause();
       });
     } else {
-      audio.pause();
+      safePause(audio);
     }
   }, [isPlaying, currentTrack?.id, pause, setError]);
 
@@ -175,7 +204,7 @@ export function useAudioPlayer() {
     const onEnded = () => {
       if (repeat === 'one') {
         audio.currentTime = 0;
-        audio.play().catch(() => {});
+        safePlay(audio).catch(() => {});
       } else {
         next();
       }
@@ -242,6 +271,38 @@ export function getEqGain(bandIndex: number): number {
 export function isEqAvailable(): boolean {
   const b = ensureAudioGraph();
   return Boolean(b.ctx && !b.ctxFailed && b.filters.length > 0);
+}
+
+export function useAnalyserAmplitude(active: boolean): number {
+  const [amp, setAmp] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setAmp(0);
+      return;
+    }
+    const b = ensureAudioGraph();
+    if (!b.analyser) return;
+    const analyser = b.analyser;
+    const buffer = new Uint8Array(analyser.frequencyBinCount);
+    let raf = 0;
+    let last = 0;
+    const tick = () => {
+      analyser.getByteFrequencyData(buffer);
+      let sumSq = 0;
+      for (let i = 0; i < buffer.length; i++) {
+        const v = (buffer[i] ?? 0) / 255;
+        sumSq += v * v;
+      }
+      const rms = Math.sqrt(sumSq / buffer.length);
+      // smooth
+      last = last * 0.7 + rms * 0.3;
+      setAmp(last);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [active]);
+  return amp;
 }
 
 export function useAnalyserData(active: boolean, bins = 32) {

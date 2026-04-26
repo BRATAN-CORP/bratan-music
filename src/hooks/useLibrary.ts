@@ -7,16 +7,44 @@ interface LikedResponse {
   total: number;
 }
 
+interface LikedIds { ids: string[] }
+
 interface PlaylistWithTracks extends Playlist {
   tracks: Track[];
 }
 
-export function usePlaylists() {
+export interface LikeableTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  coverUrl?: string;
+  duration: number;
+}
+
+type TrackSnapshot = Pick<LikeableTrack, 'title' | 'artist' | 'album' | 'coverUrl' | 'duration'>;
+
+function snapshotOf(t: LikeableTrack): TrackSnapshot {
+  return {
+    title: t.title,
+    artist: t.artist,
+    album: t.album ?? '',
+    coverUrl: t.coverUrl,
+    duration: t.duration,
+  };
+}
+
+export function usePlaylistsList() {
   return useQuery({
     queryKey: ['playlists'],
-    queryFn: () => api.get<Playlist[]>('/library/playlists'),
+    queryFn: async () => {
+      const r = await api.get<{ items: Playlist[] } | Playlist[]>('/library/playlists');
+      return Array.isArray(r) ? r : r.items;
+    },
   });
 }
+
+export const usePlaylists = usePlaylistsList;
 
 export function usePlaylist(id: string) {
   return useQuery({
@@ -30,6 +58,14 @@ export function useLikedTracks(limit = 50, offset = 0) {
   return useQuery({
     queryKey: ['liked', limit, offset],
     queryFn: () => api.get<LikedResponse>(`/library/liked?limit=${limit}&offset=${offset}`),
+  });
+}
+
+export function useLikedIds() {
+  return useQuery({
+    queryKey: ['liked', 'ids'],
+    queryFn: () => api.get<LikedIds>('/library/likes/ids'),
+    staleTime: 30_000,
   });
 }
 
@@ -60,8 +96,12 @@ export function useRenamePlaylist() {
 export function useAddTrackToPlaylist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ playlistId, trackId, source }: { playlistId: string; trackId: string; source?: string }) =>
-      api.post(`/playlists/${playlistId}/tracks`, { trackId, source }),
+    mutationFn: ({ playlistId, track, source }: { playlistId: string; track: LikeableTrack; source?: string }) =>
+      api.post(`/playlists/${playlistId}/tracks`, {
+        trackId: track.id,
+        source: source ?? 'tidal',
+        snapshot: snapshotOf(track),
+      }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['playlist', vars.playlistId] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
@@ -84,8 +124,19 @@ export function useRemoveTrackFromPlaylist() {
 export function useLikeTrack() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (trackId: string) => api.post(`/library/like/${trackId}`),
-    onSuccess: () => {
+    mutationFn: (track: LikeableTrack) => api.post(`/library/like/${track.id}`, snapshotOf(track)),
+    onMutate: async (track) => {
+      await qc.cancelQueries({ queryKey: ['liked', 'ids'] });
+      const prev = qc.getQueryData<LikedIds>(['liked', 'ids']);
+      qc.setQueryData<LikedIds>(['liked', 'ids'], (old) => ({
+        ids: Array.from(new Set([...(old?.ids ?? []), track.id])),
+      }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['liked', 'ids'], ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['liked'] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
     },
@@ -96,9 +147,35 @@ export function useUnlikeTrack() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (trackId: string) => api.delete(`/library/like/${trackId}`),
-    onSuccess: () => {
+    onMutate: async (trackId) => {
+      await qc.cancelQueries({ queryKey: ['liked', 'ids'] });
+      const prev = qc.getQueryData<LikedIds>(['liked', 'ids']);
+      qc.setQueryData<LikedIds>(['liked', 'ids'], (old) => ({
+        ids: (old?.ids ?? []).filter((id) => id !== trackId),
+      }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['liked', 'ids'], ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['liked'] });
       qc.invalidateQueries({ queryKey: ['playlists'] });
     },
   });
+}
+
+export function useToggleLike() {
+  const { data: liked } = useLikedIds();
+  const like = useLikeTrack();
+  const unlike = useUnlikeTrack();
+  const isLiked = (id: string) => liked?.ids?.includes(id) ?? false;
+  return {
+    isLiked,
+    toggle: (track: LikeableTrack) => {
+      if (isLiked(track.id)) unlike.mutate(track.id);
+      else like.mutate(track);
+    },
+    pending: like.isPending || unlike.isPending,
+  };
 }
