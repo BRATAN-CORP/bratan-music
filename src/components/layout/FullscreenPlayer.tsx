@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ChevronDown, Heart, Pause, Play, Repeat, Repeat1, Shuffle,
+  ChevronDown, Heart, ListPlus, Pause, Play, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -8,6 +8,7 @@ import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
+import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 
@@ -28,6 +29,7 @@ export function FullscreenPlayer() {
   const { progress, seek } = useAudioPlayer();
   const reduce = useReducedMotion();
   const [eqOpen, setEqOpen] = useState(false);
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying);
   // amp is 0..~0.6, normalize to a calm pulse range
   const pulse = Math.min(1, amp * 2.4);
@@ -230,6 +232,14 @@ export function FullscreenPlayer() {
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Добавить в плейлист"
+                onClick={() => currentTrack && setAddToPlaylistOpen(true)}
+              >
+                <ListPlus size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 aria-label={liked ? 'Убрать лайк' : 'Лайк'}
                 className={liked ? 'text-[var(--color-accent)]' : ''}
                 onClick={() => currentTrack && toggle(currentTrack)}
@@ -238,6 +248,12 @@ export function FullscreenPlayer() {
               </Button>
             </div>
           </div>
+
+          <AddToPlaylistDialog
+            open={addToPlaylistOpen}
+            onClose={() => setAddToPlaylistOpen(false)}
+            track={currentTrack}
+          />
 
           <AnimatePresence>
             {eqOpen && (

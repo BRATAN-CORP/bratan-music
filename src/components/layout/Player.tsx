@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
-  Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
+  Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart, ListPlus,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -27,6 +29,7 @@ export function Player() {
   const reduce = useReducedMotion();
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
 
@@ -160,11 +163,25 @@ export function Player() {
                 className="w-24 accent-[var(--color-accent)]"
                 aria-label="Громкость"
               />
+              <Button
+                onClick={() => setAddToPlaylistOpen(true)}
+                variant="ghost"
+                size="icon"
+                aria-label="Добавить в плейлист"
+              >
+                <ListPlus size={15} />
+              </Button>
               <Button onClick={openFullscreen} variant="ghost" size="icon" aria-label="Развернуть">
                 <Maximize2 size={15} />
               </Button>
             </div>
           </div>
+
+          <AddToPlaylistDialog
+            open={addToPlaylistOpen}
+            onClose={() => setAddToPlaylistOpen(false)}
+            track={currentTrack}
+          />
         </motion.div>
       )}
     </AnimatePresence>
