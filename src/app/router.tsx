@@ -11,6 +11,7 @@ import { PlaylistPage } from '@/app/playlist/page';
 import { TrackPage } from '@/app/track/page';
 import { AlbumPage } from '@/app/album/page';
 import { ArtistPage } from '@/app/artist/page';
+import { NotFoundPage } from '@/app/not-found/page';
 
 function AppLayout() {
   return (
@@ -42,6 +43,7 @@ const router = createBrowserRouter(
         { path: 'album/:id', element: <AlbumPage /> },
         { path: 'artist/:id', element: <ArtistPage /> },
         { path: 'playlist/:id', element: <PlaylistPage /> },
+        { path: '*', element: <NotFoundPage /> },
       ],
     },
   ],
