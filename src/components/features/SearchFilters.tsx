@@ -14,7 +14,7 @@ const filters: { value: SearchFilter; label: string }[] = [
 
 export function SearchFilters({ active, onChange }: SearchFiltersProps) {
   return (
-    <div className="flex w-fit max-w-full gap-6 overflow-x-auto border-b border-border">
+    <div className="flex w-fit max-w-full flex-wrap gap-x-6 gap-y-1 border-b border-border">
       {filters.map(({ value, label }) => (
         <button
           key={value}
