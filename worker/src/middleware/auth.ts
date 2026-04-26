@@ -1,6 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import type { Env, Variables } from '../types/env';
 import { AuthService } from '../services/AuthService';
+import { UserService } from '../services/UserService';
 
 export const jwtAuth = createMiddleware<{ Bindings: Env; Variables: Variables }>(async (c, next) => {
   const authorization = c.req.header('Authorization');
@@ -29,8 +30,16 @@ export const jwtAuth = createMiddleware<{ Bindings: Env; Variables: Variables }>
 });
 
 export const adminOnly = createMiddleware<{ Bindings: Env; Variables: Variables }>(async (c, next) => {
+  // Trust the JWT first (no DB hit on the hot path), but fall back to a
+  // fresh DB lookup when the claim is false — JWTs issued before the user
+  // was granted admin would otherwise lock them out until they log in again.
   if (!c.get('isAdmin')) {
-    return c.json({ error: 'Доступ запрещён' }, 403);
+    const userService = new UserService(c.env);
+    const fresh = await userService.isAdmin(c.get('userId'));
+    if (!fresh) {
+      return c.json({ error: 'Доступ запрещён' }, 403);
+    }
+    c.set('isAdmin', true);
   }
   await next();
 });

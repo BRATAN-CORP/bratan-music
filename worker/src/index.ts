@@ -40,38 +40,6 @@ app.get('/health/tidal', async (c) => {
   }
 });
 
-app.post('/admin/tidal/device/start', async (c) => {
-  const secret = c.req.header('x-admin-secret');
-  if (!secret || secret !== c.env.JWT_SECRET) {
-    return c.json({ error: 'forbidden' }, 403);
-  }
-  try {
-    const { TidalAuth } = await import('./services/tidal/TidalAuth');
-    const auth = new TidalAuth(c.env);
-    const data = await auth.startDeviceAuth();
-    return c.json(data);
-  } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
-  }
-});
-
-app.post('/admin/tidal/device/poll', async (c) => {
-  const secret = c.req.header('x-admin-secret');
-  if (!secret || secret !== c.env.JWT_SECRET) {
-    return c.json({ error: 'forbidden' }, 403);
-  }
-  try {
-    const body = await c.req.json<{ deviceCode: string }>();
-    if (!body.deviceCode) return c.json({ error: 'missing deviceCode' }, 400);
-    const { TidalAuth } = await import('./services/tidal/TidalAuth');
-    const auth = new TidalAuth(c.env);
-    const result = await auth.pollDeviceAuth(body.deviceCode);
-    return c.json(result);
-  } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
-  }
-});
-
 app.route('/auth', auth);
 app.route('/user', user);
 app.route('/search', search);

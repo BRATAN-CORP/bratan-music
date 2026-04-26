@@ -6,6 +6,11 @@ interface TidalTokens {
   expiresAt: number;
   userId: number;
   countryCode: string;
+  /** Client id + secret used to mint these tokens. Stored so future
+   * refreshes use the right pair (otherwise refresh fails with
+   * "invalid_client"). Optional — falls back to env defaults when missing. */
+  clientId?: string;
+  clientSecret?: string;
 }
 
 const KV_KEY = 'tidal:session';
@@ -16,6 +21,18 @@ const DEFAULT_CLIENT_VERSION = '2026.4.23';
 // Mobile client (works without web cookies). See bratan-muzonchik / tidalapi.
 const DEFAULT_CLIENT_ID = 'fX2JxdmntZWK0ixT';
 const DEFAULT_CLIENT_SECRET = '1Nn9AfDAjxrgJFJbKNWLeAyKGVGmINuXPPLHVXAvxAg=';
+
+// Known Tidal OAuth clients used for fallbacks. We try them in order when the
+// configured TIDAL_CLIENT_ID rejects a refresh-token exchange or device-flow
+// authorization. The TV client supports device authorization on every account
+// type — handy when the configured client is a web client (cid 8049) that
+// doesn't.
+interface ClientPair { id: string; secret: string; supportsDevice: boolean }
+const KNOWN_CLIENTS: ClientPair[] = [
+  { id: 'aR7gUaTK1ihpXOEP', secret: 'oKOXfJW371cX6xaZ0PyhgGNBdNLlBZd4AKKYougMjik=', supportsDevice: true },
+  { id: 'fX2JxdmntZWK0ixT', secret: '1Nn9AfDAjxrgJFJbKNWLeAyKGVGmINuXPPLHVXAvxAg=', supportsDevice: true },
+  { id: 'zU4XHVVkc2tDPo4t', secret: 'VJKhDFqJPqvsPVNBV6ukXTJmwlvbttP7wlMlrc72se4=', supportsDevice: true },
+];
 
 interface TidalJwtPayload {
   uid?: number;
@@ -99,13 +116,45 @@ export class TidalAuth {
     return tokens;
   }
 
+  /** Build the ordered list of client_id/secret pairs to try. The cached
+   * session's stored client (if any) goes first, then the env-configured
+   * one, then the well-known fallbacks (de-duplicated by client id). */
+  private async candidateClients(): Promise<ClientPair[]> {
+    const out: ClientPair[] = [];
+    const seen = new Set<string>();
+    const push = (id: string, secret: string, supportsDevice = false) => {
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, secret, supportsDevice });
+    };
+    const cached = await this.getCachedSession();
+    if (cached?.clientId && cached?.clientSecret) {
+      push(cached.clientId, cached.clientSecret, true);
+    }
+    push(this.clientId(), this.clientSecret(), true);
+    for (const c of KNOWN_CLIENTS) push(c.id, c.secret, c.supportsDevice);
+    return out;
+  }
+
+  /** Tries the given refresh token against every candidate client. Returns
+   * the freshly minted tokens (with clientId/secret stamped on them) on the
+   * first success. */
   private async refreshSession(refreshToken: string): Promise<TidalTokens | null> {
+    const candidates = await this.candidateClients();
+    for (const c of candidates) {
+      const tokens = await this.refreshWithClient(refreshToken, c);
+      if (tokens) return tokens;
+    }
+    return null;
+  }
+
+  private async refreshWithClient(refreshToken: string, client: ClientPair): Promise<TidalTokens | null> {
     try {
       const body = new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: this.clientId(),
-        client_secret: this.clientSecret(),
+        client_id: client.id,
+        client_secret: client.secret,
         scope: 'r_usr w_usr w_sub',
       });
 
@@ -117,7 +166,7 @@ export class TidalAuth {
 
       if (!res.ok) {
         const t = await res.text().catch(() => '');
-        console.error(`[tidal] refresh failed ${res.status}: ${t.slice(0, 200)}`);
+        console.error(`[tidal] refresh failed cid=${client.id} ${res.status}: ${t.slice(0, 200)}`);
         return null;
       }
 
@@ -135,6 +184,8 @@ export class TidalAuth {
         expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
         userId: sessionInfo.userId,
         countryCode: sessionInfo.countryCode,
+        clientId: client.id,
+        clientSecret: client.secret,
       };
 
       await this.cacheSession(tokens);
@@ -152,35 +203,69 @@ export class TidalAuth {
     expiresIn: number;
     interval: number;
   }> {
-    const body = new URLSearchParams({
-      client_id: this.clientId(),
-      scope: 'r_usr w_usr w_sub',
-    });
-    const res = await fetch('https://auth.tidal.com/v1/oauth2/device_authorization', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`tidal device_authorization ${res.status}: ${text.slice(0, 300)}`);
-    const data = JSON.parse(text) as {
-      deviceCode: string;
-      userCode: string;
-      verificationUri: string;
-      verificationUriComplete: string;
-      expiresIn: number;
-      interval: number;
-    };
-    return data;
+    // Try the configured client first, then fall back to known TV clients.
+    // Web clients (cid 8049) reject device_authorization with
+    // "Client is not a Limited Input Device client". We need to remember
+    // which client minted the code so the matching poll uses the same id.
+    const candidates = await this.candidateClients();
+    let lastError: string | null = null;
+    for (const c of candidates) {
+      const body = new URLSearchParams({
+        client_id: c.id,
+        scope: 'r_usr w_usr w_sub',
+      });
+      const res = await fetch('https://auth.tidal.com/v1/oauth2/device_authorization', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        lastError = `${res.status}: ${text.slice(0, 200)}`;
+        continue;
+      }
+      const data = JSON.parse(text) as {
+        deviceCode: string;
+        userCode: string;
+        verificationUri: string;
+        verificationUriComplete: string;
+        expiresIn: number;
+        interval: number;
+      };
+      // Remember which client minted this device code so poll can use it.
+      await this.env.SESSIONS.put(
+        `tidal:device:${data.deviceCode}`,
+        JSON.stringify({ clientId: c.id, clientSecret: c.secret }),
+        { expirationTtl: Math.max(60, data.expiresIn || 300) }
+      );
+      return data;
+    }
+    throw new Error(`tidal device_authorization failed: ${lastError ?? 'no candidate clients'}`);
   }
 
   async pollDeviceAuth(deviceCode: string): Promise<
     | { ok: true; refreshToken: string; accessToken: string; expiresIn: number }
     | { ok: false; error: string; pending: boolean }
   > {
+    // Look up which client minted this device code (saved by startDeviceAuth).
+    // Fall back to the configured client when the lookup is missing.
+    const stored = await this.env.SESSIONS.get(`tidal:device:${deviceCode}`).catch(() => null);
+    let client: ClientPair | null = null;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { clientId?: string; clientSecret?: string };
+        if (parsed.clientId && parsed.clientSecret) {
+          client = { id: parsed.clientId, secret: parsed.clientSecret, supportsDevice: true };
+        }
+      } catch { /* fallthrough */ }
+    }
+    if (!client) {
+      client = { id: this.clientId(), secret: this.clientSecret(), supportsDevice: true };
+    }
+
     const body = new URLSearchParams({
-      client_id: this.clientId(),
-      client_secret: this.clientSecret(),
+      client_id: client.id,
+      client_secret: client.secret,
       device_code: deviceCode,
       grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
       scope: 'r_usr w_usr w_sub',
@@ -202,8 +287,11 @@ export class TidalAuth {
         expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
         userId: this.decodeJwtPayload(accessToken)?.uid ?? 0,
         countryCode: this.decodeJwtPayload(accessToken)?.cc ?? DEFAULT_COUNTRY_CODE,
+        clientId: client.id,
+        clientSecret: client.secret,
       };
       await this.cacheSession(tokens);
+      await this.env.SESSIONS.delete(`tidal:device:${deviceCode}`).catch(() => {});
       return { ok: true, refreshToken, accessToken, expiresIn };
     }
     const err = typeof data.error === 'string' ? data.error : `http ${res.status}`;
