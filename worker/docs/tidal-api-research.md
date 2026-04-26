@@ -1,27 +1,60 @@
 # Tidal API — Исследование
 
-> Документ составлен на основе реверс-инжиниринга python-tidal, hmelder/TIDAL, gkasdorf/Tidal-API-Docs и официального Tidal Developer Portal.
+> Документ составлен на основе:
+> 1. **Реальных запросов из DevTools** (захвачены вручную из tidal.com, апрель 2026)
+> 2. Реверс-инжиниринга python-tidal, hmelder/TIDAL, gkasdorf/Tidal-API-Docs
+> 3. Официального Tidal Developer Portal
 
 ---
 
 ## 1. Базовые URL
 
-| Назначение | URL |
-|---|---|
-| API v1 | `https://api.tidal.com/v1/` |
-| API v2 | `https://api.tidal.com/v2/` |
-| OpenAPI v2 | `https://openapi.tidal.com/v2/` |
-| Auth (token) | `https://auth.tidal.com/v1/oauth2/token` |
-| Login (PKCE) | `https://login.tidal.com/authorize` |
-| Device Auth | `https://auth.tidal.com/v1/oauth2/device_authorization` |
-| Изображения | `https://resources.tidal.com/images/{IMAGE_ID}/{W}x{H}.jpg` |
-| Изображения (оригинал) | `https://resources.tidal.com/images/{IMAGE_ID}/origin.jpg` |
+| Назначение | URL | Примечание |
+|---|---|---|
+| **Web Proxy (основной)** | `https://tidal.com/v1/...` и `https://tidal.com/v2/...` | Same-origin proxy, используется веб-приложением |
+| API v1 (direct) | `https://api.tidal.com/v1/` | Прямой доступ к API |
+| API v2 (direct) | `https://api.tidal.com/v2/` | |
+| Auth (token) | `https://auth.tidal.com/v1/oauth2/token` | |
+| Device Auth | `https://auth.tidal.com/v1/oauth2/device_authorization` | |
+| Login (PKCE) | `https://login.tidal.com/authorize` | |
+| **Аудио-стрим** | `https://sp-ad-fa.audio.tidal.com/mediatracks/...` | CDN для аудио-файлов |
+| Изображения | `https://resources.tidal.com/images/{IMAGE_ID}/{W}x{H}.jpg` | |
+
+**Важно:** Веб-приложение Tidal использует same-origin proxy через `tidal.com/v1/` и `tidal.com/v2/` вместо прямых запросов к `api.tidal.com`. Для Workers-прокси мы будем использовать `api.tidal.com` напрямую.
 
 ---
 
 ## 2. Аутентификация
 
-### 2.1 Device Authorization Flow (OAuth 2.0 RFC 8628)
+### 2.1 Структура JWT-токена (из реального запроса)
+
+Декодированный payload Bearer-токена из веб-сессии:
+```json
+{
+  "type": "o2_access",
+  "uid": 208159949,
+  "scope": "w_usr r_usr",
+  "gVer": 0,
+  "sVer": 0,
+  "cid": 8049,
+  "cuk": "71f32269-9a05-4f4a-9eca-e63332568d40",
+  "cc": "BR",
+  "at": "INTERNAL",
+  "exp": 1777222566,
+  "sid": "2446a602-58c6-41ad-a0e4-2ec197844337",
+  "iss": "https://auth.tidal.com/v1"
+}
+```
+
+Ключевые поля:
+- `cid`: **8049** — client_id для веб-приложения (числовой)
+- `uid`: user ID
+- `sid`: session ID
+- `cc`: country code (BR)
+- `at`: "INTERNAL" — тип доступа
+- `scope`: "w_usr r_usr"
+
+### 2.2 Device Authorization Flow (OAuth 2.0 RFC 8628)
 
 Рекомендуемый flow для серверного приложения. Не требует reCaptcha.
 
@@ -48,18 +81,11 @@ client_id={CLIENT_ID}&scope=r_usr+w_usr+w_sub
 
 **Шаг 2: Polling для получения токена**
 
-Пользователь переходит по `verificationUri` и вводит `userCode`. Клиент опрашивает:
-
 ```http
 POST https://auth.tidal.com/v1/oauth2/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=urn:ietf:params:oauth:grant-type:device_code&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}&device_code={DEVICE_CODE}&scope=r_usr+w_usr+w_sub
-```
-
-Ожидание (400):
-```json
-{ "error": "authorization_pending", "error_description": "User hasn't authorized yet" }
 ```
 
 Успех (200):
@@ -73,7 +99,7 @@ grant_type=urn:ietf:params:oauth:grant-type:device_code&client_id={CLIENT_ID}&cl
 }
 ```
 
-### 2.2 PKCE Flow (для Hi-Res аудио)
+### 2.3 PKCE Flow (для Hi-Res аудио)
 
 PKCE обязателен для доступа к `HI_RES_LOSSLESS` потокам.
 
@@ -90,15 +116,7 @@ GET https://login.tidal.com/authorize?
   restrict_signup=true
 ```
 
-Обмен кода на токен:
-```http
-POST https://auth.tidal.com/v1/oauth2/token
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=authorization_code&code={AUTH_CODE}&client_id={PKCE_CLIENT_ID}&redirect_uri=https://tidal.com/android/login/auth&code_verifier={CODE_VERIFIER}&client_unique_key={CLIENT_UNIQUE_KEY}&scope=r_usr+w_usr+w_sub
-```
-
-### 2.3 Обновление токена (Refresh)
+### 2.4 Обновление токена (Refresh)
 
 ```http
 POST https://auth.tidal.com/v1/oauth2/token
@@ -107,16 +125,7 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=refresh_token&refresh_token={REFRESH_TOKEN}&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}
 ```
 
-Ответ:
-```json
-{
-  "access_token": "new_access_token",
-  "expires_in": 3600,
-  "token_type": "Bearer"
-}
-```
-
-### 2.4 Инициализация сессии
+### 2.5 Инициализация сессии
 
 ```http
 GET https://api.tidal.com/v1/sessions
@@ -126,49 +135,74 @@ Authorization: Bearer {ACCESS_TOKEN}
 Ответ:
 ```json
 {
-  "sessionId": "uuid-string",
-  "userId": 123456,
-  "countryCode": "US"
+  "sessionId": "2446a602-58c6-41ad-a0e4-2ec197844337",
+  "userId": 208159949,
+  "countryCode": "BR"
 }
 ```
 
-### 2.5 Известные Client ID / Secret
+### 2.6 Известные Client ID
 
-Из python-tidal (Device Auth flow):
-- `client_id`: `fX2JxdmntZWK0ixT` (может измениться)
-- `client_secret`: `1Nn9AfDAjxrgJFJbKNWLeAyKGVGmINuXPPLHVXAvxAg=`
+| Источник | client_id | Тип |
+|---|---|---|
+| **Веб-приложение (tidal.com)** | `8049` | Числовой, из JWT |
+| python-tidal (Device Auth) | `fX2JxdmntZWK0ixT` | Строковый |
+| python-tidal (client_secret) | `1Nn9AfDAjxrgJFJbKNWLeAyKGVGmINuXPPLHVXAvxAg=` | |
 
 ---
 
-## 3. Обязательные заголовки
+## 3. Обязательные заголовки (из реальных запросов)
 
 ```http
 Authorization: Bearer {ACCESS_TOKEN}
-User-Agent: Mozilla/5.0 (Linux; Android 12; wv) AppleWebKit/537.36
-x-tidal-client-version: 2025.7.16
+Accept: application/json
+x-tidal-client-version: 2026.4.23
 ```
 
 ### Обязательные query-параметры
 
-| Параметр | Описание |
-|---|---|
-| `sessionId` | UUID сессии из `/sessions` |
-| `countryCode` | Код страны пользователя (напр. "US", "RU") |
+| Параметр | Описание | Пример |
+|---|---|---|
+| `countryCode` | Код страны пользователя | `BR` |
+| `locale` | Локаль | `en_US` |
+| `deviceType` | Тип устройства | `BROWSER` |
 
 ---
 
-## 4. Поиск
+## 4. Поиск (РЕАЛЬНЫЙ ЗАПРОС)
 
 ```http
-GET /v1/search?
+GET https://tidal.com/v2/search/?
+  includeContributors=true&
+  includeDidYouMean=true&
+  includeUserPlaylists=true&
+  limit=20&
+  query={QUERY}&
+  supportsUserData=true&
+  types=ARTISTS,ALBUMS,TRACKS,VIDEOS,PLAYLISTS,UPLOADS&
+  countryCode={CC}&
+  locale=en_US&
+  deviceType=BROWSER
+Authorization: Bearer {ACCESS_TOKEN}
+```
+
+Или через direct API:
+```http
+GET https://api.tidal.com/v1/search?
   query={QUERY}&
   types=ARTISTS,ALBUMS,TRACKS,VIDEOS,PLAYLISTS&
   limit=25&
   offset=0&
   countryCode={CC}
+Authorization: Bearer {ACCESS_TOKEN}
 ```
 
-Заголовки: `Authorization: Bearer {ACCESS_TOKEN}`
+Дополнительные параметры v2 (веб):
+- `includeContributors=true`
+- `includeDidYouMean=true`
+- `includeUserPlaylists=true`
+- `supportsUserData=true`
+- `types`: включает `UPLOADS` (пользовательские загрузки)
 
 Ответ:
 ```json
@@ -234,12 +268,25 @@ GET /v1/tracks/{trackId}/radio?limit=25&offset=0&countryCode={CC}
 
 ---
 
-## 6. Альбомы
+## 6. Альбомы (РЕАЛЬНЫЙ ЗАПРОС)
 
-### Получить альбом
+### Страница альбома (веб-формат)
 
 ```http
-GET /v1/albums/{albumId}?countryCode={CC}
+GET https://tidal.com/v1/pages/album?
+  albumId={ALBUM_ID}&
+  countryCode={CC}&
+  locale=en_US&
+  deviceType=BROWSER
+Authorization: Bearer {ACCESS_TOKEN}
+```
+
+Пример: `albumId=457912926`
+
+### Получить альбом (direct API)
+
+```http
+GET https://api.tidal.com/v1/albums/{albumId}?countryCode={CC}
 Authorization: Bearer {ACCESS_TOKEN}
 ```
 
@@ -263,12 +310,28 @@ GET /v1/albums/{albumId}/similar?limit=10&countryCode={CC}
 
 ---
 
-## 7. Артисты
+## 7. Артисты (РЕАЛЬНЫЙ ЗАПРОС)
 
-### Получить артиста
+### Топ-треки артиста (веб-формат)
 
 ```http
-GET /v1/artists/{artistId}?countryCode={CC}
+GET https://tidal.com/v2/artist/ARTIST_TOP_TRACKS/view-all?
+  artistId={ARTIST_ID}&
+  locale=en_US&
+  countryCode={CC}&
+  deviceType=BROWSER&
+  platform=WEB&
+  limit=50&
+  offset=0
+Authorization: Bearer {ACCESS_TOKEN}
+```
+
+Пример: `artistId=3995478` (Ed Sheeran)
+
+### Получить артиста (direct API)
+
+```http
+GET https://api.tidal.com/v1/artists/{artistId}?countryCode={CC}
 Authorization: Bearer {ACCESS_TOKEN}
 ```
 
@@ -280,7 +343,7 @@ GET /v1/artists/{artistId}/albums?limit=50&offset=0&filter=ALBUMS&countryCode={C
 
 Значения filter: `ALBUMS`, `EPSANDSINGLES`, `COMPILATIONS`
 
-### Топ-треки артиста
+### Топ-треки артиста (direct API)
 
 ```http
 GET /v1/artists/{artistId}/toptracks?limit=10&offset=0&countryCode={CC}
@@ -297,8 +360,6 @@ GET /v1/artists/{artistId}/similar?limit=10&countryCode={CC}
 ## 8. Стриминг и воспроизведение (КРИТИЧЕСКИ ВАЖНО)
 
 ### 8.1 Получить информацию о воспроизведении
-
-Основной endpoint для получения URL потока:
 
 ```http
 GET /v1/tracks/{trackId}/playbackinfopostpaywall?
@@ -335,7 +396,7 @@ Authorization: Bearer {ACCESS_TOKEN}
 
 ```json
 {
-  "urls": ["https://audio.tidal.com/..."],
+  "urls": ["https://sp-ad-fa.audio.tidal.com/mediatracks/..."],
   "codecs": "mp4a.40.2",
   "mimeType": "audio/mp4",
   "encryptionType": "NONE",
@@ -347,11 +408,29 @@ Authorization: Bearer {ACCESS_TOKEN}
 - `mp4a.40.2` — AAC-LC
 - `flac` — FLAC lossless
 
-### 8.3 Формат MPEG-DASH (application/dash+xml)
+### 8.3 Реальный URL аудио-потока (из DevTools)
+
+```
+https://sp-ad-fa.audio.tidal.com/mediatracks/{ENCODED_TRACK_PATH}/{SEGMENT}.mp4?token={TOKEN}
+```
+
+Пример:
+```
+https://sp-ad-fa.audio.tidal.com/mediatracks/GisIAxIn...62Lm1wNCIhsx.../0.mp4?token=3924692492~...
+```
+
+Особенности:
+- URL содержит закодированный путь к треку
+- `token` — одноразовый токен для доступа к CDN
+- Сегмент `0.mp4` — начальный сегмент аудио
+- **Не требует Authorization header** (аутентификация через token в URL)
+- `credentials: "omit"` — куки не отправляются
+
+### 8.4 Формат MPEG-DASH (application/dash+xml)
 
 Используется для HI_RES_LOSSLESS. Поле `manifest` — base64-encoded MPD XML.
 
-### 8.4 Прямой URL (только для Device Auth, не PKCE)
+### 8.5 Прямой URL (только для Device Auth, не PKCE)
 
 ```http
 GET /v1/tracks/{trackId}/urlpostpaywall?
@@ -441,33 +520,52 @@ DELETE /v1/users/{userId}/favorites/tracks/{trackId}?countryCode={CC}
 
 ---
 
-## 15. Выводы для реализации
+## 15. Выводы для реализации BRATAN MUSIC
 
-### Рекомендуемый flow авторизации для BRATAN MUSIC:
+### Архитектура проксирования:
+
+```
+Клиент (браузер) → Workers API → api.tidal.com
+                                → sp-ad-fa.audio.tidal.com (аудио)
+```
+
+### Рекомендуемый flow авторизации:
 
 1. **Device Authorization Flow** — основной. Не требует браузера на стороне сервера, нет reCaptcha.
 2. Сохранять `access_token` и `refresh_token` в Cloudflare KV с TTL.
 3. При истечении `access_token` использовать `refresh_token` для обновления.
-4. `countryCode` получать из `/sessions` после авторизации.
+4. `countryCode` получать из JWT payload (поле `cc`) или из `/sessions`.
 
 ### Получение потока аудио:
 
 1. Запросить `/tracks/{id}/playbackinfopostpaywall` с нужным качеством.
 2. Декодировать `manifest` из base64.
-3. Для BTS — извлечь `urls[0]` (прямая ссылка на аудио).
-4. Проксировать аудио-поток через Workers (добавляя нужные заголовки).
+3. Для BTS — извлечь `urls[0]` (прямая ссылка на `sp-ad-fa.audio.tidal.com`).
+4. URL аудио **не требует Bearer-токен** — аутентификация через `token` в query string.
+5. Workers могут либо проксировать поток, либо отдавать URL клиенту напрямую.
+
+### Ключевые различия web-приложения vs direct API:
+
+| Аспект | Web (tidal.com) | Direct (api.tidal.com) |
+|---|---|---|
+| Поиск | `/v2/search/` с доп. параметрами | `/v1/search` |
+| Альбом | `/v1/pages/album?albumId=...` | `/v1/albums/{id}` |
+| Артист | `/v2/artist/ARTIST_TOP_TRACKS/view-all` | `/v1/artists/{id}/toptracks` |
+| Аудио | `sp-ad-fa.audio.tidal.com` (без auth) | То же через manifest |
+| Доп. параметры | `locale`, `deviceType`, `platform` | `countryCode` |
 
 ### Важные ограничения:
 
 - Client ID может измениться (Tidal обновляет периодически).
 - reCaptcha v3 защищает веб-flow (поэтому используем Device Auth).
-- Некоторые endpoint'ы требуют `sessionId` в query.
+- `x-tidal-client-version` нужно обновлять (текущая: `2026.4.23`).
 - Rate limiting на стороне Tidal — нужно кешировать результаты.
 
 ---
 
 ## 16. Источники
 
+- **Реальные запросы из DevTools** (захвачены пользователем, апрель 2026)
 - [python-tidal](https://github.com/tamland/python-tidal) — Python-клиент, основной референс
 - [hmelder/TIDAL](https://github.com/hmelder/TIDAL) — документация реверс-инжиниринга (82 endpoint'а)
 - [gkasdorf/Tidal-API-Docs](https://github.com/gkasdorf/Tidal-API-Docs) — дополнительная документация
