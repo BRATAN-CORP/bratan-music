@@ -11,6 +11,7 @@ import { artists } from './routes/artists';
 import { playlists } from './routes/playlists';
 import { library } from './routes/library';
 import { overrides } from './routes/overrides';
+import { uploads } from './routes/uploads';
 import { webhook } from './routes/webhook';
 import { admin } from './routes/admin';
 
@@ -49,6 +50,7 @@ app.route('/artists', artists);
 app.route('/playlists', playlists);
 app.route('/library', library);
 app.route('/tracks', overrides);
+app.route('/uploads', uploads);
 app.route('/webhook', webhook);
 app.route('/admin', admin);
 

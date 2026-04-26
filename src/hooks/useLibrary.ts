@@ -128,12 +128,18 @@ export function useRemovePlaylistCover() {
 export function useAddTrackToPlaylist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ playlistId, track, source }: { playlistId: string; track: LikeableTrack; source?: string }) =>
-      api.post(`/playlists/${playlistId}/tracks`, {
-        trackId: track.id,
-        source: source ?? 'tidal',
+    mutationFn: ({ playlistId, track, source }: { playlistId: string; track: LikeableTrack; source?: string }) => {
+      // Upload tracks are addressed as "upload:<uuid>" client-side, but the
+      // playlist_tracks table stores rawId + source separately.
+      const isUpload = track.id.startsWith('upload:');
+      const trackId = isUpload ? track.id.slice('upload:'.length) : track.id;
+      const resolvedSource = source ?? (isUpload ? 'upload' : 'tidal');
+      return api.post(`/playlists/${playlistId}/tracks`, {
+        trackId,
+        source: resolvedSource,
         snapshot: snapshotOf(track),
-      }),
+      });
+    },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['playlist', vars.playlistId] });
       qc.invalidateQueries({ queryKey: ['playlists'] });

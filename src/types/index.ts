@@ -2,14 +2,16 @@ export interface Track {
   id: string;
   title: string;
   artist: string;
-  artistId: string;
-  album: string;
-  albumId: string;
+  artistId?: string;
+  album?: string;
+  albumId?: string;
   duration: number;
   coverUrl?: string;
   /** Animated cover (mp4) when the source provides one. Used as a tasteful
    *  loop in the fullscreen player. */
   coverVideoUrl?: string;
+  /** Provider tag. Tracks without a known source default to "tidal" downstream. */
+  source?: string;
 }
 
 export interface Album {

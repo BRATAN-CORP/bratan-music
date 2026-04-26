@@ -1,11 +1,24 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { usePlayerStore } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
+import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 
-interface StreamResponse {
-  url: string;
-  source: string;
+const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
+
+/**
+ * Build the stream URL for any track. Upload tracks (id="upload:<uuid>") are
+ * served from the worker's R2-backed /uploads/:id/stream endpoint with a
+ * ?token= query fallback (the audio element can't send Authorization).
+ */
+async function fetchStreamUrl(track: { id: string; source?: string }, quality: string): Promise<string> {
+  if (track.id.startsWith('upload:') || track.source === 'upload') {
+    const rawId = track.id.startsWith('upload:') ? track.id.slice('upload:'.length) : track.id;
+    const token = useAuthStore.getState().accessToken ?? '';
+    return `${API_BASE}/uploads/${rawId}/stream?token=${encodeURIComponent(token)}`;
+  }
+  const res = await api.get<{ url: string }>(`/tracks/${track.id}/stream?quality=${encodeURIComponent(quality)}`);
+  return res.url;
 }
 
 type Slot = 'a' | 'b';
@@ -235,13 +248,14 @@ export function useAudioPlayer() {
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
 
-  /** Load `trackId` into the active slot and start playback from 0. */
-  const loadTrack = useCallback(async (trackId: string) => {
+  /** Load the given track into the active slot and start playback from 0. */
+  const loadTrack = useCallback(async (track: { id: string; source?: string }) => {
+    const trackId = track.id;
     const b = getBundle();
     loadingRef.current = trackId;
     setError(null);
     try {
-      const { url } = await api.get<StreamResponse>(`/tracks/${trackId}/stream?quality=${encodeURIComponent(tidalQuality)}`);
+      const url = await fetchStreamUrl(track, tidalQuality);
       if (loadingRef.current !== trackId) return;
       const slot = b.active;
       const audio = b.audios[slot];
@@ -311,7 +325,7 @@ export function useAudioPlayer() {
       safePause(inactiveSlot(b));
       b.loaded[inactiveSlot(b)] = null;
       if (versionBumped) b.loaded[b.active] = null;
-      loadTrack(currentTrack.id);
+      loadTrack(currentTrack);
 
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -383,7 +397,7 @@ export function useAudioPlayer() {
     const incoming = inactiveSlot(b);
     b.crossfadingInto = incoming;
     try {
-      const { url } = await api.get<StreamResponse>(`/tracks/${nextTrack.id}/stream?quality=${encodeURIComponent(tidalQuality)}`);
+      const url = await fetchStreamUrl(nextTrack, tidalQuality);
       if (!crossfadingRef.current) return;
       const audio = b.audios[incoming];
       if (b.playPromises[incoming]) {

@@ -9,6 +9,7 @@ import { PageTransition } from '@/components/ui/PageTransition';
 import { LandingPage } from '@/app/landing/page';
 import { SearchPage } from '@/app/search/page';
 import { LibraryPage } from '@/app/library/page';
+import { UploadsPage } from '@/app/library/uploads/page';
 import { ProfilePage } from '@/app/profile/page';
 import { PlaylistPage } from '@/app/playlist/page';
 import { TrackPage } from '@/app/track/page';
@@ -45,6 +46,7 @@ const router = createBrowserRouter(
         { index: true, element: <LandingPage /> },
         { path: 'search', element: <SearchPage /> },
         { path: 'library', element: <LibraryPage /> },
+        { path: 'library/uploads', element: <UploadsPage /> },
         { path: 'profile', element: <ProfilePage /> },
         { path: 'track/:id', element: <TrackPage /> },
         { path: 'album/:id', element: <AlbumPage /> },

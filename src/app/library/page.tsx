@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Upload as UploadIcon } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistCard } from '@/components/features/PlaylistCard';
 import { CreatePlaylistDialog } from '@/components/features/CreatePlaylistDialog';
 import { usePlaylists } from '@/hooks/useLibrary';
+import { useUploads } from '@/hooks/useUploads';
 import { Button } from '@/components/ui/Button';
 
 export function LibraryPage() {
   const { data: playlists, isLoading } = usePlaylists();
+  const { data: uploads } = useUploads();
   const [showCreate, setShowCreate] = useState(false);
 
   return (
@@ -25,6 +28,21 @@ export function LibraryPage() {
             Плейлист
           </Button>
         </div>
+
+        <Link
+          to="/library/uploads"
+          className="flex items-center gap-4 rounded-[var(--radius-md)] border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-[var(--color-accent)]">
+            <UploadIcon size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">Загруженные</p>
+            <p className="text-xs text-muted-foreground">
+              {uploads?.length ?? 0} {(uploads?.length ?? 0) === 1 ? 'трек' : 'треков'} · ваши файлы
+            </p>
+          </div>
+        </Link>
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Загрузка...</p>
