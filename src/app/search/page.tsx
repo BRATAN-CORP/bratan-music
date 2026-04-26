@@ -21,6 +21,7 @@ export function SearchPage() {
       id: track.id,
       title: track.title,
       artist: track.artist,
+      artistId: track.artistId,
       coverUrl: track.coverUrl,
       duration: track.duration,
     });
@@ -30,6 +31,7 @@ export function SearchPage() {
           id: t.id,
           title: t.title,
           artist: t.artist,
+          artistId: t.artistId,
           coverUrl: t.coverUrl,
           duration: t.duration,
         }))

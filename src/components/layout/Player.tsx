@@ -1,18 +1,29 @@
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
+  MoreHorizontal, ListPlus, Share2, User as UserIcon, Check,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function buildShareUrl(trackId: string): string {
+  const url = new URL(window.location.href);
+  // Strip any hash-router prefix if present.
+  const base = `${url.origin}${url.pathname.replace(/\/?(track|search|playlist|album|artist|profile|admin)\/.*$/, '')}`.replace(/\/$/, '');
+  return `${base}/track/${trackId}?autoplay=1`;
 }
 
 export function Player() {
@@ -27,8 +38,59 @@ export function Player() {
   const reduce = useReducedMotion();
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
+  const navigate = useNavigate();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [menuOpen]);
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
+
+  const handleShare = async () => {
+    if (!currentTrack) return;
+    const url = buildShareUrl(currentTrack.id);
+    const shareData = {
+      title: currentTrack.title,
+      text: `${currentTrack.artist} — ${currentTrack.title}`,
+      url,
+    };
+    if (typeof navigator.share === 'function' && navigator.canShare?.(shareData)) {
+      try {
+        await navigator.share(shareData);
+        setMenuOpen(false);
+        return;
+      } catch {
+        // user cancelled or share failed → fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1500);
+    } catch {
+      // clipboard might be blocked — last-ditch fallback
+      window.prompt('Скопируйте ссылку:', url);
+    }
+    setMenuOpen(false);
+  };
+
+  const handleGoToArtist = () => {
+    if (!currentTrack?.artistId) return;
+    setMenuOpen(false);
+    navigate(`/artist/${currentTrack.artistId}`);
+  };
 
   return (
     <AnimatePresence>
@@ -83,7 +145,7 @@ export function Player() {
             />
           </div>
 
-          <div className="flex flex-1 items-center gap-4 px-4">
+          <div className="flex flex-1 items-center gap-3 px-3 sm:gap-4 sm:px-4">
             <button
               onClick={openFullscreen}
               className="group flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-90"
@@ -108,18 +170,21 @@ export function Player() {
               </div>
             </button>
 
+            {/* Like sits next to track info on the left, easy thumb reach
+              * on mobile. Replaces the previous central heart slot. */}
+            <motion.div whileTap={reduce ? undefined : { scale: 0.85 }} className="shrink-0">
+              <Button
+                onClick={() => currentTrack && toggle(currentTrack)}
+                variant="ghost"
+                size="icon"
+                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                className={liked ? 'text-[var(--color-accent)]' : ''}
+              >
+                <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
+              </Button>
+            </motion.div>
+
             <div className="flex items-center gap-1">
-              <motion.div whileTap={reduce ? undefined : { scale: 0.85 }}>
-                <Button
-                  onClick={() => currentTrack && toggle(currentTrack)}
-                  variant="ghost"
-                  size="icon"
-                  aria-label={liked ? 'Убрать лайк' : 'Лайк'}
-                  className={liked ? 'text-[var(--color-accent)]' : ''}
-                >
-                  <Heart size={15} fill={liked ? 'currentColor' : 'none'} />
-                </Button>
-              </motion.div>
               <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Перемешать">
                 <Shuffle size={15} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
               </Button>
@@ -141,6 +206,63 @@ export function Player() {
                   <Repeat size={15} className={repeat === 'all' ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
                 )}
               </Button>
+
+              {/* 3-dot menu: add-to-playlist / share / artist. Replaces the
+                * previous heart in the central controls cluster. */}
+              <div className="relative" ref={menuRef}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-label="Действия с треком"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                >
+                  <MoreHorizontal size={16} />
+                </Button>
+                <AnimatePresence>
+                  {menuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96, y: 4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96, y: 4 }}
+                      transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                      role="menu"
+                      className="absolute bottom-full right-0 z-30 mb-2 w-56 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card shadow-[var(--shadow-lg)]"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setAddToPlaylistOpen(true); setMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                      >
+                        <ListPlus size={14} />
+                        Добавить в плейлист
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleShare}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                      >
+                        {shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
+                        {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                      </button>
+                      {currentTrack.artistId && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={handleGoToArtist}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                        >
+                          <UserIcon size={14} />
+                          Перейти к артисту
+                        </button>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             <div className="hidden flex-1 items-center justify-end gap-2 md:flex">
@@ -165,6 +287,14 @@ export function Player() {
               </Button>
             </div>
           </div>
+
+          {currentTrack && (
+            <AddToPlaylistDialog
+              track={currentTrack}
+              open={addToPlaylistOpen}
+              onClose={() => setAddToPlaylistOpen(false)}
+            />
+          )}
         </motion.div>
       )}
     </AnimatePresence>
