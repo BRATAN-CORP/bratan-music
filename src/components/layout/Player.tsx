@@ -1,11 +1,12 @@
 import {
   Play, Pause, SkipBack, SkipForward,
-  Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle,
+  Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
+import { useToggleLike } from '@/hooks/useLibrary';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -24,6 +25,8 @@ export function Player() {
 
   const { progress, seek } = useAudioPlayer();
   const reduce = useReducedMotion();
+  const { isLiked, toggle } = useToggleLike();
+  const liked = currentTrack ? isLiked(currentTrack.id) : false;
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
 
@@ -90,6 +93,17 @@ export function Player() {
             </button>
 
             <div className="flex items-center gap-1">
+              <motion.div whileTap={reduce ? undefined : { scale: 0.85 }}>
+                <Button
+                  onClick={() => currentTrack && toggle(currentTrack)}
+                  variant="ghost"
+                  size="icon"
+                  aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                  className={liked ? 'text-[var(--color-accent)]' : ''}
+                >
+                  <Heart size={15} fill={liked ? 'currentColor' : 'none'} />
+                </Button>
+              </motion.div>
               <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Перемешать">
                 <Shuffle size={15} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
               </Button>
