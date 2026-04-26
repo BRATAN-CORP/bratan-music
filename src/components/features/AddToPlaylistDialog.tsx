@@ -92,13 +92,19 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
             and the modal ends up anchored top-left (or, on mobile, off-screen
             below the player).
           */}
-          {/* Bottom-sheet on mobile (anchored to the bottom of the viewport,
-              respecting safe-area + the persistent player + tab-bar so it
-              never lands behind them), centered modal on md+. */}
-          <div
-            className="fixed inset-0 z-[60] flex items-end justify-center md:items-center md:p-4 pointer-events-none"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--player-height, 0px) + 4rem)' }}
-          >
+          {/* Bottom-sheet on mobile (anchored to the bottom of the viewport
+              with bottom padding that clears safe-area + the persistent
+              player + tab-bar so the panel never sits behind them), centered
+              modal on md+.
+
+              Notes:
+              - We use 100dvh (dynamic viewport height) for max-height so the
+                panel stays inside the visible area on iOS / Telegram WebView,
+                where 100vh includes the URL bar and the panel was overflowing
+                off-screen.
+              - We split the bottom padding into a separate element (.spacer)
+                so md+ centering isn't pushed up by the mobile padding. */}
+          <div className="fixed inset-0 z-[60] flex flex-col items-center justify-end md:justify-center pointer-events-none">
             <motion.div
               key="atp-panel"
               role="dialog"
@@ -108,7 +114,8 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="pointer-events-auto w-full max-w-[420px] overflow-hidden rounded-t-[var(--radius-xl)] border border-border/60 bg-[var(--color-surface-elevated)]/85 shadow-[var(--shadow-xl)] backdrop-blur-xl ring-1 ring-white/5 md:rounded-[var(--radius-lg)]"
+              style={{ maxHeight: 'calc(100dvh - 12rem - env(safe-area-inset-bottom, 0px))' }}
+              className="pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+9rem)] flex w-[min(420px,calc(100vw-24px))] flex-col overflow-hidden rounded-t-[var(--radius-xl)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/85 supports-[backdrop-filter]:backdrop-blur-xl md:mb-0 md:rounded-[var(--radius-lg)]"
             >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -120,7 +127,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
               </Button>
             </div>
 
-            <div className="max-h-[50vh] overflow-y-auto p-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
                   <Loader2 size={14} className="animate-spin" /> Загрузка...

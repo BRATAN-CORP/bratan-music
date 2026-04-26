@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, Download, Heart, ListPlus, Loader2, Mic2, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
@@ -33,7 +34,14 @@ export function FullscreenPlayer() {
     duration, fullscreen, closeFullscreen, error,
   } = usePlayerStore();
   const { progress, seek } = useAudioPlayer();
+  const navigate = useNavigate();
   const reduce = useReducedMotion();
+
+  const goToArtist = () => {
+    if (!currentTrack?.artistId) return;
+    closeFullscreen();
+    navigate(`/artist/${currentTrack.artistId}`);
+  };
   const [eqOpen, setEqOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
@@ -131,6 +139,16 @@ export function FullscreenPlayer() {
                   stops produced a visible band at the via point that read as
                   a hard shadow line under the "Сейчас играет" header. */}
               <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 to-black/80" aria-hidden />
+              {/* Top-bar soft fade. Adds a gentle, evenly-spread darkening
+                  band across the very top of the player so the header never
+                  shows a hard ridge against the blurred cover behind it.
+                  Solves the "грубая обрывающая тень на левой половине"
+                  artefact: the cover blur falls off asymmetrically across
+                  the wide viewport, so we layer a uniform top fade on top. */}
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-44 bg-gradient-to-b from-black/55 via-black/15 to-transparent"
+                aria-hidden
+              />
             </>
           )}
 
@@ -239,7 +257,17 @@ export function FullscreenPlayer() {
                 >
                   {currentTrack.title}
                 </motion.h1>
-                <p className="truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
+                {currentTrack.artistId ? (
+                  <button
+                    type="button"
+                    onClick={goToArtist}
+                    className="truncate text-left text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
+                  >
+                    {currentTrack.artist}
+                  </button>
+                ) : (
+                  <p className="truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
+                )}
                 {error && (
                   <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
                     {error}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { useLyrics, parseLrc, type LyricLine } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/store/player';
 
@@ -98,15 +98,26 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: Lyrics
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
-          // No card chrome — full-bleed background that visually replaces the
-          // player surface on mobile. Tap anywhere closes.
+          // Full-bleed background on mobile (replaces the player surface)
+          // with a single dismiss control in the corner so users have a way
+          // back to the player without needing to know that the panel is
+          // tap-to-close.
           className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-xl md:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Текст песни"
-          onClick={onClose}
         >
-          <div className="flex-1 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="relative flex shrink-0 items-center justify-end px-3 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Закрыть текст"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/80 text-muted-foreground shadow-[var(--shadow-md)] backdrop-blur transition-colors hover:text-foreground"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
             <LyricsContent trackId={trackId} />
           </div>
         </motion.div>
@@ -231,7 +242,7 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
         <button
           type="button"
           onClick={() => setAutoScroll(true)}
-          className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/80 px-4 py-2 text-xs font-medium shadow-[var(--shadow-md)] backdrop-blur"
+          className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/85 px-4 py-2 text-xs font-medium text-foreground shadow-[0_10px_32px_-6px_rgba(0,0,0,0.55),0_0_24px_-2px_var(--color-accent-soft)] backdrop-blur ring-1 ring-white/10 transition-shadow hover:shadow-[0_12px_36px_-4px_rgba(0,0,0,0.65),0_0_32px_-2px_var(--color-accent-soft)]"
         >
           Прокручивать вместе с песней
         </button>

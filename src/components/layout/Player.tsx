@@ -178,13 +178,15 @@ export function Player() {
           </div>
 
           <div className="flex flex-1 items-center gap-3 px-3 sm:gap-4 sm:px-4">
-            <button
-              onClick={openFullscreen}
-              className="group flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-90"
-              aria-label="Открыть плеер"
-            >
+            {/* Cover + title open the fullscreen player; the artist name is
+                a separate inline link to the artist page so users can jump
+                straight to the artist without going through the 3-dot menu. */}
+            <div className="group flex min-w-0 flex-1 items-center gap-3">
               {currentTrack.coverUrl && (
-                <motion.div
+                <motion.button
+                  type="button"
+                  onClick={openFullscreen}
+                  aria-label="Открыть плеер"
                   className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border"
                   initial={reduce ? false : { scale: 0.8, opacity: 0 }}
                   animate={reduce ? undefined : { scale: 1, opacity: 1 }}
@@ -194,13 +196,31 @@ export function Player() {
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
                     <Maximize2 size={14} className="text-white" />
                   </div>
-                </motion.div>
+                </motion.button>
               )}
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{currentTrack.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
+                <button
+                  type="button"
+                  onClick={openFullscreen}
+                  className="block w-full truncate text-left text-sm font-medium transition-opacity hover:opacity-90"
+                  aria-label="Открыть плеер"
+                >
+                  {currentTrack.title}
+                </button>
+                {currentTrack.artistId ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
+                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4"
+                    aria-label={`Открыть артиста ${currentTrack.artist}`}
+                  >
+                    {currentTrack.artist}
+                  </button>
+                ) : (
+                  <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
+                )}
               </div>
-            </button>
+            </div>
 
             {/* Like sits next to track info on the left, easy thumb reach
               * on mobile. Replaces the previous central heart slot. */}
@@ -260,7 +280,7 @@ export function Player() {
                       exit={{ opacity: 0, scale: 0.96, y: 4 }}
                       transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
                       role="menu"
-                      className="absolute bottom-full right-0 z-30 mb-2 w-56 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)]/80 shadow-[var(--shadow-xl)] backdrop-blur-xl ring-1 ring-white/5"
+                      className="absolute bottom-full right-0 z-30 mb-2 w-56 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/80 supports-[backdrop-filter]:backdrop-blur-xl"
                     >
                       <button
                         type="button"
