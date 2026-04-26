@@ -8,7 +8,6 @@ import { useArtist } from '@/hooks/useTrack';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
 
 export function ArtistPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,34 +31,38 @@ export function ArtistPage() {
 
   return (
     <AuthGuard>
-      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-muted-foreground">Загрузка...</p>
+          <p className="text-sm text-muted-foreground">Загрузка...</p>
         ) : artist ? (
           <>
-            <Card className="animate-enter mb-8 border-primary/20 bg-card/70">
-              <CardContent className="flex flex-col items-center gap-6 p-6 sm:flex-row sm:items-end">
+            <div className="mb-10 flex flex-col items-start gap-6 border-b border-border pb-10 sm:flex-row sm:items-end">
               {artist.imageUrl ? (
-                <img src={artist.imageUrl} alt={artist.name} className="h-44 w-44 rounded-full object-cover shadow-[var(--shadow-lg)] ring-4 ring-primary/20" />
+                <img
+                  src={artist.imageUrl}
+                  alt={artist.name}
+                  className="h-40 w-40 rounded-full border border-border object-cover"
+                />
               ) : (
-                <div className="flex h-44 w-44 items-center justify-center rounded-full bg-secondary ring-4 ring-primary/20">
-                  <User size={48} className="text-muted-foreground" />
+                <div className="flex h-40 w-40 items-center justify-center rounded-full border border-border bg-secondary">
+                  <User size={36} className="text-muted-foreground" />
                 </div>
               )}
-              <div className="flex flex-col gap-2 text-center sm:text-left">
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary">Артист</p>
-                <h1 className="hero-gradient-text text-4xl font-black tracking-tight sm:text-6xl">{artist.name}</h1>
-                <Button onClick={handlePlayAll} className="mx-auto mt-2 w-fit sm:mx-0">
-                  <Play size={16} fill="currentColor" /> Слушать
-                </Button>
+              <div className="flex flex-col gap-3">
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Артист</span>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{artist.name}</h1>
+                <div className="pt-2">
+                  <Button onClick={handlePlayAll}>
+                    <Play size={14} fill="currentColor" /> Слушать
+                  </Button>
+                </div>
               </div>
-              </CardContent>
-            </Card>
+            </div>
 
             {artist.topTracks?.length > 0 && (
-              <section className="animate-enter mb-8">
-                <h2 className="mb-4 text-2xl font-bold">Популярные треки</h2>
-                <div className="glass-panel flex flex-col rounded-[var(--radius-xl)] p-2">
+              <section className="mb-12">
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Популярные треки</h2>
+                <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
                   {artist.topTracks.map((track, i) => (
                     <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayTrack} />
                   ))}
@@ -68,9 +71,9 @@ export function ArtistPage() {
             )}
 
             {artist.albums?.length > 0 && (
-              <section className="animate-enter mb-8">
-                <h2 className="mb-4 text-2xl font-bold">Альбомы</h2>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+              <section className="mb-12">
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Альбомы</h2>
+                <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {artist.albums.map((album) => (
                     <AlbumCard key={album.id} album={album} />
                   ))}
@@ -79,9 +82,9 @@ export function ArtistPage() {
             )}
 
             {artist.similarArtists?.length > 0 && (
-              <section className="animate-enter">
-                <h2 className="mb-4 text-2xl font-bold">Похожие артисты</h2>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
+              <section>
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Похожие артисты</h2>
+                <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
                   {artist.similarArtists.map((a) => (
                     <ArtistCard key={a.id} artist={a} />
                   ))}
@@ -90,7 +93,7 @@ export function ArtistPage() {
             )}
           </>
         ) : (
-          <p className="text-muted-foreground">Артист не найден</p>
+          <p className="text-sm text-muted-foreground">Артист не найден</p>
         )}
       </div>
     </AuthGuard>

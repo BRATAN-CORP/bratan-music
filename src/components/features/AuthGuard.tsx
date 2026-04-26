@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { TelegramLoginButton } from './TelegramLoginButton';
-import { Card, CardContent } from '@/components/ui/Card';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -15,15 +14,18 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
     return (
       fallback ?? (
         <div className="flex min-h-[60dvh] items-center justify-center p-6">
-          <Card className="animate-enter max-w-md border-primary/20 bg-card/80">
-            <CardContent className="flex flex-col items-center gap-5 py-10 text-center">
-              <h2 className="hero-gradient-text text-3xl font-black">Войдите для продолжения</h2>
-              <p className="text-muted-foreground">
-                Авторизуйтесь через Telegram для доступа к музыке, библиотеке и плееру.
+          <div className="max-w-md rounded-[var(--radius-md)] border border-border bg-card px-8 py-10">
+            <div className="flex flex-col items-start gap-4">
+              <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Доступ</span>
+              <h2 className="text-2xl font-semibold tracking-tight">Войдите для продолжения</h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Авторизуйтесь через Telegram, чтобы получить доступ к поиску, библиотеке и плееру.
               </p>
-              <TelegramLoginButton />
-            </CardContent>
-          </Card>
+              <div className="pt-2">
+                <TelegramLoginButton />
+              </div>
+            </div>
+          </div>
         </div>
       )
     );

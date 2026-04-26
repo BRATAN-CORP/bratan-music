@@ -32,12 +32,12 @@ export function TelegramLoginButton() {
     >
       {polling ? (
         <>
-          <Loader2 size={20} className="animate-spin" />
-          Ожидание входа в Telegram...
+          <Loader2 size={16} className="animate-spin" />
+          Ожидание входа...
         </>
       ) : (
         <>
-          <MessageCircle size={20} />
+          <MessageCircle size={16} />
           Войти через Telegram
         </>
       )}
