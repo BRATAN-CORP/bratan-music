@@ -36,6 +36,7 @@ export interface Playlist {
   name: string;
   trackCount: number;
   isLiked: boolean;
+  coverUrl?: string | null;
   updatedAt: number;
 }
 

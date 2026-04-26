@@ -93,6 +93,29 @@ export function useRenamePlaylist() {
   });
 }
 
+export function useSetPlaylistCover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dataUrl }: { id: string; dataUrl: string }) =>
+      api.put<{ ok: boolean; coverUrl: string }>(`/playlists/${id}/cover`, { dataUrl }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist', vars.id] });
+    },
+  });
+}
+
+export function useRemovePlaylistCover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/playlists/${id}/cover`),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist', id] });
+    },
+  });
+}
+
 export function useAddTrackToPlaylist() {
   const qc = useQueryClient();
   return useMutation({

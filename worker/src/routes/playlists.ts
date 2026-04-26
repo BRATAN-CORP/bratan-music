@@ -33,10 +33,17 @@ interface PlaylistRow {
   user_id: string;
   name: string;
   is_liked: number;
+  cover_url?: string | null;
   created_at: number;
   updated_at: number;
   track_count?: number | null;
 }
+
+// Hard cap to keep D1 rows small. Frontend should resize+JPEG-compress
+// before upload, so anything above this is almost certainly malicious or
+// a misconfigured client.
+const MAX_COVER_BYTES = 256 * 1024;
+const COVER_DATA_URL_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 
 function rowToTrack(r: PtRow) {
   const snap = safeJson<TrackSnapshot>(r.snapshot);
@@ -58,6 +65,7 @@ function rowToPlaylist(r: PlaylistRow) {
     id: r.id,
     name: r.name,
     isLiked: Boolean(r.is_liked),
+    coverUrl: r.cover_url ?? null,
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),
@@ -158,6 +166,57 @@ playlists.delete('/:id', async (c) => {
   }
 
   await c.env.DB.prepare('DELETE FROM playlists WHERE id = ?').bind(id).run();
+  return c.json({ ok: true });
+});
+
+playlists.put('/:id/cover', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ dataUrl?: string }>().catch(() => ({} as { dataUrl?: string }));
+
+  const dataUrl = body.dataUrl?.trim();
+  if (!dataUrl) {
+    return c.json({ error: 'dataUrl обязателен' }, 400);
+  }
+  if (!COVER_DATA_URL_RE.test(dataUrl)) {
+    return c.json({ error: 'Допустимы JPEG/PNG/WebP в формате data URL' }, 400);
+  }
+  if (dataUrl.length > MAX_COVER_BYTES * 1.4) {
+    // base64 inflates ~4/3, so cap the encoded length proportionally.
+    return c.json({ error: 'Обложка слишком большая. Сжмите изображение и повторите.' }, 413);
+  }
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string }>();
+  if (!existing) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    'UPDATE playlists SET cover_url = ?, updated_at = ? WHERE id = ?'
+  ).bind(dataUrl, now, id).run();
+
+  return c.json({ ok: true, coverUrl: dataUrl });
+});
+
+playlists.delete('/:id/cover', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string }>();
+  if (!existing) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    'UPDATE playlists SET cover_url = NULL, updated_at = ? WHERE id = ?'
+  ).bind(now, id).run();
+
   return c.json({ ok: true });
 });
 

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Reorder } from 'motion/react';
-import { ChevronLeft, Pencil } from 'lucide-react';
+import { ChevronLeft, Heart, ListMusic, Pencil } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
 import { RenamePlaylistDialog } from '@/components/features/RenamePlaylistDialog';
+import { PlaylistCoverButton } from '@/components/features/PlaylistCoverButton';
 import { usePlaylist, useReorderPlaylistTracks } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
@@ -82,25 +83,47 @@ export function PlaylistPage() {
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         ) : playlist ? (
           <>
-            <div className="mb-8 flex flex-col gap-2 border-b border-border pb-6">
-              <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Плейлист</span>
-              <div className="flex items-start gap-3">
-                <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
-                {canRename && (
-                  <button
-                    type="button"
-                    onClick={() => setRenameOpen(true)}
-                    className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    aria-label="Переименовать плейлист"
-                    title="Переименовать"
-                  >
-                    <Pencil size={16} />
-                  </button>
+            <div className="mb-8 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:gap-6">
+              <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-card text-muted-foreground sm:h-40 sm:w-40">
+                {playlist.coverUrl ? (
+                  <img
+                    src={playlist.coverUrl}
+                    alt={`Обложка плейлиста ${playlist.name}`}
+                    className="h-full w-full object-cover"
+                  />
+                ) : playlist.isLiked ? (
+                  <Heart size={42} fill="currentColor" />
+                ) : (
+                  <ListMusic size={42} />
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
-              </p>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Плейлист</span>
+                <div className="flex items-start gap-3">
+                  <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
+                  {canRename && (
+                    <button
+                      type="button"
+                      onClick={() => setRenameOpen(true)}
+                      className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      aria-label="Переименовать плейлист"
+                      title="Переименовать"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
+                </p>
+                {canRename && (
+                  <PlaylistCoverButton
+                    playlistId={playlist.id}
+                    hasCover={Boolean(playlist.coverUrl)}
+                    className="pt-1"
+                  />
+                )}
+              </div>
             </div>
             {playlist && (
               <RenamePlaylistDialog

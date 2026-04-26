@@ -33,6 +33,7 @@ interface PlaylistRow {
   user_id: string;
   name: string;
   is_liked: number;
+  cover_url?: string | null;
   created_at: number;
   updated_at: number;
   track_count?: number | null;
@@ -57,6 +58,7 @@ function rowToPlaylist(r: PlaylistRow) {
     id: r.id,
     name: r.name,
     isLiked: Boolean(r.is_liked),
+    coverUrl: r.cover_url ?? null,
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),

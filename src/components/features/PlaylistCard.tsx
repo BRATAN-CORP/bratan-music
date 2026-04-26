@@ -53,8 +53,19 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           to={`/playlist/${playlist.id}`}
           className="flex items-center gap-4 border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary rounded-[var(--radius-md)]"
         >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
-            {playlist.isLiked ? <Heart size={18} fill="currentColor" /> : <ListMusic size={18} />}
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
+            {playlist.coverUrl ? (
+              <img
+                src={playlist.coverUrl}
+                alt=""
+                className="h-full w-full object-cover"
+                aria-hidden
+              />
+            ) : playlist.isLiked ? (
+              <Heart size={18} fill="currentColor" />
+            ) : (
+              <ListMusic size={18} />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{playlist.name}</p>

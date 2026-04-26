@@ -30,6 +30,7 @@ CREATE TABLE playlists (
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     is_liked    INTEGER NOT NULL DEFAULT 0,
+    cover_url   TEXT,
     created_at  INTEGER NOT NULL,
     updated_at  INTEGER NOT NULL
 );
