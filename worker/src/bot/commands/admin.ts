@@ -27,7 +27,7 @@ export async function handleAdmin(env: Env, message: TelegramMessage): Promise<v
       const subs = await env.DB.prepare("SELECT COUNT(*) as count FROM subscriptions WHERE status = 'active'").first<{ count: number }>();
 
       await tg.sendMessage(message.chat.id,
-        `📊 <b>Статистика</b>\n\n` +
+        `<b>Статистика</b>\n\n` +
         `Пользователей: ${users?.count ?? 0}\n` +
         `Активных подписок: ${subs?.count ?? 0}`
       );
@@ -62,7 +62,7 @@ export async function handleAdmin(env: Env, message: TelegramMessage): Promise<v
 
     case '/admin_help': {
       await tg.sendMessage(message.chat.id,
-        `🔧 <b>Админ-команды</b>\n\n` +
+        `<b>Админ-команды</b>\n\n` +
         `/admin_stats — Статистика\n` +
         `/admin_grant {user_id} [дней] — Выдать подписку\n` +
         `/admin_help — Эта справка`

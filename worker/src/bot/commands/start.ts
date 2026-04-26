@@ -3,8 +3,38 @@ import type { TelegramMessage } from '../types';
 import { TelegramClient } from '../telegram';
 import { UserService } from '../../services/UserService';
 
-export async function handleStart(env: Env, message: TelegramMessage): Promise<void> {
-  const tg = new TelegramClient(env);
+const DEFAULT_APP_URL = 'https://bratan-corp.github.io/bratan-music/';
+
+function getAppUrl(env: Env): string {
+  return env.APP_URL ?? DEFAULT_APP_URL;
+}
+
+function createLoginUrl(appUrl: string, nonce: string): string {
+  const url = new URL(appUrl);
+  url.searchParams.set('auth_nonce', nonce);
+  return url.toString();
+}
+
+async function createLoginNonce(env: Env, userId: number): Promise<string> {
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  await env.SESSIONS.put(`auth_nonce:${nonce}`, String(userId), { expirationTtl: 300 });
+  return nonce;
+}
+
+async function buildMainKeyboard(env: Env, userId: number): Promise<Record<string, unknown>> {
+  const appUrl = getAppUrl(env);
+  const nonce = await createLoginNonce(env, userId);
+
+  return {
+    inline_keyboard: [
+      [{ text: 'Открыть веб-приложение', web_app: { url: appUrl } }],
+      [{ text: 'Войти на сайте', url: createLoginUrl(appUrl, nonce) }],
+      [{ text: 'Оформить подписку', callback_data: 'subscribe' }],
+    ],
+  };
+}
+
+async function ensureUser(env: Env, message: TelegramMessage): Promise<void> {
   const userService = new UserService(env);
   const from = message.from;
 
@@ -13,6 +43,14 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
     tgUsername: from.username,
     tgName: [from.first_name, from.last_name].filter(Boolean).join(' ') || undefined,
   });
+}
+
+export async function handleStart(env: Env, message: TelegramMessage): Promise<void> {
+  const tg = new TelegramClient(env);
+  const from = message.from;
+
+  await ensureUser(env, message);
+  await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
 
   const text = message.text ?? '';
   const args = text.split(' ').slice(1);
@@ -22,18 +60,34 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
     await env.SESSIONS.put(`auth_nonce:${nonce}`, String(from.id), { expirationTtl: 300 });
 
     await tg.sendMessage(message.chat.id,
-      '🎵 <b>BRATAN MUSIC</b>\n\n' +
+      '<b>BRATAN MUSIC</b>\n\n' +
       'Вход подтверждён. Вернитесь на сайт — авторизация завершится автоматически.',
+      { replyMarkup: await buildMainKeyboard(env, from.id) }
     );
     return;
   }
 
   await tg.sendMessage(message.chat.id,
-    '🎵 <b>BRATAN MUSIC</b>\n\n' +
+    '<b>BRATAN MUSIC</b>\n\n' +
     'Добро пожаловать! Это бот для управления подпиской и аккаунтом.\n\n' +
     'Команды:\n' +
+    '/login — Войти на сайте\n' +
+    '/app — Открыть веб-приложение\n' +
     '/subscribe — Оформить подписку (99 Stars/мес.)\n' +
     '/status — Статус подписки\n' +
     '/help — Помощь',
+    { replyMarkup: await buildMainKeyboard(env, from.id) }
+  );
+}
+
+export async function handleLogin(env: Env, message: TelegramMessage): Promise<void> {
+  const tg = new TelegramClient(env);
+  await ensureUser(env, message);
+  await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
+
+  await tg.sendMessage(message.chat.id,
+    '<b>Вход в BRATAN MUSIC</b>\n\n' +
+    'Откройте веб-приложение внутри Telegram или нажмите «Войти на сайте» для входа в браузере.',
+    { replyMarkup: await buildMainKeyboard(env, message.from.id) }
   );
 }
