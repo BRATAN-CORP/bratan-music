@@ -49,23 +49,31 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
   const tg = new TelegramClient(env);
   const from = message.from;
 
-  await ensureUser(env, message);
-  await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
-
   const text = message.text ?? '';
   const args = text.split(' ').slice(1);
 
+  // Fast path for the website-login deeplink: write the auth nonce to KV
+  // FIRST, before any other Telegram round-trips. The site is long-polling
+  // for this key and will sign the user in within ~300 ms of this write.
   if (args[0]?.startsWith('auth_')) {
     const nonce = args[0].replace('auth_', '');
     await env.SESSIONS.put(`auth_nonce:${nonce}`, String(from.id), { expirationTtl: 300 });
 
-    await tg.sendMessage(message.chat.id,
-      '<b>BRATAN MUSIC</b>\n\n' +
-      'Вход подтверждён. Вернитесь на сайт — авторизация завершится автоматически.',
-      { replyMarkup: await buildMainKeyboard(env, from.id) }
-    );
+    // Now fan out the slower work in parallel — none of it blocks the
+    // website auth confirmation.
+    await Promise.all([
+      ensureUser(env, message),
+      tg.setChatMenuButton(message.chat.id, getAppUrl(env)),
+      tg.sendMessage(message.chat.id,
+        '<b>BRATAN MUSIC</b>\n\n' +
+        'Вход подтверждён. Вернитесь на сайт — авторизация завершится автоматически.'
+      ),
+    ]);
     return;
   }
+
+  await ensureUser(env, message);
+  await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
 
   await tg.sendMessage(message.chat.id,
     '<b>BRATAN MUSIC</b>\n\n' +

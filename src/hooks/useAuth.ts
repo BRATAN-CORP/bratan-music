@@ -80,19 +80,28 @@ export function useAuth() {
   }, []);
 
   const pollNonce = useCallback(async (nonce: string, signal?: AbortSignal): Promise<boolean> => {
-    const maxAttempts = 60;
-    for (let i = 0; i < maxAttempts; i++) {
+    // Total budget: 5 min. We use server-side long-polling (?wait=1) so each
+    // request hangs up to ~25 s and resolves the moment the bot writes the
+    // nonce. The brief sleep below only matters when the request itself
+    // returns (network hiccup or wait timeout) before confirmation.
+    const deadline = Date.now() + 5 * 60 * 1000;
+    let consecutiveErrors = 0;
+    while (Date.now() < deadline) {
       if (signal?.aborted) return false;
       try {
-        const data = await api.get<NonceResponse>(`/auth/nonce/${nonce}`);
+        const data = await api.get<NonceResponse>(`/auth/nonce/${nonce}?wait=1`);
         if (data.status === 'confirmed' && data.accessToken && data.refreshToken && data.user) {
           setAuth({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
           return true;
         }
+        consecutiveErrors = 0;
       } catch {
-        // ignore, retry
+        consecutiveErrors++;
       }
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Tiny gap between long-poll cycles. Back off a bit on consecutive
+      // errors so we do not flood the worker on outages.
+      const gap = consecutiveErrors > 2 ? 1500 : 250;
+      await new Promise((resolve) => setTimeout(resolve, gap));
     }
     return false;
   }, [setAuth]);
