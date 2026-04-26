@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Frontend typecheck
+        run: npx tsc --noEmit
+
+      - name: Frontend lint
+        run: npx eslint src/ --ext .ts,.tsx
+
+      - name: Install worker deps
+        working-directory: worker
+        run: npm ci
+
+      - name: Worker typecheck
+        working-directory: worker
+        run: npx tsc --noEmit
+
+      - name: Worker lint
+        working-directory: worker
+        run: npx eslint src/ --ext .ts
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build
+        run: npx vite build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
