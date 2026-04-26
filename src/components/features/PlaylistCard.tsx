@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2 } from 'lucide-react';
+import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2, Pencil } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Playlist } from '@/types';
 import { useDeletePlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
+import { RenamePlaylistDialog } from './RenamePlaylistDialog';
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -13,6 +14,7 @@ interface PlaylistCardProps {
 export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const deletePlaylist = useDeletePlaylist();
 
@@ -31,7 +33,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
     };
   }, [menuOpen]);
 
-  const canDelete = !playlist.isLiked;
+  const canEdit = !playlist.isLiked;
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -60,7 +62,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
               {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
             </p>
           </div>
-          {canDelete && (
+          {canEdit && (
             <div ref={menuRef} className="relative">
               <button
                 type="button"
@@ -89,6 +91,19 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                         e.preventDefault();
                         e.stopPropagation();
                         setMenuOpen(false);
+                        setRenameOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                    >
+                      <Pencil size={14} />
+                      Переименовать
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMenuOpen(false);
                         setConfirmOpen(true);
                       }}
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)]"
@@ -103,6 +118,13 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           )}
         </Link>
       </div>
+
+      <RenamePlaylistDialog
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+        playlistId={playlist.id}
+        initialName={playlist.name}
+      />
 
       <AnimatePresence>
         {confirmOpen && (

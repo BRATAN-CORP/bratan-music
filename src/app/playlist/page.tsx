@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Reorder } from 'motion/react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Pencil } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
+import { RenamePlaylistDialog } from '@/components/features/RenamePlaylistDialog';
 import { usePlaylist, useReorderPlaylistTracks } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
@@ -18,8 +19,10 @@ export function PlaylistPage() {
 
   const tracks = useMemo(() => playlist?.tracks ?? [], [playlist?.tracks]);
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
+  const [renameOpen, setRenameOpen] = useState(false);
   const ownPlaylist = useMemo(() => Boolean(playlist && id), [playlist, id]);
   const hideRemoveMenu = Boolean(playlist?.isLiked);
+  const canRename = Boolean(playlist && !playlist.isLiked);
 
   useEffect(() => {
     setLocalTracks(tracks);
@@ -81,11 +84,32 @@ export function PlaylistPage() {
           <>
             <div className="mb-8 flex flex-col gap-2 border-b border-border pb-6">
               <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Плейлист</span>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
+              <div className="flex items-start gap-3">
+                <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
+                {canRename && (
+                  <button
+                    type="button"
+                    onClick={() => setRenameOpen(true)}
+                    className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    aria-label="Переименовать плейлист"
+                    title="Переименовать"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
               </p>
             </div>
+            {playlist && (
+              <RenamePlaylistDialog
+                open={renameOpen}
+                onClose={() => setRenameOpen(false)}
+                playlistId={playlist.id}
+                initialName={playlist.name}
+              />
+            )}
             {ownPlaylist && !hideRemoveMenu ? (
               <Reorder.Group
                 axis="y"
