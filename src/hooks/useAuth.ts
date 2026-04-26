@@ -30,10 +30,19 @@ interface TelegramWebApp {
   initData?: string;
   ready?: () => void;
   expand?: () => void;
+  enableClosingConfirmation?: () => void;
+  isExpanded?: boolean;
+  colorScheme?: 'light' | 'dark';
+  themeParams?: { bg_color?: string };
 }
 
 export function getTelegramWebApp(): TelegramWebApp | undefined {
   return (window as unknown as { Telegram?: { WebApp?: TelegramWebApp } }).Telegram?.WebApp;
+}
+
+export function isTelegramWebApp(): boolean {
+  const tg = getTelegramWebApp();
+  return Boolean(tg && tg.initData);
 }
 
 function consumeQueryParam(name: string): string | null {
@@ -104,6 +113,14 @@ export function useAuth() {
 export function useAutoAuth() {
   const { loginWithInitData, isAuthenticated, pollNonce } = useAuth();
   const attempted = useRef(false);
+
+  useEffect(() => {
+    const tg = getTelegramWebApp();
+    if (tg) {
+      try { tg.ready?.(); } catch { /* ignore */ }
+      try { if (!tg.isExpanded) tg.expand?.(); } catch { /* ignore */ }
+    }
+  }, []);
 
   useEffect(() => {
     if (attempted.current || isAuthenticated) return;

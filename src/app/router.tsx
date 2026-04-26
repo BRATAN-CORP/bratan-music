@@ -1,4 +1,5 @@
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
+import { useAutoAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -16,6 +17,7 @@ import { ArtistPage } from '@/app/artist/page';
 import { NotFoundPage } from '@/app/not-found/page';
 
 function AppLayout() {
+  useAutoAuth();
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />

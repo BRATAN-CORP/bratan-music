@@ -12,6 +12,7 @@ import { playlists } from './routes/playlists';
 import { library } from './routes/library';
 import { overrides } from './routes/overrides';
 import { webhook } from './routes/webhook';
+import { admin } from './routes/admin';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -81,6 +82,7 @@ app.route('/playlists', playlists);
 app.route('/library', library);
 app.route('/tracks', overrides);
 app.route('/webhook', webhook);
+app.route('/admin', admin);
 
 app.notFound((c) => c.json({ error: 'Маршрут не найден' }, 404));
 
