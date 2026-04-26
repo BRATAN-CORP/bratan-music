@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { MessageCircle, Loader2 } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 
@@ -37,7 +37,7 @@ export function TelegramLoginButton() {
         </>
       ) : (
         <>
-          <MessageCircle size={16} />
+          <Send size={16} />
           Войти через Telegram
         </>
       )}

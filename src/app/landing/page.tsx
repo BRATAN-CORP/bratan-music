@@ -1,4 +1,4 @@
-import { ArrowUpRight, Headphones, Library, Music, Search, Shield, Sparkles, Star } from 'lucide-react';
+import { ArrowUpRight, Headphones, Library, Music, Search, Send, Shield, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { useAutoAuth } from '@/hooks/useAuth';
@@ -70,8 +70,8 @@ export function LandingPage() {
             transition={{ duration: 0.7, ease: EASE }}
             className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur"
           >
-            <Sparkles size={12} className="text-[var(--color-accent)]" />
-            BRATAN MUSIC · Закрытая бета
+            <Send size={12} className="text-[var(--color-accent)]" />
+            BRATAN MUSIC · Tidal × Telegram
           </motion.div>
 
           <motion.h1
@@ -127,7 +127,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="relative mx-auto max-w-6xl px-6 pb-20">
+      <section className="relative mx-auto max-w-6xl px-6 pb-20 pt-12 sm:pt-0">
         <Reveal className="mb-10 flex items-end justify-between gap-6 border-b border-border pb-4">
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
@@ -183,12 +183,12 @@ export function LandingPage() {
               Начни слушать <span className="font-serif italic text-muted-foreground">через минуту</span>.
             </h3>
             <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-              Открой Telegram, нажми вход, запускай первый трек. Подписка не нужна, чтобы попробовать — три бесплатных трека в день.
+              Открой Telegram, нажми вход, запускай первый трек. Без карт, без e-mail, без подтверждений.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               {user ? (
                 <Link to="/search">
-                  <Button size="lg">
+                  <Button size="lg" className="gap-2">
                     <Search size={16} /> Найти музыку
                   </Button>
                 </Link>
