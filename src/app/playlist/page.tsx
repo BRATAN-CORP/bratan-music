@@ -56,6 +56,7 @@ export function PlaylistPage() {
                     index={i}
                     onPlay={handlePlayTrack}
                     playlistId={playlist.id}
+                    hideRemoveMenu={playlist.isLiked}
                   />
                 ))}
               </AnimatePresence>
