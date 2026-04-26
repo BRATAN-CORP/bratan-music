@@ -5,6 +5,51 @@ import { TidalService } from '../services/tidal/TidalService';
 
 const tracks = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+const TIDAL_CDN_ALLOWED: RegExp[] = [
+  /^(.+\.)?audio\.tidal\.com$/i,
+  /^(.+\.)?tidal\.com$/i,
+  /^(.+\.)?akamaized\.net$/i,
+  /^(.+\.)?cloudfront\.net$/i,
+  /^(.+\.)?fa-v\d+\.tidal\.com$/i,
+  /^sp-[a-z0-9-]+\.audio\.tidal\.com$/i,
+  /^resources\.tidal\.com$/i,
+];
+
+tracks.get('/audio', async (c) => {
+  const target = c.req.query('url');
+  if (!target) return c.json({ error: 'missing url' }, 400);
+  let parsed: URL;
+  try { parsed = new URL(target); } catch { return c.json({ error: 'invalid url' }, 400); }
+  if (parsed.protocol !== 'https:') return c.json({ error: 'https only' }, 400);
+  const host = parsed.hostname.toLowerCase();
+  if (!TIDAL_CDN_ALLOWED.some((re) => re.test(host))) {
+    return c.json({ error: `host not allowed: ${host}` }, 400);
+  }
+
+  const upstreamHeaders = new Headers();
+  const range = c.req.header('Range');
+  if (range) upstreamHeaders.set('Range', range);
+
+  const upstream = await fetch(target, { headers: upstreamHeaders });
+  const out = new Headers();
+  for (const k of [
+    'content-type',
+    'content-length',
+    'content-range',
+    'accept-ranges',
+    'cache-control',
+    'etag',
+    'last-modified',
+  ]) {
+    const v = upstream.headers.get(k);
+    if (v) out.set(k, v);
+  }
+  out.set('access-control-allow-origin', '*');
+  out.set('access-control-expose-headers',
+    'Content-Length, Content-Type, Content-Range, Accept-Ranges');
+  return new Response(upstream.body, { status: upstream.status, headers: out });
+});
+
 tracks.use('/*', jwtAuth);
 
 tracks.get('/:id', async (c) => {
@@ -57,8 +102,10 @@ tracks.get('/:id/stream', async (c) => {
   }
 
   const tidal = new TidalService(c.env);
-  const url = await tidal.getStreamUrl(id);
-  return c.json({ url, source: 'tidal' });
+  const direct = await tidal.getStreamUrl(id);
+  const origin = new URL(c.req.url).origin;
+  const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(direct)}`;
+  return c.json({ url: proxied, direct, source: 'tidal' });
 });
 
 tracks.get('/:id/download', async (c) => {

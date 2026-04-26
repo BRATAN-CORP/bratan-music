@@ -39,6 +39,38 @@ app.get('/health/tidal', async (c) => {
   }
 });
 
+app.post('/admin/tidal/device/start', async (c) => {
+  const secret = c.req.header('x-admin-secret');
+  if (!secret || secret !== c.env.JWT_SECRET) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  try {
+    const { TidalAuth } = await import('./services/tidal/TidalAuth');
+    const auth = new TidalAuth(c.env);
+    const data = await auth.startDeviceAuth();
+    return c.json(data);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
+  }
+});
+
+app.post('/admin/tidal/device/poll', async (c) => {
+  const secret = c.req.header('x-admin-secret');
+  if (!secret || secret !== c.env.JWT_SECRET) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  try {
+    const body = await c.req.json<{ deviceCode: string }>();
+    if (!body.deviceCode) return c.json({ error: 'missing deviceCode' }, 400);
+    const { TidalAuth } = await import('./services/tidal/TidalAuth');
+    const auth = new TidalAuth(c.env);
+    const result = await auth.pollDeviceAuth(body.deviceCode);
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 502);
+  }
+});
+
 app.route('/auth', auth);
 app.route('/user', user);
 app.route('/search', search);
@@ -53,8 +85,9 @@ app.route('/webhook', webhook);
 app.notFound((c) => c.json({ error: 'Маршрут не найден' }, 404));
 
 app.onError((err, c) => {
-  console.error('Unhandled error:', err.message);
-  return c.json({ error: 'Внутренняя ошибка сервера' }, 500);
+  const message = err instanceof Error ? err.message : String(err);
+  console.error('Unhandled error:', message, err instanceof Error ? err.stack : '');
+  return c.json({ error: message || 'Внутренняя ошибка сервера', detail: message }, 500);
 });
 
 export default app;
