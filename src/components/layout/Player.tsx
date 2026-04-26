@@ -50,7 +50,7 @@ export function Player() {
           )}
 
           <div
-            className="group/progress relative h-2 cursor-pointer touch-none bg-[var(--color-bg-muted)] sm:h-1"
+            className="group/progress relative h-3 cursor-pointer touch-none select-none px-0"
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
               const rect = e.currentTarget.getBoundingClientRect();
@@ -73,12 +73,14 @@ export function Player() {
               target.addEventListener('pointercancel', onUp);
             }}
           >
+            <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-visible bg-[var(--color-bg-muted)] transition-[height] duration-200 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+              <div
+                className="h-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] shadow-[0_0_12px_var(--color-accent-glow)] transition-[width] duration-100"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
             <div
-              className="h-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
-              style={{ width: `${progressPct}%` }}
-            />
-            <div
-              className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-0 transition-opacity group-hover/progress:opacity-100"
+              className="pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-white opacity-0 ring-2 ring-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-glow),0_2px_8px_rgba(0,0,0,0.35)] transition-opacity duration-200 group-hover/progress:opacity-100 group-active/progress:opacity-100"
               style={{ left: `${progressPct}%` }}
             />
           </div>

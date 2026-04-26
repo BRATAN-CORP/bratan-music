@@ -151,7 +151,7 @@ export function FullscreenPlayer() {
 
             <div className="flex w-full max-w-md flex-col gap-2">
               <div
-                className="group/progress relative h-2 cursor-pointer touch-none rounded-full bg-[var(--color-bg-muted)] sm:h-1.5"
+                className="group/progress relative flex h-6 cursor-pointer touch-none items-center select-none"
                 onPointerDown={(e) => {
                   e.currentTarget.setPointerCapture(e.pointerId);
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -174,14 +174,16 @@ export function FullscreenPlayer() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
-                  style={{ width: `${progressPct}%` }}
-                />
-                <div
-                  className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-100 transition-opacity"
-                  style={{ left: `${progressPct}%` }}
-                />
+                <div className="relative h-1.5 w-full overflow-visible rounded-full bg-white/10 ring-1 ring-inset ring-white/5 transition-[height] duration-200 group-hover/progress:h-2 group-active/progress:h-2">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] shadow-[0_0_18px_var(--color-accent-glow)] transition-[width] duration-100"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 ring-2 ring-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-glow),0_4px_14px_rgba(0,0,0,0.4)] transition-[opacity,transform] duration-200 group-hover/progress:opacity-100 group-hover/progress:scale-100 group-active/progress:scale-110 group-active/progress:opacity-100"
+                    style={{ left: `${progressPct}%`, transform: `translate(-50%, -50%) scale(0.85)` }}
+                  />
+                </div>
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
                 <span>{formatTime(progress)}</span>
