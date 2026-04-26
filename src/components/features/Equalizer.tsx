@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Sliders, RotateCcw } from 'lucide-react';
 import { EQ_BANDS, setEqGain, isEqAvailable } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
@@ -39,9 +39,26 @@ export function Equalizer() {
     preset.forEach((g, i) => setEqGain(i, g));
   };
 
+  const reduce = useReducedMotion();
+
+  const fadeIn = (delay: number) =>
+    reduce
+      ? {}
+      : {
+          initial: { opacity: 0, y: 6 },
+          animate: { opacity: 1, y: 0 },
+          transition: { delay, duration: 0.28, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
+        };
+
   return (
-    <div className="flex flex-col gap-5 rounded-[var(--radius-lg)] border border-border bg-[var(--color-surface-elevated)] p-5 backdrop-blur">
-      <div className="flex items-center justify-between gap-3">
+    <motion.div
+      initial={reduce ? false : { opacity: 0, scale: 0.96 }}
+      animate={reduce ? undefined : { opacity: 1, scale: 1 }}
+      exit={reduce ? undefined : { opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+      className="flex flex-col gap-5 rounded-[var(--radius-lg)] border border-border bg-[var(--color-surface-elevated)] p-5 backdrop-blur"
+    >
+      <motion.div {...fadeIn(0.18)} className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Sliders size={14} className="text-muted-foreground" />
           <span className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
@@ -56,15 +73,15 @@ export function Equalizer() {
         >
           <RotateCcw size={12} /> Сброс
         </Button>
-      </div>
+      </motion.div>
 
       {!available && (
-        <p className="text-xs text-muted-foreground">
+        <motion.p {...fadeIn(0.22)} className="text-xs text-muted-foreground">
           Аудио-движок недоступен (требуется CORS). Регуляторы видны, но не повлияют на звук.
-        </p>
+        </motion.p>
       )}
 
-      <div className="flex flex-wrap gap-1.5">
+      <motion.div {...fadeIn(0.26)} className="flex flex-wrap gap-1.5">
         {Object.entries(PRESETS).map(([name, values]) => (
           <button
             key={name}
@@ -74,9 +91,9 @@ export function Equalizer() {
             {name}
           </button>
         ))}
-      </div>
+      </motion.div>
 
-      <div className="flex h-44 items-end justify-between gap-2">
+      <motion.div {...fadeIn(0.32)} className="flex h-44 items-end justify-between gap-2">
         {EQ_BANDS.map((freq, i) => (
           <div key={freq} className="flex h-full flex-1 flex-col items-center gap-2">
             <div className="relative flex flex-1 items-center justify-center">
@@ -105,7 +122,7 @@ export function Equalizer() {
             </span>
           </div>
         ))}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

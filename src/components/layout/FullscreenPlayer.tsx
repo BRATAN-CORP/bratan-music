@@ -9,6 +9,7 @@ import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { Visualizer } from '@/components/features/Visualizer';
 import { Equalizer } from '@/components/features/Equalizer';
+import { TiltCard } from '@/components/ui/TiltCard';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -93,21 +94,23 @@ export function FullscreenPlayer() {
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="relative aspect-square w-full max-w-md overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl"
+              className="relative w-full max-w-md"
             >
-              {currentTrack.coverUrl ? (
-                <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
-                  Без обложки
+              <TiltCard intensity={10} glare className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl">
+                {currentTrack.coverUrl ? (
+                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
+                    Без обложки
+                  </div>
+                )}
+                {isPlaying && (
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
+                )}
+                <div className="absolute bottom-3 left-3 right-3" style={{ transform: 'translateZ(40px)' }}>
+                  <Visualizer active={isPlaying} bars={48} height={36} />
                 </div>
-              )}
-              {isPlaying && (
-                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
-              )}
-              <div className="absolute bottom-3 left-3 right-3">
-                <Visualizer active={isPlaying} bars={48} height={36} />
-              </div>
+              </TiltCard>
             </motion.div>
 
             <div className="flex w-full max-w-md flex-col items-center gap-2 text-center">
@@ -198,15 +201,28 @@ export function FullscreenPlayer() {
 
           <AnimatePresence>
             {eqOpen && (
-              <motion.div
-                initial={{ y: 80, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 80, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-                className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-md p-4"
-              >
-                <Equalizer />
-              </motion.div>
+              <>
+                <motion.div
+                  key="eq-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  onClick={() => setEqOpen(false)}
+                  className="absolute inset-0 z-[5] bg-black/50 backdrop-blur-sm"
+                  aria-hidden
+                />
+                <motion.div
+                  key="eq-panel"
+                  initial={{ y: 60, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 60, opacity: 0 }}
+                  transition={{ delay: 0.12, type: 'spring', stiffness: 320, damping: 30 }}
+                  className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-md p-4"
+                >
+                  <Equalizer />
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
         </motion.div>

@@ -13,6 +13,9 @@ const AUTH_URL = 'https://auth.tidal.com/v1/oauth2/token';
 const DEFAULT_COUNTRY_CODE = 'BR';
 const DEFAULT_LOCALE = 'en_US';
 const DEFAULT_CLIENT_VERSION = '2026.4.23';
+// Mobile client (works without web cookies). See bratan-muzonchik / tidalapi.
+const DEFAULT_CLIENT_ID = 'fX2JxdmntZWK0ixT';
+const DEFAULT_CLIENT_SECRET = '1Nn9AfDAjxrgJFJbKNWLeAyKGVGmINuXPPLHVXAvxAg=';
 
 interface TidalJwtPayload {
   uid?: number;
@@ -22,6 +25,14 @@ interface TidalJwtPayload {
 
 export class TidalAuth {
   constructor(private env: Env) {}
+
+  private clientId(): string {
+    return this.env.TIDAL_CLIENT_ID || DEFAULT_CLIENT_ID;
+  }
+
+  private clientSecret(): string {
+    return this.env.TIDAL_CLIENT_SECRET || DEFAULT_CLIENT_SECRET;
+  }
 
   async getAccessToken(opts: { force?: boolean } = {}): Promise<string> {
     const force = opts.force === true;
@@ -35,20 +46,28 @@ export class TidalAuth {
 
     const cached = await this.getCachedSession();
     const refreshToken = cached?.refreshToken ?? this.env.TIDAL_REFRESH_TOKEN;
-    if (refreshToken && this.env.TIDAL_CLIENT_ID && this.env.TIDAL_CLIENT_SECRET) {
+    let refreshError: string | null = null;
+    if (refreshToken) {
       const refreshed = await this.refreshSession(refreshToken);
       if (refreshed) return refreshed.accessToken;
+      refreshError = 'refresh failed (token revoked or invalid client_id/secret)';
     }
 
     if (this.env.TIDAL_SESSION_TOKEN) {
       const payload = this.decodeJwtPayload(this.env.TIDAL_SESSION_TOKEN);
       if (payload?.exp && payload.exp <= Date.now() / 1000 + 60) {
-        throw new Error('Сессия Tidal истекла. Обновите TIDAL_SESSION_TOKEN или настройте TIDAL_REFRESH_TOKEN.');
+        throw new Error(
+          'Сессия Tidal истекла. Установите TIDAL_REFRESH_TOKEN (предпочтительно) или обновите TIDAL_SESSION_TOKEN.'
+            + (refreshError ? ` (${refreshError})` : '')
+        );
       }
       return this.env.TIDAL_SESSION_TOKEN;
     }
 
-    throw new Error('Нет активной сессии Tidal');
+    throw new Error(
+      'Нет активной сессии Tidal. Установите TIDAL_REFRESH_TOKEN или TIDAL_SESSION_TOKEN.'
+        + (refreshError ? ` (${refreshError})` : '')
+    );
   }
 
   async getCountryCode(): Promise<string> {
@@ -85,8 +104,9 @@ export class TidalAuth {
       const body = new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: this.env.TIDAL_CLIENT_ID,
-        client_secret: this.env.TIDAL_CLIENT_SECRET,
+        client_id: this.clientId(),
+        client_secret: this.clientSecret(),
+        scope: 'r_usr w_usr w_sub',
       });
 
       const res = await fetch(AUTH_URL, {
@@ -95,7 +115,11 @@ export class TidalAuth {
         body: body.toString(),
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        console.error(`[tidal] refresh failed ${res.status}: ${t.slice(0, 200)}`);
+        return null;
+      }
 
       const data = await res.json<{
         access_token: string;
@@ -118,6 +142,72 @@ export class TidalAuth {
     } catch {
       return null;
     }
+  }
+
+  async startDeviceAuth(): Promise<{
+    deviceCode: string;
+    userCode: string;
+    verificationUri: string;
+    verificationUriComplete: string;
+    expiresIn: number;
+    interval: number;
+  }> {
+    const body = new URLSearchParams({
+      client_id: this.clientId(),
+      scope: 'r_usr w_usr w_sub',
+    });
+    const res = await fetch('https://auth.tidal.com/v1/oauth2/device_authorization', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`tidal device_authorization ${res.status}: ${text.slice(0, 300)}`);
+    const data = JSON.parse(text) as {
+      deviceCode: string;
+      userCode: string;
+      verificationUri: string;
+      verificationUriComplete: string;
+      expiresIn: number;
+      interval: number;
+    };
+    return data;
+  }
+
+  async pollDeviceAuth(deviceCode: string): Promise<
+    | { ok: true; refreshToken: string; accessToken: string; expiresIn: number }
+    | { ok: false; error: string; pending: boolean }
+  > {
+    const body = new URLSearchParams({
+      client_id: this.clientId(),
+      client_secret: this.clientSecret(),
+      device_code: deviceCode,
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      scope: 'r_usr w_usr w_sub',
+    });
+    const res = await fetch(AUTH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    const raw = await res.json<unknown>().catch(() => ({}));
+    const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const accessToken = typeof data.access_token === 'string' ? data.access_token : null;
+    const refreshToken = typeof data.refresh_token === 'string' ? data.refresh_token : null;
+    if (res.ok && accessToken && refreshToken) {
+      const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 3600;
+      const tokens: TidalTokens = {
+        accessToken,
+        refreshToken,
+        expiresAt: Math.floor(Date.now() / 1000) + expiresIn,
+        userId: this.decodeJwtPayload(accessToken)?.uid ?? 0,
+        countryCode: this.decodeJwtPayload(accessToken)?.cc ?? DEFAULT_COUNTRY_CODE,
+      };
+      await this.cacheSession(tokens);
+      return { ok: true, refreshToken, accessToken, expiresIn };
+    }
+    const err = typeof data.error === 'string' ? data.error : `http ${res.status}`;
+    return { ok: false, error: err, pending: err === 'authorization_pending' || err === 'slow_down' };
   }
 
   private async fetchSessionInfo(accessToken: string): Promise<{ userId: number; countryCode: string }> {

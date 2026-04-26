@@ -30,6 +30,11 @@ export const rateLimit = createMiddleware<{ Bindings: Env; Variables: Variables 
   const method = c.req.method;
   const path = new URL(c.req.url).pathname;
 
+  if (path === '/tracks/audio') {
+    await next();
+    return;
+  }
+
   const config = getConfig(method, path);
   const windowStart = Math.floor(Date.now() / 1000 / config.windowSeconds);
   const key = `rl:${ip}:${method}:${path.split('/').slice(0, 3).join('/')}:${windowStart}`;
