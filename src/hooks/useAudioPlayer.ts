@@ -237,21 +237,55 @@ export function useAudioPlayer() {
     };
   }, [repeat, next, setProgress, setDuration, setError]);
 
-  useEffect(() => {
-    if ('mediaSession' in navigator) {
-      const store = usePlayerStore.getState();
-      navigator.mediaSession.setActionHandler('play', () => store.play());
-      navigator.mediaSession.setActionHandler('pause', () => store.pause());
-      navigator.mediaSession.setActionHandler('previoustrack', () => store.previous());
-      navigator.mediaSession.setActionHandler('nexttrack', () => store.next());
-    }
-  }, []);
-
   const seek = useCallback((time: number) => {
     const { audio } = getBundle();
     audio.currentTime = time;
     setProgress(time);
   }, [setProgress]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const store = () => usePlayerStore.getState();
+    const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
+      ['play', () => store().play()],
+      ['pause', () => store().pause()],
+      ['previoustrack', () => store().previous()],
+      ['nexttrack', () => store().next()],
+      ['seekbackward', (d) => seek(Math.max(0, progress - (d.seekOffset ?? 10)))],
+      ['seekforward', (d) => seek(Math.min(usePlayerStore.getState().duration, progress + (d.seekOffset ?? 10)))],
+      ['seekto', (d) => { if (typeof d.seekTime === 'number') seek(d.seekTime); }],
+      ['stop', () => { store().pause(); }],
+    ];
+    for (const [action, handler] of handlers) {
+      try { ms.setActionHandler(action, handler); } catch { /* not supported */ }
+    }
+    return () => {
+      for (const [action] of handlers) {
+        try { ms.setActionHandler(action, null); } catch { /* ignore */ }
+      }
+    };
+  }, [progress, seek]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (!('setPositionState' in navigator.mediaSession)) return;
+    const { audio } = getBundle();
+    const dur = audio.duration;
+    if (!dur || !isFinite(dur)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: dur,
+        position: Math.min(progress, dur),
+        playbackRate: audio.playbackRate || 1,
+      });
+    } catch { /* ignore */ }
+  }, [progress, currentTrack?.id]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : currentTrack ? 'paused' : 'none';
+  }, [isPlaying, currentTrack]);
 
   return { progress, seek };
 }
