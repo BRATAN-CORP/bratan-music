@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Player } from '@/components/layout/Player';
+import { PageTransition } from '@/components/ui/PageTransition';
 import { LandingPage } from '@/app/landing/page';
 import { SearchPage } from '@/app/search/page';
 import { LibraryPage } from '@/app/library/page';
@@ -20,7 +21,9 @@ function AppLayout() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <main className="flex-1 overflow-y-auto pb-44 lg:pb-32">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
       <Player />

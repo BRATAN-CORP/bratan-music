@@ -1,4 +1,5 @@
 import { Heart, MoreHorizontal, Play } from 'lucide-react';
+import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 
@@ -16,7 +17,11 @@ function formatDuration(seconds: number): string {
 
 export function TrackItem({ track, index, onPlay }: TrackItemProps) {
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min((index ?? 0) * 0.025, 0.4) }}
       className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
       onClick={() => onPlay?.(track)}
     >
@@ -52,6 +57,6 @@ export function TrackItem({ track, index, onPlay }: TrackItemProps) {
           <MoreHorizontal size={14} />
         </Button>
       </div>
-    </div>
+    </motion.div>
   );
 }
