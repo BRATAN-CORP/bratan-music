@@ -1,0 +1,23 @@
+{
+  "name": "bratan-music-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "eslint src/ --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "wrangler d1 execute bratan-music-db --local --file=src/db/migrations/0001_init.sql"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250411.0",
+    "typescript": "^5.7.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "wrangler": "^4.0.0"
+  }
+}
