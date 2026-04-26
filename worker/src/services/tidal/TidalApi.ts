@@ -1,6 +1,6 @@
 import { TidalAuth } from './TidalAuth';
 
-const WEB_BASE = 'https://tidal.com';
+const API_BASE = 'https://api.tidal.com';
 
 interface TidalSearchResponse {
   artists?: TidalSearchBucket<TidalArtistRaw>;
@@ -55,22 +55,21 @@ interface TidalSearchBucket<T> {
 export class TidalApi {
   constructor(private auth: TidalAuth) {}
 
-  async search(query: string, types: string = 'ARTISTS,ALBUMS,TRACKS,VIDEOS,PLAYLISTS,UPLOADS', limit: number = 25, offset: number = 0): Promise<TidalSearchResponse> {
+  async search(query: string, types: string = 'ARTISTS,ALBUMS,TRACKS', limit: number = 25, offset: number = 0): Promise<TidalSearchResponse> {
     const cc = await this.auth.getCountryCode();
     const params = new URLSearchParams({
-      includeContributors: 'true',
-      includeDidYouMean: 'true',
-      includeUserPlaylists: 'true',
-      limit: String(limit),
       query,
-      supportsUserData: 'true',
+      limit: String(limit),
+      offset: String(offset),
       types,
+      includeContributors: 'true',
+      includeUserPlaylists: 'false',
+      supportsUserData: 'true',
       countryCode: cc,
       locale: this.auth.getLocale(),
       deviceType: 'BROWSER',
     });
-    if (offset > 0) params.set('offset', String(offset));
-    return this.get<TidalSearchResponse>(`/v2/search/?${params}`);
+    return this.get<TidalSearchResponse>(`/v1/search?${params}`);
   }
 
   async getTrack(trackId: string): Promise<TidalTrackRaw> {
@@ -124,18 +123,25 @@ export class TidalApi {
   }
 
   private async get<T>(path: string): Promise<T> {
-    const token = await this.auth.getAccessToken();
-    const res = await fetch(`${WEB_BASE}${path}`, {
+    const doFetch = async (token: string) => fetch(`${API_BASE}${path}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
+        'User-Agent': 'TIDAL/2026.4.23 CFNetwork/1494.0.7 Darwin/23.4.0',
         'x-tidal-client-version': this.auth.getClientVersion(),
       },
     });
 
+    let token = await this.auth.getAccessToken();
+    let res = await doFetch(token);
+    if (res.status === 401) {
+      token = await this.auth.getAccessToken({ force: true });
+      res = await doFetch(token);
+    }
+
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Tidal API ${res.status}: ${text}`);
+      throw new Error(`Tidal API ${res.status}: ${text.slice(0, 300)}`);
     }
 
     return res.json<T>();
