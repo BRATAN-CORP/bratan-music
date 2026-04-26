@@ -4,6 +4,7 @@ compatibility_date = "2024-12-01"
 
 [vars]
 ENVIRONMENT = "production"
+APP_URL = "https://bratan-corp.github.io/bratan-music/"
 
 # D1 Database
 [[d1_databases]]

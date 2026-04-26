@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent } from '@/components/ui/Card';
 
 interface TrackOverrideModalProps {
   open: boolean;
@@ -51,28 +53,25 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
       style={{ backgroundColor: 'var(--color-overlay)' }}
       onClick={onClose}
     >
-      <div
-        className="w-full max-w-sm mx-4 p-6 rounded-2xl"
-        style={{ backgroundColor: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">Перезалив</h2>
-          <button onClick={onClose} className="p-1 hover:opacity-70">
+      <Card className="animate-enter w-full max-w-sm bg-card/95 shadow-[var(--shadow-lg)]" onClick={(e) => e.stopPropagation()}>
+        <CardContent>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-black">Перезалив</h2>
+          <Button onClick={onClose} variant="ghost" size="icon" className="h-9 w-9">
             <X size={20} />
-          </button>
+          </Button>
         </div>
 
-        <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
+        <p className="mb-4 text-sm text-muted-foreground">
           {trackTitle}
         </p>
 
         {success ? (
-          <p style={{ color: 'var(--color-accent)' }} className="text-sm text-center py-4">
+          <p className="py-4 text-center text-sm font-semibold text-primary">
             Файл загружен!
           </p>
         ) : (
@@ -87,11 +86,11 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
                 if (file) handleUpload(file);
               }}
             />
-            <button
+            <Button
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: 'var(--color-bg-muted)', color: 'var(--color-text)' }}
+              className="w-full"
+              variant="secondary"
             >
               {uploading ? (
                 <>
@@ -104,16 +103,17 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
                   Выбрать файл
                 </>
               )}
-            </button>
+            </Button>
           </>
         )}
 
         {error && (
-          <p className="text-xs mt-3 text-center" style={{ color: 'var(--color-danger)' }}>
+          <p className="mt-3 text-center text-xs text-[var(--color-danger)]">
             {error}
           </p>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

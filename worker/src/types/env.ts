@@ -15,6 +15,8 @@ export interface Env {
   TELEGRAM_ADMIN_IDS: string;
   TELEGRAM_WEBHOOK_SECRET: string;
 
+  APP_URL?: string;
+
   JWT_SECRET: string;
   JWT_REFRESH_SECRET: string;
   SESSION_ENCRYPTION_KEY: string;
