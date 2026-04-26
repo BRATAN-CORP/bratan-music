@@ -53,6 +53,39 @@ auth.post('/telegram', async (c) => {
   });
 });
 
+auth.get('/nonce/:nonce', async (c) => {
+  const nonce = c.req.param('nonce');
+  const userId = await c.env.SESSIONS.get(`auth_nonce:${nonce}`);
+
+  if (!userId) {
+    return c.json({ status: 'pending' });
+  }
+
+  await c.env.SESSIONS.delete(`auth_nonce:${nonce}`);
+
+  const userService = new UserService(c.env);
+  const user = await userService.findById(userId);
+  if (!user) {
+    return c.json({ error: 'Пользователь не найден' }, 404);
+  }
+
+  const authService = new AuthService(c.env);
+  const tokens = await authService.generateTokens(user.id, user.is_admin === 1);
+
+  return c.json({
+    status: 'confirmed',
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresIn: tokens.expiresIn,
+    user: {
+      id: user.id,
+      username: user.tg_username,
+      name: user.tg_name,
+      isAdmin: user.is_admin === 1,
+    },
+  });
+});
+
 auth.post('/refresh', async (c) => {
   const body = await c.req.json<{ refreshToken: string }>();
 
