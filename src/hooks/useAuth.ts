@@ -80,16 +80,15 @@ export function useAuth() {
   }, []);
 
   const pollNonce = useCallback(async (nonce: string, signal?: AbortSignal): Promise<boolean> => {
-    // Total budget: 5 min. We use server-side long-polling (?wait=1) so each
-    // request hangs up to ~25 s and resolves the moment the bot writes the
-    // nonce. The brief sleep below only matters when the request itself
-    // returns (network hiccup or wait timeout) before confirmation.
+    // Total budget: 5 min. Plain client-side polling — server-side
+    // long-poll was removed because it held connections open and
+    // exhausted Cloudflare KV daily write quota.
     const deadline = Date.now() + 5 * 60 * 1000;
     let consecutiveErrors = 0;
     while (Date.now() < deadline) {
       if (signal?.aborted) return false;
       try {
-        const data = await api.get<NonceResponse>(`/auth/nonce/${nonce}?wait=1`);
+        const data = await api.get<NonceResponse>(`/auth/nonce/${nonce}`);
         if (data.status === 'confirmed' && data.accessToken && data.refreshToken && data.user) {
           setAuth({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
           return true;
@@ -98,9 +97,7 @@ export function useAuth() {
       } catch {
         consecutiveErrors++;
       }
-      // Tiny gap between long-poll cycles. Back off a bit on consecutive
-      // errors so we do not flood the worker on outages.
-      const gap = consecutiveErrors > 2 ? 1500 : 250;
+      const gap = consecutiveErrors > 2 ? 3000 : 1000;
       await new Promise((resolve) => setTimeout(resolve, gap));
     }
     return false;
