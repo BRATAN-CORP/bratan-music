@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -33,6 +34,7 @@ export function FullscreenPlayer() {
   const pulse = Math.min(1, amp * 2.4);
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
+  const coarse = useCoarsePointer();
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -214,19 +216,28 @@ export function FullscreenPlayer() {
             </div>
 
             <div className="flex w-full max-w-md items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
-                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-              </Button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={muted ? 0 : volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
-                className="flex-1 accent-[var(--color-accent)]"
-                aria-label="Громкость"
-              />
+              {coarse ? (
+                <p className="flex flex-1 items-center gap-2 text-[11px] text-muted-foreground">
+                  <Volume2 size={14} className="shrink-0" />
+                  Громкость регулируется кнопками устройства
+                </p>
+              ) : (
+                <>
+                  <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
+                    {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                  </Button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={muted ? 0 : volume}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    className="flex-1 accent-[var(--color-accent)]"
+                    aria-label="Громкость"
+                  />
+                </>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
