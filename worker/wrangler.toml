@@ -1,0 +1,32 @@
+name = "bratan-music-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "bratan-music-db"
+database_id = "af567808-4d71-4248-89f0-4681371dc771"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "2f2ca120b5104617a262332524b27190"
+
+# R2 Bucket (создать отдельно: npx wrangler r2 bucket create bratanmusic-tracks)
+# [[r2_buckets]]
+# binding = "TRACKS_BUCKET"
+# bucket_name = "bratanmusic-tracks"
+
+# Secrets (задаются через wrangler secret put):
+# TIDAL_CLIENT_ID
+# TIDAL_CLIENT_SECRET
+# TIDAL_SESSION_TOKEN
+# TELEGRAM_BOT_TOKEN
+# TELEGRAM_WEBHOOK_SECRET
+# JWT_SECRET
+# JWT_REFRESH_SECRET
+# SESSION_ENCRYPTION_KEY
