@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/store/auth';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://api.bratan-corp.workers.dev';
+const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().accessToken;

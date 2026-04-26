@@ -9,7 +9,7 @@ interface TrackOverrideModalProps {
   trackTitle: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://api.bratan-corp.workers.dev';
+const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: TrackOverrideModalProps) {
   const [uploading, setUploading] = useState(false);

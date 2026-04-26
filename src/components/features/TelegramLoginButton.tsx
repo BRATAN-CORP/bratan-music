@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { MessageCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'BratanMusicBot';
+const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'bratan_music_bot';
 
 export function TelegramLoginButton() {
   const { loginWithDeeplink, pollNonce } = useAuth();
