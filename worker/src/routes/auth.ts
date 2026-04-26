@@ -55,16 +55,21 @@ auth.post('/telegram', async (c) => {
 
 auth.get('/nonce/:nonce', async (c) => {
   const nonce = c.req.param('nonce');
-  // Server-side long-poll was removed: it kept many concurrent connections
-  // open and, combined with rate-limit KV writes, blew through the
-  // Cloudflare KV daily quota. The client polls this endpoint once per
-  // second and the response is fast and cheap.
-  const userId = await c.env.SESSIONS.get(`auth_nonce:${nonce}`);
-  if (!userId) {
+  // Auth nonces live in D1 (table `auth_nonces`). Previously KV, but the
+  // free KV plan is 1000 writes/day for the whole worker which broke
+  // login. D1 has plenty of headroom.
+  const now = Math.floor(Date.now() / 1000);
+  const row = await c.env.DB
+    .prepare('SELECT user_id, expires_at FROM auth_nonces WHERE nonce = ?')
+    .bind(nonce)
+    .first<{ user_id: string; expires_at: number }>();
+
+  if (!row || row.expires_at <= now) {
     return c.json({ status: 'pending' });
   }
+  const userId = row.user_id;
 
-  await c.env.SESSIONS.delete(`auth_nonce:${nonce}`);
+  await c.env.DB.prepare('DELETE FROM auth_nonces WHERE nonce = ?').bind(nonce).run();
 
   const userService = new UserService(c.env);
   const user = await userService.findById(userId);
