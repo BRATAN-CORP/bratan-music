@@ -45,6 +45,18 @@ export interface TidalArtistRaw {
   popularity?: number;
 }
 
+export interface TidalLyricsRaw {
+  trackId: number;
+  lyricsProvider?: string;
+  providerCommontrackId?: string;
+  providerLyricsId?: string;
+  /** Plain unsynced lyrics. */
+  lyrics?: string | null;
+  /** LRC-style synced lyrics ("[mm:ss.xx] line"). */
+  subtitles?: string | null;
+  isRightToLeft?: boolean;
+}
+
 type WrappedSearchItem<T> = T | { item?: T; value?: T };
 
 interface TidalSearchBucket<T> {
@@ -110,6 +122,20 @@ export class TidalApi {
   async getTrackRadio(trackId: string, limit: number = 25): Promise<{ items: TidalTrackRaw[] }> {
     const cc = await this.auth.getCountryCode();
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/tracks/${trackId}/radio?limit=${limit}&offset=0&countryCode=${cc}`);
+  }
+
+  async getTrackLyrics(trackId: string): Promise<TidalLyricsRaw | null> {
+    const cc = await this.auth.getCountryCode();
+    try {
+      return await this.get<TidalLyricsRaw>(
+        `/v1/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${this.auth.getLocale()}&deviceType=BROWSER`,
+      );
+    } catch (err) {
+      // Tidal returns 404 for tracks that have no lyrics — surface that as
+      // null so callers don't have to special-case the error message.
+      if (err instanceof Error && /\b404\b/.test(err.message)) return null;
+      throw err;
+    }
   }
 
   unwrapSearchItems<T>(bucket?: TidalSearchBucket<T>): T[] {

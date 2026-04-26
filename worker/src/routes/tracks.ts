@@ -59,6 +59,28 @@ tracks.get('/:id', async (c) => {
   return c.json(track);
 });
 
+tracks.get('/:id/lyrics', async (c) => {
+  const id = c.req.param('id');
+  try {
+    const { TidalAuth } = await import('../services/tidal/TidalAuth');
+    const { TidalApi } = await import('../services/tidal/TidalApi');
+    const auth = new TidalAuth(c.env);
+    const api = new TidalApi(auth);
+    const raw = await api.getTrackLyrics(id);
+    if (!raw) return c.json({ available: false });
+    return c.json({
+      available: Boolean(raw.lyrics || raw.subtitles),
+      provider: raw.lyricsProvider ?? null,
+      isRightToLeft: Boolean(raw.isRightToLeft),
+      lyrics: raw.lyrics ?? null,
+      subtitles: raw.subtitles ?? null,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Не удалось получить текст';
+    return c.json({ available: false, error: message }, 502);
+  }
+});
+
 tracks.get('/:id/stream', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId');

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ChevronDown, Download, Heart, ListPlus, Pause, Play, Repeat, Repeat1, Shuffle,
+  ChevronDown, Download, Heart, ListPlus, Mic2, Pause, Play, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
+import { LyricsPanel } from '@/components/features/LyricsPanel';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
@@ -32,6 +33,7 @@ export function FullscreenPlayer() {
   const { progress, seek } = useAudioPlayer();
   const reduce = useReducedMotion();
   const [eqOpen, setEqOpen] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -104,15 +106,26 @@ export function FullscreenPlayer() {
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Сейчас играет
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setEqOpen((v) => !v)}
-              aria-label="Эквалайзер"
-              className={eqOpen ? 'text-foreground' : ''}
-            >
-              <Sliders size={18} />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setLyricsOpen((v) => !v)}
+                aria-label="Текст песни"
+                className={lyricsOpen ? 'text-foreground' : ''}
+              >
+                <Mic2 size={18} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEqOpen((v) => !v)}
+                aria-label="Эквалайзер"
+                className={eqOpen ? 'text-foreground' : ''}
+              >
+                <Sliders size={18} />
+              </Button>
+            </div>
           </div>
 
           <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8">
@@ -302,6 +315,14 @@ export function FullscreenPlayer() {
               </div>
             )}
           </div>
+
+          {currentTrack && (
+            <LyricsPanel
+              trackId={currentTrack.id}
+              open={lyricsOpen}
+              onClose={() => setLyricsOpen(false)}
+            />
+          )}
 
           <AddToPlaylistDialog
             open={addToPlaylistOpen}
