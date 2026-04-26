@@ -151,19 +151,35 @@ export function FullscreenPlayer() {
 
             <div className="flex w-full max-w-md flex-col gap-2">
               <div
-                className="group/progress relative h-1.5 cursor-pointer rounded-full bg-[var(--color-bg-muted)]"
-                onClick={(e) => {
+                className="group/progress relative h-2 cursor-pointer touch-none rounded-full bg-[var(--color-bg-muted)] sm:h-1.5"
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = (e.clientX - rect.left) / rect.width;
-                  seek(pct * duration);
+                  const seekFromX = (clientX: number) => {
+                    const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                    seek(pct * duration);
+                  };
+                  seekFromX(e.clientX);
+                  const target = e.currentTarget;
+                  const onMove = (ev: PointerEvent) => seekFromX(ev.clientX);
+                  const onUp = (ev: PointerEvent) => {
+                    seekFromX(ev.clientX);
+                    target.removeEventListener('pointermove', onMove);
+                    target.removeEventListener('pointerup', onUp);
+                    target.removeEventListener('pointercancel', onUp);
+                    try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+                  };
+                  target.addEventListener('pointermove', onMove);
+                  target.addEventListener('pointerup', onUp);
+                  target.addEventListener('pointercancel', onUp);
                 }}
               >
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-sub-accent)] transition-[width] duration-100"
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
                   style={{ width: `${progressPct}%` }}
                 />
                 <div
-                  className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full bg-foreground opacity-0 transition-opacity group-hover/progress:opacity-100"
+                  className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-100 transition-opacity"
                   style={{ left: `${progressPct}%` }}
                 />
               </div>

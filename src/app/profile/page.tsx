@@ -1,10 +1,87 @@
-import { LogOut, Crown, Shield } from 'lucide-react';
+import { useState } from 'react';
+import { LogOut, Crown, Shield, Moon, Sun, KeyRound } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { useAuthStore } from '@/store/auth';
+import { useUiStore } from '@/store/ui';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
+
+interface GrantResponse {
+  ok: boolean;
+  user?: { id: string; username: string | null; name: string | null };
+  subscription?: { id: string; expiresAt: number; days: number };
+}
+
+function AdminGrantPanel() {
+  const [target, setTarget] = useState('');
+  const [days, setDays] = useState('30');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const submit = async () => {
+    const t = target.trim();
+    if (!t) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const payload: { userId?: string; tgUsername?: string; days: number } = { days: Number(days) || 30 };
+      if (/^\d+$/.test(t)) payload.userId = t;
+      else payload.tgUsername = t;
+      const r = await api.post<GrantResponse>('/admin/grant', payload);
+      if (r.ok && r.user && r.subscription) {
+        const u = r.user.username ? '@' + r.user.username : (r.user.name ?? r.user.id);
+        const exp = new Date(r.subscription.expiresAt * 1000).toLocaleDateString('ru-RU');
+        setMsg({ kind: 'ok', text: `Выдано ${u} на ${r.subscription.days} дн. (до ${exp})` });
+        setTarget('');
+      } else {
+        setMsg({ kind: 'err', text: 'Не удалось выдать доступ' });
+      }
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Ошибка' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
+      <h2 className="flex items-center gap-2 text-sm font-medium">
+        <KeyRound size={14} className="text-muted-foreground" />
+        Выдача доступа (admin)
+      </h2>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Введи ID или @username и количество дней.
+      </p>
+      <div className="mt-3 flex flex-col gap-2">
+        <input
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          placeholder="user id или @username"
+          className="w-full rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+        />
+        <div className="flex items-center gap-2">
+          <input
+            value={days}
+            onChange={(e) => setDays(e.target.value.replace(/[^\d]/g, ''))}
+            placeholder="дней"
+            className="w-20 rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+          />
+          <Button onClick={submit} disabled={busy || !target.trim()} className="flex-1">
+            {busy ? 'Выдаём…' : 'Выдать доступ'}
+          </Button>
+        </div>
+        {msg && (
+          <p className={`text-xs ${msg.kind === 'ok' ? 'text-[var(--color-accent)]' : 'text-[var(--color-danger)]'}`}>
+            {msg.text}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
 
 interface UserProfile {
   id: string;
@@ -16,6 +93,7 @@ interface UserProfile {
 
 export function ProfilePage() {
   const { user, logout } = useAuthStore();
+  const { theme, toggleTheme } = useUiStore();
   const { data: profile } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<UserProfile>('/user/me'),
@@ -81,6 +159,33 @@ export function ProfilePage() {
             )}
           </section>
         )}
+
+        {profile?.isAdmin && <AdminGrantPanel />}
+
+        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
+          <h2 className="text-sm font-medium">Настройки</h2>
+          <button
+            onClick={toggleTheme}
+            className="mt-3 flex w-full items-center justify-between rounded-[var(--radius-sm)] px-2 py-2 text-sm transition-colors hover:bg-secondary"
+          >
+            <span>Тема</span>
+            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={theme}
+                  initial={{ rotate: -45, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 45, opacity: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="inline-flex"
+                >
+                  {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                </motion.span>
+              </AnimatePresence>
+              {theme === 'dark' ? 'Тёмная' : 'Светлая'}
+            </span>
+          </button>
+        </section>
 
         <Button onClick={logout} variant="danger" className="w-full">
           <LogOut size={14} />
