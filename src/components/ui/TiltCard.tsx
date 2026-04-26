@@ -5,26 +5,45 @@ import { cn } from '@/lib/utils';
 interface TiltCardProps {
   children: ReactNode;
   className?: string;
+  /** Tilt range in degrees on either axis. */
   intensity?: number;
+  /** Show a moving radial highlight that follows the cursor. */
   glare?: boolean;
+  /** Scale applied while the pointer is over the card. */
+  hoverScale?: number;
+  /** Glare strength (0..1). Higher = more visible highlight. */
+  glareStrength?: number;
 }
 
-export function TiltCard({ children, className, intensity = 12, glare = true }: TiltCardProps) {
+export function TiltCard({
+  children,
+  className,
+  intensity = 14,
+  glare = true,
+  hoverScale = 1.03,
+  glareStrength = 0.55,
+}: TiltCardProps) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const sx = useSpring(x, { stiffness: 220, damping: 22 });
-  const sy = useSpring(y, { stiffness: 220, damping: 22 });
+  const hover = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 240, damping: 20 });
+  const sy = useSpring(y, { stiffness: 240, damping: 20 });
+  const sHover = useSpring(hover, { stiffness: 220, damping: 22 });
 
   const rotateX = useTransform(sy, [-0.5, 0.5], [intensity, -intensity]);
   const rotateY = useTransform(sx, [-0.5, 0.5], [-intensity, intensity]);
+  const scale = useTransform(sHover, [0, 1], [1, hoverScale]);
+  const z = useTransform(sHover, [0, 1], [0, 30]);
+
   const glareX = useTransform(sx, [-0.5, 0.5], ['0%', '100%']);
   const glareY = useTransform(sy, [-0.5, 0.5], ['0%', '100%']);
+  const glareOpacity = useTransform(sHover, [0, 1], [0, 1]);
   const glareBg = useTransform(
     [glareX, glareY] as unknown as never,
     ([gx, gy]: [string, string]) =>
-      `radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,0.35), transparent 50%)`
+      `radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,${glareStrength}) 0%, rgba(255,255,255,${glareStrength * 0.4}) 25%, transparent 60%)`,
   );
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -34,9 +53,15 @@ export function TiltCard({ children, className, intensity = 12, glare = true }: 
     y.set((e.clientY - rect.top) / rect.height - 0.5);
   };
 
+  const onEnter = () => {
+    if (reduce) return;
+    hover.set(1);
+  };
+
   const onLeave = () => {
     x.set(0);
     y.set(0);
+    hover.set(0);
   };
 
   if (reduce) {
@@ -51,15 +76,17 @@ export function TiltCard({ children, className, intensity = 12, glare = true }: 
     <motion.div
       ref={ref}
       onPointerMove={onMove}
+      onPointerEnter={onEnter}
       onPointerLeave={onLeave}
-      style={{ rotateX, rotateY, transformStyle: 'preserve-3d', perspective: 1000 }}
-      className={cn('relative', className)}
+      style={{ rotateX, rotateY, scale, z, transformStyle: 'preserve-3d', perspective: 1100 }}
+      className={cn('relative will-change-transform', className)}
     >
       <div style={{ transformStyle: 'preserve-3d' }}>{children}</div>
       {glare && (
         <motion.div
+          aria-hidden
           className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] mix-blend-overlay"
-          style={{ background: glareBg }}
+          style={{ background: glareBg, opacity: glareOpacity }}
         />
       )}
     </motion.div>

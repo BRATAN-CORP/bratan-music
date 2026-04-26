@@ -142,7 +142,13 @@ export function FullscreenPlayer() {
                   }}
                 />
               )}
-              <TiltCard intensity={10} glare className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl">
+              <TiltCard
+                intensity={20}
+                hoverScale={1.06}
+                glareStrength={0.7}
+                glare
+                className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
+              >
                 {currentTrack.coverUrl ? (
                   <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
                 ) : (
