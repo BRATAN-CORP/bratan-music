@@ -1,5 +1,5 @@
-import { motion, useInView, useMotionValue, useSpring, useTransform } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
+import { useEffect } from 'react';
 
 interface AnimatedNumberProps {
   value: number;
@@ -9,18 +9,18 @@ interface AnimatedNumberProps {
 }
 
 export function AnimatedNumber({ value, format, className }: AnimatedNumberProps) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-20% 0px' });
   const motionValue = useMotionValue(0);
   const spring = useSpring(motionValue, { stiffness: 60, damping: 18 });
   const display = useTransform(spring, (v) => (format ? format(v) : Math.round(v).toString()));
 
+  // Animation starts immediately on mount instead of waiting for the
+  // user to scroll the element into view.
   useEffect(() => {
-    if (inView) motionValue.set(value);
-  }, [inView, motionValue, value]);
+    motionValue.set(value);
+  }, [motionValue, value]);
 
   return (
-    <motion.span ref={ref} className={className}>
+    <motion.span className={className}>
       {display}
     </motion.span>
   );
