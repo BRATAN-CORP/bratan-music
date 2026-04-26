@@ -85,17 +85,25 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
             className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
             aria-hidden
           />
-          <motion.div
-            key="atp-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Добавить в плейлист"
-            initial={{ opacity: 0, y: 24, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.97, transition: { duration: 0.18 } }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed left-1/2 top-1/2 z-[60] w-[min(420px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[var(--radius-lg)] border border-border bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] backdrop-blur"
-          >
+          {/*
+            The panel is positioned by a flex container that fills the
+            viewport. This avoids the classic bug where motion's animate
+            transform overrides tailwind's `-translate-x-1/2 -translate-y-1/2`
+            and the modal ends up anchored top-left (or, on mobile, off-screen
+            below the player).
+          */}
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+            <motion.div
+              key="atp-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Добавить в плейлист"
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.97, transition: { duration: 0.18 } }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="pointer-events-auto w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-[var(--radius-lg)] border border-border/60 bg-[var(--color-surface-elevated)]/80 shadow-[var(--shadow-xl)] backdrop-blur-xl ring-1 ring-white/5"
+            >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
                 <ListMusic size={15} className="text-muted-foreground" />
@@ -193,7 +201,8 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                 </button>
               )}
             </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>
