@@ -8,6 +8,9 @@ import { SearchPage } from '@/app/search/page';
 import { LibraryPage } from '@/app/library/page';
 import { ProfilePage } from '@/app/profile/page';
 import { PlaylistPage } from '@/app/playlist/page';
+import { TrackPage } from '@/app/track/page';
+import { AlbumPage } from '@/app/album/page';
+import { ArtistPage } from '@/app/artist/page';
 
 function AppLayout() {
   return (
@@ -35,9 +38,9 @@ const router = createBrowserRouter(
         { path: 'search', element: <SearchPage /> },
         { path: 'library', element: <LibraryPage /> },
         { path: 'profile', element: <ProfilePage /> },
-        { path: 'track/:id', element: <div>Трек</div> },
-        { path: 'album/:id', element: <div>Альбом</div> },
-        { path: 'artist/:id', element: <div>Артист</div> },
+        { path: 'track/:id', element: <TrackPage /> },
+        { path: 'album/:id', element: <AlbumPage /> },
+        { path: 'artist/:id', element: <ArtistPage /> },
         { path: 'playlist/:id', element: <PlaylistPage /> },
       ],
     },
