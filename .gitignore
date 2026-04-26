@@ -35,3 +35,5 @@ coverage/
 # Misc
 *.tgz
 .cache/
+*.tsbuildinfo
+vite.config.d.ts
