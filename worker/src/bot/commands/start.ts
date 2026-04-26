@@ -17,8 +17,12 @@ function createLoginUrl(appUrl: string, nonce: string): string {
 
 async function createLoginNonce(env: Env, userId: number): Promise<string | null> {
   const nonce = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = Math.floor(Date.now() / 1000) + 300;
   try {
-    await env.SESSIONS.put(`auth_nonce:${nonce}`, String(userId), { expirationTtl: 300 });
+    await env.DB
+      .prepare('INSERT INTO auth_nonces (nonce, user_id, expires_at) VALUES (?, ?, ?)')
+      .bind(nonce, String(userId), expiresAt)
+      .run();
     return nonce;
   } catch (err) {
     console.error('[bot] createLoginNonce failed:', err instanceof Error ? err.message : err);
@@ -64,17 +68,24 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
   // for this key and will sign the user in within ~1 s of this write.
   if (args[0]?.startsWith('auth_')) {
     const nonce = args[0].replace('auth_', '');
-    let kvOk = true;
+    const expiresAt = Math.floor(Date.now() / 1000) + 300;
+    let dbOk = true;
     try {
-      await env.SESSIONS.put(`auth_nonce:${nonce}`, String(from.id), { expirationTtl: 300 });
+      await env.DB
+        .prepare(
+          'INSERT INTO auth_nonces (nonce, user_id, expires_at) VALUES (?, ?, ?) ' +
+          'ON CONFLICT(nonce) DO UPDATE SET user_id = excluded.user_id, expires_at = excluded.expires_at'
+        )
+        .bind(nonce, String(from.id), expiresAt)
+        .run();
     } catch (err) {
-      kvOk = false;
-      console.error('[bot] auth nonce KV put failed:', err instanceof Error ? err.message : err);
+      dbOk = false;
+      console.error('[bot] auth nonce DB insert failed:', err instanceof Error ? err.message : err);
     }
 
-    const replyText = kvOk
+    const replyText = dbOk
       ? '<b>BRATAN MUSIC</b>\n\nВход подтверждён. Вернитесь на сайт — авторизация завершится автоматически.'
-      : '<b>BRATAN MUSIC</b>\n\nВременная техническая ошибка авторизации (исчерпан суточный лимит KV). Попробуйте позже — лимит сбрасывается в полночь UTC.';
+      : '<b>BRATAN MUSIC</b>\n\nВременная техническая ошибка авторизации. Попробуйте ещё раз через минуту.';
 
     await Promise.all([
       ensureUser(env, message),
