@@ -7,6 +7,7 @@ import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { triggerLikeBurst } from '@/lib/likeFeedback';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -111,7 +112,11 @@ export function Player() {
             <div className="flex items-center gap-1">
               <motion.div whileTap={reduce ? undefined : { scale: 0.85 }}>
                 <Button
-                  onClick={() => currentTrack && toggle(currentTrack)}
+                  onClick={(e) => {
+                    if (!currentTrack) return;
+                    triggerLikeBurst(e, liked ? 'unliked' : 'liked');
+                    toggle(currentTrack);
+                  }}
                   variant="ghost"
                   size="icon"
                   aria-label={liked ? 'Убрать лайк' : 'Лайк'}

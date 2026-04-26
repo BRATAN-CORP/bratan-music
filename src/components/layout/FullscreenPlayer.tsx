@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { triggerLikeBurst } from '@/lib/likeFeedback';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -232,7 +233,11 @@ export function FullscreenPlayer() {
                 size="icon"
                 aria-label={liked ? 'Убрать лайк' : 'Лайк'}
                 className={liked ? 'text-[var(--color-accent)]' : ''}
-                onClick={() => currentTrack && toggle(currentTrack)}
+                onClick={(e) => {
+                  if (!currentTrack) return;
+                  triggerLikeBurst(e, liked ? 'unliked' : 'liked');
+                  toggle(currentTrack);
+                }}
               >
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </Button>

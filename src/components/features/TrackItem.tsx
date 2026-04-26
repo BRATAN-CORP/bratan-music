@@ -4,6 +4,7 @@ import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
+import { triggerLikeBurst } from '@/lib/likeFeedback';
 
 interface TrackItemProps {
   track: Track;
@@ -59,7 +60,12 @@ export function TrackItem({ track, index, onPlay }: TrackItemProps) {
           variant="ghost"
           size="icon"
           className={"h-7 w-7 " + (liked ? 'opacity-100 text-[var(--color-accent)]' : '')}
-          onClick={(e) => { e.stopPropagation(); if (isAuthed) toggle(track); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isAuthed) return;
+            triggerLikeBurst(e, liked ? 'unliked' : 'liked');
+            toggle(track);
+          }}
           aria-label={liked ? 'Убрать лайк' : 'Лайк'}
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />

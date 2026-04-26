@@ -4,6 +4,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useTrack, useTrackRadio } from '@/hooks/useTrack';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { triggerLikeBurst } from '@/lib/likeFeedback';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -61,7 +62,10 @@ export function TrackPage() {
                     <Play size={14} fill="currentColor" /> Слушать
                   </Button>
                   <Button
-                    onClick={() => toggle(track)}
+                    onClick={(e) => {
+                      triggerLikeBurst(e, liked ? 'unliked' : 'liked');
+                      toggle(track);
+                    }}
                     variant="outline"
                     size="icon"
                     aria-label={liked ? 'Убрать лайк' : 'Лайк'}
