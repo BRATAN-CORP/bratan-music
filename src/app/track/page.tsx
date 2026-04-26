@@ -6,6 +6,8 @@ import { useTrack, useTrackRadio } from '@/hooks/useTrack';
 import { useLikeTrack } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent } from '@/components/ui/Card';
 
 export function TrackPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,57 +34,50 @@ export function TrackPage() {
 
   return (
     <AuthGuard>
-      <div className="p-6">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
         {isLoading ? (
-          <p style={{ color: 'var(--color-text-muted)' }}>Загрузка...</p>
+          <p className="text-muted-foreground">Загрузка...</p>
         ) : track ? (
           <>
-            <div className="flex flex-col sm:flex-row gap-6 mb-8">
+            <Card className="animate-enter mb-8 border-primary/20 bg-card/70">
+              <CardContent className="flex flex-col gap-6 p-6 sm:flex-row">
               {track.coverUrl && (
-                <img src={track.coverUrl} alt={track.title} className="w-48 h-48 rounded-xl object-cover" />
+                <img src={track.coverUrl} alt={track.title} className="h-56 w-56 rounded-[1.75rem] object-cover shadow-[var(--shadow-lg)]" />
               )}
               <div className="flex flex-col justify-end gap-3">
-                <h1 className="text-3xl font-bold">{track.title}</h1>
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary">Трек</p>
+                <h1 className="hero-gradient-text text-4xl font-black tracking-tight sm:text-6xl">{track.title}</h1>
                 <Link
                   to={`/artist/${track.artistId}`}
-                  className="text-lg hover:underline"
-                  style={{ color: 'var(--color-text-muted)' }}
+                  className="text-lg text-muted-foreground hover:text-foreground"
                 >
                   {track.artist}
                 </Link>
                 <Link
                   to={`/album/${track.albumId}`}
-                  className="text-sm hover:underline"
-                  style={{ color: 'var(--color-text-subtle)' }}
+                  className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   {track.album}
                 </Link>
                 <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={handlePlay}
-                    className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium"
-                    style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)' }}
-                  >
+                  <Button onClick={handlePlay}>
                     <Play size={16} fill="currentColor" /> Слушать
-                  </button>
-                  <button
-                    onClick={() => like.mutate(track.id)}
-                    className="p-2 rounded-full hover:opacity-80"
-                    style={{ border: '1px solid var(--color-border)' }}
-                  >
+                  </Button>
+                  <Button onClick={() => like.mutate(track.id)} variant="secondary" size="icon">
                     <Heart size={18} />
-                  </button>
+                  </Button>
                 </div>
               </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {radio?.items && radio.items.length > 0 && (
-              <section>
-                <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
-                  <Radio size={18} style={{ color: 'var(--color-accent)' }} />
+              <section className="animate-enter">
+                <h2 className="mb-4 flex items-center gap-2 text-2xl font-bold">
+                  <Radio size={20} className="text-primary" />
                   Похожие треки
                 </h2>
-                <div className="flex flex-col">
+                <div className="glass-panel flex flex-col rounded-[var(--radius-xl)] p-2">
                   {radio.items.map((t, i) => (
                     <TrackItem key={t.id} track={t} index={i} onPlay={handlePlayRadioTrack} />
                   ))}
@@ -91,7 +86,7 @@ export function TrackPage() {
             )}
           </>
         ) : (
-          <p style={{ color: 'var(--color-text-muted)' }}>Трек не найден</p>
+          <p className="text-muted-foreground">Трек не найден</p>
         )}
       </div>
     </AuthGuard>

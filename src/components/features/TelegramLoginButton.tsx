@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { MessageCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/Button';
 
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'bratan_music_bot';
 
@@ -23,11 +24,11 @@ export function TelegramLoginButton() {
   };
 
   return (
-    <button
+    <Button
       onClick={handleLogin}
       disabled={polling}
-      className="flex items-center gap-3 px-6 py-3 rounded-xl font-medium text-white transition-transform active:scale-95"
-      style={{ backgroundColor: '#2AABEE' }}
+      className="bg-[var(--color-telegram)] text-[var(--color-telegram-foreground)] hover:bg-[var(--color-telegram-hover)]"
+      size="lg"
     >
       {polling ? (
         <>
@@ -40,6 +41,6 @@ export function TelegramLoginButton() {
           Войти через Telegram
         </>
       )}
-    </button>
+    </Button>
   );
 }

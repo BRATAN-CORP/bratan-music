@@ -1,34 +1,39 @@
 :root {
-  --color-bg:           #ffffff;
-  --color-bg-subtle:    #f5f5f5;
-  --color-bg-muted:     #ebebeb;
-  --color-surface:      #ffffff;
-  --color-surface-raised: #f9f9f9;
+  --color-bg:           #f8fafc;
+  --color-bg-subtle:    #f1f5f9;
+  --color-bg-muted:     #e2e8f0;
+  --color-surface:      rgba(255,255,255,0.82);
+  --color-surface-raised: #ffffff;
 
-  --color-text:         #0f0f0f;
-  --color-text-muted:   #5a5a5a;
-  --color-text-subtle:  #8a8a8a;
+  --color-text:         #0f172a;
+  --color-text-muted:   #64748b;
+  --color-text-subtle:  #94a3b8;
   --color-text-on-accent: #ffffff;
 
-  --color-accent:       #1db954;
-  --color-accent-hover: #17a349;
-  --color-accent-muted: #d4f5e1;
+  --color-accent:       #8b5cf6;
+  --color-accent-hover: #7c3aed;
+  --color-accent-muted: #ede9fe;
 
-  --color-sub-accent:   #0066cc;
-  --color-sub-accent-hover: #0052a3;
-  --color-sub-accent-muted: #ddeeff;
+  --color-sub-accent:   #06b6d4;
+  --color-sub-accent-hover: #0891b2;
+  --color-sub-accent-muted: #cffafe;
 
-  --color-danger:       #d93025;
-  --color-danger-muted: #fce8e6;
+  --color-danger:       #ef4444;
+  --color-danger-muted: #fee2e2;
 
-  --color-border:       rgba(0,0,0,0.10);
-  --color-border-strong: rgba(0,0,0,0.20);
+  --color-border:       rgba(15,23,42,0.10);
+  --color-border-strong: rgba(15,23,42,0.18);
 
   --color-overlay:      rgba(0,0,0,0.45);
+  --color-media-overlay: rgba(0,0,0,0.45);
+  --color-telegram:     #2AABEE;
+  --color-telegram-hover: #229ED9;
+  --color-telegram-foreground: #ffffff;
 
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.10);
-  --shadow-lg:  0 8px 32px rgba(0,0,0,0.14);
+  --shadow-sm:  0 10px 30px rgba(15,23,42,0.06);
+  --shadow-md:  0 18px 48px rgba(15,23,42,0.10);
+  --shadow-lg:  0 30px 80px rgba(15,23,42,0.16);
+  --shadow-glow: 0 18px 50px rgba(139,92,246,0.32);
 
   --radius-sm:  6px;
   --radius-md:  10px;
@@ -54,30 +59,37 @@
   // shadcn/ui sync
   --background: var(--color-bg);
   --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
   --primary: var(--color-accent);
   --primary-foreground: var(--color-text-on-accent);
+  --secondary: var(--color-bg-subtle);
+  --secondary-foreground: var(--color-text);
   --muted: var(--color-bg-muted);
   --muted-foreground: var(--color-text-muted);
+  --destructive: var(--color-danger);
+  --destructive-foreground: #ffffff;
   --border: var(--color-border);
+  --input: var(--color-border);
   --ring: var(--color-accent);
   --radius: var(--radius-md);
 }
 
 [data-theme="dark"] {
-  --color-bg:           #0d0d0d;
-  --color-bg-subtle:    #161616;
-  --color-bg-muted:     #1f1f1f;
-  --color-surface:      #161616;
-  --color-surface-raised: #1f1f1f;
+  --color-bg:           #050816;
+  --color-bg-subtle:    #0f172a;
+  --color-bg-muted:     #1e293b;
+  --color-surface:      rgba(15,23,42,0.78);
+  --color-surface-raised: #111827;
 
   --color-text:         #f0f0f0;
   --color-text-muted:   #a0a0a0;
   --color-text-subtle:  #666666;
   --color-text-on-accent: #ffffff;
 
-  --color-accent:       #1db954;
-  --color-accent-hover: #21cc5e;
-  --color-accent-muted: #0d2b1a;
+  --color-accent:       #a78bfa;
+  --color-accent-hover: #8b5cf6;
+  --color-accent-muted: #2e1065;
 
   --color-sub-accent:   #4d9fff;
   --color-sub-accent-hover: #70b3ff;
@@ -90,14 +102,23 @@
   --color-border-strong: rgba(255,255,255,0.16);
 
   --color-overlay:      rgba(0,0,0,0.65);
+  --color-media-overlay: rgba(0,0,0,0.52);
 
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.30);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.40);
-  --shadow-lg:  0 8px 32px rgba(0,0,0,0.50);
+  --shadow-sm:  0 10px 30px rgba(0,0,0,0.24);
+  --shadow-md:  0 18px 48px rgba(0,0,0,0.36);
+  --shadow-lg:  0 30px 80px rgba(0,0,0,0.48);
+  --shadow-glow: 0 18px 60px rgba(167,139,250,0.26);
 
   --player-bg:     #161616;
   --player-border: rgba(255,255,255,0.06);
 
   --background: var(--color-bg);
   --foreground: var(--color-text);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-text);
+  --secondary: var(--color-bg-subtle);
+  --secondary-foreground: var(--color-text);
+  --destructive: var(--color-danger);
+  --destructive-foreground: #ffffff;
+  --input: var(--color-border);
 }
