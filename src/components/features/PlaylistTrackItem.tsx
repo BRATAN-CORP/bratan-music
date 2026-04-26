@@ -13,6 +13,12 @@ interface PlaylistTrackItemProps {
   reorderable: boolean;
   onPlay: (track: Track) => void;
   onReorderEnd?: () => void;
+  /**
+   * Hide the kebab menu (the only action of which is "remove from playlist").
+   * Used for the system "Liked" playlist where unliking already removes the
+   * track, so there is no separate delete affordance.
+   */
+  hideRemoveMenu?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -28,6 +34,7 @@ export function PlaylistTrackItem({
   reorderable,
   onPlay,
   onReorderEnd,
+  hideRemoveMenu,
 }: PlaylistTrackItemProps) {
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
@@ -122,6 +129,7 @@ export function PlaylistTrackItem({
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
+        {!hideRemoveMenu && (
         <div ref={menuRef} className="relative">
           <Button
             variant="ghost"
@@ -158,6 +166,7 @@ export function PlaylistTrackItem({
             )}
           </AnimatePresence>
         </div>
+        )}
       </div>
     </>
   );

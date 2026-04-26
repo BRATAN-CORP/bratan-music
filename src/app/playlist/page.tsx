@@ -19,6 +19,7 @@ export function PlaylistPage() {
   const tracks = useMemo(() => playlist?.tracks ?? [], [playlist?.tracks]);
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
   const ownPlaylist = useMemo(() => Boolean(playlist && id), [playlist, id]);
+  const hideRemoveMenu = Boolean(playlist?.isLiked);
 
   useEffect(() => {
     setLocalTracks(tracks);
@@ -83,7 +84,7 @@ export function PlaylistPage() {
                 {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
               </p>
             </div>
-            {ownPlaylist ? (
+            {ownPlaylist && !hideRemoveMenu ? (
               <Reorder.Group
                 axis="y"
                 values={localTracks}
@@ -112,6 +113,7 @@ export function PlaylistPage() {
                     playlistId={playlist.id}
                     reorderable={false}
                     onPlay={handlePlayTrack}
+                    hideRemoveMenu={hideRemoveMenu}
                   />
                 ))}
               </div>
