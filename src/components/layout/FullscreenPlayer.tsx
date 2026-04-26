@@ -37,6 +37,7 @@ export function FullscreenPlayer() {
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
   // amp is 0..~0.6 from the bass band; scale up a touch so weaker bass is
   // still visible. The smoothing is now lighter (tau=110ms in the hook),
@@ -68,10 +69,14 @@ export function FullscreenPlayer() {
   const handleDownload = async () => {
     if (!currentTrack || downloading) return;
     setDownloading(true);
+    setDownloadError(null);
     try {
       await downloadTrack(currentTrack);
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось скачать';
       console.error('[download]', err);
+      setDownloadError(message);
+      window.setTimeout(() => setDownloadError(null), 5000);
     } finally {
       setDownloading(false);
     }
@@ -315,6 +320,18 @@ export function FullscreenPlayer() {
                 </Button>
               </div>
             )}
+            <AnimatePresence>
+              {downloadError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]"
+                >
+                  {downloadError}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Desktop side-panel: takes ~half the row when open. */}

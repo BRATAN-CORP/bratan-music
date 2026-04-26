@@ -1,4 +1,6 @@
-import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 export interface DownloadableTrack {
   id: string;
@@ -21,17 +23,27 @@ function safeFileName(track: DownloadableTrack): string {
 }
 
 /**
- * Download a track as a file (real "Save As", not a new tab).
- *
- * The `<a download>` attribute is ignored when the href is cross-origin,
- * which is the case for Tidal's CDN URLs returned by the worker. So we
- * fetch the audio as a Blob, create a same-origin object URL, and click
- * an anchor pointing at the blob — that always triggers a download.
+ * Download a track as a file. Goes through the worker `/tracks/:id/file`
+ * proxy: the worker fetches the (cross-origin) Tidal CDN URL server-side
+ * and streams the response back with a `Content-Disposition: attachment`
+ * header — so we get a real "Save As" dialog regardless of CDN CORS.
  */
 export async function downloadTrack(track: DownloadableTrack): Promise<void> {
-  const data = await api.get<{ url: string }>(`/tracks/${track.id}/download`);
-  const res = await fetch(data.url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const token = useAuthStore.getState().accessToken;
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}/tracks/${track.id}/file`, { headers });
+  if (!res.ok) {
+    let message: string;
+    try {
+      const body = (await res.json()) as { error?: string };
+      message = body.error ?? `HTTP ${res.status}`;
+    } catch {
+      message = `HTTP ${res.status}`;
+    }
+    throw new Error(message);
+  }
 
   const blob = await res.blob();
   const blobUrl = URL.createObjectURL(blob);

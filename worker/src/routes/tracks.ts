@@ -144,6 +144,43 @@ tracks.get('/:id/download', async (c) => {
   return c.json({ url, source: 'tidal' });
 });
 
+// Proxies the download so the file gets a stable Content-Disposition and
+// no cross-origin restrictions from the Tidal CDN reach the browser.
+tracks.get('/:id/file', async (c) => {
+  const id = c.req.param('id');
+  const tidal = new TidalService(c.env);
+  let trackTitle = '';
+  let trackArtist = '';
+  try {
+    const meta = await tidal.getTrack(id);
+    trackTitle = meta.title;
+    trackArtist = meta.artist;
+  } catch {
+    // metadata is optional — the file is still downloadable
+  }
+  const url = await tidal.getDownloadUrl(id);
+  const upstream = await fetch(url);
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text().catch(() => '');
+    return c.json({ error: `upstream ${upstream.status}: ${text.slice(0, 200)}` }, 502);
+  }
+  const ct = upstream.headers.get('content-type') ?? 'audio/flac';
+  const len = upstream.headers.get('content-length');
+  const ext = ct.includes('mpeg') || ct.includes('mp3') ? 'mp3'
+    : ct.includes('mp4') || ct.includes('m4a') || ct.includes('aac') ? 'm4a'
+    : 'flac';
+  const baseName = (trackArtist && trackTitle ? `${trackArtist} — ${trackTitle}` : `track-${id}`)
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .slice(0, 180);
+  const headers: Record<string, string> = {
+    'Content-Type': ct,
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(baseName)}.${ext}`,
+    'Cache-Control': 'private, max-age=60',
+  };
+  if (len) headers['Content-Length'] = len;
+  return new Response(upstream.body, { status: 200, headers });
+});
+
 tracks.get('/:id/radio', async (c) => {
   const id = c.req.param('id');
   const tidal = new TidalService(c.env);
