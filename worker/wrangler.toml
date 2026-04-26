@@ -16,10 +16,10 @@ database_id = "af567808-4d71-4248-89f0-4681371dc771"
 binding = "SESSIONS"
 id = "2f2ca120b5104617a262332524b27190"
 
-# R2 Bucket (создать отдельно: npx wrangler r2 bucket create bratanmusic-tracks)
-# [[r2_buckets]]
-# binding = "TRACKS_BUCKET"
-# bucket_name = "bratanmusic-tracks"
+# R2 Bucket
+[[r2_buckets]]
+binding = "TRACKS"
+bucket_name = "bratanmusic-tracks"
 
 # Secrets (задаются через wrangler secret put):
 # TIDAL_CLIENT_ID
