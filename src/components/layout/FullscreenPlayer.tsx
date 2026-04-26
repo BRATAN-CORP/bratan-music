@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ChevronDown, Download, Heart, ListPlus, Mic2, Pause, Play, Repeat, Repeat1, Shuffle,
+  ChevronDown, Download, Heart, ListPlus, Loader2, Mic2, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -15,6 +15,8 @@ import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
+import { startTrackRadio } from '@/lib/trackRadio';
+import type { Track } from '@/types';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -38,6 +40,7 @@ export function FullscreenPlayer() {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [radioBusy, setRadioBusy] = useState(false);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
   // amp is 0..~0.6 from the bass band; scale up a touch so weaker bass is
   // still visible. The smoothing is now lighter (tau=110ms in the hook),
@@ -65,6 +68,30 @@ export function FullscreenPlayer() {
   }, [fullscreen, closeFullscreen, togglePlay]);
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
+
+  const handleStartRadio = async () => {
+    if (!currentTrack || radioBusy) return;
+    setRadioBusy(true);
+    try {
+      const seed: Track = {
+        id: currentTrack.id,
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        artistId: currentTrack.artistId ?? '',
+        album: '',
+        albumId: '',
+        duration: duration || 0,
+        coverUrl: currentTrack.coverUrl,
+      };
+      await startTrackRadio(seed);
+    } catch (err) {
+      console.error('[radio]', err);
+      setDownloadError(err instanceof Error ? err.message : 'Не удалось запустить волну');
+      window.setTimeout(() => setDownloadError(null), 4000);
+    } finally {
+      setRadioBusy(false);
+    }
+  };
 
   const handleDownload = async () => {
     if (!currentTrack || downloading) return;
@@ -112,6 +139,16 @@ export function FullscreenPlayer() {
               Сейчас играет
             </span>
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleStartRadio}
+                aria-label="Запустить волну"
+                disabled={radioBusy}
+                title="Запустить волну на основе этого трека"
+              >
+                {radioBusy ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

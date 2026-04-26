@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
-  MoreHorizontal, ListPlus, Share2, User as UserIcon, Check,
+  MoreHorizontal, ListPlus, Share2, User as UserIcon, Check, Radio, Loader2,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -11,6 +11,8 @@ import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
+import { startTrackRadio } from '@/lib/trackRadio';
+import type { Track } from '@/types';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -95,6 +97,33 @@ export function Player() {
     navigate(`/artist/${currentTrack.artistId}`);
   };
 
+  const [radioBusy, setRadioBusy] = useState(false);
+  const [radioError, setRadioError] = useState<string | null>(null);
+  const handleStartRadio = async () => {
+    if (!currentTrack || radioBusy) return;
+    setRadioBusy(true);
+    setRadioError(null);
+    try {
+      const seed: Track = {
+        id: currentTrack.id,
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        artistId: currentTrack.artistId ?? '',
+        album: '',
+        albumId: '',
+        duration: duration || 0,
+        coverUrl: currentTrack.coverUrl,
+      };
+      await startTrackRadio(seed);
+      setMenuOpen(false);
+    } catch (err) {
+      setRadioError(err instanceof Error ? err.message : 'Не удалось запустить волну');
+      window.setTimeout(() => setRadioError(null), 4000);
+    } finally {
+      setRadioBusy(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       {currentTrack && (
@@ -107,10 +136,10 @@ export function Player() {
           className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 flex flex-col border-t border-border glass lg:bottom-0 lg:left-60"
           style={{ height: 'var(--player-height)' }}
         >
-          {error && (
+          {(error || radioError) && (
             <div className="flex items-center gap-2 bg-[var(--color-danger-muted)] px-4 py-1.5 text-xs text-[var(--color-danger)]">
               <AlertTriangle size={12} className="shrink-0" />
-              <span className="truncate">{error}</span>
+              <span className="truncate">{radioError || error}</span>
             </div>
           )}
 
@@ -241,6 +270,16 @@ export function Player() {
                       >
                         <ListPlus size={14} />
                         Добавить в плейлист
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleStartRadio}
+                        disabled={radioBusy}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary disabled:opacity-60"
+                      >
+                        {radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                        Запустить волну
                       </button>
                       <button
                         type="button"
