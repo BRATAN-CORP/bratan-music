@@ -13,7 +13,7 @@ import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
-import { api } from '@/lib/api';
+import { downloadTrack } from '@/lib/trackActions';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -65,18 +65,7 @@ export function FullscreenPlayer() {
     if (!currentTrack || downloading) return;
     setDownloading(true);
     try {
-      const data = await api.get<{ url: string }>(`/tracks/${currentTrack.id}/download`);
-      const a = document.createElement('a');
-      a.href = data.url;
-      const safeName = `${currentTrack.artist} — ${currentTrack.title}`
-        .replace(/[\\/:*?"<>|]/g, '_')
-        .slice(0, 180);
-      a.download = `${safeName}.flac`;
-      a.rel = 'noopener';
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      await downloadTrack(currentTrack);
     } catch (err) {
       console.error('[download]', err);
     } finally {

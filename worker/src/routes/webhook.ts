@@ -13,11 +13,16 @@ webhook.post('/telegram', async (c) => {
 
   const update = await c.req.json<TelegramUpdate>();
 
-  try {
-    await handleBotUpdate(c.env, update);
-  } catch (err) {
-    console.error('Bot error:', err instanceof Error ? err.message : err);
-  }
+  // Acknowledge Telegram immediately so it never retries the update,
+  // and run the (potentially slow) bot logic in the background. Without
+  // this, every Telegram round-trip inside handleBotUpdate (sendMessage,
+  // setChatMenuButton, KV writes, …) blocks the webhook response and the
+  // user sees the bot lagging by tens of seconds.
+  c.executionCtx.waitUntil(
+    handleBotUpdate(c.env, update).catch((err) => {
+      console.error('Bot error:', err instanceof Error ? err.message : err);
+    })
+  );
 
   return c.json({ ok: true });
 });

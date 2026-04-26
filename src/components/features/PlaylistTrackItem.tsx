@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Heart, MoreHorizontal, Play, Trash2, GripVertical } from 'lucide-react';
+import { Download, Heart, MoreHorizontal, Play, Trash2, GripVertical, Upload } from 'lucide-react';
 import { Reorder, useDragControls, motion, AnimatePresence, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
+import { useCoarsePointer } from '@/hooks/useCoarsePointer';
+import { downloadTrack } from '@/lib/trackActions';
+import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 
 interface PlaylistTrackItemProps {
   track: Track;
@@ -40,10 +43,26 @@ export function PlaylistTrackItem({
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
   const removeMutation = useRemoveTrackFromPlaylist();
+  const coarse = useCoarsePointer();
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTrack(track);
+    } catch (err) {
+      console.error('[download]', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -129,6 +148,31 @@ export function PlaylistTrackItem({
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
+        {isAuthed && !coarse && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleDownload}
+              disabled={downloading}
+              aria-label="Скачать"
+              title="Скачать"
+            >
+              <Download size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => { e.stopPropagation(); setOverrideOpen(true); }}
+              aria-label="Загрузить свою версию"
+              title="Загрузить свою версию"
+            >
+              <Upload size={14} />
+            </Button>
+          </>
+        )}
         {!hideRemoveMenu && (
         <div ref={menuRef} className="relative">
           <Button
@@ -168,6 +212,13 @@ export function PlaylistTrackItem({
         </div>
         )}
       </div>
+
+      <TrackOverrideModal
+        open={overrideOpen}
+        onClose={() => setOverrideOpen(false)}
+        trackId={track.id}
+        trackTitle={`${track.artist} — ${track.title}`}
+      />
     </>
   );
 
