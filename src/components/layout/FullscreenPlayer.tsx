@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ChevronDown, Heart, Pause, Play, Repeat, Repeat1, Shuffle,
+  ChevronDown, Heart, ListPlus, Pause, Play, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -8,6 +8,7 @@ import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { Equalizer } from '@/components/features/Equalizer';
+import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
@@ -29,6 +30,7 @@ export function FullscreenPlayer() {
   const { progress, seek } = useAudioPlayer();
   const reduce = useReducedMotion();
   const [eqOpen, setEqOpen] = useState(false);
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying);
   // amp is 0..~0.6, normalize to a calm pulse range
   const pulse = Math.min(1, amp * 2.4);
@@ -89,7 +91,7 @@ export function FullscreenPlayer() {
               size="icon"
               onClick={() => setEqOpen((v) => !v)}
               aria-label="Эквалайзер"
-              className={eqOpen ? 'text-[var(--color-accent)]' : ''}
+              className={eqOpen ? 'text-foreground' : ''}
             >
               <Sliders size={18} />
             </Button>
@@ -153,7 +155,7 @@ export function FullscreenPlayer() {
 
             <div className="flex w-full max-w-md flex-col gap-2">
               <div
-                className="group/progress relative h-2 cursor-pointer touch-none rounded-full bg-[var(--color-bg-muted)] sm:h-1.5"
+                className="group/progress relative flex h-6 cursor-pointer touch-none items-center select-none"
                 onPointerDown={(e) => {
                   e.currentTarget.setPointerCapture(e.pointerId);
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -176,14 +178,16 @@ export function FullscreenPlayer() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
-                  style={{ width: `${progressPct}%` }}
-                />
-                <div
-                  className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-100 transition-opacity"
-                  style={{ left: `${progressPct}%` }}
-                />
+                <div className="relative h-1 w-full rounded-full bg-white/15 transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+                  <div
+                    className="h-full rounded-full bg-white/85 transition-[width] duration-100"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
+                    style={{ left: `${progressPct}%` }}
+                  />
+                </div>
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
                 <span>{formatTime(progress)}</span>
@@ -193,7 +197,7 @@ export function FullscreenPlayer() {
 
             <div className="flex w-full max-w-md items-center justify-between">
               <Button variant="ghost" size="icon" onClick={toggleShuffle} aria-label="Перемешать">
-                <Shuffle size={18} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
+                <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
               <Button variant="ghost" size="icon" onClick={previous} aria-label="Назад" className="h-12 w-12">
                 <SkipBack size={22} />
@@ -208,9 +212,9 @@ export function FullscreenPlayer() {
               </Button>
               <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label="Повтор">
                 {repeat === 'one' ? (
-                  <Repeat1 size={18} className="text-[var(--color-accent)]" />
+                  <Repeat1 size={18} className="text-foreground" />
                 ) : (
-                  <Repeat size={18} className={repeat === 'all' ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
+                  <Repeat size={18} className={repeat === 'all' ? 'text-foreground' : 'text-muted-foreground'} />
                 )}
               </Button>
             </div>
@@ -233,7 +237,7 @@ export function FullscreenPlayer() {
                     step={0.01}
                     value={muted ? 0 : volume}
                     onChange={(e) => setVolume(Number(e.target.value))}
-                    className="flex-1 accent-[var(--color-accent)]"
+                    className="flex-1 accent-white"
                     aria-label="Громкость"
                   />
                 </>
@@ -241,14 +245,28 @@ export function FullscreenPlayer() {
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Добавить в плейлист"
+                onClick={() => currentTrack && setAddToPlaylistOpen(true)}
+              >
+                <ListPlus size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
                 aria-label={liked ? 'Убрать лайк' : 'Лайк'}
-                className={liked ? 'text-[var(--color-accent)]' : ''}
+                className={liked ? 'text-foreground' : ''}
                 onClick={() => currentTrack && toggle(currentTrack)}
               >
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </Button>
             </div>
           </div>
+
+          <AddToPlaylistDialog
+            open={addToPlaylistOpen}
+            onClose={() => setAddToPlaylistOpen(false)}
+            track={currentTrack}
+          />
 
           <AnimatePresence>
             {eqOpen && (
