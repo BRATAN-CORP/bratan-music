@@ -20,6 +20,8 @@ interface PlayerState {
   repeat: RepeatMode;
   progress: number;
   duration: number;
+  error: string | null;
+  fullscreen: boolean;
   setTrack: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
   addToQueue: (track: Track) => void;
@@ -34,6 +36,9 @@ interface PlayerState {
   cycleRepeat: () => void;
   setProgress: (progress: number) => void;
   setDuration: (duration: number) => void;
+  setError: (err: string | null) => void;
+  openFullscreen: () => void;
+  closeFullscreen: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>()((set, get) => ({
@@ -46,8 +51,10 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   repeat: 'off',
   progress: 0,
   duration: 0,
+  error: null,
+  fullscreen: false,
 
-  setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0 }),
+  setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0, error: null }),
   setQueue: (tracks) => set({ queue: tracks }),
   addToQueue: (track) => set((s) => ({ queue: [...s.queue, track] })),
   play: () => set({ isPlaying: true }),
@@ -96,4 +103,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     }),
   setProgress: (progress) => set({ progress }),
   setDuration: (duration) => set({ duration }),
+  setError: (error) => set({ error }),
+  openFullscreen: () => set({ fullscreen: true }),
+  closeFullscreen: () => set({ fullscreen: false }),
 }));

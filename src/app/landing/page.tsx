@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
+import { TiltCard } from '@/components/ui/TiltCard';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 
 const features = [
@@ -146,26 +147,31 @@ export function LandingPage() {
 
         <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {features.map(({ icon: Icon, title, desc, span }) => (
-            <motion.div
-              key={title}
-              variants={staggerItem}
-              whileHover={reduce ? undefined : { y: -2 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-              className={`group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)] ${span ?? ''}`}
-            >
-              <div
-                className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
-                style={{
-                  background:
-                    'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
-                }}
-                aria-hidden
-              />
-              <div className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-foreground">
-                <Icon size={16} />
-              </div>
-              <p className="relative text-base font-semibold tracking-tight">{title}</p>
-              <p className="relative text-sm leading-relaxed text-muted-foreground">{desc}</p>
+            <motion.div key={title} variants={staggerItem} className={span ?? ''}>
+              <TiltCard intensity={8} className="h-full rounded-[var(--radius-lg)]">
+                <div className="group relative flex h-full flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)]">
+                  <div
+                    className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+                    style={{
+                      background:
+                        'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+                    }}
+                    aria-hidden
+                  />
+                  <div
+                    className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-foreground"
+                    style={{ transform: 'translateZ(40px)' }}
+                  >
+                    <Icon size={16} />
+                  </div>
+                  <p className="relative text-base font-semibold tracking-tight" style={{ transform: 'translateZ(30px)' }}>
+                    {title}
+                  </p>
+                  <p className="relative text-sm leading-relaxed text-muted-foreground" style={{ transform: 'translateZ(20px)' }}>
+                    {desc}
+                  </p>
+                </div>
+              </TiltCard>
             </motion.div>
           ))}
         </Stagger>

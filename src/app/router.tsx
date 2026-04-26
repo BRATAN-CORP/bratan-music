@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Player } from '@/components/layout/Player';
+import { FullscreenPlayer } from '@/components/layout/FullscreenPlayer';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { LandingPage } from '@/app/landing/page';
 import { SearchPage } from '@/app/search/page';
@@ -27,6 +28,7 @@ function AppLayout() {
         </main>
       </div>
       <Player />
+      <FullscreenPlayer />
       <BottomNav />
     </div>
   );
