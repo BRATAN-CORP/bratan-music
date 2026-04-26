@@ -15,23 +15,30 @@ function createLoginUrl(appUrl: string, nonce: string): string {
   return url.toString();
 }
 
-async function createLoginNonce(env: Env, userId: number): Promise<string> {
+async function createLoginNonce(env: Env, userId: number): Promise<string | null> {
   const nonce = crypto.randomUUID().replace(/-/g, '');
-  await env.SESSIONS.put(`auth_nonce:${nonce}`, String(userId), { expirationTtl: 300 });
-  return nonce;
+  try {
+    await env.SESSIONS.put(`auth_nonce:${nonce}`, String(userId), { expirationTtl: 300 });
+    return nonce;
+  } catch (err) {
+    console.error('[bot] createLoginNonce failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 async function buildMainKeyboard(env: Env, userId: number): Promise<Record<string, unknown>> {
   const appUrl = getAppUrl(env);
   const nonce = await createLoginNonce(env, userId);
 
-  return {
-    inline_keyboard: [
-      [{ text: 'Открыть веб-приложение', web_app: { url: appUrl } }],
-      [{ text: 'Войти на сайте', url: createLoginUrl(appUrl, nonce) }],
-      [{ text: 'Оформить подписку', callback_data: 'subscribe' }],
-    ],
-  };
+  const rows: Array<Array<Record<string, unknown>>> = [
+    [{ text: 'Открыть веб-приложение', web_app: { url: appUrl } }],
+  ];
+  if (nonce) {
+    rows.push([{ text: 'Войти на сайте', url: createLoginUrl(appUrl, nonce) }]);
+  }
+  rows.push([{ text: 'Оформить подписку', callback_data: 'subscribe' }]);
+
+  return { inline_keyboard: rows };
 }
 
 async function ensureUser(env: Env, message: TelegramMessage): Promise<void> {
@@ -53,21 +60,26 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
   const args = text.split(' ').slice(1);
 
   // Fast path for the website-login deeplink: write the auth nonce to KV
-  // FIRST, before any other Telegram round-trips. The site is long-polling
-  // for this key and will sign the user in within ~300 ms of this write.
+  // FIRST, before any other Telegram round-trips. The site is polling
+  // for this key and will sign the user in within ~1 s of this write.
   if (args[0]?.startsWith('auth_')) {
     const nonce = args[0].replace('auth_', '');
-    await env.SESSIONS.put(`auth_nonce:${nonce}`, String(from.id), { expirationTtl: 300 });
+    let kvOk = true;
+    try {
+      await env.SESSIONS.put(`auth_nonce:${nonce}`, String(from.id), { expirationTtl: 300 });
+    } catch (err) {
+      kvOk = false;
+      console.error('[bot] auth nonce KV put failed:', err instanceof Error ? err.message : err);
+    }
 
-    // Now fan out the slower work in parallel — none of it blocks the
-    // website auth confirmation.
+    const replyText = kvOk
+      ? '<b>BRATAN MUSIC</b>\n\nВход подтверждён. Вернитесь на сайт — авторизация завершится автоматически.'
+      : '<b>BRATAN MUSIC</b>\n\nВременная техническая ошибка авторизации (исчерпан суточный лимит KV). Попробуйте позже — лимит сбрасывается в полночь UTC.';
+
     await Promise.all([
       ensureUser(env, message),
       tg.setChatMenuButton(message.chat.id, getAppUrl(env)),
-      tg.sendMessage(message.chat.id,
-        '<b>BRATAN MUSIC</b>\n\n' +
-        'Вход подтверждён. Вернитесь на сайт — авторизация завершится автоматически.'
-      ),
+      tg.sendMessage(message.chat.id, replyText),
     ]);
     return;
   }
