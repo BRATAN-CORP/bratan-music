@@ -19,10 +19,15 @@ export function BottomNav() {
   const cornerCx = playerVisible
     ? 'rounded-t-none rounded-b-[var(--radius-xl)] border-t-0 no-lip'
     : 'rounded-[var(--radius-xl)]';
+  // Side margins mirror the app's content grid (`p-4` / `sm:p-6`) so
+  // the bar lines up with library/search cards. The bottom offset is
+  // intentionally bumped to 1rem (1.5rem on sm) so the bar doesn't
+  // crowd the safe-area edge. Height is fixed at `h-14` (3.5rem) so the
+  // mini-player above can use the SAME literal value for its bottom
+  // offset and the two surfaces sit perfectly tangent (no seam gap).
   return (
     <nav
-      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-2 right-2 z-40 flex justify-around overflow-hidden liquid-glass pt-2 lg:hidden ${cornerCx}`}
-      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) * 0 + 8px)' }}
+      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-4 right-4 z-40 flex h-14 items-center justify-around overflow-hidden liquid-glass sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:left-6 sm:right-6 lg:hidden ${cornerCx}`}
     >
       {navItems.map(({ to, icon: Icon, label }) => (
         <NavLink

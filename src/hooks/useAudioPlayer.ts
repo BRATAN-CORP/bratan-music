@@ -3,7 +3,8 @@ import { useMotionValue, type MotionValue } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
-import { api } from '@/lib/api';
+import { useUiStore } from '@/store/ui';
+import { api, ApiError } from '@/lib/api';
 
 import type { TidalQuality } from '@/store/settings';
 
@@ -353,13 +354,23 @@ export function useAudioPlayer() {
     // Try each quality level in the fallback chain.
     let url: string | null = null;
     let loaded = false;
+    let paywall = false;
     const MAX_RETRIES = 2;
     while (true) {
       if (loadingRef.current !== trackId) return;
       try {
         url = await fetchStreamUrl(track, effectiveQuality);
-      } catch {
+      } catch (err) {
         url = null;
+        // 402 Payment Required → daily free-listen quota is exhausted.
+        // Surface the global paywall and stop the fallback loop; trying
+        // lower qualities won't help because the limit is per-track, not
+        // per-quality. We bubble the flag out of the loop instead of
+        // returning here so we still pause the audio cleanly below.
+        if (err instanceof ApiError && err.status === 402) {
+          paywall = true;
+          break;
+        }
       }
       if (loadingRef.current !== trackId) return;
       if (url) {
@@ -387,6 +398,15 @@ export function useAudioPlayer() {
 
     if (loadingRef.current !== trackId) return;
     fallbackInProgressRef.current = false;
+
+    if (paywall) {
+      useUiStore.getState().openSubscriptionPrompt(
+        'Дневной лимит бесплатных прослушиваний исчерпан.',
+      );
+      setError(null);
+      pause();
+      return;
+    }
 
     if (!loaded) {
       setError('Не удалось загрузить трек');

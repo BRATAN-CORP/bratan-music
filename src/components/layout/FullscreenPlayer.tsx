@@ -7,6 +7,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useAnalyserAmplitude, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { Equalizer } from '@/components/features/Equalizer';
@@ -45,6 +46,11 @@ export function FullscreenPlayer() {
     d > 0 ? `${Math.min(100, (b / d) * 100)}%` : '0%');
   const navigate = useNavigate();
   const reduce = useReducedMotion();
+  // Lyrics is only rendered as a side-panel on md+; on narrow widths it
+  // becomes a full-surface overlay and the cover stays put. We need to
+  // know which mode we're in so the cover-shift translateX only fires
+  // when there's actually a side-panel taking up space next to it.
+  const isMdUp = useMediaQuery('(min-width: 768px)');
 
   const goToArtist = () => {
     if (!currentTrack?.artistId) return;
@@ -344,15 +350,19 @@ export function FullscreenPlayer() {
               horizontal band right under the header on light-coloured
               covers. The outer fullscreen <motion.div> already has
               overflow-hidden so nothing escapes the viewport. */}
+          <div className="relative z-[3] flex flex-1 min-h-0">
+          {/* Cover column. Stays full-width across the whole row; when
+              the lyrics side-panel mounts it gets translated left by a
+              fixed % so the cover content visually centres in the
+              remaining space without any width animation (the previous
+              flex-basis layout animation made the column "stretch"
+              which the user found jerky). md+ only — on narrow widths
+              the lyrics is rendered as an overlay and the cover stays
+              put. */}
           <motion.div
-            layout
-            transition={{ layout: { type: 'spring', stiffness: 240, damping: 32, mass: 0.85 } }}
-            className="relative z-[3] flex flex-1 min-h-0"
-          >
-          <motion.div
-            layout
-            transition={{ layout: { type: 'spring', stiffness: 240, damping: 32, mass: 0.85 } }}
-            className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8"
+            animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
+            transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
+            className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8 md:transform-gpu"
           >
             <motion.div
               key={currentTrack.id}
@@ -634,30 +644,28 @@ export function FullscreenPlayer() {
             </AnimatePresence>
           </motion.div>
 
-          {/* Desktop side-panel: takes ~half the row when open. The
-              wrapper carries `layout` so the cover column eases into
-              its smaller share of the row when this panel mounts and
-              eases back out when it unmounts (otherwise the cover
-              snaps in a single frame). */}
-          <AnimatePresence initial={false}>
-            {currentTrack && lyricsOpen && (
-              <motion.div
-                key="lyrics-side-shell"
-                layout
-                transition={{ layout: { type: 'spring', stiffness: 240, damping: 32, mass: 0.85 } }}
-                className="hidden md:flex md:basis-[44%] lg:basis-[42%] xl:basis-2/5"
-              >
-                <LyricsPanel
-                  trackId={currentTrack.id}
-                  open={lyricsOpen}
-                  onClose={() => setLyricsOpen(false)}
-                  mode="side"
-                  onSeek={seek}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-          </motion.div>
+          {/* Desktop side-panel: positioned absolutely over the right
+              portion of the row (md:w-[44%] etc.) so the cover column
+              never has to animate its width. It slides in from the
+              right via the LyricsPanel's own enter/exit animation,
+              while the cover translates left by `-22%` (motion.div
+              above) to visually re-centre in the remaining space. */}
+          {currentTrack && (
+            <div
+              className={`absolute inset-y-0 right-0 hidden md:block md:w-[44%] lg:w-[42%] xl:w-[40%] ${
+                lyricsOpen ? 'pointer-events-auto' : 'pointer-events-none'
+              }`}
+            >
+              <LyricsPanel
+                trackId={currentTrack.id}
+                open={lyricsOpen}
+                onClose={() => setLyricsOpen(false)}
+                mode="side"
+                onSeek={seek}
+              />
+            </div>
+          )}
+          </div>
 
           {/* Mobile overlay: covers the whole player surface. */}
           {currentTrack && (

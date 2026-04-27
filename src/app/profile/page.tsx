@@ -95,7 +95,7 @@ interface UserProfile {
 
 export function ProfilePage() {
   const { user, logout } = useAuthStore();
-  const { theme, toggleTheme } = useUiStore();
+  const { theme, toggleTheme, openSubscriptionPrompt } = useUiStore();
   const {
     crossfade, crossfadeDuration, tidalQuality,
     setCrossfade, setCrossfadeDuration, setTidalQuality,
@@ -150,7 +150,20 @@ export function ProfilePage() {
               </p>
             </>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Не активна. 3 трека в день бесплатно.</p>
+            <>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Не активна. 3 трека в день бесплатно.
+              </p>
+              <Button
+                type="button"
+                onClick={() => openSubscriptionPrompt()}
+                size="sm"
+                className="mt-4"
+              >
+                <Crown size={14} />
+                Оформить за 99 ⭐
+              </Button>
+            </>
           )}
         </section>
 
