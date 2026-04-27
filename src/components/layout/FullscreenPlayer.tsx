@@ -19,7 +19,7 @@ import { LyricsPanel } from '@/components/features/LyricsPanel';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useTrack } from '@/hooks/useTrack';
-import { useCoarsePointer } from '@/hooks/useCoarsePointer';
+import { useTouchOnlyDevice } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import type { Track } from '@/types';
@@ -77,7 +77,12 @@ export function FullscreenPlayer() {
   const pulse = Math.min(1, Math.sqrt(Math.max(0, amp - 0.06) * 3.4));
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
-  const coarse = useCoarsePointer();
+  // `touchOnly` is stricter than the legacy `useCoarsePointer` —
+  // requires NO hover capability AND coarse pointer, so touchscreen
+  // laptops with a trackpad still keep the volume slider. Matches
+  // user expectation: volume shows everywhere except real iOS /
+  // Android phones / tablets.
+  const touchOnly = useTouchOnlyDevice();
 
   // Enrich playback metadata for tracks that came from the user's
   // library / playlists. Likes saved before we started persisting
@@ -521,21 +526,27 @@ export function FullscreenPlayer() {
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative mx-auto aspect-square w-full max-w-md"
-              // Viewport-height-aware width clamp. On short desktop
-              // windows (≈ <800px tall) the cover at full max-w-md
-              // (28rem = 448px) plus the title + progress + controls +
-              // volume stack overflows past the viewport, so the user
-              // sees the cover *welded* to the header bar with the
-              // bottom of the volume slider clipped off. We reserve
-              // 22rem (≈ 352px) for everything that's not the cover —
-              // header bar, title, progress bar, transport row, volume
-              // row, and column padding — and let `aspect-square`
-              // shrink the cover transitively when there's not enough
-              // room. On viewports ≥ 800px tall this clamp evaluates
-              // to ≥ 28rem so the visual is unchanged. On mobile the
-              // cover is already constrained by `w-full` inside a
-              // narrower column so this kicks in without harm.
-              style={{ maxWidth: 'min(28rem, calc(100vh - 22rem))' }}
+              // Viewport-height-aware width clamp. The cover wraps
+              // `aspect-square w-full max-w-md` so without this clamp
+              // the square block was the same 28rem (448px) at every
+              // viewport height. On a short desktop window the cover
+              // plus the header + title + progress + transport +
+              // volume + column-padding stack adds up to ~28rem of
+              // non-cover height, so the cover would visually weld to
+              // the top bar and clip the volume slider off the bottom.
+              //
+              // We reserve a real 28rem (≈ 448px) for non-cover chrome
+              // (measured: header 72 + title 70 + progress 30 +
+              // transport 56 + volume 40 + 4×gap 96 + column py-6 48
+              // ≈ 412px, plus a few pixels of error-toast / safe-area
+              // headroom) and let aspect-square shrink the cover
+              // transitively when there's less room. The remaining
+              // 16-30px of slack distributes equally above and below
+              // via justify-center, giving a *real* visible breathing
+              // gap from the header AND from the bottom edge — at
+              // every viewport height where the cover has to shrink,
+              // not just at "tall enough" viewports.
+              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
@@ -793,7 +804,7 @@ export function FullscreenPlayer() {
               </Button>
             </div>
 
-            {!coarse && (
+            {!touchOnly && (
               <div className="flex w-full max-w-md items-center gap-3">
                 <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
                   {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
