@@ -28,7 +28,7 @@ export function Sidebar() {
     });
 
   return (
-    <aside className="hidden h-full w-60 shrink-0 flex-col overflow-y-auto border-r border-border bg-background py-6 lg:flex">
+    <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-border bg-background py-6 lg:flex">
       <nav className="flex flex-col gap-0.5 px-3">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink
