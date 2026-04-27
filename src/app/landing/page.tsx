@@ -63,7 +63,7 @@ export function LandingPage() {
         <Aurora />
         <div className="grid-bg absolute inset-0 opacity-30" aria-hidden />
 
-        <div className="relative mx-auto flex max-w-6xl flex-col items-start gap-8 px-6">
+        <div className="relative mx-auto flex max-w-6xl flex-col items-start gap-8 px-4 sm:px-6 lg:px-10">
           <motion.div
             initial={reduce ? false : { opacity: 0, y: 12 }}
             animate={reduce ? undefined : { opacity: 1, y: 0 }}
@@ -127,7 +127,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="relative mx-auto max-w-6xl px-6 pb-20 pt-12 sm:pt-0">
+      <section className="relative mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 sm:pt-0 lg:px-10">
         <Reveal className="mb-10 flex items-end justify-between gap-6 border-b border-border pb-4">
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
@@ -172,7 +172,7 @@ export function LandingPage() {
         </Stagger>
       </section>
 
-      <section className="relative mx-auto max-w-6xl px-6 pb-24">
+      <section className="relative mx-auto max-w-6xl px-4 pb-24 sm:px-6 lg:px-10">
         <Reveal className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-8 sm:p-12">
           <Aurora variant="subtle" />
           <div className="relative flex flex-col items-start gap-6">
