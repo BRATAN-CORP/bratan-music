@@ -263,49 +263,100 @@ export function useAudioPlayer() {
   currentQualityRef.current = tidalQuality;
   const fallbackInProgressRef = useRef(false);
 
+  /** Try loading the audio src and wait for it to become playable.
+   *  Resolves with true on success, false on media error. */
+  const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const cleanup = () => {
+        audio.removeEventListener('canplay', onCanPlay);
+        audio.removeEventListener('error', onErr);
+      };
+      const onCanPlay = () => { cleanup(); resolve(true); };
+      const onErr = () => { cleanup(); resolve(false); };
+      audio.addEventListener('canplay', onCanPlay, { once: true });
+      audio.addEventListener('error', onErr, { once: true });
+      audio.src = url;
+      audio.load();
+    });
+  };
+
   /** Load the given track into the active slot and start playback from 0.
+   *  Automatically tries the full quality fallback chain before giving up.
    *  If `quality` is provided it overrides the user setting (used for fallback). */
   const loadTrack = useCallback(async (track: { id: string; source?: string }, quality?: string) => {
     const trackId = track.id;
     const b = getBundle();
     loadingRef.current = trackId;
-    const effectiveQuality = quality ?? currentQualityRef.current;
+    let effectiveQuality = quality ?? currentQualityRef.current;
     setError(null);
-    try {
-      const url = await fetchStreamUrl(track, effectiveQuality);
+    fallbackInProgressRef.current = true;
+
+    const slot = b.active;
+    const audio = b.audios[slot];
+
+    // Wait for any in-flight play promise before touching the audio element.
+    if (b.playPromises[slot]) {
+      try { await b.playPromises[slot]; } catch { /* ignore */ }
+    }
+    audio.pause();
+
+    // Try each quality level in the fallback chain.
+    let url: string | null = null;
+    let loaded = false;
+    const MAX_RETRIES = 2;
+    while (true) {
       if (loadingRef.current !== trackId) return;
-      if (!url) {
-        setError('Не удалось получить ссылку на аудио');
-        pause();
-        return;
+      try {
+        url = await fetchStreamUrl(track, effectiveQuality);
+      } catch {
+        url = null;
       }
-      const slot = b.active;
-      const audio = b.audios[slot];
-      if (b.playPromises[slot]) {
-        try { await b.playPromises[slot]; } catch { /* ignore */ }
+      if (loadingRef.current !== trackId) return;
+      if (url) {
+        corsRetried[slot] = false;
+        audio.crossOrigin = 'anonymous';
+        // Try loading and auto-retry up to MAX_RETRIES for transient errors.
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          if (loadingRef.current !== trackId) return;
+          const ok = await tryLoadSrc(audio, url);
+          if (ok) { loaded = true; break; }
+          if (attempt < MAX_RETRIES) {
+            console.warn(`[stream] attempt ${attempt + 1} failed for ${effectiveQuality}, retrying...`);
+            await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          }
+        }
+        if (loaded) break;
       }
-      audio.pause();
-      corsRetried[slot] = false;
-      audio.crossOrigin = 'anonymous';
-      audio.src = url;
-      audio.load();
-      b.loaded[slot] = trackId;
-      ensureAudioGraph();
-      setSlotGain(slot, 1);
-      setSlotGain(inactiveSlot(b), 0);
-      if (b.ctx && b.ctx.state === 'suspended') {
-        await b.ctx.resume().catch(() => {});
-      }
+      // Try next quality in fallback chain.
+      const next = getNextFallbackQuality(effectiveQuality);
+      if (!next) break;
+      console.warn(`[stream] quality ${effectiveQuality} failed, falling back to ${next}`);
+      currentQualityRef.current = next;
+      effectiveQuality = next;
+    }
+
+    if (loadingRef.current !== trackId) return;
+    fallbackInProgressRef.current = false;
+
+    if (!loaded) {
+      setError('Не удалось загрузить трек');
+      pause();
+      return;
+    }
+
+    b.loaded[slot] = trackId;
+    ensureAudioGraph();
+    setSlotGain(slot, 1);
+    setSlotGain(inactiveSlot(b), 0);
+    if (b.ctx && b.ctx.state === 'suspended') {
+      await b.ctx.resume().catch(() => {});
+    }
+    try {
       await safePlay(slot);
-      fallbackInProgressRef.current = false;
     } catch (err) {
       if (loadingRef.current !== trackId) return;
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('[stream]', message);
-      if (!fallbackInProgressRef.current) {
-        setError(message || 'Не удалось загрузить трек');
-        pause();
-      }
+      setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
+      pause();
     }
   }, [pause, setError]);
 
@@ -381,7 +432,6 @@ export function useAudioPlayer() {
         ctxBundle.ctx.resume().catch(() => {});
       }
       safePlay(slot).catch((err) => {
-        if (fallbackInProgressRef.current) return;
         setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
         pause();
       });
@@ -506,22 +556,13 @@ export function useAudioPlayer() {
       };
       const onError = () => {
         if (slot !== b.active) return;
+        // During loadTrack's internal fallback loop, errors are handled
+        // by tryLoadSrc — ignore them here to prevent visual stutter.
+        if (fallbackInProgressRef.current) return;
         const code = audio.error?.code;
         if (audio.crossOrigin && !corsRetried[slot]) {
           reloadWithoutCors(slot);
           return;
-        }
-        if ((code === 2 || code === 3 || code === 4) && currentTrack) {
-          const current = currentQualityRef.current;
-          const fallback = getNextFallbackQuality(current);
-          if (fallback) {
-            console.warn(`[stream] quality ${current} failed (code ${code}), falling back to ${fallback}`);
-            fallbackInProgressRef.current = true;
-            setError(null);
-            currentQualityRef.current = fallback;
-            loadTrack(currentTrack, fallback);
-            return;
-          }
         }
         const messages: Record<number, string> = {
           1: 'Загрузка прервана',
