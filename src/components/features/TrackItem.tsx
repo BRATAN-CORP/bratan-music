@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, Heart, MoreHorizontal, Play, Trash2, Upload } from 'lucide-react';
+import { Download, Heart, ListOrdered, ListPlus, MoreHorizontal, Play, Trash2, Upload } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
+import { usePlayerStore } from '@/store/player';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
+import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 
 interface TrackItemProps {
   track: Track;
@@ -34,8 +36,11 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   const [menuOpen, setMenuOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
+  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const removeFromPlaylist = useRemoveTrackFromPlaylist();
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const playNext = usePlayerStore((s) => s.playNext);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -76,6 +81,41 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
     if (!playlistId) return;
     setMenuOpen(false);
     removeFromPlaylist.mutate({ playlistId, trackId: track.id });
+  };
+
+  const handleAddToPlaylist = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    setAddToPlaylistOpen(true);
+  };
+
+  const handleAddToQueue = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    addToQueue({
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      artistId: track.artistId,
+      coverUrl: track.coverUrl,
+      duration: track.duration,
+    });
+  };
+
+  const handlePlayNext = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    playNext({
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      artistId: track.artistId,
+      coverUrl: track.coverUrl,
+      duration: track.duration,
+    });
   };
 
   return (
@@ -147,29 +187,58 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
             </Button>
           </>
         )}
-        {playlistId && !hideRemoveMenu ? (
-          <div ref={menuRef} className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-              aria-label="Ещё"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-            >
-              <MoreHorizontal size={14} />
-            </Button>
-            <AnimatePresence>
-              {menuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                  transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                  role="menu"
-                  className="absolute right-0 top-8 z-20 w-52 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/80 supports-[backdrop-filter]:backdrop-blur-xl"
+        <div ref={menuRef} className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            aria-label="Ещё"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            <MoreHorizontal size={14} />
+          </Button>
+          <AnimatePresence>
+            {menuOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                role="menu"
+                className="absolute right-0 top-8 z-50 w-52 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/85 supports-[backdrop-filter]:backdrop-blur-xl"
+              >
+                {isAuthed && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleAddToPlaylist}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                  >
+                    <ListPlus size={14} />
+                    Добавить в плейлист
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handlePlayNext}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
                 >
+                  <ListOrdered size={14} />
+                  Воспроизвести следующим
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleAddToQueue}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                >
+                  <ListOrdered size={14} />
+                  Добавить в очередь
+                </button>
+                {playlistId && !hideRemoveMenu && (
                   <button
                     type="button"
                     role="menuitem"
@@ -180,15 +249,11 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
                     <Trash2 size={14} />
                     Удалить из плейлиста
                   </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        ) : (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} aria-label="Ещё">
-            <MoreHorizontal size={14} />
-          </Button>
-        )}
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       <TrackOverrideModal
@@ -196,6 +261,12 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
         onClose={() => setOverrideOpen(false)}
         trackId={track.id}
         trackTitle={`${track.artist} — ${track.title}`}
+      />
+
+      <AddToPlaylistDialog
+        open={addToPlaylistOpen}
+        onClose={() => setAddToPlaylistOpen(false)}
+        track={track}
       />
     </motion.div>
   );
