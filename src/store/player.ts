@@ -171,5 +171,11 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     repeat: s.repeat,
     progress: s.progress,
     duration: s.duration,
+    // Persist isPlaying so UI state matches what the user left the player at.
+    // useAudioPlayer's loadTrack honours this on rehydrate: if the browser
+    // blocks autoplay (no user gesture yet), the play() rejection path
+    // falls back to pause() which writes isPlaying=false — keeping UI and
+    // audio in sync regardless of whether the resume actually starts.
+    isPlaying: s.isPlaying,
   }),
 }));
