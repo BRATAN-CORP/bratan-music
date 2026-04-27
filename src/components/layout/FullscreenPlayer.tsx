@@ -192,26 +192,23 @@ export function FullscreenPlayer() {
                   />
                 </>
               )}
+              {/* Single soft bottom vignette — gives the bottom controls
+                  enough contrast without darkening the top. The previous
+                  radial vignette (centred at 50% 35%) was creating a
+                  visible horizontal band of darkness across the upper
+                  half of the screen, right where the header bar ends. */}
               <div
-                className="absolute inset-0 z-[2]"
+                className="pointer-events-none absolute inset-0 z-[2]"
                 style={{
                   background:
-                    'radial-gradient(ellipse 120% 90% at 50% 35%, transparent 0%, transparent 55%, rgba(0,0,0,0.35) 100%)',
-                }}
-                aria-hidden
-              />
-              <div
-                className="absolute inset-0 z-[2]"
-                style={{
-                  background:
-                    'linear-gradient(to bottom, transparent 0%, transparent 75%, rgba(0,0,0,0.45) 100%)',
+                    'linear-gradient(to bottom, transparent 0%, transparent 70%, rgba(0,0,0,0.45) 100%)',
                 }}
                 aria-hidden
               />
             </>
           )}
 
-          <div className="relative z-[3] flex items-center justify-between px-5 py-4">
+          <div className="relative z-[20] flex items-center justify-between px-5 py-4">
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
               <ChevronDown size={20} />
             </Button>
@@ -281,14 +278,14 @@ export function FullscreenPlayer() {
                       exit={{ opacity: 0, scale: 0.96, y: -4 }}
                       transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
                       role="menu"
-                      className="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-[var(--radius-md)] border border-white/10 bg-[var(--color-surface-elevated)]/85 shadow-[var(--shadow-xl)] ring-1 ring-white/5 backdrop-blur-2xl"
+                      className="liquid-glass absolute right-0 top-full z-[60] mt-2 w-60 overflow-hidden rounded-[var(--radius-md)]"
                     >
                       <button
                         type="button"
                         role="menuitem"
                         onClick={() => { handleStartRadio(); setMoreOpen(false); }}
                         disabled={radioBusy}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60 md:hidden"
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60 md:hidden"
                       >
                         {radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
                         Запустить волну
@@ -297,7 +294,7 @@ export function FullscreenPlayer() {
                         type="button"
                         role="menuitem"
                         onClick={() => { setQueueOpen(true); setMoreOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
                       >
                         <ListOrdered size={14} />
                         Очередь
@@ -306,7 +303,7 @@ export function FullscreenPlayer() {
                         type="button"
                         role="menuitem"
                         onClick={() => { setLyricsOpen((v) => !v); setMoreOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
                       >
                         <Mic2 size={14} />
                         {lyricsOpen ? 'Скрыть текст' : 'Текст песни'}
@@ -315,18 +312,18 @@ export function FullscreenPlayer() {
                         type="button"
                         role="menuitem"
                         onClick={() => { setEqOpen((v) => !v); setMoreOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
                       >
                         <Sliders size={14} />
                         {eqOpen ? 'Скрыть эквалайзер' : 'Эквалайзер'}
                       </button>
-                      <div className="h-px bg-white/10 md:hidden" />
+                      <div className="relative z-[1] h-px bg-white/10 md:hidden" />
                       <button
                         type="button"
                         role="menuitem"
                         onClick={() => { handleDownload(); setMoreOpen(false); }}
                         disabled={downloading}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60"
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60"
                       >
                         {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                         Скачать
@@ -335,7 +332,7 @@ export function FullscreenPlayer() {
                         type="button"
                         role="menuitem"
                         onClick={() => { setOverrideOpen(true); setMoreOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
                       >
                         <Upload size={14} />
                         Загрузить свою версию

@@ -299,7 +299,7 @@ export function Player() {
                       exit={{ opacity: 0, scale: 0.96, y: 4 }}
                       transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
                       role="menu"
-                      className="absolute bottom-full right-0 z-30 mb-2 w-56 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/90 supports-[backdrop-filter]:backdrop-blur-xl"
+                      className="liquid-glass absolute bottom-full right-0 z-30 mb-2 w-56 overflow-hidden rounded-[var(--radius-md)]"
                     >
                       <button
                         type="button"

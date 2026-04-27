@@ -56,7 +56,7 @@ export function Equalizer() {
       animate={reduce ? undefined : { opacity: 1, scale: 1 }}
       exit={reduce ? undefined : { opacity: 0, scale: 0.96 }}
       transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-      className="flex flex-col gap-5 rounded-[var(--radius-lg)] border border-border bg-[var(--color-surface-elevated)] p-5 backdrop-blur"
+      className="liquid-glass flex flex-col gap-5 rounded-[var(--radius-lg)] p-5"
     >
       <motion.div {...fadeIn(0.18)} className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">

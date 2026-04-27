@@ -207,7 +207,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
                 exit={{ opacity: 0, scale: 0.96, y: -4 }}
                 transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
                 role="menu"
-                className="absolute right-0 top-8 z-50 w-52 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/85 supports-[backdrop-filter]:backdrop-blur-xl"
+                className="liquid-glass absolute right-0 top-8 z-50 w-52 overflow-hidden rounded-[var(--radius-md)]"
               >
                 {isAuthed && (
                   <button
