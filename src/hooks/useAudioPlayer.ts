@@ -249,6 +249,7 @@ export function useAudioPlayer() {
     pause,
     next,
     setTrack,
+    _seekToZero,
   } = usePlayerStore();
 
   const crossfade = useSettingsStore((s) => s.crossfade);
@@ -548,6 +549,19 @@ export function useAudioPlayer() {
     audio.currentTime = time;
     setProgress(time);
   }, [setProgress]);
+
+  // Respond to store's _seekToZero (triggered by the "previous" action
+  // when progress > 3s — restarts current track).
+  const seekToZeroRef = useRef(_seekToZero);
+  useEffect(() => {
+    if (_seekToZero !== seekToZeroRef.current) {
+      seekToZeroRef.current = _seekToZero;
+      const b = getBundle();
+      const audio = b.audios[b.active];
+      audio.currentTime = 0;
+      setProgress(0);
+    }
+  }, [_seekToZero, setProgress]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
