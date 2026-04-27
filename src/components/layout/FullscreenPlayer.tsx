@@ -55,10 +55,12 @@ export function FullscreenPlayer() {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
-  // amp is 0..~0.6 from the bass band; scale up a touch so weaker bass is
-  // still visible. The smoothing is now lighter (tau=110ms in the hook),
-  // so the glow tracks the kick more closely without being epileptic.
-  const pulse = Math.min(1, amp * 2.6);
+  // amp is 0..~0.6 from the bass band. The hook now uses asymmetric
+  // smoothing (fast 25ms attack, 90ms release) so kicks pop visibly. We
+  // bias the curve with sqrt so quiet bass still moves the glow but loud
+  // kicks don't saturate to 1 instantly — the result is a glow that
+  // visibly *throbs* with the beat instead of floating smoothly.
+  const pulse = Math.min(1, Math.sqrt(amp * 3.2));
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const coarse = useCoarsePointer();
@@ -351,11 +353,16 @@ export function FullscreenPlayer() {
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
                   animate={reduce ? undefined : {
-                    scale: 1.04 + pulse * 0.12,
-                    opacity: 0.45 + pulse * 0.3,
-                    filter: `blur(${72 + pulse * 22}px) saturate(${1.3 + pulse * 0.35})`,
+                    // Wider scale + opacity range and a brightness boost
+                    // so each kick visibly throbs. Spring stiffness was
+                    // bumped (70 → 260) and damping reduced (18 → 13) so
+                    // the motion catches the attack instead of averaging
+                    // it away.
+                    scale: 1.0 + pulse * 0.22,
+                    opacity: 0.32 + pulse * 0.55,
+                    filter: `blur(${56 + pulse * 38}px) saturate(${1.2 + pulse * 0.7}) brightness(${1 + pulse * 0.45})`,
                   }}
-                  transition={{ type: 'spring', stiffness: 70, damping: 18, mass: 0.6 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 13, mass: 0.45 }}
                   style={{ borderRadius: 'var(--radius-xl)' }}
                 >
                   {currentTrack.coverVideoUrl ? (
