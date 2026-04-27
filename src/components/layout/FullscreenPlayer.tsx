@@ -344,7 +344,14 @@ export function FullscreenPlayer() {
             </div>
           </div>
 
-          <div className="relative z-[3] flex flex-1 overflow-hidden">
+          {/* Body row. We deliberately do NOT use `overflow-hidden` here:
+              the cover has a pulsing blur halo (-z-10, blur up to ~94px,
+              scale up to 1.16) that bleeds beyond its bounding box, and
+              clipping that bleed at the body's edge produced a visible
+              horizontal band right under the header on light-coloured
+              covers. The outer fullscreen <motion.div> already has
+              overflow-hidden so nothing escapes the viewport. */}
+          <div className="relative z-[3] flex flex-1 min-h-0">
           <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8">
             <motion.div
               key={currentTrack.id}
