@@ -521,6 +521,21 @@ export function FullscreenPlayer() {
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative mx-auto aspect-square w-full max-w-md"
+              // Viewport-height-aware width clamp. On short desktop
+              // windows (≈ <800px tall) the cover at full max-w-md
+              // (28rem = 448px) plus the title + progress + controls +
+              // volume stack overflows past the viewport, so the user
+              // sees the cover *welded* to the header bar with the
+              // bottom of the volume slider clipped off. We reserve
+              // 22rem (≈ 352px) for everything that's not the cover —
+              // header bar, title, progress bar, transport row, volume
+              // row, and column padding — and let `aspect-square`
+              // shrink the cover transitively when there's not enough
+              // room. On viewports ≥ 800px tall this clamp evaluates
+              // to ≥ 28rem so the visual is unchanged. On mobile the
+              // cover is already constrained by `w-full` inside a
+              // narrower column so this kicks in without harm.
+              style={{ maxWidth: 'min(28rem, calc(100vh - 22rem))' }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
@@ -571,18 +586,27 @@ export function FullscreenPlayer() {
               >
                 {coverVideoUrl ? (
                   // Animated cover (Tidal mp4). Falls back gracefully — the
-                  // <img> stays under the <video> as a poster so even if the
-                  // mp4 fails to load we still see a static cover.
+                  // <img> stays under the <video> as a poster so even if
+                  // the mp4 fails to load we still see a static cover.
                   //
-                  // We re-apply `rounded-[inherit] overflow-hidden` on the
-                  // wrapper AND on the <video> itself: TiltCard sets
-                  // `transform-style: preserve-3d` on its parent, and
-                  // WebKit (Safari, iOS) silently breaks the parent's
-                  // border-radius clip on raster-backed elements (most
-                  // notably <video>) inside a 3D context. Without this
-                  // the animated cover paints as a hard rectangle while
-                  // a static <img> stays rounded.
-                  <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
+                  // Round-corner correctness on <video> is *fragile*. The
+                  // first paint clips fine via the parent's `overflow:
+                  // hidden` + `border-radius`, but as soon as the video
+                  // element starts decoding frames the browser promotes
+                  // it to a hardware-composited layer that ignores the
+                  // ancestor's border-radius clip — the corners visibly
+                  // un-round a few moments after playback starts (the
+                  // exact behaviour the user reported). The robust fix
+                  // is to clip the *video element itself* with both
+                  // `clip-path: inset(... round R)` and
+                  // `-webkit-mask-image` — both survive compositor
+                  // promotion in Chromium and WebKit respectively.
+                  <div
+                    className="relative h-full w-full overflow-hidden rounded-[inherit]"
+                    style={{
+                      clipPath: 'inset(0 round var(--radius-xl))',
+                    }}
+                  >
                     {currentTrack.coverUrl && (
                       <img
                         src={currentTrack.coverUrl}
@@ -594,7 +618,18 @@ export function FullscreenPlayer() {
                       key={coverVideoUrl}
                       src={coverVideoUrl}
                       poster={currentTrack.coverUrl}
-                      className="relative z-[1] h-full w-full rounded-[inherit] object-cover"
+                      className="relative z-[1] h-full w-full object-cover"
+                      style={{
+                        borderRadius: 'var(--radius-xl)',
+                        clipPath: 'inset(0 round var(--radius-xl))',
+                        // The WebKit mask hack — forces Safari to keep the
+                        // composited video layer clipped to its own
+                        // border-radius. The radial gradient is fully
+                        // opaque so it has no visible effect; only the
+                        // mask layer's existence matters.
+                        WebkitMaskImage:
+                          '-webkit-radial-gradient(white, black)',
+                      }}
                       autoPlay
                       muted
                       loop
