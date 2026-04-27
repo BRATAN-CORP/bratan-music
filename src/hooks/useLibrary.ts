@@ -112,18 +112,31 @@ export function usePinPlaylist() {
       api.put<{ ok: boolean; pinnedAt: number | null }>(`/playlists/${id}/pin`, { pinned }),
     onMutate: async ({ id, pinned }) => {
       await qc.cancelQueries({ queryKey: ['playlists'] });
-      const prev = qc.getQueryData<Playlist[]>(['playlists']);
+      await qc.cancelQueries({ queryKey: ['playlist', id] });
+      const prevList = qc.getQueryData<Playlist[]>(['playlists']);
+      const prevDetail = qc.getQueryData<PlaylistWithTracks>(['playlist', id]);
+      const newPinnedAt = pinned ? Date.now() : null;
       qc.setQueryData<Playlist[]>(['playlists'], (old) =>
         old?.map((p) =>
-          p.id === id ? { ...p, pinnedAt: pinned ? Date.now() : null } : p,
+          p.id === id ? { ...p, pinnedAt: newPinnedAt } : p,
         ),
       );
-      return { prev };
+      if (prevDetail) {
+        qc.setQueryData<PlaylistWithTracks>(['playlist', id], {
+          ...prevDetail,
+          pinnedAt: newPinnedAt,
+        });
+      }
+      return { prevList, prevDetail };
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['playlists'], ctx.prev);
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.prevList) qc.setQueryData(['playlists'], ctx.prevList);
+      if (ctx?.prevDetail) qc.setQueryData(['playlist', id], ctx.prevDetail);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+    onSettled: (_d, _e, { id }) => {
+      qc.invalidateQueries({ queryKey: ['playlists'] });
+      qc.invalidateQueries({ queryKey: ['playlist', id] });
+    },
   });
 }
 
