@@ -194,7 +194,7 @@ export function PlaylistTrackItem({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.12 } }}
                 transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute right-0 top-9 z-20 min-w-[200px] overflow-hidden rounded-[var(--radius-md)] border border-border bg-card p-1 shadow-[var(--shadow-lg)]"
+                className="liquid-glass absolute right-0 top-9 z-20 min-w-[200px] overflow-hidden rounded-[var(--radius-md)] p-1"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button

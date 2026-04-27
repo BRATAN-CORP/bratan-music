@@ -96,7 +96,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.96, y: -4 }}
                     transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute right-0 top-9 z-50 w-48 overflow-hidden rounded-[var(--radius-md)] border border-border/60 bg-[var(--color-surface-elevated)] shadow-[var(--shadow-xl)] ring-1 ring-white/5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/85 supports-[backdrop-filter]:backdrop-blur-xl"
+                    className="liquid-glass absolute right-0 top-9 z-50 w-48 overflow-hidden rounded-[var(--radius-md)]"
                   >
                     <button
                       type="button"
@@ -160,8 +160,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ backgroundColor: 'var(--color-overlay)' }}
+            className="liquid-glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={() => !deletePlaylist.isPending && setConfirmOpen(false)}
             role="dialog"
             aria-modal="true"
@@ -172,7 +171,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
               exit={{ scale: 0.94, opacity: 0 }}
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm rounded-[var(--radius-md)] border border-border bg-card p-5 shadow-[var(--shadow-lg)]"
+              className="liquid-glass w-full max-w-sm rounded-[var(--radius-lg)] p-5"
             >
               <h2 className="text-base font-semibold tracking-tight">Удалить плейлист?</h2>
               <p className="mt-2 text-sm text-muted-foreground">
