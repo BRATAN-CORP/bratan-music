@@ -432,8 +432,19 @@ export function useAudioPlayer() {
       if (fallbackInProgressRef.current) return;
       // If restored from localStorage, seek to the saved progress before playing.
       const storeProgress = usePlayerStore.getState().progress;
-      if (audio.currentTime === 0 && storeProgress > 1 && audio.duration > 0) {
-        audio.currentTime = Math.min(storeProgress, audio.duration);
+      if (audio.currentTime < 1 && storeProgress > 1) {
+        const dur = audio.duration;
+        if (isFinite(dur) && dur > 0) {
+          audio.currentTime = Math.min(storeProgress, dur);
+        } else {
+          const onMeta = () => {
+            audio.removeEventListener('loadedmetadata', onMeta);
+            if (isFinite(audio.duration) && audio.duration > 0) {
+              audio.currentTime = Math.min(storeProgress, audio.duration);
+            }
+          };
+          audio.addEventListener('loadedmetadata', onMeta, { once: true });
+        }
       }
       const ctxBundle = ensureAudioGraph();
       if (ctxBundle.ctx && ctxBundle.ctx.state === 'suspended') {

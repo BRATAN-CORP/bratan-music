@@ -158,7 +158,7 @@ export function FullscreenPlayer() {
               <div
                 className="absolute inset-0 z-[2]"
                 style={{
-                  background: 'radial-gradient(ellipse 120% 80% at 50% 40%, transparent 0%, rgba(0,0,0,0.12) 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.55) 100%)',
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 15%, transparent 75%, rgba(0,0,0,0.45) 100%)',
                 }}
                 aria-hidden
               />
