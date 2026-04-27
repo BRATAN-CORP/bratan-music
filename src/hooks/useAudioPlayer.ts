@@ -263,6 +263,14 @@ export function useAudioPlayer() {
   currentQualityRef.current = tidalQuality;
   const fallbackInProgressRef = useRef(false);
 
+  /** When restoring from localStorage on page load, the audio element will
+   *  fire `timeupdate` (currentTime=0) as soon as the new src loads, which
+   *  would clobber the persisted progress with 0 before we get a chance to
+   *  seek. While this ref is non-null we (a) treat 0-time updates as a
+   *  no-op and (b) seek the audio to the saved position as soon as
+   *  metadata loads. Cleared after the seek lands or playback advances. */
+  const pendingRestoreProgressRef = useRef<number | null>(null);
+
   /** Try loading the audio src and wait for it to become playable.
    *  Resolves with true on success, false on media error. */
   const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<boolean> => {
@@ -293,6 +301,17 @@ export function useAudioPlayer() {
 
     const slot = b.active;
     const audio = b.audios[slot];
+
+    // ARM the restore-seek BEFORE we touch audio.src. If the page just
+    // reloaded with a persisted progress, suppress the inevitable
+    // timeupdate(0) that fires during initial load and remember the target
+    // for the loadedmetadata listener to pick up. Tracks restarted by
+    // setTrack/bumpStream/etc. always have progress=0, so this only kicks
+    // in for the reload-restore path.
+    const initialStoreProgress = usePlayerStore.getState().progress;
+    if (initialStoreProgress > 1) {
+      pendingRestoreProgressRef.current = initialStoreProgress;
+    }
 
     // Wait for any in-flight play promise before touching the audio element.
     if (b.playPromises[slot]) {
@@ -350,6 +369,15 @@ export function useAudioPlayer() {
     setSlotGain(inactiveSlot(b), 0);
     if (b.ctx && b.ctx.state === 'suspended') {
       await b.ctx.resume().catch(() => {});
+    }
+    // If loadedmetadata never fired our seek (e.g. cached/already-decoded
+    // src), execute it now while we have a known-good audio.duration.
+    if (pendingRestoreProgressRef.current !== null) {
+      const dur = audio.duration;
+      if (isFinite(dur) && dur > 0) {
+        audio.currentTime = Math.min(pendingRestoreProgressRef.current, dur);
+        pendingRestoreProgressRef.current = null;
+      }
     }
     // Only auto-play if the store says we should be playing (avoids
     // a sound blip when the track is restored from localStorage on reload).
@@ -546,6 +574,10 @@ export function useAudioPlayer() {
       const audio = b.audios[slot];
       const onTimeUpdate = () => {
         if (slot !== b.active) return;
+        // Suppress the 0-time update that fires right after src/load while
+        // we still owe a restore-seek; otherwise it would clobber the
+        // persisted progress.
+        if (audio.currentTime === 0 && pendingRestoreProgressRef.current !== null) return;
         setProgress(audio.currentTime);
         const dur = audio.duration;
         if (
@@ -561,6 +593,14 @@ export function useAudioPlayer() {
       const onDurationChange = () => {
         if (slot !== b.active) return;
         setDuration(audio.duration || 0);
+      };
+      const onLoadedMetadata = () => {
+        if (slot !== b.active) return;
+        const target = pendingRestoreProgressRef.current;
+        if (target !== null && isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = Math.min(target, audio.duration);
+        }
+        pendingRestoreProgressRef.current = null;
       };
       const onEnded = () => {
         if (slot !== b.active) return;
@@ -596,11 +636,13 @@ export function useAudioPlayer() {
       };
       audio.addEventListener('timeupdate', onTimeUpdate);
       audio.addEventListener('durationchange', onDurationChange);
+      audio.addEventListener('loadedmetadata', onLoadedMetadata);
       audio.addEventListener('ended', onEnded);
       audio.addEventListener('error', onError);
       return () => {
         audio.removeEventListener('timeupdate', onTimeUpdate);
         audio.removeEventListener('durationchange', onDurationChange);
+        audio.removeEventListener('loadedmetadata', onLoadedMetadata);
         audio.removeEventListener('ended', onEnded);
         audio.removeEventListener('error', onError);
       };
