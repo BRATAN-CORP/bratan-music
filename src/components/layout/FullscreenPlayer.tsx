@@ -657,11 +657,18 @@ export function FullscreenPlayer() {
                     className="absolute inset-y-0 left-0 rounded-full bg-white/85"
                     style={{ width: progressWidth }}
                   />
-                  <motion.div
-                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
-                    style={{ left: progressWidth }}
-                  />
                 </div>
+                {/* Thumb is a SIBLING of the rail, not a child — the rail
+                    has overflow-hidden to clip the gradient fill, but the
+                    thumb (h-3) has to extend above and below the 1.5px
+                    rail without being cropped. Sits on the outer h-6 hit
+                    area which has no overflow constraint, with z-10 so
+                    nothing in the rail (buffered/progress fills) paints
+                    on top of it. */}
+                <motion.div
+                  className="pointer-events-none absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
+                  style={{ left: progressWidth }}
+                />
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
                 <span className="fs-readable">{formatTime(progress)}</span>
