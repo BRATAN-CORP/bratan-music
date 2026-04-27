@@ -504,14 +504,12 @@ export function useAudioPlayer() {
           reloadWithoutCors(slot);
           return;
         }
-        // Auto-fallback: if the audio format isn't supported (code 4) or
-        // network/decode failed (2, 3), try the next lower quality before
-        // surfacing the error to the user.
         if ((code === 2 || code === 3 || code === 4) && currentTrack) {
           const current = currentQualityRef.current;
           const fallback = getNextFallbackQuality(current);
           if (fallback) {
             console.warn(`[stream] quality ${current} failed (code ${code}), falling back to ${fallback}`);
+            setError(null);
             currentQualityRef.current = fallback;
             loadTrack(currentTrack, fallback);
             return;

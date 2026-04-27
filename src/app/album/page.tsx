@@ -1,8 +1,9 @@
 import { useParams, Link } from 'react-router-dom';
-import { Play, Disc3 } from 'lucide-react';
+import { Play, Disc3, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useAlbum } from '@/hooks/useTrack';
+import { useToggleAlbumLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +13,8 @@ export function AlbumPage() {
   const { data: album, isLoading } = useAlbum(id ?? '');
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const albumLike = useToggleAlbumLike();
+  const liked = album ? albumLike.isLiked(album.id) : false;
 
   const handlePlayTrack = (track: Track) => {
     setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
@@ -55,15 +58,27 @@ export function AlbumPage() {
                 {album.releaseDate && (
                   <p className="text-xs text-muted-foreground">{album.releaseDate}</p>
                 )}
-                <div className="pt-2">
+                <div className="flex items-center gap-2 pt-2">
                   <Button onClick={handlePlayAll}>
                     <Play size={14} fill="currentColor" /> Слушать
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => albumLike.toggle({ id: album.id, title: album.title, artist: album.artist, artistId: album.artistId, coverUrl: album.coverUrl })}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
+                      liked
+                        ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                    aria-label={liked ? 'Убрать из библиотеки' : 'Добавить в библиотеку'}
+                  >
+                    <Heart size={16} className={liked ? 'fill-current' : ''} />
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+            <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
               {album.tracks?.map((track, i) => (
                 <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayTrack} />
               ))}

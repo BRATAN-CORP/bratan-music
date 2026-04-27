@@ -120,7 +120,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                         pinPlaylist.mutate({ id: playlist.id, pinned: !isPinned });
                       }}
                       disabled={playlist.isLiked}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-all hover:bg-secondary active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
                       {isPinned ? 'Открепить' : 'Закрепить на панели'}

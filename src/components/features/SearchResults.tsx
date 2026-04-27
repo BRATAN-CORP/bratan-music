@@ -70,7 +70,7 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
       {(filter === 'all' || filter === 'tracks') && hasTracks && (
         <section>
           {filter === 'all' && <SectionTitle title="Треки" subtitle={`${data.tracks.length} найдено`} />}
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+          <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
             {data.tracks.map((track, i) => (
               <TrackItem key={track.id} track={track} index={i} onPlay={onPlayTrack} />
             ))}

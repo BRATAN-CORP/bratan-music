@@ -1,10 +1,11 @@
 import { useParams } from 'react-router-dom';
-import { Play, User } from 'lucide-react';
+import { Play, User, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
 import { useArtist } from '@/hooks/useTrack';
+import { useToggleArtistLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +15,8 @@ export function ArtistPage() {
   const { data: artist, isLoading } = useArtist(id ?? '');
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const artistLike = useToggleArtistLike();
+  const liked = artist ? artistLike.isLiked(artist.id) : false;
 
   const handlePlayTrack = (track: Track) => {
     setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
@@ -51,10 +54,22 @@ export function ArtistPage() {
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Артист</span>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{artist.name}</h1>
-                <div className="pt-2">
+                <div className="flex items-center gap-2 pt-2">
                   <Button onClick={handlePlayAll}>
                     <Play size={14} fill="currentColor" /> Слушать
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => artistLike.toggle({ id: artist.id, name: artist.name, imageUrl: artist.imageUrl })}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
+                      liked
+                        ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                    aria-label={liked ? 'Отписаться' : 'Подписаться'}
+                  >
+                    <Heart size={16} className={liked ? 'fill-current' : ''} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -62,7 +77,7 @@ export function ArtistPage() {
             {artist.topTracks?.length > 0 && (
               <section className="mb-12">
                 <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Популярные треки</h2>
-                <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+                <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
                   {artist.topTracks.map((track, i) => (
                     <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayTrack} />
                   ))}

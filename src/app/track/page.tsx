@@ -92,7 +92,7 @@ export function TrackPage() {
             {radio?.items && radio.items.length > 0 && (
               <section>
                 <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Похожие треки</h2>
-                <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+                <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
                   {radio.items.map((t, i) => (
                     <TrackItem key={t.id} track={t} index={i} onPlay={handlePlayRadioTrack} />
                   ))}
