@@ -532,7 +532,7 @@ export function FullscreenPlayer() {
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} className="h-16 w-16 rounded-full" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
-                  {isPlaying ? <Pause size={24} /> : <Play size={24} fill="currentColor" />}
+                  {isPlaying ? <Pause size={24} fill="currentColor" strokeWidth={0} /> : <Play size={24} fill="currentColor" />}
                 </Button>
               </motion.div>
               <Button variant="ghost" size="icon" onClick={nextManual} aria-label="Вперёд" className="h-12 w-12">
