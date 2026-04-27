@@ -4,9 +4,9 @@ import {
   ChevronDown, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
-import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
+import { useAudioPlayer, useAnalyserAmplitude, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { Equalizer } from '@/components/features/Equalizer';
@@ -36,6 +36,13 @@ export function FullscreenPlayer() {
     duration, fullscreen, closeFullscreen, error,
   } = usePlayerStore();
   const { progress, seek } = useAudioPlayer();
+  const { progressSeconds, bufferedSeconds, durationSeconds } = usePlaybackVisuals();
+  // rAF-driven progress + buffered widths so the bar slides smoothly
+  // between timeupdate events. See `usePlaybackVisuals` for details.
+  const progressWidth = useTransform([progressSeconds, durationSeconds] as unknown as never, ([t, d]: [number, number]) =>
+    d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%');
+  const bufferedWidth = useTransform([bufferedSeconds, durationSeconds] as unknown as never, ([b, d]: [number, number]) =>
+    d > 0 ? `${Math.min(100, (b / d) * 100)}%` : '0%');
   const navigate = useNavigate();
   const reduce = useReducedMotion();
 
@@ -82,7 +89,6 @@ export function FullscreenPlayer() {
     };
   }, [fullscreen, closeFullscreen, togglePlay]);
 
-  const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
 
   const handleStartRadio = async () => {
     if (!currentTrack || radioBusy) return;
@@ -506,14 +512,23 @@ export function FullscreenPlayer() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div className="relative h-1 w-full rounded-full bg-white/15 transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
-                  <div
-                    className="h-full rounded-full bg-white/85 transition-[width] duration-100"
-                    style={{ width: `${progressPct}%` }}
+                <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/15 transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+                  {/* Buffered range — light bar that runs ahead of the
+                      played portion to show how far the audio is already
+                      downloaded. Sits behind the played bar and gets
+                      covered as playback catches up. */}
+                  <motion.div
+                    className="absolute inset-y-0 left-0 rounded-full bg-white/30"
+                    style={{ width: bufferedWidth }}
+                    aria-hidden
                   />
-                  <div
+                  <motion.div
+                    className="absolute inset-y-0 left-0 rounded-full bg-white/85"
+                    style={{ width: progressWidth }}
+                  />
+                  <motion.div
                     className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
-                    style={{ left: `${progressPct}%` }}
+                    style={{ left: progressWidth }}
                   />
                 </div>
               </div>

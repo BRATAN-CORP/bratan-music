@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { useMotionValue, type MotionValue } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
@@ -890,6 +891,70 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
     return () => cancelAnimationFrame(raf);
   }, [active, band]);
   return amp;
+}
+
+/**
+ * Smooth progress + buffered-range visualisation values driven from the
+ * active audio element via requestAnimationFrame. The store's `progress`
+ * still updates on `timeupdate` events (every 200–300ms in most browsers,
+ * jerky on short tracks), and remains the source of truth for things that
+ * read time as a number (lyrics auto-scroll, time text, mediaSession).
+ *
+ * UI surfaces that visualise the playhead — the mini-player and
+ * fullscreen-player progress bars — should drive their `width` from the
+ * MotionValues returned here so the bar slides at full frame rate without
+ * forcing a React re-render every animation frame.
+ *
+ * `bufferedSeconds` is the end of the contiguous buffered range covering
+ * the current playback position (so the gray bar represents "downloaded
+ * up to here from where you are"), and falls back to the furthest end of
+ * any buffered range if no range covers the playhead yet.
+ */
+export function usePlaybackVisuals(): {
+  progressSeconds: MotionValue<number>;
+  bufferedSeconds: MotionValue<number>;
+  durationSeconds: MotionValue<number>;
+} {
+  const progressSeconds = useMotionValue(0);
+  const bufferedSeconds = useMotionValue(0);
+  const durationSeconds = useMotionValue(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const b = getBundle();
+      const audio = b.audios[b.active];
+      if (audio) {
+        const t = audio.currentTime;
+        progressSeconds.set(t);
+        const dur = audio.duration;
+        if (isFinite(dur) && dur > 0) durationSeconds.set(dur);
+
+        // Walk the buffered TimeRanges and pick the end of the range that
+        // currently contains the playhead. If we're between ranges (rare —
+        // happens after a seek before the new range fills in) fall back
+        // to the furthest end so the gray bar at least never jumps
+        // backwards visually.
+        const ranges = audio.buffered;
+        let bufEnd = 0;
+        for (let i = 0; i < ranges.length; i++) {
+          const start = ranges.start(i);
+          const end = ranges.end(i);
+          if (start <= t && t <= end) {
+            bufEnd = end;
+            break;
+          }
+          if (end > bufEnd) bufEnd = end;
+        }
+        bufferedSeconds.set(bufEnd);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [progressSeconds, bufferedSeconds, durationSeconds]);
+
+  return { progressSeconds, bufferedSeconds, durationSeconds };
 }
 
 export function useAnalyserData(active: boolean, bins = 32) {

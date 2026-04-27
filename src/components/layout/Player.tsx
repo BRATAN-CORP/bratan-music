@@ -6,9 +6,9 @@ import {
   MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
   Download, Upload,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
-import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { useAudioPlayer, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { useToggleLike } from '@/hooks/useLibrary';
@@ -42,6 +42,14 @@ export function Player() {
   } = usePlayerStore();
 
   const { progress, seek } = useAudioPlayer();
+  const { progressSeconds, bufferedSeconds, durationSeconds } = usePlaybackVisuals();
+  // rAF-driven width for the played and buffered bars. Driving these via
+  // MotionValues lets the bar slide at full frame rate without re-rendering
+  // the player on every animation frame.
+  const progressWidth = useTransform([progressSeconds, durationSeconds] as unknown as never, ([t, d]: [number, number]) =>
+    d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%');
+  const bufferedWidth = useTransform([bufferedSeconds, durationSeconds] as unknown as never, ([b, d]: [number, number]) =>
+    d > 0 ? `${Math.min(100, (b / d) * 100)}%` : '0%');
   const reduce = useReducedMotion();
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
@@ -70,7 +78,7 @@ export function Player() {
   // them here.
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
+
 
   const handleShare = async () => {
     if (!currentTrack) return;
@@ -179,13 +187,22 @@ export function Player() {
               target.addEventListener('pointercancel', onUp);
             }}
           >
-            <div
-              className="h-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
-              style={{ width: `${progressPct}%` }}
+            {/* Buffered range — a faint bar that runs from the start of the
+                track to whatever the audio element reports as buffered. Sits
+                visually behind the played bar so once playback catches up
+                the gradient covers it. */}
+            <motion.div
+              className="absolute inset-y-0 left-0 bg-white/15"
+              style={{ width: bufferedWidth }}
+              aria-hidden
             />
-            <div
+            <motion.div
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+              style={{ width: progressWidth }}
+            />
+            <motion.div
               className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-0 transition-opacity group-hover/progress:opacity-100"
-              style={{ left: `${progressPct}%` }}
+              style={{ left: progressWidth }}
             />
           </div>
 
