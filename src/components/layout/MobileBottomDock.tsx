@@ -65,15 +65,22 @@ export function MobileBottomDock() {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="flex flex-col"
           >
-            {/* Progress bar — thin rail flush with the dock's top edge.
-                Outer wrapper is taller than the visible rail so the
-                draggable thumb has room to sit ON TOP of the bar without
-                being clipped by the dock's `overflow-hidden`. The thumb
-                fades in on hover/active so it doesn't clutter the bar at
-                rest, but it's always there for users who reach for it on
-                touch (the active state shows it on tap). */}
+            {/* Progress bar — thin rail FLUSH with the dock's top edge.
+                No padding wrapper above (a previous attempt at hosting
+                the thumb in extra hit-area was eating cover taps that
+                landed near the top of the cover image and broke the
+                'tap cover → open fullscreen' gesture).
+
+                Mobile-native pattern: the rail is invisible-thin at
+                rest (3px) and grows to 6px while the user is hovering
+                (desktop) or actively dragging (touch). The thumb is
+                rendered INSIDE the expanded rail at the playhead edge,
+                so it's always fully contained — no clipping by the
+                dock's `overflow-hidden`, no z-index conflict with
+                neighbouring buttons, and nothing extends above the
+                rail to steal taps from the cover button. */}
             <div
-              className="group/progress relative flex h-3 w-full shrink-0 cursor-pointer touch-none items-center select-none"
+              className="group/progress relative w-full shrink-0 cursor-pointer touch-none select-none"
               role="slider"
               aria-label="Перемотка"
               aria-valuemin={0}
@@ -101,17 +108,24 @@ export function MobileBottomDock() {
                 target.addEventListener('pointercancel', onUp);
               }}
             >
-              <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/[0.08] transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+              <div className="relative h-[3px] w-full overflow-hidden bg-white/[0.08] transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
                 <motion.div
-                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
                   style={{ width: progressWidth }}
                 />
+                {/* Thumb lives INSIDE the rail container so it
+                    inherits the rail's expanded height. At rest the
+                    rail is 3px tall and the 1.5×1.5 thumb is barely
+                    visible inside it (matches Spotify's "no thumb at
+                    rest" feel). On hover/active the rail grows to 6px
+                    and the thumb scales up to 2.5×2.5 — fully
+                    contained by the rail, no clipping. */}
+                <motion.div
+                  aria-hidden
+                  className="pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 transition-opacity duration-150 group-hover/progress:opacity-100 group-active/progress:opacity-100"
+                  style={{ left: progressWidth }}
+                />
               </div>
-              <motion.div
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] opacity-0 shadow-[0_0_0_2px_rgba(0,0,0,0.45),0_2px_6px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-150 group-hover/progress:opacity-100 group-hover/progress:scale-110 group-active/progress:opacity-100 group-active/progress:scale-125"
-                style={{ left: progressWidth }}
-              />
             </div>
 
             <div className="flex items-center gap-3 px-3 py-2.5">
