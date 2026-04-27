@@ -222,9 +222,15 @@ export function Player() {
                   onClick={openFullscreen}
                   aria-label="Открыть плеер"
                   className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border"
-                  initial={reduce ? false : { scale: 0.8, opacity: 0 }}
-                  animate={reduce ? undefined : { scale: 1, opacity: 1 }}
-                  key={currentTrack.id}
+                  /* `layoutId` morphs the cover from this small thumb into
+                     the large fullscreen artwork (and back) when the
+                     player is opened/closed. The id intentionally does
+                     NOT depend on track id — we want the SAME element
+                     to fly across components, not a new one to fade in
+                     at the destination. See FullscreenPlayer.tsx for
+                     the matching destination layoutId. */
+                  layoutId="player-cover-art"
+                  transition={{ type: 'spring', stiffness: 380, damping: 36, mass: 0.7 }}
                 >
                   <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
