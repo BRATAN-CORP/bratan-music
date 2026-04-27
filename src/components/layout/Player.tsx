@@ -153,7 +153,7 @@ export function Player() {
           animate={reduce ? undefined : { y: 0, opacity: 1 }}
           exit={reduce ? undefined : { y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-          className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 flex flex-col border-t border-white/[0.06] glass shadow-[0_-16px_40px_-20px_rgba(0,0,0,0.7)] lg:bottom-0 lg:left-60"
+          className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.5rem)] left-2 right-2 z-30 flex flex-col overflow-hidden rounded-t-[var(--radius-xl)] rounded-b-none border-b-0 liquid-glass shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] lg:bottom-4 lg:left-[calc(15rem+1rem)] lg:right-4 lg:rounded-[var(--radius-xl)] lg:border-b"
           style={{ height: 'var(--player-height)' }}
         >
           {(error || radioError) && (
