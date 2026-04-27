@@ -27,7 +27,14 @@ export function PlaylistPage() {
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
 
-  const tracks = useMemo(() => playlist?.tracks ?? [], [playlist?.tracks]);
+  // For the special "Liked" playlist the backend returns tracks in
+  // insertion order (oldest first). The user expects newest-first both
+  // in the visible list and in playback queue, so reverse client-side.
+  // Custom playlists keep their explicit order.
+  const tracks = useMemo(() => {
+    const list = playlist?.tracks ?? [];
+    return playlist?.isLiked ? [...list].reverse() : list;
+  }, [playlist?.tracks, playlist?.isLiked]);
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
   const [renameOpen, setRenameOpen] = useState(false);
   const ownPlaylist = useMemo(() => Boolean(playlist && id), [playlist, id]);
