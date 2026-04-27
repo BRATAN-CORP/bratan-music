@@ -97,6 +97,16 @@ CREATE INDEX idx_ovr_user     ON track_overrides(user_id);
 CREATE INDEX idx_sess_user    ON sessions(user_id);
 CREATE INDEX idx_dl_user_date ON daily_listens(user_id, date);
 
+CREATE TABLE library_items (
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id     TEXT NOT NULL,
+    type        TEXT NOT NULL CHECK(type IN ('album','artist')),
+    snapshot    TEXT,
+    added_at    INTEGER NOT NULL,
+    PRIMARY KEY (user_id, item_id, type)
+);
+CREATE INDEX IF NOT EXISTS idx_library_items_user_type ON library_items(user_id, type, added_at DESC);
+
 CREATE TABLE tidal_session (
     id              INTEGER PRIMARY KEY,
     access_token    TEXT NOT NULL,

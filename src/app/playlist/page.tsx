@@ -118,7 +118,7 @@ export function PlaylistPage() {
                     <button
                       type="button"
                       onClick={() => pinPlaylist.mutate({ id: playlist.id, pinned: !isPinned })}
-                      className={`mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-colors lg:inline-flex ${
+                      className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-all active:scale-90 ${
                         isPinned
                           ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -155,7 +155,7 @@ export function PlaylistPage() {
                 axis="y"
                 values={localTracks}
                 onReorder={setLocalTracks}
-                className="overflow-hidden rounded-[var(--radius-md)] border border-border"
+                className="overflow-visible rounded-[var(--radius-md)] border border-border"
               >
                 {localTracks.map((track, i) => (
                   <PlaylistTrackItem
@@ -170,7 +170,7 @@ export function PlaylistPage() {
                 ))}
               </Reorder.Group>
             ) : (
-              <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+              <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
                 {localTracks.map((track, i) => (
                   <PlaylistTrackItem
                     key={track.id}

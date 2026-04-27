@@ -110,7 +110,20 @@ export function usePinPlaylist() {
   return useMutation({
     mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
       api.put<{ ok: boolean; pinnedAt: number | null }>(`/playlists/${id}/pin`, { pinned }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
+    onMutate: async ({ id, pinned }) => {
+      await qc.cancelQueries({ queryKey: ['playlists'] });
+      const prev = qc.getQueryData<Playlist[]>(['playlists']);
+      qc.setQueryData<Playlist[]>(['playlists'], (old) =>
+        old?.map((p) =>
+          p.id === id ? { ...p, pinnedAt: pinned ? Date.now() : null } : p,
+        ),
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['playlists'], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['playlists'] }),
   });
 }
 
@@ -230,6 +243,176 @@ export function useUnlikeTrack() {
       qc.invalidateQueries({ queryKey: ['playlist'] });
     },
   });
+}
+
+// ── Album / Artist library items ─────────────────────────────────────
+
+interface LibraryAlbumSnapshot {
+  title: string;
+  artist: string;
+  artistId: string;
+  coverUrl?: string;
+}
+
+interface LibraryArtistSnapshot {
+  name: string;
+  imageUrl?: string;
+}
+
+export interface LibraryAlbum extends LibraryAlbumSnapshot {
+  id: string;
+  addedAt: number;
+}
+
+export interface LibraryArtist extends LibraryArtistSnapshot {
+  id: string;
+  addedAt: number;
+}
+
+export function useLikedAlbumIds() {
+  return useQuery({
+    queryKey: ['library', 'album', 'ids'],
+    queryFn: () => api.get<{ ids: string[] }>('/library/items/album/ids'),
+    staleTime: 30_000,
+  });
+}
+
+export function useLikedArtistIds() {
+  return useQuery({
+    queryKey: ['library', 'artist', 'ids'],
+    queryFn: () => api.get<{ ids: string[] }>('/library/items/artist/ids'),
+    staleTime: 30_000,
+  });
+}
+
+export function useLikedAlbums() {
+  return useQuery({
+    queryKey: ['library', 'album'],
+    queryFn: () => api.get<{ items: LibraryAlbum[] }>('/library/items/album'),
+  });
+}
+
+export function useLikedArtists() {
+  return useQuery({
+    queryKey: ['library', 'artist'],
+    queryFn: () => api.get<{ items: LibraryArtist[] }>('/library/items/artist'),
+  });
+}
+
+export function useLikeAlbum() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...snapshot }: { id: string } & LibraryAlbumSnapshot) =>
+      api.post(`/library/items/album/${id}`, snapshot),
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: ['library', 'album', 'ids'] });
+      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'album', 'ids']);
+      qc.setQueryData<{ ids: string[] }>(['library', 'album', 'ids'], (old) => ({
+        ids: Array.from(new Set([...(old?.ids ?? []), id])),
+      }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['library', 'album', 'ids'], ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['library', 'album'] });
+    },
+  });
+}
+
+export function useUnlikeAlbum() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/library/items/album/${id}`),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['library', 'album', 'ids'] });
+      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'album', 'ids']);
+      qc.setQueryData<{ ids: string[] }>(['library', 'album', 'ids'], (old) => ({
+        ids: (old?.ids ?? []).filter((x) => x !== id),
+      }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['library', 'album', 'ids'], ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['library', 'album'] });
+    },
+  });
+}
+
+export function useToggleAlbumLike() {
+  const { data } = useLikedAlbumIds();
+  const like = useLikeAlbum();
+  const unlike = useUnlikeAlbum();
+  const isLiked = (id: string) => data?.ids?.includes(id) ?? false;
+  return {
+    isLiked,
+    toggle: (album: { id: string } & LibraryAlbumSnapshot) => {
+      if (isLiked(album.id)) unlike.mutate(album.id);
+      else like.mutate(album);
+    },
+    pending: like.isPending || unlike.isPending,
+  };
+}
+
+export function useLikeArtist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...snapshot }: { id: string } & LibraryArtistSnapshot) =>
+      api.post(`/library/items/artist/${id}`, snapshot),
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: ['library', 'artist', 'ids'] });
+      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'artist', 'ids']);
+      qc.setQueryData<{ ids: string[] }>(['library', 'artist', 'ids'], (old) => ({
+        ids: Array.from(new Set([...(old?.ids ?? []), id])),
+      }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['library', 'artist', 'ids'], ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['library', 'artist'] });
+    },
+  });
+}
+
+export function useUnlikeArtist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/library/items/artist/${id}`),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['library', 'artist', 'ids'] });
+      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'artist', 'ids']);
+      qc.setQueryData<{ ids: string[] }>(['library', 'artist', 'ids'], (old) => ({
+        ids: (old?.ids ?? []).filter((x) => x !== id),
+      }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['library', 'artist', 'ids'], ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['library', 'artist'] });
+    },
+  });
+}
+
+export function useToggleArtistLike() {
+  const { data } = useLikedArtistIds();
+  const like = useLikeArtist();
+  const unlike = useUnlikeArtist();
+  const isLiked = (id: string) => data?.ids?.includes(id) ?? false;
+  return {
+    isLiked,
+    toggle: (artist: { id: string } & LibraryArtistSnapshot) => {
+      if (isLiked(artist.id)) unlike.mutate(artist.id);
+      else like.mutate(artist);
+    },
+    pending: like.isPending || unlike.isPending,
+  };
 }
 
 export function useToggleLike() {

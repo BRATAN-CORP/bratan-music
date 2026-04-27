@@ -34,6 +34,7 @@ interface PlaylistRow {
   name: string;
   is_liked: number;
   cover_url?: string | null;
+  pinned_at?: number | null;
   created_at: number;
   updated_at: number;
   track_count?: number | null;
@@ -59,6 +60,7 @@ function rowToPlaylist(r: PlaylistRow) {
     name: r.name,
     isLiked: Boolean(r.is_liked),
     coverUrl: r.cover_url ?? null,
+    pinnedAt: r.pinned_at ?? null,
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),
@@ -188,6 +190,92 @@ library.get('/playlists', async (c) => {
   ).bind(userId).all<PlaylistRow>();
 
   return c.json({ items: (items.results ?? []).map(rowToPlaylist) });
+});
+
+// ── Library items (albums & artists) ─────────────────────────────────
+
+interface LibraryItemRow {
+  user_id: string;
+  item_id: string;
+  type: string;
+  snapshot?: string | null;
+  added_at: number;
+}
+
+library.post('/items/:type/:itemId', async (c) => {
+  const userId = c.get('userId');
+  const type = c.req.param('type');
+  const itemId = c.req.param('itemId');
+
+  if (type !== 'album' && type !== 'artist') {
+    return c.json({ error: 'Invalid type' }, 400);
+  }
+
+  let snapshot: Record<string, unknown> | null = null;
+  try {
+    const body = await c.req.json<Record<string, unknown>>().catch(() => null);
+    if (body && typeof body === 'object') snapshot = body;
+  } catch {
+    snapshot = null;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    'INSERT OR REPLACE INTO library_items (user_id, item_id, type, snapshot, added_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(userId, itemId, type, snapshot ? JSON.stringify(snapshot) : null, now).run();
+
+  return c.json({ ok: true }, 201);
+});
+
+library.delete('/items/:type/:itemId', async (c) => {
+  const userId = c.get('userId');
+  const type = c.req.param('type');
+  const itemId = c.req.param('itemId');
+
+  if (type !== 'album' && type !== 'artist') {
+    return c.json({ error: 'Invalid type' }, 400);
+  }
+
+  await c.env.DB.prepare(
+    'DELETE FROM library_items WHERE user_id = ? AND item_id = ? AND type = ?'
+  ).bind(userId, itemId, type).run();
+
+  return c.json({ ok: true });
+});
+
+library.get('/items/:type', async (c) => {
+  const userId = c.get('userId');
+  const type = c.req.param('type');
+
+  if (type !== 'album' && type !== 'artist') {
+    return c.json({ error: 'Invalid type' }, 400);
+  }
+
+  const rows = await c.env.DB.prepare(
+    'SELECT * FROM library_items WHERE user_id = ? AND type = ? ORDER BY added_at DESC'
+  ).bind(userId, type).all<LibraryItemRow>();
+
+  const items = (rows.results ?? []).map((r) => {
+    const snap = safeJson<Record<string, unknown>>(r.snapshot);
+    return { id: r.item_id, addedAt: r.added_at, ...snap };
+  });
+
+  return c.json({ items });
+});
+
+library.get('/items/:type/ids', async (c) => {
+  const userId = c.get('userId');
+  const type = c.req.param('type');
+
+  if (type !== 'album' && type !== 'artist') {
+    return c.json({ error: 'Invalid type' }, 400);
+  }
+
+  const rows = await c.env.DB.prepare(
+    'SELECT item_id FROM library_items WHERE user_id = ? AND type = ?'
+  ).bind(userId, type).all<{ item_id: string }>();
+
+  return c.json({ ids: (rows.results ?? []).map((r) => r.item_id) });
 });
 
 export { library };
