@@ -208,116 +208,47 @@ export function FullscreenPlayer() {
           animate={reduce ? undefined : { opacity: 1 }}
           exit={reduce ? undefined : { opacity: 0 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="fullscreen-player fixed inset-0 z-50 flex flex-col overflow-hidden"
+          className="fullscreen-player fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--color-bg)]"
         >
-          {/* Background — single full-viewport blurred cover that pulses
-              with the bass. The user explicitly asked us to "rethink the
-              approach": instead of having a blur layer + a separate halo
-              wrapper around the cover (which inevitably gets clipped to
-              the cover's box), we use ONE big blurred layer that spans
-              the entire fullscreen and treat its pulsing as the glow.
-              No `overflow-hidden`, no mask, no clip — the blur fills the
-              fullscreen card edge-to-edge and is the deepest z-layer. */}
-          <div className="absolute inset-0 z-0 bg-[var(--color-bg)]" aria-hidden />
+          {/* Background — restored to the simpler approach the user
+              confirmed worked correctly (commit 49360f3). One bg-cover
+              blur layer for the cover artwork ambience plus a vertical
+              dark gradient that handles readability on bright covers.
+              No motion-driven layers, no full-viewport tracking, no
+              top/bottom vignettes — those experimental approaches
+              consistently introduced visible bands at the edges of
+              the viewport. The `blur-3xl` Tailwind preset (≈ 64px)
+              + `saturate-150` + `opacity-50` is enough to sample the
+              cover's dominant tone without leaking spatial detail.
+              The vertical gradient (40 / 60 / 80% black) is the
+              "затенящий блюр" the user asked for — sits behind the
+              halo and cover, gives white text on a white cover its
+              contrast back. */}
           {(currentTrack.coverUrl || coverVideoUrl) && (
             <>
-              {/* Cover-tracking blur layer. The user wants the blur to
-                  feel anchored to the cover artwork, not pinned to the
-                  centre of the viewport — when the cover column shifts
-                  left to make room for the lyrics panel, the blur
-                  should slide with it so the brightest part of the
-                  ambient field stays *under* the cover rather than
-                  drifting off into the lyrics column.
-                  We mirror the column's horizontal shift on the blur
-                  wrapper, and we scale the blur layers themselves up
-                  to 1.6× so the box still covers the viewport even
-                  after a 22% translate.
-                  Blur radius bumped to 220-280px so the cover's spatial
-                  detail (e.g. the dark-flag top of the Amped cover)
-                  smears into a uniform ambient tint instead of leaking
-                  through as a visible darker band at the top of the
-                  viewport. backgroundPosition moved from `center 30%`
-                  to plain `center` for the same reason — no top-bias
-                  sampling. */}
-              <motion.div
-                className="pointer-events-none absolute inset-0 z-[1]"
-                initial={false}
-                animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
-                transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
-                aria-hidden
-              >
-                {coverVideoUrl ? (
-                  <motion.video
-                    key={coverVideoUrl + '-bg'}
-                    src={coverVideoUrl}
-                    className="absolute inset-0 h-full w-full object-cover"
-                    initial={false}
-                    animate={reduce ? undefined : {
-                      opacity: 0.6 + pulse * 0.25,
-                      scale: 1.6 + pulse * 0.08,
-                      filter: `blur(${220 + pulse * 60}px) saturate(${1.5 + pulse * 0.4}) brightness(${1 + pulse * 0.18})`,
-                    }}
-                    transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                    style={reduce ? { filter: 'blur(240px) saturate(1.6)', transform: 'scale(1.6)', opacity: 0.65 } : undefined}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="auto"
-                    disablePictureInPicture
-                    controlsList="nofullscreen nodownload noremoteplayback"
-                  />
-                ) : (
-                  <>
-                    <motion.div
-                      className="absolute inset-0"
-                      initial={false}
-                      animate={reduce ? undefined : {
-                        opacity: 0.6 + pulse * 0.25,
-                        scale: 1.6 + pulse * 0.08,
-                        filter: `blur(${220 + pulse * 60}px) saturate(${1.5 + pulse * 0.4}) brightness(${1 + pulse * 0.18})`,
-                      }}
-                      transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                      style={{
-                        backgroundImage: `url(${currentTrack.coverUrl})`,
-                        backgroundSize: '200% 200%',
-                        backgroundPosition: 'center',
-                        ...(reduce ? { filter: 'blur(240px) saturate(1.6)', transform: 'scale(1.6)', opacity: 0.65 } : {}),
-                      }}
-                    />
-                    <motion.div
-                      className="absolute inset-0"
-                      initial={false}
-                      animate={reduce ? undefined : {
-                        opacity: 0.32 + pulse * 0.22,
-                        scale: 1.6 + pulse * 0.08,
-                        filter: `blur(${260 + pulse * 60}px) saturate(${1.3 + pulse * 0.4}) hue-rotate(8deg) brightness(${1 + pulse * 0.16})`,
-                      }}
-                      transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                      style={{
-                        backgroundImage: `url(${currentTrack.coverUrl})`,
-                        backgroundSize: '220% 220%',
-                        backgroundPosition: 'center',
-                        ...(reduce ? { filter: 'blur(280px) saturate(1.4) hue-rotate(8deg)', transform: 'scale(1.6)', opacity: 0.35 } : {}),
-                      }}
-                    />
-                  </>
-                )}
-              </motion.div>
-              {/* Full-viewport readability tint. ~7% black sat across
-                  the whole fullscreen — sits *above* the blurred cover
-                  background but *below* every interactive layer (cover,
-                  header, controls). On extremely bright covers (white,
-                  pastel pinks, etc.) the tint gives the white-ish text
-                  + muted-grey controls just enough contrast to remain
-                  legible without darkening the overall mood. The
-                  blurred cover behind it still reads as the dominant
-                  ambient field — the tint only modulates the brightest
-                  highlights. No vignettes, no gradients, no clipping —
-                  the user explicitly does not want the blur or glow
-                  constrained or shaped by anything. */}
+              {coverVideoUrl ? (
+                <video
+                  key={coverVideoUrl + '-bg'}
+                  src={coverVideoUrl}
+                  className="absolute inset-0 -z-10 h-full w-full object-cover opacity-50 blur-3xl saturate-150"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  aria-hidden
+                  disablePictureInPicture
+                  controlsList="nofullscreen nodownload noremoteplayback"
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 -z-10 bg-cover bg-center opacity-50 blur-3xl saturate-150"
+                  style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
+                  aria-hidden
+                />
+              )}
               <div
-                className="pointer-events-none absolute inset-0 z-[2] bg-black/[0.07]"
+                className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-black/60 to-black/80"
                 aria-hidden
               />
             </>
@@ -502,80 +433,56 @@ export function FullscreenPlayer() {
               covers. The outer fullscreen <motion.div> already has
               overflow-hidden so nothing escapes the viewport. */}
           <div className="relative z-[3] flex flex-1 min-h-0">
-          {/* Cover column. Stays full-width across the whole row; when
-              the lyrics side-panel mounts it gets translated left by a
-              fixed % so the cover content visually centres in the
-              remaining space without any width animation (the previous
-              flex-basis layout animation made the column "stretch"
-              which the user found jerky). md+ only — on narrow widths
-              the lyrics is rendered as an overlay and the cover stays
-              put. */}
+          {/* Cover column. Uses the simple flex layout from commit
+              49360f3 — the user explicitly asked for that. The lyrics
+              side-panel still pushes the column left by `-22%` on md+
+              so the cover visually re-centres in the remaining space
+              when lyrics is open (this animation didn't exist in the
+              original commit because lyrics didn't exist yet, but the
+              layout still works correctly: cover-wrapper width is
+              `max-w-md`, so the shift just translates the whole
+              column without resizing anything). */}
           <motion.div
             animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
             transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
-            // Symmetric padding (top == bottom). The user explicitly
-            // asked for `gap(header → cover) === gap(volume → bottom)`.
-            // With `justify-center`, equal pt and pb produce equal
-            // visual gaps even after slack distribution. We use `py-4`
-            // on mobile and `sm:py-6` on desktop — the desktop value
-            // matters most because that's where the user noticed the
-            // volume slider sitting too close to the bottom and the
-            // cover sitting too close to the bar.
-            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:py-6 md:transform-gpu"
+            className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8"
           >
-            {/* Cover artwork wrapper. The halo (-z-10 inside) is sized
-                to the cover but its filter blur paints freely outside
-                the box — we deliberately do NOT clip or shrink the
-                halo. The full-viewport readability tint (7% black) +
-                the existing text-shadow / drop-shadow on header text
-                together keep the title/icons legible on bright covers
-                even with the halo bleed reaching the top of the
-                viewport. */}
+            {/* Cover artwork wrapper — restored to the simple
+                `relative w-full max-w-md` from commit 49360f3. No
+                `aspect-square` here (the TiltCard inside owns it),
+                no viewport-height-aware maxWidth clamp. The user
+                confirmed this exact sizing reads correctly. */}
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="relative mx-auto aspect-square w-full max-w-md"
-              // Viewport-height-aware width clamp. The cover wraps
-              // `aspect-square w-full max-w-md` so without this clamp
-              // the square block was the same 28rem (448px) at every
-              // viewport height. On a short desktop window the cover
-              // plus the header + title + progress + transport +
-              // volume + column-padding stack adds up to ~28rem of
-              // non-cover height, so the cover would visually weld to
-              // the top bar and clip the volume slider off the bottom.
-              //
-              // We reserve a real 28rem (≈ 448px) for non-cover chrome
-              // (measured: header 72 + title 70 + progress 30 +
-              // transport 56 + volume 40 + 4×gap 96 + column py-6 48
-              // ≈ 412px, plus a few pixels of error-toast / safe-area
-              // headroom) and let aspect-square shrink the cover
-              // transitively when there's less room. The remaining
-              // 16-30px of slack distributes equally above and below
-              // via justify-center, giving a *real* visible breathing
-              // gap from the header AND from the bottom edge — at
-              // every viewport height where the cover has to shrink,
-              // not just at "tall enough" viewports.
-              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
+              className="relative w-full max-w-md"
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+                  className="pointer-events-none absolute inset-0 -z-10"
                   animate={reduce ? undefined : {
-                    // Bass-only pulse (the amplitude hook is fed the
-                    // 30–180Hz band). Free bleed: the glow is allowed
-                    // to spread to its full natural radius — the top
-                    // vignette + bottom vignette together absorb the
-                    // bleed visually, so we don't need to clip or
-                    // mask the halo itself.
-                    scale: 1.0 + pulse * 0.18,
-                    opacity: 0.32 + pulse * 0.44,
-                    filter: `blur(${56 + pulse * 32}px) saturate(${1.2 + pulse * 0.6}) brightness(${1 + pulse * 0.36})`,
+                    // Halo around the cover ("обложка дубликат —
+                    // создаёт свет от баса"). Restored to the spring
+                    // params from commit 49360f3: gentler scale
+                    // breathing, less aggressive blur growth — the
+                    // user confirmed this curve felt right. The
+                    // amplitude hook is band-passed to bass
+                    // (30-180Hz) so the halo only reacts to bass
+                    // hits, not full-spectrum loudness.
+                    scale: 1.04 + pulse * 0.12,
+                    opacity: 0.45 + pulse * 0.3,
+                    filter: `blur(${72 + pulse * 22}px) saturate(${1.3 + pulse * 0.35})`,
                   }}
-                  transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                  style={{ borderRadius: 'var(--radius-xl)' }}
+                  transition={{ type: 'spring', stiffness: 70, damping: 18, mass: 0.6 }}
+                  style={{
+                    backgroundImage: currentTrack.coverUrl ? `url(${currentTrack.coverUrl})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: 'var(--radius-xl)',
+                  }}
                 >
                   {coverVideoUrl ? (
                     <video
@@ -591,12 +498,7 @@ export function FullscreenPlayer() {
                       disablePictureInPicture
                       controlsList="nofullscreen nodownload noremoteplayback"
                     />
-                  ) : (
-                    <div
-                      className="h-full w-full bg-cover bg-center"
-                      style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
-                    />
-                  )}
+                  ) : null}
                 </motion.div>
               )}
               <TiltCard
