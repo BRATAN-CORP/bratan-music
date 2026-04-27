@@ -2,7 +2,7 @@ import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { useAutoAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { BottomNav } from '@/components/layout/BottomNav';
+import { MobileBottomDock } from '@/components/layout/MobileBottomDock';
 import { Player } from '@/components/layout/Player';
 import { FullscreenPlayer } from '@/components/layout/FullscreenPlayer';
 import { PageTransition } from '@/components/ui/PageTransition';
@@ -43,7 +43,7 @@ function AppLayout() {
       </div>
       <Player />
       <FullscreenPlayer />
-      <BottomNav />
+      <MobileBottomDock />
       <SubscriptionDialog />
       <GlassFilter />
     </div>

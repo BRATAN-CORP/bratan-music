@@ -159,10 +159,7 @@ img {
    The look is composed of three things:
 
    1. A multi-layer `box-shadow` that paints the chrome bezel and inner
-      highlights without any actual gradient bitmap. The inset shadows
-      give the top-edge "lip" and the bottom-edge "foot"; the modifiers
-      `.no-lip` / `.no-foot` remove the relevant slice when this surface
-      is fused to another (e.g. mobile mini-player + bottom nav).
+      highlights without any actual gradient bitmap.
    2. The SVG `#container-glass` filter (mounted globally via
       `<GlassFilter />` in the app root) applied as `backdrop-filter:
       url(...)` to refract the page behind it. Falls back gracefully to
@@ -171,9 +168,6 @@ img {
    3. A very faint translucent surface tint so unsupported browsers
       still get an elevated look. */
 
-/* Shadow recipe shared by the base + modifiers. We list each inset
-   highlight separately so the `.no-lip` / `.no-foot` modifiers can drop
-   only the slice they need to hide. */
 $lg-drop: 0 30px 80px -20px rgba(0, 0, 0, 0.55);
 $lg-tl-1: inset 3px 3px 0.5px -3.5px rgba(255, 255, 255, 0.55); // top-left highlight (lip)
 $lg-tl-2: inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.45);
@@ -193,7 +187,7 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
 
 /* Default to `position: relative` ONLY when the consumer hasn't already
    declared a positioning utility — otherwise this class would clobber
-   the `.fixed` Tailwind utility on the bottom player + nav and they'd
+   the `.fixed` Tailwind utility on the bottom dock and it would
    collapse into the document flow. The `:not()` carries the same
    specificity as `.liquid-glass.fixed` so the chain unambiguously wins
    for the modal/sheet cases that need a positioning context for their
@@ -207,26 +201,6 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
     background: rgba(20, 20, 24, 0.22);
     backdrop-filter: url(#container-glass) blur(22px) saturate(180%);
     -webkit-backdrop-filter: blur(22px) saturate(180%);
-  }
-}
-
-/* Drop the top-edge highlights when this surface is glued to another
-   liquid-glass card above it (e.g. mobile bottom nav under the
-   mini-player). Without this the lip would draw a visible line across
-   the seam. */
-.liquid-glass.no-lip {
-  box-shadow: $lg-drop, $lg-br-1, $lg-br-2, $lg-inner-soft, $lg-inner-tight,
-    $lg-glow;
-}
-
-/* Companion to `.no-lip` for the surface above the seam (e.g. the
-   mobile mini-player sitting on top of the bottom nav). Drops the
-   bottom highlights AND the big drop shadow so the seam reads as one
-   continuous card. Desktop keeps the full shadow via the media query
-   gate — the player floats free there. */
-@media (max-width: 1023px) {
-  .liquid-glass.no-foot {
-    box-shadow: $lg-tl-1, $lg-tl-2, $lg-inner-soft, $lg-inner-tight;
   }
 }
 
