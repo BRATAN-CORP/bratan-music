@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from 'motion/react';
 
 interface MarqueeProps {
   /** Text to display. If it overflows the container, a slow slide animation
@@ -15,16 +15,27 @@ interface MarqueeProps {
   speed?: number;
   /** Width of the soft fade on each edge (px). The container gets a
    *  CSS mask so the text dissolves into the player background instead
-   *  of being chopped at the container edge. */
+   *  of being chopped at the container edge. The two edges are masked
+   *  asymmetrically — see below. */
   fade?: number;
   /** Optional `aria-label` override (defaults to the text). */
   'aria-label'?: string;
 }
 
 /** Single-line text that auto-truncates when it fits and gently slides
- *  to reveal its tail when it doesn't. The two ends are softly masked
- *  so the text fades in/out of the container edges instead of getting
- *  visually chopped — same pattern used by Spotify, Apple Music, etc.
+ *  to reveal its tail when it doesn't.
+ *
+ *  Mask behaviour:
+ *  - At rest, only the side that actually has hidden content is faded.
+ *    Short text that fits the box is rendered with no mask at all so
+ *    the surrounding `text-shadow` halation can extend freely past the
+ *    box (a flex-1 column inside a `text-center` row would otherwise
+ *    chop the shadow at the column edge — the bug the user reported).
+ *  - While the text slides, both fades smoothly grow/shrink in lockstep
+ *    with how much content is currently hidden on each side. The left
+ *    fade only appears once the text has actually moved off the left
+ *    edge, so a stationary marquee never has its leading edge "eaten"
+ *    by a phantom shadow mask.
  *
  *  We re-measure on:
  *  - container size changes (window resize, sidebar toggle)
@@ -85,12 +96,75 @@ export function Marquee({
   const t3 = ((pause * 2) / 1000 + slideTime) / total;
 
   const shouldAnimate = distance > 0 && !reduce;
-  const maskStyle: React.CSSProperties = distance > 0
-    ? {
-        WebkitMaskImage: `linear-gradient(to right, transparent 0, black ${fade}px, black calc(100% - ${fade}px), transparent 100%)`,
-        maskImage: `linear-gradient(to right, transparent 0, black ${fade}px, black calc(100% - ${fade}px), transparent 100%)`,
-      }
-    : {};
+
+  // Drive the slide ourselves so we can read the current x and update
+  // the asymmetric mask in lockstep with the animation. (motion's
+  // declarative `animate={{ x: [...] }}` would also work but we'd lose
+  // the live read-back without an additional ref dance.)
+  const x = useMotionValue(0);
+
+  useEffect(() => {
+    if (!shouldAnimate) {
+      x.set(0);
+      return;
+    }
+    const controls = animate(x, [0, 0, -distance, -distance, 0], {
+      duration: total,
+      times: [0, t1, t2, t3, 1],
+      ease: 'easeInOut',
+      repeat: Infinity,
+    });
+    return () => controls.stop();
+  }, [shouldAnimate, distance, total, t1, t2, t3, x]);
+
+  // Compute the per-side fade widths from the live `x` value. We
+  // intentionally write to inline CSS variables instead of re-rendering
+  // — `useMotionValueEvent` fires every animation frame and React
+  // re-renders are far too slow for that.
+  const writeFade = (v: number) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    if (distance <= 0) {
+      wrapper.style.setProperty('--marquee-fade-l', '0px');
+      wrapper.style.setProperty('--marquee-fade-r', '0px');
+      return;
+    }
+    // hidden_left = -x (clamped 0..distance)
+    // hidden_right = distance + x (clamped 0..distance)
+    const hiddenLeft = Math.max(0, -v);
+    const hiddenRight = Math.max(0, distance + v);
+    // Ramp each fade in over the first `fade` px of hidden content
+    // so the mask gracefully fades up rather than snapping on at the
+    // first subpixel of motion.
+    const ramp = Math.max(1, fade);
+    const leftFade = Math.round(fade * Math.min(1, hiddenLeft / ramp));
+    const rightFade = Math.round(fade * Math.min(1, hiddenRight / ramp));
+    wrapper.style.setProperty('--marquee-fade-l', `${leftFade}px`);
+    wrapper.style.setProperty('--marquee-fade-r', `${rightFade}px`);
+  };
+
+  useMotionValueEvent(x, 'change', writeFade);
+
+  // Seed the CSS variables synchronously so the very first paint
+  // already has the correct asymmetric mask (no flash of full-fade).
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    if (distance <= 0) {
+      wrapper.style.setProperty('--marquee-fade-l', '0px');
+      wrapper.style.setProperty('--marquee-fade-r', '0px');
+    } else {
+      // At rest the text sits at x=0: nothing hidden on the left,
+      // `distance` px hidden on the right.
+      wrapper.style.setProperty('--marquee-fade-l', '0px');
+      wrapper.style.setProperty('--marquee-fade-r', `${fade}px`);
+    }
+  }, [distance, fade]);
+
+  const isMarqueeing = distance > 0;
+  const maskImage = isMarqueeing
+    ? 'linear-gradient(to right, transparent 0, black var(--marquee-fade-l), black calc(100% - var(--marquee-fade-r)), transparent 100%)'
+    : undefined;
 
   return (
     <span
@@ -98,29 +172,27 @@ export function Marquee({
       className={'block w-full whitespace-nowrap ' + className}
       aria-label={ariaLabel ?? text}
       style={{
-        // CSS spec forces `overflow-x: hidden` to also clip y — we want
-        // y unbounded so `text-shadow` (and the soft halation we apply
-        // on fullscreen-player descendants) can extend above and below
-        // the text line without being chopped at the box.
-        // `clip-path: inset(...)` gives us per-axis control: clip x to
-        // the wrapper's box but leave a generous vertical bleed so the
-        // shadow has room. The negative top/bottom inset is a fixed
-        // px so the layout doesn't depend on the wrapper's font-size.
-        clipPath: 'inset(-1.5em 0 -1.5em 0)',
-        WebkitClipPath: 'inset(-1.5em 0 -1.5em 0)',
-        ...maskStyle,
+        // Only constrain the box when we're actually marqueeing — short
+        // text that fits the column should let `text-shadow` halation
+        // bleed freely past the box (otherwise a `flex-1` column with
+        // narrow neighbours chops the shadow at the column edges).
+        // When marqueeing, we keep a vertical bleed so the shadow has
+        // room above/below the line, while the horizontal mask handles
+        // the side fades.
+        ...(isMarqueeing
+          ? {
+              clipPath: 'inset(-1.5em 0 -1.5em 0)',
+              WebkitClipPath: 'inset(-1.5em 0 -1.5em 0)',
+              WebkitMaskImage: maskImage,
+              maskImage: maskImage,
+            }
+          : null),
       }}
     >
       <motion.span
         ref={innerRef}
         className="inline-block whitespace-nowrap will-change-transform"
-        animate={shouldAnimate ? { x: [0, 0, -distance, -distance, 0] } : { x: 0 }}
-        transition={shouldAnimate ? {
-          duration: total,
-          times: [0, t1, t2, t3, 1],
-          ease: 'easeInOut',
-          repeat: Infinity,
-        } : { duration: 0 }}
+        style={{ x }}
       >
         {text}
       </motion.span>
