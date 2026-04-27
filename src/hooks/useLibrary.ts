@@ -19,10 +19,13 @@ export interface LikeableTrack {
   artist: string;
   album?: string;
   coverUrl?: string;
+  /** Animated mp4 cover URL (Tidal). Persisted into the like-snapshot
+   *  so liked / playlist tracks keep the animated cover in fullscreen. */
+  coverVideoUrl?: string;
   duration: number;
 }
 
-type TrackSnapshot = Pick<LikeableTrack, 'title' | 'artist' | 'album' | 'coverUrl' | 'duration'>;
+type TrackSnapshot = Pick<LikeableTrack, 'title' | 'artist' | 'album' | 'coverUrl' | 'coverVideoUrl' | 'duration'>;
 
 function snapshotOf(t: LikeableTrack): TrackSnapshot {
   return {
@@ -30,6 +33,7 @@ function snapshotOf(t: LikeableTrack): TrackSnapshot {
     artist: t.artist,
     album: t.album ?? '',
     coverUrl: t.coverUrl,
+    coverVideoUrl: t.coverVideoUrl,
     duration: t.duration,
   };
 }

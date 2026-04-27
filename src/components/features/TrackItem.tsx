@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Download, Heart, ListOrdered, ListPlus, MoreHorizontal, Play, Trash2, Upload } from 'lucide-react';
+import { Download, Heart, ListOrdered, ListPlus, MoreHorizontal, Pause, Play, Trash2, Upload } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -42,6 +42,14 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   const removeFromPlaylist = useRemoveTrackFromPlaylist();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  // True when *this* row is the currently-playing track in the player.
+  // Used to swap the cover-overlay's hover icon from Play → Pause and
+  // make a click toggle playback instead of restarting the track.
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const isActive = currentTrackId === track.id;
+  const isActivePlaying = isActive && isPlaying;
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -112,14 +120,41 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min((index ?? 0) * 0.025, 0.4) }}
       className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
-      onClick={() => onPlay?.(track)}
+      onClick={() => {
+        // If the user clicks the row of the track that's already
+        // playing, treat it as a play/pause toggle (matches what the
+        // hover icon hints at). Otherwise start the track via the
+        // owner's `onPlay` callback (which sets up the queue, etc).
+        if (isActivePlaying) {
+          togglePlay();
+          return;
+        }
+        onPlay?.(track);
+      }}
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center">
         {track.coverUrl ? (
           <div className="relative h-10 w-10 overflow-hidden rounded-[var(--radius-sm)]">
             <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 hidden items-center justify-center bg-[var(--color-media-overlay)] group-hover:flex">
-              <Play size={14} fill="currentColor" className="text-[var(--color-text-on-accent)]" />
+            {/* Hover overlay. Shows a Pause icon when this row is the
+                currently-playing track (signals "click to stop"), or a
+                Play icon when starting a new track. The active row
+                also pre-shows the overlay (no hover required) on
+                coarse-pointer / mobile so users can see playback state
+                without hovering. */}
+            <div
+              className={
+                'absolute inset-0 items-center justify-center bg-[var(--color-media-overlay)] ' +
+                (isActive
+                  ? 'flex opacity-100'
+                  : 'hidden group-hover:flex')
+              }
+            >
+              {isActivePlaying ? (
+                <Pause size={14} fill="currentColor" className="text-[var(--color-text-on-accent)]" />
+              ) : (
+                <Play size={14} fill="currentColor" className="text-[var(--color-text-on-accent)]" />
+              )}
             </div>
           </div>
         ) : (

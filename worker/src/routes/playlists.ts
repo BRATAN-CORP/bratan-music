@@ -11,6 +11,10 @@ interface TrackSnapshot {
   artist?: string;
   album?: string;
   coverUrl?: string;
+  /** Animated mp4 cover URL (Tidal). Only some albums expose it; we
+   *  persist it inside the JSON snapshot so liked / playlist tracks
+   *  retain the animated cover after a refresh. */
+  coverVideoUrl?: string;
   duration?: number;
 }
 
@@ -57,6 +61,7 @@ function rowToTrack(r: PtRow) {
     artist: snap?.artist ?? '',
     album: snap?.album ?? '',
     coverUrl: snap?.coverUrl ?? '',
+    coverVideoUrl: snap?.coverVideoUrl ?? undefined,
     duration: snap?.duration ?? 0,
   };
 }

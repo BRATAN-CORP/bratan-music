@@ -18,6 +18,7 @@ import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel } from '@/components/features/LyricsPanel';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { useTrack } from '@/hooks/useTrack';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
@@ -78,6 +79,26 @@ export function FullscreenPlayer() {
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const coarse = useCoarsePointer();
 
+  // Enrich playback metadata for tracks that came from the user's
+  // library / playlists. Likes saved before we started persisting
+  // `coverVideoUrl` in the snapshot have it missing — when the
+  // fullscreen player opens we transparently re-fetch the full Tidal
+  // track and use its `coverVideoUrl` for the animated cover. We don't
+  // touch the player store here (avoids a render storm and keeps
+  // offline play working); we just compose the enriched cover into
+  // local render variables below. New likes already write the field
+  // into the DB snapshot so this fallback is purely for legacy data.
+  const snapshotCoverVideoUrl = currentTrack?.coverVideoUrl;
+  const needsEnrichment = Boolean(
+    fullscreen &&
+    currentTrack &&
+    !snapshotCoverVideoUrl &&
+    currentTrack.id &&
+    /^\d+$/.test(currentTrack.id), // Tidal track ids are numeric strings
+  );
+  const enrichedTrack = useTrack(needsEnrichment ? (currentTrack?.id ?? '') : '');
+  const coverVideoUrl = snapshotCoverVideoUrl ?? enrichedTrack.data?.coverVideoUrl;
+
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -137,41 +158,34 @@ export function FullscreenPlayer() {
   };
 
   const [shareCopied, setShareCopied] = useState(false);
+  // Mirror the mini-player's share behaviour exactly: copy a deep-link
+  // straight to the clipboard, no native share sheet, no picker. The
+  // user explicitly asked for parity with the mini player, and the
+  // share sheet was inconsistent across browsers anyway (mobile Safari
+  // showed a picker, desktop Chrome silently failed).
   const handleShare = async () => {
     if (!currentTrack) return;
-    // The repo deploys under a sub-path on GitHub Pages
-    // (`/bratan-music/`). `window.location.origin + import.meta.env.BASE_URL`
-    // gives us the canonical public URL prefix in any environment
-    // (dev, preview, production) without hard-coding it.
-    const base = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '');
-    const url = `${base}/track/${currentTrack.id}`;
-    const shareText = `${currentTrack.artist} — ${currentTrack.title}`;
+    const u = new URL(window.location.href);
+    const base = `${u.origin}${u.pathname.replace(/\/?(track|search|playlist|album|artist|profile|admin)\/.*$/, '')}`.replace(/\/$/, '');
+    const url = `${base}/track/${currentTrack.id}?autoplay=1`;
     try {
-      // Native share sheet on mobile (Android intent picker, iOS sheet,
-      // desktop Edge / mobile Safari). Falls back to clipboard copy.
-      if (typeof navigator.share === 'function') {
-        await navigator.share({ title: shareText, text: shareText, url });
-        setMoreOpen(false);
-        return;
-      }
       await navigator.clipboard.writeText(url);
-      setShareCopied(true);
-      // Keep the menu open just long enough to show the confirmation,
-      // then dismiss so it doesn't linger.
-      window.setTimeout(() => {
-        setShareCopied(false);
-        setMoreOpen(false);
-      }, 1400);
-    } catch (err) {
-      // AbortError: user dismissed the share sheet — silently ignore
-      // and close the menu (matches the success path).
-      if (err instanceof Error && err.name === 'AbortError') {
-        setMoreOpen(false);
-        return;
-      }
-      console.error('[share]', err);
-      setMoreOpen(false);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(textarea);
     }
+    setShareCopied(true);
+    window.setTimeout(() => {
+      setShareCopied(false);
+      setMoreOpen(false);
+    }, 1400);
   };
 
   const goToAlbum = () => {
@@ -191,19 +205,30 @@ export function FullscreenPlayer() {
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="fullscreen-player fixed inset-0 z-50 flex flex-col overflow-hidden"
         >
-          {/* Background layers: solid bg → ambient blurred cover → vignette
-              The cover is heavily blurred and over-scaled so the player
-              backdrop reads as a single tinted ambient field — no visible
-              edges or contrast bands from the source image. */}
+          {/* Background — single full-viewport blurred cover that pulses
+              with the bass. The user explicitly asked us to "rethink the
+              approach": instead of having a blur layer + a separate halo
+              wrapper around the cover (which inevitably gets clipped to
+              the cover's box), we use ONE big blurred layer that spans
+              the entire fullscreen and treat its pulsing as the glow.
+              No `overflow-hidden`, no mask, no clip — the blur fills the
+              fullscreen card edge-to-edge and is the deepest z-layer. */}
           <div className="absolute inset-0 z-0 bg-[var(--color-bg)]" aria-hidden />
-          {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
+          {(currentTrack.coverUrl || coverVideoUrl) && (
             <>
-              {currentTrack.coverVideoUrl ? (
-                <video
-                  key={currentTrack.coverVideoUrl + '-bg'}
-                  src={currentTrack.coverVideoUrl}
-                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-60 saturate-150"
-                  style={{ filter: 'blur(140px) saturate(1.6)', transform: 'scale(1.4)' }}
+              {coverVideoUrl ? (
+                <motion.video
+                  key={coverVideoUrl + '-bg'}
+                  src={coverVideoUrl}
+                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover"
+                  initial={false}
+                  animate={reduce ? undefined : {
+                    opacity: 0.55 + pulse * 0.25,
+                    scale: 1.4 + pulse * 0.05,
+                    filter: `blur(${130 + pulse * 30}px) saturate(${1.5 + pulse * 0.4}) brightness(${1 + pulse * 0.18})`,
+                  }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
+                  style={reduce ? { filter: 'blur(140px) saturate(1.6)', transform: 'scale(1.4)', opacity: 0.6 } : undefined}
                   autoPlay
                   muted
                   loop
@@ -215,27 +240,37 @@ export function FullscreenPlayer() {
                 />
               ) : (
                 <>
-                  <div
+                  <motion.div
                     className="absolute inset-0 z-[1]"
+                    initial={false}
+                    animate={reduce ? undefined : {
+                      opacity: 0.55 + pulse * 0.25,
+                      scale: 1.4 + pulse * 0.05,
+                      filter: `blur(${130 + pulse * 30}px) saturate(${1.5 + pulse * 0.4}) brightness(${1 + pulse * 0.18})`,
+                    }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
                     style={{
                       backgroundImage: `url(${currentTrack.coverUrl})`,
                       backgroundSize: '180% 180%',
                       backgroundPosition: 'center 30%',
-                      filter: 'blur(140px) saturate(1.6)',
-                      transform: 'scale(1.4)',
-                      opacity: 0.6,
+                      ...(reduce ? { filter: 'blur(140px) saturate(1.6)', transform: 'scale(1.4)', opacity: 0.6 } : {}),
                     }}
                     aria-hidden
                   />
-                  <div
+                  <motion.div
                     className="absolute inset-0 z-[1]"
+                    initial={false}
+                    animate={reduce ? undefined : {
+                      opacity: 0.32 + pulse * 0.22,
+                      scale: 1.4 + pulse * 0.06,
+                      filter: `blur(${170 + pulse * 30}px) saturate(${1.3 + pulse * 0.4}) hue-rotate(8deg) brightness(${1 + pulse * 0.16})`,
+                    }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
                     style={{
                       backgroundImage: `url(${currentTrack.coverUrl})`,
                       backgroundSize: '220% 220%',
                       backgroundPosition: 'center 70%',
-                      filter: 'blur(180px) saturate(1.4) hue-rotate(8deg)',
-                      transform: 'scale(1.4)',
-                      opacity: 0.35,
+                      ...(reduce ? { filter: 'blur(180px) saturate(1.4) hue-rotate(8deg)', transform: 'scale(1.4)', opacity: 0.35 } : {}),
                     }}
                     aria-hidden
                   />
@@ -462,12 +497,15 @@ export function FullscreenPlayer() {
           <motion.div
             animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
             transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
-            // No top padding — the user wants the cover to butt right up
-            // against the header bar's bottom edge (the bar's own `py-4`
-            // already buffers its content so the cover doesn't visually
-            // crowd the title). Bottom padding is kept small so the volume
-            // slider sits comfortably above the safe area.
-            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8 md:transform-gpu"
+            // Symmetric padding (top == bottom). The user explicitly
+            // asked for `gap(header → cover) === gap(volume → bottom)`.
+            // With `justify-center`, equal pt and pb produce equal
+            // visual gaps even after slack distribution. We use `py-4`
+            // on mobile and `sm:py-6` on desktop — the desktop value
+            // matters most because that's where the user noticed the
+            // volume slider sitting too close to the bottom and the
+            // cover sitting too close to the bar.
+            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:py-6 md:transform-gpu"
           >
             {/* Cover artwork wrapper. The halo (-z-10 inside) is sized
                 to the cover but its filter blur paints freely outside
@@ -484,7 +522,7 @@ export function FullscreenPlayer() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative mx-auto aspect-square w-full max-w-md"
             >
-              {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
+              {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
@@ -502,10 +540,10 @@ export function FullscreenPlayer() {
                   transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
                   style={{ borderRadius: 'var(--radius-xl)' }}
                 >
-                  {currentTrack.coverVideoUrl ? (
+                  {coverVideoUrl ? (
                     <video
-                      key={currentTrack.coverVideoUrl + '-glow'}
-                      src={currentTrack.coverVideoUrl}
+                      key={coverVideoUrl + '-glow'}
+                      src={coverVideoUrl}
                       className="h-full w-full object-cover pointer-events-none"
                       autoPlay
                       muted
@@ -531,11 +569,20 @@ export function FullscreenPlayer() {
                 glare
                 className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
               >
-                {currentTrack.coverVideoUrl ? (
+                {coverVideoUrl ? (
                   // Animated cover (Tidal mp4). Falls back gracefully — the
                   // <img> stays under the <video> as a poster so even if the
                   // mp4 fails to load we still see a static cover.
-                  <div className="relative h-full w-full">
+                  //
+                  // We re-apply `rounded-[inherit] overflow-hidden` on the
+                  // wrapper AND on the <video> itself: TiltCard sets
+                  // `transform-style: preserve-3d` on its parent, and
+                  // WebKit (Safari, iOS) silently breaks the parent's
+                  // border-radius clip on raster-backed elements (most
+                  // notably <video>) inside a 3D context. Without this
+                  // the animated cover paints as a hard rectangle while
+                  // a static <img> stays rounded.
+                  <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
                     {currentTrack.coverUrl && (
                       <img
                         src={currentTrack.coverUrl}
@@ -544,10 +591,10 @@ export function FullscreenPlayer() {
                       />
                     )}
                     <video
-                      key={currentTrack.coverVideoUrl}
-                      src={currentTrack.coverVideoUrl}
+                      key={coverVideoUrl}
+                      src={coverVideoUrl}
                       poster={currentTrack.coverUrl}
-                      className="relative z-[1] h-full w-full object-cover"
+                      className="relative z-[1] h-full w-full rounded-[inherit] object-cover"
                       autoPlay
                       muted
                       loop
