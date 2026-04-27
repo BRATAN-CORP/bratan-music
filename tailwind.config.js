@@ -2,6 +2,14 @@
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: ['selector', '[data-theme="dark"]'],
+  // Wrap `hover:` utilities in `@media (hover: hover)` so they don't stick
+  // on touch devices after a tap. Without this Tailwind emits plain `:hover`,
+  // which iOS/Android leave latched on the last-tapped button until the user
+  // taps somewhere else — most visible inside the fullscreen player on
+  // mobile, where every transport control was holding its hover style.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {
