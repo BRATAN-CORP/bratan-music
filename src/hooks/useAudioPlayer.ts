@@ -921,14 +921,60 @@ export function usePlaybackVisuals(): {
 
   useEffect(() => {
     let raf = 0;
+    // Wall-clock time of the previous tick (used for predicting the
+    // playhead between currentTime samples).
+    let lastTickAt = performance.now();
+    // Last value we wrote to progressSeconds. Initialised lazily on the
+    // first frame where we actually see audio.currentTime.
+    let displayed = 0;
+    let initialised = false;
+
     const tick = () => {
       const b = getBundle();
       const audio = b.audios[b.active];
+      const now = performance.now();
+      const dt = (now - lastTickAt) / 1000;
+      lastTickAt = now;
+
       if (audio) {
-        const t = audio.currentTime;
-        progressSeconds.set(t);
+        const realT = audio.currentTime;
         const dur = audio.duration;
         if (isFinite(dur) && dur > 0) durationSeconds.set(dur);
+
+        if (!initialised) {
+          displayed = realT;
+          initialised = true;
+        } else if (audio.paused) {
+          // While paused, snap directly — no interpolation needed.
+          displayed = realT;
+        } else {
+          // Predict the playhead by extrapolating wall-clock dt over the
+          // last displayed time. `audio.currentTime` only updates at the
+          // browser's `timeupdate` cadence (often 200–300 ms, sometimes
+          // worse on short tracks where the bar otherwise visibly jumps).
+          // We integrate dt at full rAF rate so the bar slides smoothly,
+          // and softly ease the prediction toward the real currentTime to
+          // correct any drift. Large drifts (> 0.25 s) only happen on
+          // seeks/big stalls — snap in that case so we don't slow-roll
+          // into the new position.
+          const rate = audio.playbackRate || 1;
+          const predicted = displayed + dt * rate;
+          const drift = realT - predicted;
+          if (Math.abs(drift) > 0.25) {
+            displayed = realT;
+          } else {
+            // Soft pull toward truth (~6 % per frame at 60 fps converges
+            // in under a second; imperceptible visually).
+            displayed = predicted + drift * 0.06;
+          }
+        }
+
+        if (isFinite(dur) && dur > 0) {
+          displayed = Math.max(0, Math.min(displayed, dur));
+        } else {
+          displayed = Math.max(0, displayed);
+        }
+        progressSeconds.set(displayed);
 
         // Walk the buffered TimeRanges and pick the end of the range that
         // currently contains the playhead. If we're between ranges (rare —
@@ -940,7 +986,7 @@ export function usePlaybackVisuals(): {
         for (let i = 0; i < ranges.length; i++) {
           const start = ranges.start(i);
           const end = ranges.end(i);
-          if (start <= t && t <= end) {
+          if (start <= realT && realT <= end) {
             bufEnd = end;
             break;
           }
