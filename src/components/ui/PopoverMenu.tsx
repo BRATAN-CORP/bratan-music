@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -128,4 +128,41 @@ export function PopoverMenu({
     </AnimatePresence>,
     document.body,
   );
+}
+
+/** Single row inside a `PopoverMenu`. Centralises the styling for menu rows
+ *  so the hover effect, padding, icon spacing and disabled-state look the
+ *  same everywhere — previously the mini-player used `hover:bg-secondary`
+ *  while the fullscreen 3-dots menu used `hover:bg-white/10`, which
+ *  produced two visibly different hovers on the same control. */
+type MenuItemProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  /** Optional leading icon. Rendered at 14px to match the existing rows. */
+  icon?: ReactNode;
+  /** Hide on `md+` widths (used for actions that have a dedicated inline
+   *  button on wide screens and only need to be in the kebab on narrow). */
+  mobileOnly?: boolean;
+};
+
+export function MenuItem({ icon, mobileOnly, className = '', children, type = 'button', ...rest }: MenuItemProps) {
+  const visibility = mobileOnly ? ' md:hidden' : '';
+  return (
+    <button
+      type={type}
+      role="menuitem"
+      {...rest}
+      className={
+        'popover-menu-item flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors disabled:opacity-60' +
+        visibility +
+        (className ? ' ' + className : '')
+      }
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+/** Visual divider between groups of `MenuItem`. */
+export function MenuDivider({ mobileOnly }: { mobileOnly?: boolean }) {
+  return <div className={'h-px bg-[var(--color-border)]' + (mobileOnly ? ' md:hidden' : '')} />;
 }
