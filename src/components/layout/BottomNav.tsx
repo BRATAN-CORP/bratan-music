@@ -21,7 +21,7 @@ export function BottomNav() {
     : 'rounded-[var(--radius-xl)]';
   return (
     <nav
-      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-2 right-2 z-40 flex justify-around overflow-hidden liquid-glass shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] pt-2 lg:hidden ${cornerCx}`}
+      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] left-2 right-2 z-40 flex justify-around overflow-hidden liquid-glass pt-2 lg:hidden ${cornerCx}`}
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) * 0 + 8px)' }}
     >
       {navItems.map(({ to, icon: Icon, label }) => (

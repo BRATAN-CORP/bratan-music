@@ -344,8 +344,16 @@ export function FullscreenPlayer() {
               horizontal band right under the header on light-coloured
               covers. The outer fullscreen <motion.div> already has
               overflow-hidden so nothing escapes the viewport. */}
-          <div className="relative z-[3] flex flex-1 min-h-0">
-          <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8">
+          <motion.div
+            layout
+            transition={{ layout: { type: 'spring', stiffness: 240, damping: 32, mass: 0.85 } }}
+            className="relative z-[3] flex flex-1 min-h-0"
+          >
+          <motion.div
+            layout
+            transition={{ layout: { type: 'spring', stiffness: 240, damping: 32, mass: 0.85 } }}
+            className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8"
+          >
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
@@ -624,21 +632,32 @@ export function FullscreenPlayer() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
 
-          {/* Desktop side-panel: takes ~half the row when open. */}
-          {currentTrack && lyricsOpen && (
-            <div className="hidden md:flex md:basis-[44%] lg:basis-[42%] xl:basis-2/5">
-              <LyricsPanel
-                trackId={currentTrack.id}
-                open={lyricsOpen}
-                onClose={() => setLyricsOpen(false)}
-                mode="side"
-                onSeek={seek}
-              />
-            </div>
-          )}
-          </div>
+          {/* Desktop side-panel: takes ~half the row when open. The
+              wrapper carries `layout` so the cover column eases into
+              its smaller share of the row when this panel mounts and
+              eases back out when it unmounts (otherwise the cover
+              snaps in a single frame). */}
+          <AnimatePresence initial={false}>
+            {currentTrack && lyricsOpen && (
+              <motion.div
+                key="lyrics-side-shell"
+                layout
+                transition={{ layout: { type: 'spring', stiffness: 240, damping: 32, mass: 0.85 } }}
+                className="hidden md:flex md:basis-[44%] lg:basis-[42%] xl:basis-2/5"
+              >
+                <LyricsPanel
+                  trackId={currentTrack.id}
+                  open={lyricsOpen}
+                  onClose={() => setLyricsOpen(false)}
+                  mode="side"
+                  onSeek={seek}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          </motion.div>
 
           {/* Mobile overlay: covers the whole player surface. */}
           {currentTrack && (

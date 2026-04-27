@@ -198,9 +198,29 @@ img {
 
 /* Suppress the top-edge highlight when this surface is glued to another
    liquid-glass card above it (e.g. mobile bottom nav under the mini-player).
-   Without this the lip would draw a visible line across the seam. */
+   Without this the lip would draw a visible line across the seam. The
+   inset 1px top highlight from the base box-shadow is also dropped so
+   the seam reads as one continuous surface. */
+.liquid-glass.no-lip {
+  box-shadow:
+    0 30px 80px -20px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
 .liquid-glass.no-lip::before {
   display: none;
+}
+
+/* Companion to `.no-lip` for the surface above the seam (e.g. the mobile
+   mini-player sitting on top of the bottom nav). Drops the bottom drop
+   shadow so it doesn't darken the navbar's top edge, fusing the two
+   into one card. The big drop-shadow is only useful when the surface
+   floats on its own — desktop keeps it via the media query gate. */
+@media (max-width: 1023px) {
+  .liquid-glass.no-foot {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+      0 1px 0 0 rgba(255, 255, 255, 0.08) inset;
+  }
 }
 
 /* Backdrop scrim companion to liquid-glass — mid-darkness with a slight

@@ -153,7 +153,7 @@ export function Player() {
           animate={reduce ? undefined : { y: 0, opacity: 1 }}
           exit={reduce ? undefined : { y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-          className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.5rem)] left-2 right-2 z-30 flex flex-col overflow-hidden rounded-t-[var(--radius-xl)] rounded-b-none border-b-0 liquid-glass shadow-[0_30px_80px_-20px_rgba(0,0,0,0.65)] lg:bottom-4 lg:left-[calc(15rem+1rem)] lg:right-4 lg:rounded-[var(--radius-xl)] lg:border-b"
+          className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px)+0.5rem)] left-2 right-2 z-30 flex flex-col overflow-hidden rounded-t-[var(--radius-xl)] rounded-b-none border-b-0 liquid-glass no-foot lg:bottom-6 lg:[left:max(calc(15rem+1.5rem),calc(50vw+7.5rem-36rem))] lg:[right:max(1.5rem,calc(50vw-7.5rem-36rem))] lg:rounded-[var(--radius-xl)] lg:border-b"
           style={{ height: 'var(--player-height)' }}
         >
           {(error || radioError) && (
@@ -163,8 +163,13 @@ export function Player() {
             </div>
           )}
 
+          {/* Bar wrapper: thicker than the visible rail so we have room
+              for the thumb to sit on top without being clipped by the
+              player's `overflow-hidden`. The rail underneath stays h-1
+              regardless of viewport size so the bar doesn't fatten on
+              narrow screens. */}
           <div
-            className="group/progress relative h-2 cursor-pointer touch-none bg-[var(--color-bg-muted)] sm:h-1"
+            className="group/progress relative flex h-3 w-full cursor-pointer touch-none items-center select-none"
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
               const rect = e.currentTarget.getBoundingClientRect();
@@ -187,21 +192,26 @@ export function Player() {
               target.addEventListener('pointercancel', onUp);
             }}
           >
-            {/* Buffered range — a faint bar that runs from the start of the
-                track to whatever the audio element reports as buffered. Sits
-                visually behind the played bar so once playback catches up
-                the gradient covers it. */}
+            <div className="relative h-1 w-full overflow-hidden bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+              {/* Buffered range — a faint bar that runs from the start of
+                  the track to whatever the audio element reports as
+                  buffered. Sits visually behind the played bar so once
+                  playback catches up the gradient covers it. */}
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-white/15"
+                style={{ width: bufferedWidth }}
+                aria-hidden
+              />
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                style={{ width: progressWidth }}
+              />
+            </div>
+            {/* Thumb sits on the wrapper (h-3), not inside the rail, so
+                the rail's overflow-hidden doesn't clip it. z-10 keeps
+                it above the gradient when the bar is hovered. */}
             <motion.div
-              className="absolute inset-y-0 left-0 bg-white/15"
-              style={{ width: bufferedWidth }}
-              aria-hidden
-            />
-            <motion.div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
-              style={{ width: progressWidth }}
-            />
-            <motion.div
-              className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-0 transition-opacity group-hover/progress:opacity-100"
+              className="pointer-events-none absolute top-1/2 z-10 h-3 w-3 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg),0_2px_6px_rgba(0,0,0,0.45)] opacity-0 transition-[transform,opacity] duration-150 group-hover/progress:scale-110 group-hover/progress:opacity-100 group-active/progress:scale-125 group-active/progress:opacity-100"
               style={{ left: progressWidth }}
             />
           </div>
@@ -311,6 +321,34 @@ export function Player() {
                 align="end"
                 width={224}
               >
+                      {/* Shuffle + repeat — surfaced inside the kebab on
+                          narrow widths where the inline buttons are
+                          hidden. md+ keeps them as the dedicated icon
+                          buttons in the player row instead. Re-using the
+                          same store actions so their state stays in
+                          sync with the inline buttons. */}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { toggleShuffle(); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary md:hidden"
+                      >
+                        <Shuffle size={14} className={shuffle ? 'text-[var(--color-accent)]' : ''} />
+                        {shuffle ? 'Перемешать: вкл' : 'Перемешать'}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { cycleRepeat(); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary md:hidden"
+                      >
+                        {repeat === 'one' ? (
+                          <Repeat1 size={14} className="text-[var(--color-accent)]" />
+                        ) : (
+                          <Repeat size={14} className={repeat === 'all' ? 'text-[var(--color-accent)]' : ''} />
+                        )}
+                        Повтор: {repeat === 'off' ? 'выкл' : repeat === 'all' ? 'очередь' : 'один трек'}
+                      </button>
                       <button
                         type="button"
                         role="menuitem"
