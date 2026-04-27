@@ -196,6 +196,13 @@ img {
   z-index: -1;
 }
 
+/* Suppress the top-edge highlight when this surface is glued to another
+   liquid-glass card above it (e.g. mobile bottom nav under the mini-player).
+   Without this the lip would draw a visible line across the seam. */
+.liquid-glass.no-lip::before {
+  display: none;
+}
+
 /* Backdrop scrim companion to liquid-glass — mid-darkness with a slight
    blur so layered modals don't feel fully opaque. */
 .liquid-glass-scrim {
