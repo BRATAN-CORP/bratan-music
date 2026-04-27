@@ -153,11 +153,10 @@ export function FullscreenPlayer() {
                   aria-hidden
                 />
               )}
-              <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 to-black/80" aria-hidden />
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-52"
+                className="absolute inset-0 -z-10"
                 style={{
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 25%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.06) 75%, transparent 100%)',
+                  background: 'radial-gradient(ellipse 120% 80% at 50% 40%, transparent 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.45) 70%, rgba(0,0,0,0.65) 100%)',
                 }}
                 aria-hidden
               />

@@ -31,6 +31,9 @@ interface PlayerState {
   /** Bumped to force the audio hook to re-fetch the stream URL for the
    * current track (used after replacing or deleting an override). */
   streamVersion: number;
+  /** Incremented when the audio element needs to seek to 0 (e.g. back
+   *  button restart). The audio hook subscribes to this counter. */
+  _seekToZero: number;
   bumpStream: () => void;
   setTrack: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
@@ -71,6 +74,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   error: null,
   fullscreen: false,
   streamVersion: 0,
+  _seekToZero: 0,
 
   bumpStream: () => set((s) => ({ streamVersion: s.streamVersion + 1, progress: 0 })),
 
@@ -129,9 +133,9 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   },
 
   previous: () => {
-    const { queue, currentTrack, progress } = get();
+    const { queue, currentTrack, progress, _seekToZero } = get();
     if (progress > 3) {
-      set({ progress: 0 });
+      set({ progress: 0, _seekToZero: _seekToZero + 1 });
       return;
     }
     const idx = queue.findIndex((t) => t.id === currentTrack?.id);
