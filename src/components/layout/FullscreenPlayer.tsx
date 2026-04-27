@@ -451,6 +451,9 @@ export function FullscreenPlayer() {
           >
             <motion.div
               key={currentTrack.id}
+              initial={reduce ? false : { opacity: 0, scale: 0.92 }}
+              animate={reduce ? undefined : { opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative w-full max-w-md"
             >
               {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
@@ -492,32 +495,12 @@ export function FullscreenPlayer() {
                   )}
                 </motion.div>
               )}
-              {/* `layoutId` morphs this large artwork from the small
-                  cover thumb in the mini-player when the user opens
-                  the fullscreen, and morphs back to the thumb on
-                  close. The matching layoutId lives on the cover
-                  buttons in MobileBottomDock and Player. The TiltCard
-                  is rendered as a child so the 3D tilt happens INSIDE
-                  the morphing box (it doesn't fight with the layout
-                  animation). */}
-              <motion.div
-                layoutId="player-cover-art"
-                transition={{ type: 'spring', stiffness: 380, damping: 36, mass: 0.7 }}
-                className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl"
-              >
               <TiltCard
                 intensity={20}
                 hoverScale={1.06}
                 glareStrength={0.7}
                 glare
-                /* On a phone, drive the tilt from the device gyroscope
-                   so the artwork gently parallaxes as the user moves
-                   the device. Pointer-based tilt still works on
-                   desktop. The TiltCard checks `(pointer: coarse)`
-                   internally and skips gyro on non-touch devices, so
-                   we can leave the prop on unconditionally. */
-                useGyroscope
-                className="h-full w-full overflow-hidden rounded-[var(--radius-xl)] transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
+                className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
               >
                 {currentTrack.coverVideoUrl ? (
                   // Animated cover (Tidal mp4). Falls back gracefully — the
@@ -554,7 +537,6 @@ export function FullscreenPlayer() {
                   </div>
                 )}
               </TiltCard>
-              </motion.div>
             </motion.div>
 
             <div className="flex w-full max-w-md items-center gap-2">

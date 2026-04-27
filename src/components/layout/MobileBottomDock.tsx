@@ -132,18 +132,11 @@ export function MobileBottomDock() {
             <div className="flex items-center gap-3 px-3 py-2.5">
               {/* Cover + title open the fullscreen player; the artist
                   is a separate inline link. */}
-              <motion.button
+              <button
                 type="button"
                 onClick={openFullscreen}
                 aria-label="Открыть плеер"
                 className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
-                /* Shared `layoutId` with the FullscreenPlayer cover —
-                   when the user taps this thumb, motion morphs the box
-                   from 44×44 in the dock corner to the large fullscreen
-                   artwork in the centre of the screen. The reverse
-                   morph happens on close. */
-                layoutId="player-cover-art"
-                transition={{ type: 'spring', stiffness: 380, damping: 36, mass: 0.7 }}
               >
                 {currentTrack.coverUrl ? (
                   <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
@@ -153,7 +146,7 @@ export function MobileBottomDock() {
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                   <Maximize2 size={14} className="text-white" />
                 </div>
-              </motion.button>
+              </button>
 
               <div className="min-w-0 flex-1">
                 <button
