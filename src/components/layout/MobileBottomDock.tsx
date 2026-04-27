@@ -1,8 +1,8 @@
 import { useNavigate, NavLink } from 'react-router-dom';
 import { Play, Pause, SkipForward, Heart, Maximize2, Search, Library, User as UserIcon, Home } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion, useTransform } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion, useTransform, type MotionValue } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
-import { useAudioPlayer, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
+import { seekAudio, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useToggleLike } from '@/hooks/useLibrary';
 
 const navItems = [
@@ -33,17 +33,19 @@ const navItems = [
 export function MobileBottomDock() {
   const {
     currentTrack, isPlaying, togglePlay, nextManual,
-    duration, fullscreen, openFullscreen,
+    duration, progress, fullscreen, openFullscreen,
   } = usePlayerStore();
-  const { seek } = useAudioPlayer();
   const { progressSeconds, durationSeconds } = usePlaybackVisuals();
   const reduce = useReducedMotion();
   const navigate = useNavigate();
   const { isLiked, toggle } = useToggleLike();
 
   const progressWidth = useTransform(
-    [progressSeconds, durationSeconds] as unknown as never,
-    ([t, d]: [number, number]) => (d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%'),
+    [progressSeconds as MotionValue<number>, durationSeconds as MotionValue<number>],
+    (values) => {
+      const [t, d] = values as [number, number];
+      return d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%';
+    },
   );
 
   if (fullscreen) return null;
@@ -64,16 +66,25 @@ export function MobileBottomDock() {
             className="flex flex-col"
           >
             {/* Progress bar — thin rail flush with the dock's top edge.
-                Tap-to-seek; the draggable thumb lives in the fullscreen
-                player to keep the dock surface clean. */}
+                Outer wrapper is taller than the visible rail so the
+                draggable thumb has room to sit ON TOP of the bar without
+                being clipped by the dock's `overflow-hidden`. The thumb
+                fades in on hover/active so it doesn't clutter the bar at
+                rest, but it's always there for users who reach for it on
+                touch (the active state shows it on tap). */}
             <div
-              className="group/progress relative h-[3px] w-full shrink-0 cursor-pointer touch-none overflow-hidden bg-white/[0.06] transition-[height] duration-150 select-none hover:h-1.5 active:h-1.5"
+              className="group/progress relative flex h-3 w-full shrink-0 cursor-pointer touch-none items-center select-none"
+              role="slider"
+              aria-label="Перемотка"
+              aria-valuemin={0}
+              aria-valuemax={Math.max(1, Math.round(duration))}
+              aria-valuenow={Math.round(progress)}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const rect = e.currentTarget.getBoundingClientRect();
                 const seekFromX = (clientX: number) => {
                   const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-                  seek(pct * duration);
+                  seekAudio(pct * duration);
                 };
                 seekFromX(e.clientX);
                 const target = e.currentTarget;
@@ -90,9 +101,16 @@ export function MobileBottomDock() {
                 target.addEventListener('pointercancel', onUp);
               }}
             >
+              <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-white/[0.08] transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+                <motion.div
+                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                  style={{ width: progressWidth }}
+                />
+              </div>
               <motion.div
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
-                style={{ width: progressWidth }}
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] opacity-0 shadow-[0_0_0_2px_rgba(0,0,0,0.45),0_2px_6px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-150 group-hover/progress:opacity-100 group-hover/progress:scale-110 group-active/progress:opacity-100 group-active/progress:scale-125"
+                style={{ left: progressWidth }}
               />
             </div>
 
@@ -138,30 +156,28 @@ export function MobileBottomDock() {
                 )}
               </div>
 
-              <motion.button
+              <button
                 type="button"
                 onClick={() => currentTrack && toggle(currentTrack)}
-                whileTap={reduce ? undefined : { scale: 0.85 }}
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--color-hover-overlay)] hover:text-foreground ${liked ? 'text-[var(--color-accent)]' : ''}`}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[transform,colors,background-color] active:scale-90 hover:bg-[var(--color-hover-overlay)] hover:text-foreground ${liked ? 'text-[var(--color-accent)]' : ''}`}
                 aria-label={liked ? 'Убрать лайк' : 'Лайк'}
               >
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
-              </motion.button>
+              </button>
 
-              <motion.button
+              <button
                 type="button"
                 onClick={togglePlay}
-                whileTap={reduce ? undefined : { scale: 0.92 }}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-[0_2px_8px_-2px_var(--color-accent-glow)] transition-shadow hover:shadow-[0_4px_16px_-4px_var(--color-accent-glow)]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-[0_2px_8px_-2px_var(--color-accent-glow)] transition-[transform,box-shadow] active:scale-95 hover:shadow-[0_4px_16px_-4px_var(--color-accent-glow)]"
                 aria-label={isPlaying ? 'Пауза' : 'Пуск'}
               >
                 {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" />}
-              </motion.button>
+              </button>
 
               <button
                 type="button"
                 onClick={nextManual}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-[var(--color-hover-overlay)] hover:text-foreground"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[transform,colors,background-color] active:scale-90 hover:bg-[var(--color-hover-overlay)] hover:text-foreground"
                 aria-label="Следующий"
               >
                 <SkipForward size={16} />
