@@ -72,16 +72,24 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
 
   if (mode === 'side') {
     // Side pane on md+. Borderless and transparent so it visually merges
-    // with the fullscreen player background and doesn't look like a card.
+    // with the fullscreen player background. The panel slides in from
+    // the right with a soft spring + a subtle scale so it lands instead
+    // of just sliding — same feel modals get when they animate in.
     return (
       <AnimatePresence>
         {open && (
           <motion.aside
             key="lyrics-side"
-            initial={reduce ? false : { opacity: 0, x: 32 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 32 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            initial={reduce ? false : { opacity: 0, x: 48, scale: 0.985, filter: 'blur(6px)' }}
+            animate={reduce ? undefined : { opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={reduce ? undefined : { opacity: 0, x: 32, scale: 0.985, filter: 'blur(4px)' }}
+            transition={{
+              opacity: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+              filter: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+              x: { type: 'spring', stiffness: 240, damping: 32, mass: 0.9 },
+              scale: { type: 'spring', stiffness: 260, damping: 26 },
+            }}
+            style={{ transformOrigin: 'right center' }}
             className="hidden h-full w-full overflow-hidden md:block"
             aria-label="Текст песни"
           >
@@ -92,25 +100,35 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
     );
   }
 
+  // Mobile overlay. Slides in from the bottom with a soft spring + a
+  // brief blur-in so the underlying player surface visibly recedes
+  // before the lyric layer takes over.
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           key="lyrics-overlay"
-          initial={reduce ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.22 }}
-          // Full-bleed background on mobile (replaces the player surface)
-          // with a single dismiss control in the corner so users have a way
-          // back to the player without needing to know that the panel is
-          // tap-to-close.
+          initial={reduce ? false : { opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
+          animate={reduce ? undefined : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+          exit={reduce ? undefined : { opacity: 0, y: 16, scale: 0.985, filter: 'blur(6px)' }}
+          transition={{
+            opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+            filter: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+            y: { type: 'spring', stiffness: 280, damping: 30, mass: 0.85 },
+            scale: { type: 'spring', stiffness: 280, damping: 26 },
+          }}
+          style={{ transformOrigin: 'center bottom' }}
           className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-xl md:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Текст песни"
         >
-          <div className="relative flex shrink-0 items-center justify-end px-3 pt-3">
+          <motion.div
+            className="relative flex shrink-0 items-center justify-end px-3 pt-3"
+            initial={reduce ? false : { opacity: 0, y: -8 }}
+            animate={reduce ? undefined : { opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+          >
             <button
               type="button"
               onClick={onClose}
@@ -119,7 +137,7 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
             >
               <X size={16} />
             </button>
-          </div>
+          </motion.div>
           <div className="min-h-0 flex-1 overflow-hidden">
             <LyricsContent trackId={trackId} onSeek={onSeek} />
           </div>
