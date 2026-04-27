@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface Track {
   id: string;
@@ -61,7 +62,7 @@ interface PlayerState {
   closeFullscreen: () => void;
 }
 
-export const usePlayerStore = create<PlayerState>()((set, get) => ({
+export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   currentTrack: null,
   queue: [],
   isPlaying: false,
@@ -159,4 +160,16 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   setError: (error) => set({ error }),
   openFullscreen: () => set({ fullscreen: true }),
   closeFullscreen: () => set({ fullscreen: false }),
+}), {
+  name: 'bratan-player',
+  partialize: (s) => ({
+    currentTrack: s.currentTrack,
+    queue: s.queue,
+    volume: s.volume,
+    muted: s.muted,
+    shuffle: s.shuffle,
+    repeat: s.repeat,
+    progress: s.progress,
+    duration: s.duration,
+  }),
 }));

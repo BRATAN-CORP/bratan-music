@@ -351,6 +351,9 @@ export function useAudioPlayer() {
     if (b.ctx && b.ctx.state === 'suspended') {
       await b.ctx.resume().catch(() => {});
     }
+    // Only auto-play if the store says we should be playing (avoids
+    // a sound blip when the track is restored from localStorage on reload).
+    if (!usePlayerStore.getState().isPlaying) return;
     try {
       await safePlay(slot);
     } catch (err) {
@@ -427,6 +430,11 @@ export function useAudioPlayer() {
     if (!audio.src || b.loaded[slot] !== currentTrack?.id) return;
     if (isPlaying) {
       if (fallbackInProgressRef.current) return;
+      // If restored from localStorage, seek to the saved progress before playing.
+      const storeProgress = usePlayerStore.getState().progress;
+      if (audio.currentTime === 0 && storeProgress > 1 && audio.duration > 0) {
+        audio.currentTime = Math.min(storeProgress, audio.duration);
+      }
       const ctxBundle = ensureAudioGraph();
       if (ctxBundle.ctx && ctxBundle.ctx.state === 'suspended') {
         ctxBundle.ctx.resume().catch(() => {});
