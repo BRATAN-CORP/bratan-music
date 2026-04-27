@@ -21,12 +21,21 @@ import { NotFoundPage } from '@/app/not-found/page';
 
 function AppLayout() {
   useAutoAuth();
+  // Single-scroller layout: html/body owns the only vertical scroll. The
+  // previous nested `main { overflow-y-auto }` inside `h-dvh + overflow-hidden`
+  // shell created a SECOND scrollbar inside `main`, which made `position: fixed`
+  // children (BottomNav, mobile mini-player) measure their right edge against
+  // the viewport while content text edges measured against `main`'s narrower
+  // content area — the bars ended up ~scrollbar_width past the grid on the
+  // right while the left edges still aligned. With one scroller the grid and
+  // fixed bars share the same right anchor (html's `scrollbar-gutter: stable`),
+  // and Sidebar is parked sticky-below-Header so it still feels pinned.
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
+    <div className="flex min-h-dvh flex-col">
       <Header />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex flex-1">
         <Sidebar />
-        <main className="min-w-0 flex-1 overflow-y-auto pb-44 lg:pb-32">
+        <main className="min-w-0 flex-1 pb-44 lg:pb-32">
           <PageTransition>
             <Outlet />
           </PageTransition>
