@@ -128,15 +128,17 @@ export function FullscreenPlayer() {
           animate={reduce ? undefined : { opacity: 1 }}
           exit={reduce ? undefined : { opacity: 0 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--color-bg)]"
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden"
         >
+          {/* Background layers: solid bg → blurred cover → soft vignette */}
+          <div className="absolute inset-0 z-0 bg-[var(--color-bg)]" aria-hidden />
           {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
             <>
               {currentTrack.coverVideoUrl ? (
                 <video
                   key={currentTrack.coverVideoUrl + '-bg'}
                   src={currentTrack.coverVideoUrl}
-                  className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-50 blur-3xl saturate-150 scale-110"
+                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-50 blur-3xl saturate-150 scale-110"
                   autoPlay
                   muted
                   loop
@@ -148,22 +150,22 @@ export function FullscreenPlayer() {
                 />
               ) : (
                 <div
-                  className="absolute inset-0 -z-10 bg-cover bg-center opacity-50 blur-3xl saturate-150"
+                  className="absolute inset-0 z-[1] bg-cover bg-center opacity-50 blur-3xl saturate-150 scale-110"
                   style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
                   aria-hidden
                 />
               )}
               <div
-                className="absolute inset-0 -z-10"
+                className="absolute inset-0 z-[2]"
                 style={{
-                  background: 'radial-gradient(ellipse 120% 80% at 50% 40%, transparent 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.45) 70%, rgba(0,0,0,0.65) 100%)',
+                  background: 'radial-gradient(ellipse 120% 80% at 50% 40%, transparent 0%, rgba(0,0,0,0.12) 40%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.55) 100%)',
                 }}
                 aria-hidden
               />
             </>
           )}
 
-          <div className="relative flex items-center justify-between px-5 py-4">
+          <div className="relative z-[3] flex items-center justify-between px-5 py-4">
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
               <ChevronDown size={20} />
             </Button>
@@ -210,7 +212,7 @@ export function FullscreenPlayer() {
             </div>
           </div>
 
-          <div className="relative flex flex-1 overflow-hidden">
+          <div className="relative z-[3] flex flex-1 overflow-hidden">
           <div className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8">
             <motion.div
               key={currentTrack.id}
