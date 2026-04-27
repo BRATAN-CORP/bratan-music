@@ -13,7 +13,14 @@ import type { Track } from '@/types';
 export function PlaylistPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: playlist, isLoading } = usePlaylist(id ?? '');
+  const { data: playlist, isLoading, isFetching, isError, refetch } = usePlaylist(id ?? '');
+  // While react-router transitions and the URL is updating, `id` can be
+  // briefly empty / falsy, which makes the query disabled and `isLoading`
+  // false even though the page just opened — we'd flash "Плейлист не
+  // найден" until the route param resolves. Treat "no id yet" as the
+  // loading state so the page never bottoms out on the not-found copy
+  // before we've actually tried to fetch.
+  const showLoading = !id || isLoading || (isFetching && !playlist);
   const reorderMutation = useReorderPlaylistTracks();
   const pinPlaylist = usePinPlaylist();
   const isPinned = playlist ? (playlist.pinnedAt != null || playlist.isLiked) : false;
@@ -81,8 +88,33 @@ export function PlaylistPage() {
           <span>Назад</span>
         </button>
 
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Загрузка...</p>
+        {showLoading ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:gap-6">
+              <div className="h-32 w-32 shrink-0 animate-pulse rounded-[var(--radius-md)] bg-secondary/50 sm:h-40 sm:w-40" />
+              <div className="flex flex-1 flex-col gap-3">
+                <div className="h-3 w-24 animate-pulse rounded bg-secondary/50" />
+                <div className="h-9 w-2/3 animate-pulse rounded bg-secondary/50" />
+                <div className="h-3 w-20 animate-pulse rounded bg-secondary/50" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-12 animate-pulse rounded-[var(--radius-md)] bg-secondary/30" />
+              ))}
+            </div>
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-start gap-3 py-12">
+            <p className="text-sm text-muted-foreground">Не удалось загрузить плейлист.</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] bg-secondary px-3 text-sm font-medium transition-colors hover:bg-secondary/80"
+            >
+              Повторить
+            </button>
+          </div>
         ) : playlist ? (
           <>
             <div className="mb-8 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:gap-6">
