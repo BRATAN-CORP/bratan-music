@@ -488,16 +488,24 @@ export function FullscreenPlayer() {
               {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
                 <motion.div
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+                  // No `overflow-hidden` here on purpose. With overflow-hidden
+                  // + border-radius + filter:blur on the same element,
+                  // Safari clips the blurred output to the element's rounded
+                  // box — producing a sharp horizontal cut at the top of the
+                  // glow on portrait mobile (the user's report). Letting the
+                  // blur extend naturally past the (rectangular) source gives
+                  // a continuous soft halo with no visible edge.
+                  //
+                  // The expansion ranges are also tighter than before so the
+                  // glow stays inside the viewport on small phones (iPhone SE
+                  // ~568px tall): max scale 1.10 (was 1.18), max blur 56px
+                  // (was 88px). The bass response is still very visible —
+                  // we just keep it from punching through the top safe area.
+                  className="pointer-events-none absolute inset-0 -z-10"
                   animate={reduce ? undefined : {
-                    // ~20% smoother than before: smaller animated ranges
-                    // and a softer spring so the glow swells with the
-                    // bass instead of snapping. Still kick-locked because
-                    // the underlying amplitude hook uses a 25ms attack;
-                    // we just damp the visual response on this side.
-                    scale: 1.0 + pulse * 0.18,
+                    scale: 1.0 + pulse * 0.10,
                     opacity: 0.32 + pulse * 0.44,
-                    filter: `blur(${56 + pulse * 32}px) saturate(${1.2 + pulse * 0.6}) brightness(${1 + pulse * 0.36})`,
+                    filter: `blur(${32 + pulse * 24}px) saturate(${1.15 + pulse * 0.5}) brightness(${1 + pulse * 0.32})`,
                   }}
                   transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
                   style={{ borderRadius: 'var(--radius-xl)' }}
