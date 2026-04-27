@@ -55,12 +55,11 @@ export function FullscreenPlayer() {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
-  // amp is 0..~0.6 from the bass band. The hook now uses asymmetric
-  // smoothing (fast 25ms attack, 90ms release) so kicks pop visibly. We
-  // bias the curve with sqrt so quiet bass still moves the glow but loud
-  // kicks don't saturate to 1 instantly — the result is a glow that
-  // visibly *throbs* with the beat instead of floating smoothly.
-  const pulse = Math.min(1, Math.sqrt(amp * 3.2));
+  // amp is 0..~0.6 from the bass band (30–180Hz). We subtract a small noise
+  // floor first so room tone / mid-bleed doesn't keep the glow swimming
+  // when there's no actual kick — the glow should sit still during quiet
+  // passages and only react to real bass content.
+  const pulse = Math.min(1, Math.sqrt(Math.max(0, amp - 0.06) * 3.4));
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const coarse = useCoarsePointer();
@@ -353,16 +352,16 @@ export function FullscreenPlayer() {
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
                   animate={reduce ? undefined : {
-                    // Wider scale + opacity range and a brightness boost
-                    // so each kick visibly throbs. Spring stiffness was
-                    // bumped (70 → 260) and damping reduced (18 → 13) so
-                    // the motion catches the attack instead of averaging
-                    // it away.
-                    scale: 1.0 + pulse * 0.22,
-                    opacity: 0.32 + pulse * 0.55,
-                    filter: `blur(${56 + pulse * 38}px) saturate(${1.2 + pulse * 0.7}) brightness(${1 + pulse * 0.45})`,
+                    // ~20% smoother than before: smaller animated ranges
+                    // and a softer spring so the glow swells with the
+                    // bass instead of snapping. Still kick-locked because
+                    // the underlying amplitude hook uses a 25ms attack;
+                    // we just damp the visual response on this side.
+                    scale: 1.0 + pulse * 0.18,
+                    opacity: 0.32 + pulse * 0.44,
+                    filter: `blur(${56 + pulse * 32}px) saturate(${1.2 + pulse * 0.6}) brightness(${1 + pulse * 0.36})`,
                   }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 13, mass: 0.45 }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
                   style={{ borderRadius: 'var(--radius-xl)' }}
                 >
                   {currentTrack.coverVideoUrl ? (
