@@ -8,6 +8,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useAnalyserAmplitude } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
+import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { Equalizer } from '@/components/features/Equalizer';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
@@ -52,17 +53,7 @@ export function FullscreenPlayer() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [radioBusy, setRadioBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!moreOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [moreOpen]);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
   // amp is 0..~0.6 from the bass band; scale up a touch so weaker bass is
   // still visible. The smoothing is now lighter (tau=110ms in the hook),
@@ -259,27 +250,25 @@ export function FullscreenPlayer() {
                 <Sliders size={18} />
               </Button>
 
-              <div className="relative" ref={moreRef}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMoreOpen((v) => !v)}
-                  aria-label="Действия с треком"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                >
-                  <MoreHorizontal size={18} />
-                </Button>
-                <AnimatePresence>
-                  {moreOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                      role="menu"
-                      className="liquid-glass absolute right-0 top-full z-[60] mt-2 w-60 overflow-hidden rounded-[var(--radius-md)]"
-                    >
+              <Button
+                ref={moreTriggerRef}
+                variant="ghost"
+                size="icon"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-label="Действия с треком"
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+              >
+                <MoreHorizontal size={18} />
+              </Button>
+              <PopoverMenu
+                open={moreOpen}
+                onClose={() => setMoreOpen(false)}
+                triggerRef={moreTriggerRef}
+                anchor="bottom"
+                align="end"
+                width={240}
+              >
                       <button
                         type="button"
                         role="menuitem"
@@ -337,10 +326,7 @@ export function FullscreenPlayer() {
                         <Upload size={14} />
                         Загрузить свою версию
                       </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              </PopoverMenu>
             </div>
           </div>
 

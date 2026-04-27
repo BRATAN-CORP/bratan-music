@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
@@ -10,6 +10,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
+import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
@@ -64,18 +65,10 @@ export function Player() {
       setDownloading(false);
     }
   };
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [menuOpen]);
+  // Menu trigger ref — used by PopoverMenu to anchor the dropdown. Outside
+  // clicks and Escape are handled inside PopoverMenu so we don't duplicate
+  // them here.
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   const progressPct = duration > 0 ? (progress / duration) * 100 : 0;
 
@@ -278,29 +271,29 @@ export function Player() {
                 )}
               </Button>
 
-              {/* 3-dot menu: add-to-playlist / share / artist. Replaces the
-                * previous heart in the central controls cluster. */}
-              <div className="relative" ref={menuRef}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setMenuOpen((v) => !v)}
-                  aria-label="Действия с треком"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                >
-                  <MoreHorizontal size={16} />
-                </Button>
-                <AnimatePresence>
-                  {menuOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.96, y: 4 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96, y: 4 }}
-                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                      role="menu"
-                      className="liquid-glass absolute bottom-full right-0 z-30 mb-2 w-56 overflow-hidden rounded-[var(--radius-md)]"
-                    >
+              {/* 3-dot menu: add-to-playlist / share / artist. The actual menu
+                * is rendered via PopoverMenu (body-level portal + fixed
+                * position) so it can never reflow the player's flex row when
+                * it opens. */}
+              <Button
+                ref={menuTriggerRef}
+                variant="ghost"
+                size="icon"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Действия с треком"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <MoreHorizontal size={16} />
+              </Button>
+              <PopoverMenu
+                open={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                triggerRef={menuTriggerRef}
+                anchor="top"
+                align="end"
+                width={224}
+              >
                       <button
                         type="button"
                         role="menuitem"
@@ -367,11 +360,8 @@ export function Player() {
                           <UserIcon size={14} />
                           Перейти к артисту
                         </button>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                )}
+              </PopoverMenu>
             </div>
 
             <div className="hidden flex-1 items-center justify-end gap-2 md:flex">
