@@ -144,7 +144,7 @@ export function FullscreenPlayer() {
           animate={reduce ? undefined : { opacity: 1 }}
           exit={reduce ? undefined : { opacity: 0 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed inset-0 z-50 flex flex-col overflow-hidden"
+          className="fullscreen-player fixed inset-0 z-50 flex flex-col overflow-hidden"
         >
           {/* Background layers: solid bg → ambient blurred cover → vignette
               The cover is heavily blurred and over-scaled so the player

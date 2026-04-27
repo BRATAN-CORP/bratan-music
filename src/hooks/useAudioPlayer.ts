@@ -88,6 +88,21 @@ function getBundle(): AudioBundle {
   return bundle;
 }
 
+/**
+ * Standalone seek used by surfaces that need a draggable timeline but do
+ * not own the rest of the audio engine (e.g. MobileBottomDock). Mounting
+ * the full `useAudioPlayer()` hook just to expose `seek` would spin up a
+ * second copy of every effect (mediaSession, listeners, fallbacks, …) and
+ * has been observed to cause flaky tap registration on iOS Safari when
+ * three components race the same singleton's listeners. */
+export function seekAudio(time: number): void {
+  const b = getBundle();
+  const audio = b.audios[b.active];
+  if (!audio) return;
+  audio.currentTime = time;
+  usePlayerStore.getState().setProgress(time);
+}
+
 function reloadWithoutCors(slot: Slot) {
   const b = getBundle();
   const audio = b.audios[slot];
