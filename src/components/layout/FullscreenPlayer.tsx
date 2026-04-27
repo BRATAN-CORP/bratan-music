@@ -465,6 +465,7 @@ export function FullscreenPlayer() {
                 open={lyricsOpen}
                 onClose={() => setLyricsOpen(false)}
                 mode="side"
+                onSeek={seek}
               />
             </div>
           )}
@@ -477,6 +478,7 @@ export function FullscreenPlayer() {
               open={lyricsOpen}
               onClose={() => setLyricsOpen(false)}
               mode="overlay"
+              onSeek={seek}
             />
           )}
 

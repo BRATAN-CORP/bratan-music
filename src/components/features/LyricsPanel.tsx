@@ -6,6 +6,7 @@ import { usePlayerStore } from '@/store/player';
 
 interface LyricsContentProps {
   trackId: string;
+  onSeek?: (time: number) => void;
 }
 
 /**
@@ -13,7 +14,7 @@ interface LyricsContentProps {
  * lyrics in Apple-Music style. Has no positioning of its own so it can be
  * embedded as a side panel on desktop or as a full-screen overlay on mobile.
  */
-function LyricsContent({ trackId }: LyricsContentProps) {
+function LyricsContent({ trackId, onSeek }: LyricsContentProps) {
   const { data, isLoading, isError } = useLyrics(trackId);
   const progress = usePlayerStore((s) => s.progress);
 
@@ -49,6 +50,7 @@ function LyricsContent({ trackId }: LyricsContentProps) {
       activeIndex={activeIndex}
       progress={progress}
       isRtl={Boolean(data?.isRightToLeft)}
+      onSeek={onSeek}
     />
   );
 }
@@ -62,9 +64,10 @@ interface LyricsPanelProps {
    * 'side'    = inline side pane (used inside a flex row on md+).
    */
   mode?: 'overlay' | 'side';
+  onSeek?: (time: number) => void;
 }
 
-export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: LyricsPanelProps) {
+export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }: LyricsPanelProps) {
   const reduce = useReducedMotion();
 
   if (mode === 'side') {
@@ -82,7 +85,7 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: Lyrics
             className="hidden h-full w-full overflow-hidden md:block"
             aria-label="Текст песни"
           >
-            <LyricsContent trackId={trackId} />
+            <LyricsContent trackId={trackId} onSeek={onSeek} />
           </motion.aside>
         )}
       </AnimatePresence>
@@ -118,7 +121,7 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay' }: Lyrics
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <LyricsContent trackId={trackId} />
+            <LyricsContent trackId={trackId} onSeek={onSeek} />
           </div>
         </motion.div>
       )}
@@ -134,11 +137,12 @@ interface LyricsBodyProps {
   activeIndex: number;
   progress: number;
   isRtl: boolean;
+  onSeek?: (time: number) => void;
 }
 
 const SCROLL_MASK = 'linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)';
 
-function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, isRtl }: LyricsBodyProps) {
+function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, isRtl, onSeek }: LyricsBodyProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -219,10 +223,17 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
                     filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
                   }}
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  onClick={() => {
+                    if (onSeek && l.time != null) {
+                      onSeek(l.time);
+                      setAutoScroll(true);
+                    }
+                  }}
                   className={
-                    isActive
+                    (isActive
                       ? 'origin-left text-foreground drop-shadow-[0_2px_18px_var(--color-accent-soft)]'
-                      : 'origin-left text-muted-foreground'
+                      : 'origin-left text-muted-foreground')
+                    + (onSeek ? ' cursor-pointer select-none active:scale-[0.98] transition-transform' : '')
                   }
                 >
                   {l.text || '\u00a0'}
