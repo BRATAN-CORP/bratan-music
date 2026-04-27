@@ -562,6 +562,12 @@ export function FullscreenPlayer() {
                     <Marquee text={currentTrack.title} />
                   </h1>
                 </motion.div>
+                {/* Always render the artist line inside a `block w-full
+                    text-center` shell so short and long names sit at
+                    the same horizontal centre as the title above —
+                    previously the no-artistId branch let the Marquee
+                    inherit the parent flex column's `items-stretch`
+                    default and the text drifted to the left edge. */}
                 {currentTrack.artistId ? (
                   <button
                     type="button"
@@ -571,7 +577,9 @@ export function FullscreenPlayer() {
                     <Marquee text={currentTrack.artist} />
                   </button>
                 ) : (
-                  <Marquee text={currentTrack.artist} className="text-sm text-muted-foreground sm:text-base" />
+                  <div className="block w-full text-center text-sm text-muted-foreground sm:text-base">
+                    <Marquee text={currentTrack.artist} />
+                  </div>
                 )}
                 {error && (
                   <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
