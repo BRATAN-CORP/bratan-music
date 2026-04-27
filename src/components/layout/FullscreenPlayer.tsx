@@ -130,25 +130,35 @@ export function FullscreenPlayer() {
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--color-bg)]"
         >
-          {currentTrack.coverUrl && (
+          {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
             <>
-              <div
-                className="absolute inset-0 -z-10 bg-cover bg-center opacity-50 blur-3xl saturate-150"
-                style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
-                aria-hidden
-              />
-              {/* Smooth bg darkener — the previous from/via/to with three
-                  stops produced a visible band at the via point that read as
-                  a hard shadow line under the "Сейчас играет" header. */}
+              {currentTrack.coverVideoUrl ? (
+                <video
+                  key={currentTrack.coverVideoUrl + '-bg'}
+                  src={currentTrack.coverVideoUrl}
+                  className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover opacity-50 blur-3xl saturate-150 scale-110"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  aria-hidden
+                  disablePictureInPicture
+                  controlsList="nofullscreen nodownload noremoteplayback"
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 -z-10 bg-cover bg-center opacity-50 blur-3xl saturate-150"
+                  style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
+                  aria-hidden
+                />
+              )}
               <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 to-black/80" aria-hidden />
-              {/* Top-bar soft fade. Adds a gentle, evenly-spread darkening
-                  band across the very top of the player so the header never
-                  shows a hard ridge against the blurred cover behind it.
-                  Solves the "грубая обрывающая тень на левой половине"
-                  artefact: the cover blur falls off asymmetrically across
-                  the wide viewport, so we layer a uniform top fade on top. */}
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-44 bg-gradient-to-b from-black/55 via-black/15 to-transparent"
+                className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-52"
+                style={{
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 25%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.06) 75%, transparent 100%)',
+                }}
                 aria-hidden
               />
             </>
@@ -158,7 +168,7 @@ export function FullscreenPlayer() {
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
               <ChevronDown size={20} />
             </Button>
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
+            <span className="pointer-events-none absolute inset-x-0 top-0 flex h-full items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Сейчас играет
             </span>
             <div className="flex items-center gap-1">
@@ -210,24 +220,39 @@ export function FullscreenPlayer() {
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative w-full max-w-md"
             >
-              {/* glow: duplicated cover behind, blurred + pulsed by audio amplitude */}
-              {currentTrack.coverUrl && (
+              {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
                 <motion.div
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 -z-10"
+                  className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
                   animate={reduce ? undefined : {
                     scale: 1.04 + pulse * 0.12,
                     opacity: 0.45 + pulse * 0.3,
                     filter: `blur(${72 + pulse * 22}px) saturate(${1.3 + pulse * 0.35})`,
                   }}
                   transition={{ type: 'spring', stiffness: 70, damping: 18, mass: 0.6 }}
-                  style={{
-                    backgroundImage: `url(${currentTrack.coverUrl})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    borderRadius: 'var(--radius-xl)',
-                  }}
-                />
+                  style={{ borderRadius: 'var(--radius-xl)' }}
+                >
+                  {currentTrack.coverVideoUrl ? (
+                    <video
+                      key={currentTrack.coverVideoUrl + '-glow'}
+                      src={currentTrack.coverVideoUrl}
+                      className="h-full w-full object-cover pointer-events-none"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      preload="auto"
+                      aria-hidden
+                      disablePictureInPicture
+                      controlsList="nofullscreen nodownload noremoteplayback"
+                    />
+                  ) : (
+                    <div
+                      className="h-full w-full bg-cover bg-center"
+                      style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
+                    />
+                  )}
+                </motion.div>
               )}
               <TiltCard
                 intensity={20}
@@ -259,6 +284,8 @@ export function FullscreenPlayer() {
                       playsInline
                       preload="auto"
                       aria-hidden
+                      disablePictureInPicture
+                      controlsList="nofullscreen nodownload noremoteplayback"
                     />
                   </div>
                 ) : currentTrack.coverUrl ? (
@@ -445,6 +472,7 @@ export function FullscreenPlayer() {
                 open={lyricsOpen}
                 onClose={() => setLyricsOpen(false)}
                 mode="side"
+                onSeek={seek}
               />
             </div>
           )}
@@ -457,6 +485,7 @@ export function FullscreenPlayer() {
               open={lyricsOpen}
               onClose={() => setLyricsOpen(false)}
               mode="overlay"
+              onSeek={seek}
             />
           )}
 

@@ -189,9 +189,9 @@ export function ProfilePage() {
               }`}
             >
               <motion.span
-                layout
+                animate={{ x: crossfade ? 24 : 4 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                className={`inline-block h-4 w-4 rounded-full bg-white shadow ${crossfade ? 'translate-x-6' : 'translate-x-1'}`}
+                className="inline-block h-4 w-4 rounded-full bg-white shadow"
               />
             </button>
           </label>

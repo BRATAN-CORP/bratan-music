@@ -4,7 +4,17 @@ import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 
+import type { TidalQuality } from '@/store/settings';
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
+
+const QUALITY_FALLBACK_ORDER: TidalQuality[] = ['HI_RES_LOSSLESS', 'LOSSLESS', 'HIGH', 'LOW'];
+
+function getNextFallbackQuality(current: string): TidalQuality | null {
+  const idx = QUALITY_FALLBACK_ORDER.indexOf(current as TidalQuality);
+  if (idx < 0 || idx >= QUALITY_FALLBACK_ORDER.length - 1) return null;
+  return QUALITY_FALLBACK_ORDER[idx + 1] ?? null;
+}
 
 /**
  * Build the stream URL for any track. Upload tracks (id="upload:<uuid>") are
@@ -248,21 +258,33 @@ export function useAudioPlayer() {
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
 
-  /** Load the given track into the active slot and start playback from 0. */
-  const loadTrack = useCallback(async (track: { id: string; source?: string }) => {
+  const currentQualityRef = useRef<string>(tidalQuality);
+  currentQualityRef.current = tidalQuality;
+
+  /** Load the given track into the active slot and start playback from 0.
+   *  If `quality` is provided it overrides the user setting (used for fallback). */
+  const loadTrack = useCallback(async (track: { id: string; source?: string }, quality?: string) => {
     const trackId = track.id;
     const b = getBundle();
     loadingRef.current = trackId;
+    const effectiveQuality = quality ?? currentQualityRef.current;
     setError(null);
     try {
-      const url = await fetchStreamUrl(track, tidalQuality);
+      const url = await fetchStreamUrl(track, effectiveQuality);
       if (loadingRef.current !== trackId) return;
+      if (!url) {
+        setError('Не удалось получить ссылку на аудио');
+        pause();
+        return;
+      }
       const slot = b.active;
       const audio = b.audios[slot];
       if (b.playPromises[slot]) {
         try { await b.playPromises[slot]; } catch { /* ignore */ }
       }
       audio.pause();
+      corsRetried[slot] = false;
+      audio.crossOrigin = 'anonymous';
       audio.src = url;
       audio.load();
       b.loaded[slot] = trackId;
@@ -277,10 +299,10 @@ export function useAudioPlayer() {
       if (loadingRef.current !== trackId) return;
       const message = err instanceof Error ? err.message : String(err);
       console.error('[stream]', message);
-      setError(message);
+      setError(message || 'Не удалось загрузить трек');
       pause();
     }
-  }, [pause, setError, tidalQuality]);
+  }, [pause, setError]);
 
   // Reload when track id changes (or stream version bumped).
   const lastStreamVersionRef = useRef(streamVersion);
@@ -318,6 +340,8 @@ export function useAudioPlayer() {
 
     const trackChanged = currentTrack.id !== b.loaded[b.active] && currentTrack.id !== loadingRef.current;
     if (trackChanged || versionBumped) {
+      // Reset quality fallback to user's chosen quality for the new track.
+      currentQualityRef.current = tidalQuality;
       // Cancel any in-flight crossfade so we don't keep two audios alive.
       cancelRamp();
       crossfadingRef.current = false;
@@ -480,13 +504,29 @@ export function useAudioPlayer() {
           reloadWithoutCors(slot);
           return;
         }
+        // Auto-fallback: if the audio format isn't supported (code 4) or
+        // network/decode failed (2, 3), try the next lower quality before
+        // surfacing the error to the user.
+        if ((code === 2 || code === 3 || code === 4) && currentTrack) {
+          const current = currentQualityRef.current;
+          const fallback = getNextFallbackQuality(current);
+          if (fallback) {
+            console.warn(`[stream] quality ${current} failed (code ${code}), falling back to ${fallback}`);
+            currentQualityRef.current = fallback;
+            loadTrack(currentTrack, fallback);
+            return;
+          }
+        }
         const messages: Record<number, string> = {
           1: 'Загрузка прервана',
-          2: 'Сетевая ошибка',
-          3: 'Не удалось декодировать',
-          4: 'Формат не поддерживается',
+          2: 'Сетевая ошибка при загрузке трека',
+          3: 'Не удалось декодировать аудио',
+          4: 'Аудио формат не поддерживается',
         };
-        setError(messages[code ?? 0] ?? 'Ошибка плеера');
+        const nativeMsg = audio.error?.message;
+        const msg = messages[code ?? 0]
+          ?? (nativeMsg ? `Ошибка: ${nativeMsg}` : 'Ошибка воспроизведения');
+        setError(msg);
       };
       audio.addEventListener('timeupdate', onTimeUpdate);
       audio.addEventListener('durationchange', onDurationChange);
@@ -502,7 +542,7 @@ export function useAudioPlayer() {
     const offA = wireSlot('a');
     const offB = wireSlot('b');
     return () => { offA(); offB(); };
-  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade]);
+  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade, currentTrack, loadTrack]);
 
   const seek = useCallback((time: number) => {
     const b = getBundle();
