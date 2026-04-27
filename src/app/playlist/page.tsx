@@ -123,8 +123,8 @@ export function PlaylistPage() {
                           ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
-                      aria-label={isPinned ? 'Открепить' : 'Закрепить в навбаре'}
-                      title={isPinned ? 'Открепить из навбара' : 'Закрепить в навбаре'}
+                      aria-label={isPinned ? 'Открепить' : 'Закрепить на панели'}
+                      title={isPinned ? 'Открепить с панели' : 'Закрепить на панели'}
                     >
                       {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
                     </button>
