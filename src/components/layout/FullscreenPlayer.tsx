@@ -450,27 +450,47 @@ export function FullscreenPlayer() {
           <motion.div
             animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
             transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
-            className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8"
+            // `min-h-0` is essential here — inside a parent flex, a
+            // flex item's default min-height is `auto` (its content's
+            // intrinsic height), which prevents the cover from
+            // shrinking to fit the viewport. With `min-h-0` the
+            // column can shrink below its intrinsic content height
+            // and the cover-wrapper's height-aware maxWidth clamp
+            // (see below) can actually take effect.
+            //
+            // Symmetric `py-4 sm:py-6` padding gives the cover a
+            // *visible* breathing gap from the top bar (so "Сейчас
+            // играет" no longer overlays the cover) and matches it
+            // with an equal pad below the volume slider.
+            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:py-6"
           >
-            {/* Cover artwork wrapper. Width is `w-full max-w-md` so it
-                renders at the full 28rem (448px) the user marked as
-                ideal, but on short viewports the height-aware clamp
-                below keeps the cover from pushing the volume slider
-                off the bottom of the screen. The reservation
-                (`100vh - 22rem`) is the minimum room the rest of the
-                stack needs (header 72 + title row 56 + progress 30 +
-                transport 56 + volume 40 + 4×gap 96 + pb-4 16 ≈ 22rem)
-                — at any viewport tall enough to fit that, the cover
-                stays at full 28rem; below that the cover shrinks
-                gracefully and aspect-square on the TiltCard inside
-                follows. */}
+            {/* Cover artwork wrapper. Width is `w-full max-w-md` so
+                on a tall enough viewport it renders at the full
+                28rem (448px) the user marked as ideal. The
+                viewport-height-aware clamp below shrinks the cover
+                when there isn't enough room for the rest of the
+                stack — the reserve is sized for the desktop case
+                (sm:py-6 + sm:gap-8) which is where the volume
+                slider was getting clipped:
+
+                  header 72 + title 56 + progress 30 + transport 56 +
+                  volume 40 + 4×gap-8 128 + py-6 48 ≈ 430px ≈ 27rem
+
+                We reserve 26rem to leave a tiny safety margin for
+                the cover to still feel large; the remaining slack
+                distributes equally above and below via
+                `justify-center`. We add `aspect-square mx-auto` so
+                both dimensions of the wrapper shrink together with
+                the maxWidth clamp — without it, only width
+                shrinks and the TiltCard inside (which derives its
+                own size from `aspect-square`) wouldn't follow. */}
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="relative w-full max-w-md"
-              style={{ maxWidth: 'min(28rem, calc(100vh - 22rem))' }}
+              className="relative mx-auto aspect-square w-full max-w-md"
+              style={{ maxWidth: 'min(28rem, calc(100vh - 26rem))' }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
