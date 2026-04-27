@@ -281,32 +281,20 @@ export function FullscreenPlayer() {
                   />
                 </>
               )}
-              {/* Top + bottom soft vignettes. The TOP one absorbs the
-                  cover halo's natural blur bleed before it reaches the
-                  header bar — without it, on bright covers + bass kicks
-                  the halo's pulsing was visibly painting through the
-                  (transparent) header as a "torn light strip" right at
-                  the top of the viewport. Darkening this strip turns
-                  that bleed into ambient depth instead of a visible
-                  band, and the header's `text-shadow` keeps the title
-                  readable on top.
-
-                  Bottom vignette (unchanged) gives the controls and
-                  volume row enough contrast to read on light covers. */}
+              {/* Full-viewport readability tint. ~7% black sat across
+                  the whole fullscreen — sits *above* the blurred cover
+                  background but *below* every interactive layer (cover,
+                  header, controls). On extremely bright covers (white,
+                  pastel pinks, etc.) the tint gives the white-ish text
+                  + muted-grey controls just enough contrast to remain
+                  legible without darkening the overall mood. The
+                  blurred cover behind it still reads as the dominant
+                  ambient field — the tint only modulates the brightest
+                  highlights. No vignettes, no gradients, no clipping —
+                  the user explicitly does not want the blur or glow
+                  constrained or shaped by anything. */}
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-40"
-                style={{
-                  background:
-                    'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 55%, transparent 100%)',
-                }}
-                aria-hidden
-              />
-              <div
-                className="pointer-events-none absolute inset-0 z-[2]"
-                style={{
-                  background:
-                    'linear-gradient(to bottom, transparent 0%, transparent 70%, rgba(0,0,0,0.45) 100%)',
-                }}
+                className="pointer-events-none absolute inset-0 z-[2] bg-black/[0.07]"
                 aria-hidden
               />
             </>
@@ -514,12 +502,12 @@ export function FullscreenPlayer() {
           >
             {/* Cover artwork wrapper. The halo (-z-10 inside) is sized
                 to the cover but its filter blur paints freely outside
-                the box — we deliberately do NOT clip or shrink it any
-                more. The "torn light strip" the user used to see at
-                the top of the viewport from the halo's bleed is now
-                handled by a top-side darkening vignette (mirrors the
-                bottom one) so the bleed reads as ambient depth rather
-                than a visible band. */}
+                the box — we deliberately do NOT clip or shrink the
+                halo. The full-viewport readability tint (7% black) +
+                the existing text-shadow / drop-shadow on header text
+                together keep the title/icons legible on bright covers
+                even with the halo bleed reaching the top of the
+                viewport. */}
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
