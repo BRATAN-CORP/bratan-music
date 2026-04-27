@@ -12,8 +12,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantClass: Record<ButtonVariant, string> = {
   primary: 'bg-primary text-primary-foreground shadow-[0_2px_8px_-2px_var(--color-accent-glow)] hover:bg-[var(--color-accent-hover)] hover:shadow-[0_4px_16px_-4px_var(--color-accent-glow)] active:scale-[0.98]',
   secondary: 'bg-secondary text-secondary-foreground hover:bg-[var(--color-bg-muted)] active:scale-[0.98]',
-  outline: 'border border-border bg-transparent text-foreground hover:bg-secondary hover:border-[var(--color-border-strong)] active:scale-[0.98]',
-  ghost: 'text-muted-foreground hover:bg-secondary hover:text-foreground active:scale-[0.98]',
+  outline: 'border border-border bg-transparent text-foreground hover:bg-[color-mix(in_oklab,var(--color-text)_8%,transparent)] hover:border-[var(--color-border-strong)] active:scale-[0.98]',
+  ghost: 'text-muted-foreground hover:bg-[color-mix(in_oklab,var(--color-text)_8%,transparent)] hover:text-foreground active:scale-[0.98]',
   danger: 'bg-destructive text-destructive-foreground hover:opacity-90 active:scale-[0.98]',
 };
 
