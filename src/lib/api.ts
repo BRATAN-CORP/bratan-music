@@ -15,6 +15,22 @@ function parseErrorMessage(text: string): string {
   return text;
 }
 
+/**
+ * Error subclass that preserves the HTTP status code from the failed
+ * response. Callers that need to branch on specific statuses (e.g. 402
+ * for the subscription paywall) can `instanceof ApiError` and read
+ * `err.status`. Plain `catch (err: Error)` callers still see the
+ * parsed message via `err.message`.
+ */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().accessToken;
   const headers: Record<string, string> = {
@@ -33,14 +49,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (refreshed) {
       headers['Authorization'] = `Bearer ${useAuthStore.getState().accessToken}`;
       const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
-      if (!retry.ok) throw new Error(parseErrorMessage(await retry.text()));
+      if (!retry.ok) throw new ApiError(retry.status, parseErrorMessage(await retry.text()));
       return retry.json() as Promise<T>;
     }
     useAuthStore.getState().logout();
-    throw new Error('Требуется повторный вход');
+    throw new ApiError(401, 'Требуется повторный вход');
   }
 
-  if (!res.ok) throw new Error(parseErrorMessage(await res.text()));
+  if (!res.ok) throw new ApiError(res.status, parseErrorMessage(await res.text()));
   return res.json() as Promise<T>;
 }
 
