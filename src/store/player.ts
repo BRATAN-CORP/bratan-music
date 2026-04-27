@@ -49,7 +49,13 @@ interface PlayerState {
   play: () => void;
   pause: () => void;
   togglePlay: () => void;
+  /** Auto-advance (called by audio engine on track end). Honours repeat
+   *  mode: stops at the end of the queue when repeat is 'off'. */
   next: () => void;
+  /** Manual skip (user pressed the skip-forward button). Always wraps to
+   *  the first track when at the end of the queue, even with repeat='off'
+   *  — the queue is non-empty so the user expects *something* to play. */
+  nextManual: () => void;
   previous: () => void;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
@@ -133,6 +139,25 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     if (nextTrack) set({ currentTrack: nextTrack, isPlaying: true, progress: 0 });
   },
 
+  nextManual: () => {
+    const { queue, currentTrack, shuffle } = get();
+    if (!queue.length) return;
+    const idx = queue.findIndex((t) => t.id === currentTrack?.id);
+    let nextIdx: number;
+    if (shuffle) {
+      nextIdx = Math.floor(Math.random() * queue.length);
+    } else if (idx < queue.length - 1) {
+      nextIdx = idx + 1;
+    } else {
+      // End of queue — wrap regardless of repeat mode. The user pressed
+      // skip-forward expecting *something* to play, and the queue is
+      // non-empty.
+      nextIdx = 0;
+    }
+    const nextTrack = queue[nextIdx];
+    if (nextTrack) set({ currentTrack: nextTrack, isPlaying: true, progress: 0 });
+  },
+
   previous: () => {
     const { queue, currentTrack, progress, _seekToZero } = get();
     if (progress > 3) {
@@ -151,7 +176,12 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
   cycleRepeat: () =>
     set((s) => {
-      const modes: RepeatMode[] = ['off', 'one', 'all'];
+      // off → all (queue/playlist repeat) → one (current track repeat) → off.
+      // Rationale: on the first press from the inactive state the user
+      // most likely wants "keep the queue going" rather than "loop this
+      // single track". Single-track loop is a less common, more niche
+      // intent so it lives at the second press.
+      const modes: RepeatMode[] = ['off', 'all', 'one'];
       const idx = modes.indexOf(s.repeat);
       return { repeat: modes[(idx + 1) % modes.length] ?? 'off' };
     }),

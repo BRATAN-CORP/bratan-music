@@ -35,7 +35,7 @@ function buildShareUrl(trackId: string): string {
 
 export function Player() {
   const {
-    currentTrack, isPlaying, togglePlay, next, previous,
+    currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
     shuffle, toggleShuffle, repeat, cycleRepeat,
     duration, error, openFullscreen,
@@ -260,7 +260,7 @@ export function Player() {
                   {isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
                 </Button>
               </motion.div>
-              <Button onClick={next} variant="ghost" size="icon" aria-label="Следующий">
+              <Button onClick={nextManual} variant="ghost" size="icon" aria-label="Следующий">
                 <SkipForward size={16} />
               </Button>
               <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Повтор">

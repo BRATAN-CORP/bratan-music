@@ -30,7 +30,7 @@ function formatTime(seconds: number): string {
 
 export function FullscreenPlayer() {
   const {
-    currentTrack, isPlaying, togglePlay, next, previous,
+    currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
     shuffle, toggleShuffle, repeat, cycleRepeat,
     duration, fullscreen, closeFullscreen, error,
@@ -535,7 +535,7 @@ export function FullscreenPlayer() {
                   {isPlaying ? <Pause size={24} /> : <Play size={24} fill="currentColor" />}
                 </Button>
               </motion.div>
-              <Button variant="ghost" size="icon" onClick={next} aria-label="Вперёд" className="h-12 w-12">
+              <Button variant="ghost" size="icon" onClick={nextManual} aria-label="Вперёд" className="h-12 w-12">
                 <SkipForward size={22} />
               </Button>
               <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label="Повтор">

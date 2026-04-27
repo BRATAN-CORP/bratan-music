@@ -775,7 +775,7 @@ export function useAudioPlayer() {
       ['play', () => store().play()],
       ['pause', () => store().pause()],
       ['previoustrack', () => store().previous()],
-      ['nexttrack', () => store().next()],
+      ['nexttrack', () => store().nextManual()],
       ['seekbackward', (d) => seek(Math.max(0, progress - (d.seekOffset ?? 10)))],
       ['seekforward', (d) => seek(Math.min(usePlayerStore.getState().duration, progress + (d.seekOffset ?? 10)))],
       ['seekto', (d) => { if (typeof d.seekTime === 'number') seek(d.seekTime); }],
