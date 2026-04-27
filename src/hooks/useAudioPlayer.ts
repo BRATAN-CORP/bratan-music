@@ -574,10 +574,12 @@ export function useAudioPlayer() {
       const audio = b.audios[slot];
       const onTimeUpdate = () => {
         if (slot !== b.active) return;
-        // Suppress the 0-time update that fires right after src/load while
-        // we still owe a restore-seek; otherwise it would clobber the
-        // persisted progress.
-        if (audio.currentTime === 0 && pendingRestoreProgressRef.current !== null) return;
+        // While a restore-seek is still pending, ignore any timeupdate the
+        // audio element fires from the initial src/load: the value will be
+        // close to 0 and would clobber the persisted progress before our
+        // seek lands. The ref is cleared in onLoadedMetadata once we've
+        // applied the seek, after which timeupdate values are trustworthy.
+        if (pendingRestoreProgressRef.current !== null) return;
         setProgress(audio.currentTime);
         const dur = audio.duration;
         if (
@@ -599,8 +601,11 @@ export function useAudioPlayer() {
         const target = pendingRestoreProgressRef.current;
         if (target !== null && isFinite(audio.duration) && audio.duration > 0) {
           audio.currentTime = Math.min(target, audio.duration);
+          pendingRestoreProgressRef.current = null;
         }
-        pendingRestoreProgressRef.current = null;
+        // If duration isn't known yet, KEEP the ref armed: loadTrack's
+        // post-canplay block (line ~375) will land the seek once duration
+        // is available. Clearing here would lose the restore target.
       };
       const onEnded = () => {
         if (slot !== b.active) return;
