@@ -361,17 +361,21 @@ export function Player() {
             </div>
           </div>
 
-          {currentTrack && (
-            <AddToPlaylistDialog
-              track={currentTrack}
-              open={addToPlaylistOpen}
-              onClose={() => setAddToPlaylistOpen(false)}
-            />
-          )}
-
-          <QueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
         </motion.div>
       )}
+
+      {/* Dialogs must be outside the player's motion.div because its
+        * backdrop-filter (glass class) creates a containing block for
+        * fixed-positioned children — making the dialogs position
+        * relative to the player bar instead of the viewport. */}
+      {currentTrack && (
+        <AddToPlaylistDialog
+          track={currentTrack}
+          open={addToPlaylistOpen}
+          onClose={() => setAddToPlaylistOpen(false)}
+        />
+      )}
+      <QueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
     </AnimatePresence>
   );
 }
