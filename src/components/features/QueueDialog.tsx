@@ -73,7 +73,7 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
               exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
               style={{ maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))' }}
-              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-t-[var(--radius-xl)] md:mb-0 md:rounded-[var(--radius-lg)]"
+              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--radius-xl)] md:mb-0 md:rounded-[var(--radius-lg)]"
             >
               <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">

@@ -10,7 +10,8 @@ import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
-import { PopoverMenu } from '@/components/ui/PopoverMenu';
+import { PopoverMenu, MenuItem } from '@/components/ui/PopoverMenu';
+import { Marquee } from '@/components/ui/Marquee';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
@@ -231,26 +232,26 @@ export function Player() {
                   </div>
                 </motion.button>
               )}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <button
                   type="button"
                   onClick={openFullscreen}
-                  className="block w-full truncate text-left text-sm font-medium transition-opacity hover:opacity-90"
+                  className="block w-full text-left text-sm font-medium transition-opacity hover:opacity-90"
                   aria-label="Открыть плеер"
                 >
-                  {currentTrack.title}
+                  <Marquee text={currentTrack.title} />
                 </button>
                 {currentTrack.artistId ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
-                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4"
+                    className="block w-full text-left text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4"
                     aria-label={`Открыть артиста ${currentTrack.artist}`}
                   >
-                    {currentTrack.artist}
+                    <Marquee text={currentTrack.artist} />
                   </button>
                 ) : (
-                  <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
+                  <Marquee text={currentTrack.artist} className="text-xs text-muted-foreground" />
                 )}
               </div>
             </div>
@@ -315,100 +316,74 @@ export function Player() {
                 align="end"
                 width={224}
               >
-                      {/* Shuffle + repeat — surfaced inside the kebab on
-                          narrow widths where the inline buttons are
-                          hidden. md+ keeps them as the dedicated icon
-                          buttons in the player row instead. Re-using the
-                          same store actions so their state stays in
-                          sync with the inline buttons. */}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { toggleShuffle(); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary md:hidden"
-                      >
-                        <Shuffle size={14} className={shuffle ? 'text-[var(--color-accent)]' : ''} />
-                        {shuffle ? 'Перемешать: вкл' : 'Перемешать'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { cycleRepeat(); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary md:hidden"
-                      >
-                        {repeat === 'one' ? (
-                          <Repeat1 size={14} className="text-[var(--color-accent)]" />
-                        ) : (
-                          <Repeat size={14} className={repeat === 'all' ? 'text-[var(--color-accent)]' : ''} />
-                        )}
-                        Повтор: {repeat === 'off' ? 'выкл' : repeat === 'all' ? 'очередь' : 'один трек'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setQueueOpen(true); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                      >
-                        <ListOrdered size={14} />
-                        Очередь
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setAddToPlaylistOpen(true); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                      >
-                        <ListPlus size={14} />
-                        Добавить в плейлист
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={handleStartRadio}
-                        disabled={radioBusy}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary disabled:opacity-60"
-                      >
-                        {radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
-                        Запустить волну
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { handleDownload(); setMenuOpen(false); }}
-                        disabled={downloading}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary disabled:opacity-60"
-                      >
-                        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                        Скачать
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setOverrideOpen(true); setMenuOpen(false); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                      >
-                        <Upload size={14} />
-                        Загрузить свою версию
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={handleShare}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                      >
-                        {shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
-                        {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
-                      </button>
-                      {currentTrack.artistId && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={handleGoToArtist}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                        >
-                          <UserIcon size={14} />
-                          Перейти к артисту
-                        </button>
+                {/* Shuffle + repeat — surfaced inside the kebab on narrow
+                    widths where the inline buttons are hidden. md+ keeps
+                    them as the dedicated icon buttons in the player row
+                    instead. Re-using the same store actions so their
+                    state stays in sync with the inline buttons. */}
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { toggleShuffle(); }}
+                  icon={<Shuffle size={14} className={shuffle ? 'text-[var(--color-accent)]' : ''} />}
+                >
+                  {shuffle ? 'Перемешать: вкл' : 'Перемешать'}
+                </MenuItem>
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { cycleRepeat(); }}
+                  icon={repeat === 'one' ? (
+                    <Repeat1 size={14} className="text-[var(--color-accent)]" />
+                  ) : (
+                    <Repeat size={14} className={repeat === 'all' ? 'text-[var(--color-accent)]' : ''} />
+                  )}
+                >
+                  Повтор: {repeat === 'off' ? 'выкл' : repeat === 'all' ? 'очередь' : 'один трек'}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { setQueueOpen(true); setMenuOpen(false); }}
+                  icon={<ListOrdered size={14} />}
+                >
+                  Очередь
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { setAddToPlaylistOpen(true); setMenuOpen(false); }}
+                  icon={<ListPlus size={14} />}
+                >
+                  Добавить в плейлист
+                </MenuItem>
+                <MenuItem
+                  onClick={handleStartRadio}
+                  disabled={radioBusy}
+                  icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                >
+                  Запустить волну
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { handleDownload(); setMenuOpen(false); }}
+                  disabled={downloading}
+                  icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                >
+                  Скачать
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { setOverrideOpen(true); setMenuOpen(false); }}
+                  icon={<Upload size={14} />}
+                >
+                  Загрузить свою версию
+                </MenuItem>
+                <MenuItem
+                  onClick={handleShare}
+                  icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
+                >
+                  {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                </MenuItem>
+                {currentTrack.artistId && (
+                  <MenuItem
+                    onClick={handleGoToArtist}
+                    icon={<UserIcon size={14} />}
+                  >
+                    Перейти к артисту
+                  </MenuItem>
                 )}
               </PopoverMenu>
             </div>

@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion, useTransform, type MotionVal
 import { usePlayerStore } from '@/store/player';
 import { seekAudio, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { Marquee } from '@/components/ui/Marquee';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -151,22 +152,22 @@ export function MobileBottomDock() {
                 <button
                   type="button"
                   onClick={openFullscreen}
-                  className="block w-full truncate text-left text-sm font-medium leading-tight"
+                  className="block w-full text-left text-sm font-medium leading-tight"
                   aria-label="Открыть плеер"
                 >
-                  {currentTrack.title}
+                  <Marquee text={currentTrack.title} />
                 </button>
                 {currentTrack.artistId ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
-                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    className="block w-full text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={`Открыть артиста ${currentTrack.artist}`}
                   >
-                    {currentTrack.artist}
+                    <Marquee text={currentTrack.artist} />
                   </button>
                 ) : (
-                  <p className="truncate text-xs text-muted-foreground">{currentTrack.artist}</p>
+                  <Marquee text={currentTrack.artist} className="text-xs text-muted-foreground" />
                 )}
               </div>
 

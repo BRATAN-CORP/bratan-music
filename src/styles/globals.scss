@@ -244,6 +244,39 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
   border: 1px solid var(--color-border);
 }
 
+/* Single source of truth for popover/dropdown menu rows. The hover overlay
+   is theme-aware (light tint on dark themes, dark tint on light themes)
+   so the effect reads the same on every backdrop. Used by `MenuItem` in
+   `PopoverMenu.tsx` — anywhere we surface a 3-dots / kebab menu (mini
+   player, fullscreen player, queue, etc.) the hover, focus and active
+   states all match. */
+.popover-menu-item {
+  position: relative;
+  z-index: 1;
+  background-color: transparent;
+  color: var(--color-text);
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent;
+
+  &:hover,
+  &:focus-visible {
+    background-color: var(--color-hover-overlay-strong);
+  }
+
+  &:active:not(:disabled) {
+    background-color: var(--color-hover-overlay-strong);
+    transform: scale(0.99);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -318,8 +351,15 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
 
   /* Icons (lucide ships them as inline <svg>). Apply a matching soft
      drop-shadow on the SVG layer — text-shadow doesn't reach SVG
-     children. Same two-stop curve so icons and text feel cohesive. */
+     children. Same two-stop curve so icons and text feel cohesive.
+     `overflow: visible` is critical: lucide icons render at their
+     natural viewBox (24×24) but the <svg> element's own overflow
+     clips drop-shadow to that box, producing the "tear" the user
+     reported on icons sitting near container edges. Allowing the
+     filter to spread beyond the box lets the shadow fall naturally
+     onto whatever is next to the icon. */
   svg {
+    overflow: visible;
     filter:
       drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35))
       drop-shadow(0 4px 12px rgba(0, 0, 0, 0.28));
@@ -333,5 +373,14 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
   [role="dialog"] svg,
   img + svg {
     filter: none;
+  }
+
+  /* Headline / artist text must not clip the shadow off the glyphs.
+     The Marquee component itself renders a mask-image so the text
+     fades cleanly into the background; outside of marquees we want
+     the shadow to spread freely past the text box (which can be
+     narrow inside `flex` rows). */
+  h1, h2, h3 {
+    overflow: visible;
   }
 }

@@ -9,7 +9,8 @@ import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useAnalyserAmplitude, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/Button';
-import { PopoverMenu } from '@/components/ui/PopoverMenu';
+import { PopoverMenu, MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
+import { Marquee } from '@/components/ui/Marquee';
 import { Equalizer } from '@/components/features/Equalizer';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
@@ -326,133 +327,103 @@ export function FullscreenPlayer() {
                 align="end"
                 width={240}
               >
-                      {/* Mobile-only group: surfaces the four track-side
-                          actions that are inline buttons on md+ but
-                          collapse here on narrow widths. */}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { handleStartRadio(); setMoreOpen(false); }}
-                        disabled={radioBusy}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60 md:hidden"
-                      >
-                        {radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
-                        Запустить волну
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setQueueOpen(true); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
-                      >
-                        <ListOrdered size={14} />
-                        Очередь
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setLyricsOpen((v) => !v); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
-                      >
-                        <Mic2 size={14} />
-                        {lyricsOpen ? 'Скрыть текст' : 'Текст песни'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setEqOpen((v) => !v); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
-                      >
-                        <Sliders size={14} />
-                        {eqOpen ? 'Скрыть эквалайзер' : 'Эквалайзер'}
-                      </button>
-                      {/* Mobile-only — also surface shuffle/repeat in the
-                          menu so the user has a discoverable place to
-                          toggle them; the inline icons in the bottom
-                          control row are tiny on small phones. */}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { toggleShuffle(); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
-                      >
-                        <Shuffle size={14} className={shuffle ? 'text-foreground' : ''} />
-                        Перемешать{shuffle ? ' (вкл.)' : ''}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { cycleRepeat(); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
-                      >
-                        {repeat === 'one' ? <Repeat1 size={14} className="text-foreground" /> : <Repeat size={14} className={repeat === 'all' ? 'text-foreground' : ''} />}
-                        Повтор{repeat === 'all' ? ' (всё)' : repeat === 'one' ? ' (один)' : ''}
-                      </button>
-                      <div className="relative z-[1] h-px bg-white/10 md:hidden" />
+                {/* Mobile-only group: surfaces the four track-side actions
+                    that are inline buttons on md+ but collapse here on
+                    narrow widths. */}
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { handleStartRadio(); setMoreOpen(false); }}
+                  disabled={radioBusy}
+                  icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                >
+                  Запустить волну
+                </MenuItem>
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { setQueueOpen(true); setMoreOpen(false); }}
+                  icon={<ListOrdered size={14} />}
+                >
+                  Очередь
+                </MenuItem>
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { setLyricsOpen((v) => !v); setMoreOpen(false); }}
+                  icon={<Mic2 size={14} />}
+                >
+                  {lyricsOpen ? 'Скрыть текст' : 'Текст песни'}
+                </MenuItem>
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { setEqOpen((v) => !v); setMoreOpen(false); }}
+                  icon={<Sliders size={14} />}
+                >
+                  {eqOpen ? 'Скрыть эквалайзер' : 'Эквалайзер'}
+                </MenuItem>
+                {/* Mobile-only — surface shuffle/repeat in the menu so the
+                    user has a discoverable place to toggle them; the
+                    inline icons in the bottom control row are tiny on
+                    small phones. */}
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { toggleShuffle(); setMoreOpen(false); }}
+                  icon={<Shuffle size={14} className={shuffle ? 'text-foreground' : ''} />}
+                >
+                  Перемешать{shuffle ? ' (вкл.)' : ''}
+                </MenuItem>
+                <MenuItem
+                  mobileOnly
+                  onClick={() => { cycleRepeat(); setMoreOpen(false); }}
+                  icon={repeat === 'one' ? <Repeat1 size={14} className="text-foreground" /> : <Repeat size={14} className={repeat === 'all' ? 'text-foreground' : ''} />}
+                >
+                  Повтор{repeat === 'all' ? ' (всё)' : repeat === 'one' ? ' (один)' : ''}
+                </MenuItem>
+                <MenuDivider mobileOnly />
 
-                      {/* Always-shown: track navigation + library actions.
-                          Most of these would otherwise require closing
-                          the fullscreen player to reach. */}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setAddToPlaylistOpen(true); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
-                      >
-                        <ListPlus size={14} />
-                        Добавить в плейлист
-                      </button>
-                      {currentTrack.artistId && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => { goToArtist(); setMoreOpen(false); }}
-                          className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
-                        >
-                          <User size={14} />
-                          Перейти к артисту
-                        </button>
-                      )}
-                      {currentTrack.albumId && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => { goToAlbum(); setMoreOpen(false); }}
-                          className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
-                        >
-                          <Disc size={14} />
-                          Перейти к альбому
-                        </button>
-                      )}
-                      <div className="relative z-[1] h-px bg-white/10" />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { handleShare(); /* keep the menu open briefly so the user sees the copy confirmation; setMoreOpen(false) is called by the share sheet flow on mobile via the AbortError catch */ }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
-                      >
-                        {shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
-                        {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { handleDownload(); setMoreOpen(false); }}
-                        disabled={downloading}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60"
-                      >
-                        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                        Скачать
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setOverrideOpen(true); setMoreOpen(false); }}
-                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
-                      >
-                        <Upload size={14} />
-                        Загрузить свою версию
-                      </button>
+                {/* Always-shown: track navigation + library actions. Most
+                    of these would otherwise require closing the fullscreen
+                    player to reach. */}
+                <MenuItem
+                  onClick={() => { setAddToPlaylistOpen(true); setMoreOpen(false); }}
+                  icon={<ListPlus size={14} />}
+                >
+                  Добавить в плейлист
+                </MenuItem>
+                {currentTrack.artistId && (
+                  <MenuItem
+                    onClick={() => { goToArtist(); setMoreOpen(false); }}
+                    icon={<User size={14} />}
+                  >
+                    Перейти к артисту
+                  </MenuItem>
+                )}
+                {currentTrack.albumId && (
+                  <MenuItem
+                    onClick={() => { goToAlbum(); setMoreOpen(false); }}
+                    icon={<Disc size={14} />}
+                  >
+                    Перейти к альбому
+                  </MenuItem>
+                )}
+                <MenuDivider />
+                <MenuItem
+                  onClick={handleShare}
+                  icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
+                >
+                  {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { handleDownload(); setMoreOpen(false); }}
+                  disabled={downloading}
+                  icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                >
+                  Скачать
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { setOverrideOpen(true); setMoreOpen(false); }}
+                  icon={<Upload size={14} />}
+                >
+                  Загрузить свою версию
+                </MenuItem>
               </PopoverMenu>
             </div>
           </div>
@@ -579,26 +550,28 @@ export function FullscreenPlayer() {
                 <ListPlus size={20} />
               </Button>
 
-              <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
-                <motion.h1
+              <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1">
+                <motion.div
                   key={currentTrack.id + '-title'}
                   initial={reduce ? false : { opacity: 0, y: 8 }}
                   animate={reduce ? undefined : { opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  className="line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+                  className="text-center"
                 >
-                  {currentTrack.title}
-                </motion.h1>
+                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                    <Marquee text={currentTrack.title} />
+                  </h1>
+                </motion.div>
                 {currentTrack.artistId ? (
                   <button
                     type="button"
                     onClick={goToArtist}
-                    className="truncate text-left text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
+                    className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
                   >
-                    {currentTrack.artist}
+                    <Marquee text={currentTrack.artist} />
                   </button>
                 ) : (
-                  <p className="truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
+                  <Marquee text={currentTrack.artist} className="text-sm text-muted-foreground sm:text-base" />
                 )}
                 {error && (
                   <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
@@ -657,11 +630,19 @@ export function FullscreenPlayer() {
                     className="absolute inset-y-0 left-0 rounded-full bg-white/85"
                     style={{ width: progressWidth }}
                   />
-                  <motion.div
-                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
-                    style={{ left: progressWidth }}
-                  />
                 </div>
+                {/* Thumb is rendered as a sibling of the rail (not inside)
+                    so it isn't clipped by the rail's `overflow-hidden`,
+                    which is needed to keep rounded edges on the fill. The
+                    outer `.group/progress` is `relative h-6 items-center`,
+                    so `top-1/2 -translate-y-1/2` vertically centres the
+                    thumb on the rail regardless of the rail's animated
+                    height (1px → 1.5px on hover/drag). */}
+                <motion.div
+                  className="pointer-events-none absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
+                  style={{ left: progressWidth }}
+                  aria-hidden
+                />
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
                 <span>{formatTime(progress)}</span>
