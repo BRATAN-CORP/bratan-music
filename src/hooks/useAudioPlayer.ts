@@ -201,21 +201,34 @@ function setSlotGain(slot: Slot, value: number) {
   b.audios[slot].volume = v;
 }
 
-let activeRamp: number | null = null;
+/** Per-slot active ramp tracking. The previous implementation used a single
+ *  global RAF id, so when both slots ramped in parallel during a crossfade
+ *  the second call clobbered the first id and `cancelRamp` could only stop
+ *  ONE of the two ramps. The leftover ramp would keep writing gain values
+ *  into a slot we'd already loaded a fresh track into — that's exactly the
+ *  "track plays but no sound" / "audio fades out unexpectedly" symptom. */
+const activeRamps: Record<Slot, { raf: number; resolve: () => void } | null> = { a: null, b: null };
 
-function cancelRamp() {
-  if (activeRamp != null) {
-    cancelAnimationFrame(activeRamp);
-    activeRamp = null;
+function cancelRamp(slot?: Slot) {
+  const slots: Slot[] = slot ? [slot] : ['a', 'b'];
+  for (const s of slots) {
+    const ramp = activeRamps[s];
+    if (ramp) {
+      cancelAnimationFrame(ramp.raf);
+      ramp.resolve();
+      activeRamps[s] = null;
+    }
   }
 }
 
 /**
  * Animate gain from `fromValue` to `toValue` over `durationMs` for the given
  * slot. Returns a promise that resolves when the ramp finishes (or is
- * cancelled).
+ * cancelled). Safe to run two ramps in parallel — each slot tracks its own
+ * RAF id.
  */
 function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: number): Promise<void> {
+  cancelRamp(slot);
   return new Promise((resolve) => {
     const start = performance.now();
     setSlotGain(slot, fromValue);
@@ -224,12 +237,14 @@ function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: nu
       const v = fromValue + (toValue - fromValue) * t;
       setSlotGain(slot, v);
       if (t >= 1) {
+        activeRamps[slot] = null;
         resolve();
         return;
       }
-      activeRamp = requestAnimationFrame(tick);
+      const ramp = activeRamps[slot];
+      if (ramp) ramp.raf = requestAnimationFrame(tick);
     };
-    activeRamp = requestAnimationFrame(tick);
+    activeRamps[slot] = { raf: requestAnimationFrame(tick), resolve };
   });
 }
 
@@ -258,6 +273,11 @@ export function useAudioPlayer() {
 
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
+  /** Track id we already attempted (and failed) to crossfade out of. While
+   *  set, we won't retry crossfade on every timeupdate — otherwise a flaky
+   *  network would make us spam fetchStreamUrl 30 times in the last 6
+   *  seconds of a track. Cleared whenever currentTrack changes. */
+  const crossfadeAttemptedRef = useRef<string | null>(null);
 
   const currentQualityRef = useRef<string>(tidalQuality);
   currentQualityRef.current = tidalQuality;
@@ -398,6 +418,11 @@ export function useAudioPlayer() {
     const versionBumped = lastStreamVersionRef.current !== streamVersion;
     lastStreamVersionRef.current = streamVersion;
     const b = getBundle();
+    // Whenever the playing track changes we re-arm the crossfade-attempt
+    // gate so the next track is allowed to fade out exactly once.
+    if (crossfadeAttemptedRef.current !== currentTrack.id) {
+      crossfadeAttemptedRef.current = null;
+    }
 
     // If the requested track is already loaded into the inactive slot (the
     // crossfade preloaded it and finished) we just promote that slot — no
@@ -484,13 +509,18 @@ export function useAudioPlayer() {
       });
     } else {
       safePause(slot);
-      // If a crossfade was in flight, cancel it: pause the incoming slot too.
+      // If a crossfade was in flight, cancel it: pause the incoming slot too
+      // AND restore the active slot's gain to the user's volume — otherwise
+      // the leftover ramp would have left it near 0 and the next play()
+      // would resume into silence.
       if (crossfadingRef.current) {
         cancelRamp();
         crossfadingRef.current = false;
         b.crossfadingInto = null;
         safePause(inactiveSlot(b));
         setSlotGain(inactiveSlot(b), 0);
+        const s = usePlayerStore.getState();
+        setSlotGain(slot, s.muted ? 0 : s.volume);
         b.loaded[inactiveSlot(b)] = null;
       }
     }
@@ -516,54 +546,91 @@ export function useAudioPlayer() {
     const b = getBundle();
     if (crossfadingRef.current) return;
     if (!currentTrack) return;
+    if (crossfadeAttemptedRef.current === currentTrack.id) return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
     const nextTrack = queue[idx + 1];
     if (!nextTrack) return;
 
+    crossfadeAttemptedRef.current = currentTrack.id;
     crossfadingRef.current = true;
     const incoming = inactiveSlot(b);
+    const outgoing = b.active;
     b.crossfadingInto = incoming;
+    const audio = b.audios[incoming];
+
+    // Helper that fully tears the crossfade down. Called both on success
+    // (after promotion) and on any error / external cancellation.
+    const teardown = (promote: boolean) => {
+      if (promote) {
+        safePause(outgoing);
+        b.loaded[outgoing] = null;
+        setSlotGain(outgoing, 0);
+        b.active = incoming;
+      } else {
+        // Failure: keep outgoing as active, kill the incoming attempt.
+        safePause(incoming);
+        b.loaded[incoming] = null;
+        setSlotGain(incoming, 0);
+        // Restore outgoing gain in case its ramp moved it.
+        setSlotGain(outgoing, muted ? 0 : volume);
+      }
+      b.crossfadingInto = null;
+      crossfadingRef.current = false;
+    };
+
     try {
       const url = await fetchStreamUrl(nextTrack, tidalQuality);
       if (!crossfadingRef.current) return;
-      const audio = b.audios[incoming];
+
       if (b.playPromises[incoming]) {
         try { await b.playPromises[incoming]; } catch { /* ignore */ }
       }
       audio.pause();
-      audio.src = url;
-      audio.load();
-      audio.currentTime = 0;
-      b.loaded[incoming] = nextTrack.id;
+
+      // Mute the incoming slot BEFORE we attach src. ensureAudioGraph()
+      // creates GainNodes only on first call — on a brand-new session
+      // with crossfade enabled the graph might not exist yet, in which
+      // case setSlotGain falls back to writing audio.volume. We need the
+      // 0 in place before play() so the user never hears the first 1-2
+      // frames of the incoming track at full volume.
       ensureAudioGraph();
       setSlotGain(incoming, 0);
+
+      // Wait for the incoming track to be playable before we hit play().
+      // Without this, browsers can either delay play() until canplay fires
+      // (so we ramp into silence) or the play() promise rejects on slow
+      // networks ("track plays without sound" symptom).
+      const loaded = await tryLoadSrc(audio, url);
+      if (!crossfadingRef.current) { teardown(false); return; }
+      if (!loaded) {
+        teardown(false);
+        return;
+      }
+      // Now that metadata is in we can safely seek to 0.
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+      b.loaded[incoming] = nextTrack.id;
+
       if (b.ctx && b.ctx.state === 'suspended') {
         await b.ctx.resume().catch(() => {});
       }
       await safePlay(incoming);
+      if (!crossfadingRef.current) { teardown(false); return; }
+
       const target = muted ? 0 : volume;
       const durMs = Math.max(500, crossfadeDuration * 1000);
-      // Run both ramps in parallel.
       await Promise.all([
-        rampGain(b.active, target, 0, durMs),
+        rampGain(outgoing, target, 0, durMs),
         rampGain(incoming, 0, target, durMs),
       ]);
-      if (!crossfadingRef.current) return;
-      // Ramp done → switch the active slot.
-      safePause(b.active);
-      const oldActive = b.active;
-      b.loaded[oldActive] = null;
-      b.active = incoming;
-      b.crossfadingInto = null;
-      crossfadingRef.current = false;
+      if (!crossfadingRef.current) return; // got cancelled mid-ramp
+      teardown(true);
       // Tell the store the playing track has changed without triggering a
-      // reload. Our load effect detects 'slot already loaded' and skips.
+      // reload. The load effect detects 'slot already loaded' and skips.
       setTrack(nextTrack);
     } catch (err) {
       console.warn('[crossfade] failed, falling back to hard switch', err);
-      crossfadingRef.current = false;
-      b.crossfadingInto = null;
+      teardown(false);
     }
   }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, tidalQuality]);
 
