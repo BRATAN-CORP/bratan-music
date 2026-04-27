@@ -48,12 +48,19 @@ export function MobileBottomDock() {
     },
   );
 
-  if (fullscreen) return null;
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
 
+  // While the fullscreen player is open we keep the dock mounted but
+  // visually hidden + non-interactive. Unmounting it (`return null`)
+  // mid-touch — which is exactly what happens when the user taps the
+  // cover button to open fullscreen — caused iOS Safari to drop the
+  // gesture and lock the page input until the next reload. Keeping it
+  // in the DOM lets the touch sequence finish naturally on the now-
+  // hidden element.
   return (
     <div
-      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-4 right-4 z-40 flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
+      aria-hidden={fullscreen || undefined}
+      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-4 right-4 z-40 flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:left-6 sm:right-6 lg:hidden ${fullscreen ? 'pointer-events-none opacity-0' : ''}`}
     >
       <AnimatePresence initial={false}>
         {currentTrack && (
@@ -135,14 +142,15 @@ export function MobileBottomDock() {
                 type="button"
                 onClick={openFullscreen}
                 aria-label="Открыть плеер"
+                style={{ touchAction: 'manipulation' }}
                 className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
               >
                 {currentTrack.coverUrl ? (
-                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
+                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="pointer-events-none h-full w-full object-cover" />
                 ) : (
-                  <div className="h-full w-full bg-white/5" />
+                  <div className="pointer-events-none h-full w-full bg-white/5" />
                 )}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                   <Maximize2 size={14} className="text-white" />
                 </div>
               </button>
