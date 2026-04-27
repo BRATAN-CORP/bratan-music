@@ -143,6 +143,8 @@ export function FullscreenPlayer() {
                   playsInline
                   preload="auto"
                   aria-hidden
+                  disablePictureInPicture
+                  controlsList="nofullscreen nodownload noremoteplayback"
                 />
               ) : (
                 <div
@@ -234,12 +236,15 @@ export function FullscreenPlayer() {
                     <video
                       key={currentTrack.coverVideoUrl + '-glow'}
                       src={currentTrack.coverVideoUrl}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover pointer-events-none"
                       autoPlay
                       muted
                       loop
                       playsInline
                       preload="auto"
+                      aria-hidden
+                      disablePictureInPicture
+                      controlsList="nofullscreen nodownload noremoteplayback"
                     />
                   ) : (
                     <div
@@ -279,6 +284,8 @@ export function FullscreenPlayer() {
                       playsInline
                       preload="auto"
                       aria-hidden
+                      disablePictureInPicture
+                      controlsList="nofullscreen nodownload noremoteplayback"
                     />
                   </div>
                 ) : currentTrack.coverUrl ? (
