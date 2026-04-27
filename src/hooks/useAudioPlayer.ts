@@ -257,12 +257,19 @@ export function useAudioPlayer() {
     try {
       const url = await fetchStreamUrl(track, tidalQuality);
       if (loadingRef.current !== trackId) return;
+      if (!url) {
+        setError('Не удалось получить ссылку на аудио');
+        pause();
+        return;
+      }
       const slot = b.active;
       const audio = b.audios[slot];
       if (b.playPromises[slot]) {
         try { await b.playPromises[slot]; } catch { /* ignore */ }
       }
       audio.pause();
+      corsRetried[slot] = false;
+      audio.crossOrigin = 'anonymous';
       audio.src = url;
       audio.load();
       b.loaded[slot] = trackId;
@@ -277,7 +284,7 @@ export function useAudioPlayer() {
       if (loadingRef.current !== trackId) return;
       const message = err instanceof Error ? err.message : String(err);
       console.error('[stream]', message);
-      setError(message);
+      setError(message || 'Не удалось загрузить трек');
       pause();
     }
   }, [pause, setError, tidalQuality]);
@@ -482,11 +489,14 @@ export function useAudioPlayer() {
         }
         const messages: Record<number, string> = {
           1: 'Загрузка прервана',
-          2: 'Сетевая ошибка',
-          3: 'Не удалось декодировать',
-          4: 'Формат не поддерживается',
+          2: 'Сетевая ошибка при загрузке трека',
+          3: 'Не удалось декодировать аудио',
+          4: 'Аудио формат не поддерживается браузером. Попробуйте сменить качество в настройках.',
         };
-        setError(messages[code ?? 0] ?? 'Ошибка плеера');
+        const nativeMsg = audio.error?.message;
+        const msg = messages[code ?? 0]
+          ?? (nativeMsg ? `Ошибка: ${nativeMsg}` : 'Ошибка воспроизведения');
+        setError(msg);
       };
       audio.addEventListener('timeupdate', onTimeUpdate);
       audio.addEventListener('durationchange', onDurationChange);
