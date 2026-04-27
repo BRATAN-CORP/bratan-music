@@ -158,7 +158,7 @@ export function FullscreenPlayer() {
               <div
                 className="absolute inset-0 z-[2]"
                 style={{
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 15%, transparent 75%, rgba(0,0,0,0.45) 100%)',
+                  background: 'linear-gradient(to bottom, transparent 0%, transparent 75%, rgba(0,0,0,0.45) 100%)',
                 }}
                 aria-hidden
               />
