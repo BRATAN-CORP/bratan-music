@@ -241,11 +241,26 @@ export function FullscreenPlayer() {
                   />
                 </>
               )}
-              {/* Single soft bottom vignette — gives the bottom controls
-                  enough contrast without darkening the top. The previous
-                  radial vignette (centred at 50% 35%) was creating a
-                  visible horizontal band of darkness across the upper
-                  half of the screen, right where the header bar ends. */}
+              {/* Top + bottom soft vignettes. The TOP one absorbs the
+                  cover halo's natural blur bleed before it reaches the
+                  header bar — without it, on bright covers + bass kicks
+                  the halo's pulsing was visibly painting through the
+                  (transparent) header as a "torn light strip" right at
+                  the top of the viewport. Darkening this strip turns
+                  that bleed into ambient depth instead of a visible
+                  band, and the header's `text-shadow` keeps the title
+                  readable on top.
+
+                  Bottom vignette (unchanged) gives the controls and
+                  volume row enough contrast to read on light covers. */}
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-40"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 55%, transparent 100%)',
+                }}
+                aria-hidden
+              />
               <div
                 className="pointer-events-none absolute inset-0 z-[2]"
                 style={{
@@ -447,106 +462,67 @@ export function FullscreenPlayer() {
           <motion.div
             animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
             transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
-            // `pt`/`pb` here are the *minimum* gap above the cover and below
-            // the volume slider — `justify-center` only kicks in if there is
-            // remaining vertical slack, so on shorter desktop windows
-            // (e.g. ~700-800px tall, where flex-centering produced ~16-30px
-            // crammed gaps) these guarantee breathing room. Mobile keeps the
-            // original tight-on-purpose feel (`pt-1 pb-3`), desktop steps up.
-            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 pt-1 pb-3 sm:gap-8 sm:pt-4 sm:pb-6 md:pt-8 md:pb-10 md:transform-gpu"
+            // No top padding — the user wants the cover to butt right up
+            // against the header bar's bottom edge (the bar's own `py-4`
+            // already buffers its content so the cover doesn't visually
+            // crowd the title). Bottom padding is kept small so the volume
+            // slider sits comfortably above the safe area.
+            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8 md:transform-gpu"
           >
-            {/* Cover artwork wrapper. We clamp `max-width` against
-                `100vh - 28rem` so the (aspect-square) cover never
-                grows tall enough to overflow into the header bar on
-                short or wide-screen viewports — the header sits in
-                the same flex column and `justify-center` was happily
-                centring a 28rem-tall cover inside a too-short row,
-                eating the title bar visually. The 28rem reserve
-                (bumped from 24rem) leaves more vertical slack so the
-                cover doesn't kiss the header on ~700-800px-tall
-                desktop windows. The cover stays a clean square
-                because both width and height are governed by the
-                aspect-square rule on the same box, with `max-width`
-                doing the work. */}
+            {/* Cover artwork wrapper. The halo (-z-10 inside) is sized
+                to the cover but its filter blur paints freely outside
+                the box — we deliberately do NOT clip or shrink it any
+                more. The "torn light strip" the user used to see at
+                the top of the viewport from the halo's bleed is now
+                handled by a top-side darkening vignette (mirrors the
+                bottom one) so the bleed reads as ambient depth rather
+                than a visible band. */}
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative mx-auto aspect-square w-full max-w-md"
-              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
             >
               {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
-                // Halo containment box. The glow's blur (~56-88px)
-                // and over-scale (~1.18) combined would otherwise
-                // paint all the way up into the header bar on bright
-                // covers — the user reported a "torn light strip"
-                // appearing at the very top after pause/play, which
-                // was exactly the halo's pulsing bleed reaching the
-                // top edge of the viewport.
-                //
-                // We:
-                //   1. Wrap the halo in a `-inset-10` (2.5rem on each
-                //      side) container so the glow has somewhere to
-                //      spread laterally.
-                //   2. Apply a `radial-gradient` mask that fades the
-                //      container's alpha to 0 at its own edges. This
-                //      anti-aliases what would otherwise be a hard
-                //      `overflow:hidden` clip line — the same kind
-                //      of band that prompted the prior "do NOT use
-                //      overflow-hidden on the body row" comment.
-                //   3. Let `overflow:hidden` hard-clip whatever blur
-                //      output sneaks past the mask's transparent
-                //      stop, guaranteeing the halo cannot reach the
-                //      header even on extreme bass kicks.
-                <div
+                <motion.div
                   aria-hidden
-                  className="pointer-events-none absolute -inset-10 -z-10 overflow-hidden"
-                  style={{
-                    WebkitMaskImage:
-                      'radial-gradient(closest-side, black 55%, transparent 100%)',
-                    maskImage:
-                      'radial-gradient(closest-side, black 55%, transparent 100%)',
+                  className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+                  animate={reduce ? undefined : {
+                    // Bass-only pulse (the amplitude hook is fed the
+                    // 30–180Hz band). Free bleed: the glow is allowed
+                    // to spread to its full natural radius — the top
+                    // vignette + bottom vignette together absorb the
+                    // bleed visually, so we don't need to clip or
+                    // mask the halo itself.
+                    scale: 1.0 + pulse * 0.18,
+                    opacity: 0.32 + pulse * 0.44,
+                    filter: `blur(${56 + pulse * 32}px) saturate(${1.2 + pulse * 0.6}) brightness(${1 + pulse * 0.36})`,
                   }}
+                  transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
+                  style={{ borderRadius: 'var(--radius-xl)' }}
                 >
-                  <motion.div
-                    aria-hidden
-                    className="absolute inset-0"
-                    animate={reduce ? undefined : {
-                      // ~20% smoother than before: smaller animated ranges
-                      // and a softer spring so the glow swells with the
-                      // bass instead of snapping. Still kick-locked because
-                      // the underlying amplitude hook uses a 25ms attack;
-                      // we just damp the visual response on this side.
-                      scale: 1.0 + pulse * 0.18,
-                      opacity: 0.32 + pulse * 0.44,
-                      filter: `blur(${56 + pulse * 32}px) saturate(${1.2 + pulse * 0.6}) brightness(${1 + pulse * 0.36})`,
-                    }}
-                    transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                    style={{ borderRadius: 'var(--radius-xl)' }}
-                  >
-                    {currentTrack.coverVideoUrl ? (
-                      <video
-                        key={currentTrack.coverVideoUrl + '-glow'}
-                        src={currentTrack.coverVideoUrl}
-                        className="h-full w-full object-cover pointer-events-none"
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        preload="auto"
-                        aria-hidden
-                        disablePictureInPicture
-                        controlsList="nofullscreen nodownload noremoteplayback"
-                      />
-                    ) : (
-                      <div
-                        className="h-full w-full bg-cover bg-center"
-                        style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
-                      />
-                    )}
-                  </motion.div>
-                </div>
+                  {currentTrack.coverVideoUrl ? (
+                    <video
+                      key={currentTrack.coverVideoUrl + '-glow'}
+                      src={currentTrack.coverVideoUrl}
+                      className="h-full w-full object-cover pointer-events-none"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      preload="auto"
+                      aria-hidden
+                      disablePictureInPicture
+                      controlsList="nofullscreen nodownload noremoteplayback"
+                    />
+                  ) : (
+                    <div
+                      className="h-full w-full bg-cover bg-center"
+                      style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
+                    />
+                  )}
+                </motion.div>
               )}
               <TiltCard
                 intensity={20}
