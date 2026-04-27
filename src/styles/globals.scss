@@ -17,6 +17,11 @@ html {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  /* Reserve space for the vertical scrollbar even when content is shorter
+     than the viewport. Without this, fixed/sticky elements (header,
+     player, bottom nav) jump horizontally by the scrollbar width when a
+     modal sets `body { overflow: hidden }` and the scrollbar disappears. */
+  scrollbar-gutter: stable;
 }
 
 body {
