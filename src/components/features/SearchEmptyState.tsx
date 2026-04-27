@@ -1,5 +1,6 @@
 import { Clock, Sparkles, TrendingUp, X } from 'lucide-react';
 import { motion } from 'motion/react';
+import { TiltCard } from '@/components/ui/TiltCard';
 
 interface SearchEmptyStateProps {
   recent: string[];
@@ -88,28 +89,45 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
         </h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {TRENDING.map((it, i) => (
-            <motion.button
+            <motion.div
               key={it.query}
-              type="button"
-              onClick={() => onPick(it.query)}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.22, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ y: -2 }}
-              className="relative flex flex-col items-start justify-end gap-1 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card p-4 text-left transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
             >
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full"
-                style={{
-                  background:
-                    'radial-gradient(circle, var(--color-accent-soft) 0%, transparent 70%)',
-                  opacity: 0.6,
-                }}
-              />
-              <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">#{i + 1}</span>
-              <span className="text-sm font-semibold leading-snug">{it.label}</span>
-            </motion.button>
+              {/* Same TiltCard treatment as the landing-page feature
+                  cards: parallax tilt, scale-on-hover, glare follows the
+                  cursor. The inner element stays a real <button> so
+                  click-to-search and keyboard activation behave normally. */}
+              <TiltCard intensity={8} className="h-full rounded-[var(--radius-md)]">
+                <button
+                  type="button"
+                  onClick={() => onPick(it.query)}
+                  className="group relative flex h-full w-full flex-col items-start justify-end gap-1 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card p-4 text-left transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
+                >
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
+                    style={{
+                      background:
+                        'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+                    }}
+                  />
+                  <span
+                    className="relative text-xs uppercase tracking-[0.2em] text-muted-foreground"
+                    style={{ transform: 'translateZ(20px)' }}
+                  >
+                    #{i + 1}
+                  </span>
+                  <span
+                    className="relative text-sm font-semibold leading-snug"
+                    style={{ transform: 'translateZ(30px)' }}
+                  >
+                    {it.label}
+                  </span>
+                </button>
+              </TiltCard>
+            </motion.div>
           ))}
         </div>
       </section>
