@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
@@ -24,9 +24,13 @@ const sizeClass: Record<ButtonSize, string> = {
   icon: 'h-9 w-9',
 };
 
-export function Button({ className, variant = 'primary', size = 'md', ...props }: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { className, variant = 'primary', size = 'md', ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
         variantClass[variant],
@@ -36,4 +40,4 @@ export function Button({ className, variant = 'primary', size = 'md', ...props }
       {...props}
     />
   );
-}
+});

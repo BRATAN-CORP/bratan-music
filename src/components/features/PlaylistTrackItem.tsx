@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Download, Heart, MoreHorizontal, Play, Trash2, GripVertical, Upload } from 'lucide-react';
-import { Reorder, useDragControls, motion, AnimatePresence, type PanInfo } from 'motion/react';
+import { Reorder, useDragControls, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
@@ -49,7 +50,7 @@ export function PlaylistTrackItem({
   const [menuOpen, setMenuOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -63,21 +64,6 @@ export function PlaylistTrackItem({
       setDownloading(false);
     }
   };
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onClick = (e: Event) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('touchstart', onClick);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('touchstart', onClick);
-    };
-  }, [menuOpen]);
 
   const handleRemove = () => {
     setMenuOpen(false);
@@ -174,42 +160,40 @@ export function PlaylistTrackItem({
           </>
         )}
         {!hideRemoveMenu && (
-        <div ref={menuRef} className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((v) => !v);
-            }}
-            aria-label="Ещё"
-          >
-            <MoreHorizontal size={14} />
-          </Button>
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.12 } }}
-                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="liquid-glass absolute right-0 top-9 z-20 min-w-[200px] overflow-hidden rounded-[var(--radius-md)] p-1"
-                onClick={(e) => e.stopPropagation()}
+          <>
+            <Button
+              ref={menuTriggerRef}
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((v) => !v);
+              }}
+              aria-label="Ещё"
+            >
+              <MoreHorizontal size={14} />
+            </Button>
+            <PopoverMenu
+              open={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              triggerRef={menuTriggerRef}
+              anchor="bottom"
+              align="end"
+              width={200}
+              className="p-1"
+            >
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={removeMutation.isPending}
+                className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)] disabled:opacity-60"
               >
-                <button
-                  type="button"
-                  onClick={handleRemove}
-                  disabled={removeMutation.isPending}
-                  className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)] disabled:opacity-60"
-                >
-                  <Trash2 size={14} />
-                  Удалить из плейлиста
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                <Trash2 size={14} />
+                Удалить из плейлиста
+              </button>
+            </PopoverMenu>
+          </>
         )}
       </div>
 

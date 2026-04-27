@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2, Pencil, Pin, PinOff } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Playlist } from '@/types';
 import { useDeletePlaylist, usePinPlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
+import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { RenamePlaylistDialog } from './RenamePlaylistDialog';
 
 interface PlaylistCardProps {
@@ -15,25 +16,10 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const deletePlaylist = useDeletePlaylist();
   const pinPlaylist = usePinPlaylist();
   const isPinned = playlist.pinnedAt != null || playlist.isLiked;
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onClick = (e: Event) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('touchstart', onClick);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('touchstart', onClick);
-    };
-  }, [menuOpen]);
 
   const canEdit = !playlist.isLiked;
 
@@ -76,8 +62,9 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
             </p>
           </div>
           {canEdit && (
-            <div ref={menuRef} className="relative">
+            <>
               <button
+                ref={menuTriggerRef}
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
@@ -89,15 +76,14 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
               >
                 <MoreHorizontal size={16} />
               </button>
-              <AnimatePresence>
-                {menuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                    transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                    className="liquid-glass absolute right-0 top-9 z-50 w-48 overflow-hidden rounded-[var(--radius-md)]"
-                  >
+              <PopoverMenu
+                open={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                triggerRef={menuTriggerRef}
+                anchor="bottom"
+                align="end"
+                width={192}
+              >
                     <button
                       type="button"
                       onClick={(e) => {
@@ -138,10 +124,8 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                       <Trash2 size={14} />
                       Удалить плейлист
                     </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+              </PopoverMenu>
+            </>
           )}
         </Link>
       </div>

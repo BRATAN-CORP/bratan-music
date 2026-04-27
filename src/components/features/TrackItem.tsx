@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Download, Heart, ListOrdered, ListPlus, MoreHorizontal, Play, Trash2, Upload } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
@@ -37,7 +38,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   const [downloading, setDownloading] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const removeFromPlaylist = useRemoveTrackFromPlaylist();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
@@ -59,21 +60,6 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
     e.stopPropagation();
     setOverrideOpen(true);
   };
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onClick = (e: Event) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('touchstart', onClick);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('touchstart', onClick);
-    };
-  }, [menuOpen]);
 
   const handleRemove = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -187,28 +173,26 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
             </Button>
           </>
         )}
-        <div ref={menuRef} className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-            aria-label="Ещё"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-          >
-            <MoreHorizontal size={14} />
-          </Button>
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                role="menu"
-                className="liquid-glass absolute right-0 top-8 z-50 w-52 overflow-hidden rounded-[var(--radius-md)]"
-              >
+        <Button
+          ref={menuTriggerRef}
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+          aria-label="Ещё"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+        >
+          <MoreHorizontal size={14} />
+        </Button>
+        <PopoverMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          triggerRef={menuTriggerRef}
+          anchor="bottom"
+          align="end"
+          width={208}
+        >
                 {isAuthed && (
                   <button
                     type="button"
@@ -250,10 +234,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
                     Удалить из плейлиста
                   </button>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        </PopoverMenu>
       </div>
 
       <TrackOverrideModal
