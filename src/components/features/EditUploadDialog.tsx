@@ -97,7 +97,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 24, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="liquid-glass relative z-10 flex w-full max-w-md flex-col gap-4 rounded-[var(--radius-lg)] p-5 pb-[calc(20px+env(safe-area-inset-bottom))] sm:pb-5"
+            className="liquid-glass relative z-10 flex w-full max-w-md flex-col gap-4 rounded-t-[var(--radius-lg)] p-5 pb-[calc(20px+env(safe-area-inset-bottom))] sm:rounded-[var(--radius-lg)] sm:pb-5"
           >
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Редактировать трек</h2>

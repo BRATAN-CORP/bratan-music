@@ -202,7 +202,7 @@ export function FullscreenPlayer() {
                   key={currentTrack.coverVideoUrl + '-bg'}
                   src={currentTrack.coverVideoUrl}
                   className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-60 saturate-150"
-                  style={{ filter: 'blur(60px) saturate(1.5)', transform: 'scale(1.4)' }}
+                  style={{ filter: 'blur(140px) saturate(1.6)', transform: 'scale(1.4)' }}
                   autoPlay
                   muted
                   loop
@@ -220,7 +220,7 @@ export function FullscreenPlayer() {
                       backgroundImage: `url(${currentTrack.coverUrl})`,
                       backgroundSize: '180% 180%',
                       backgroundPosition: 'center 30%',
-                      filter: 'blur(60px) saturate(1.5)',
+                      filter: 'blur(140px) saturate(1.6)',
                       transform: 'scale(1.4)',
                       opacity: 0.6,
                     }}
@@ -232,7 +232,7 @@ export function FullscreenPlayer() {
                       backgroundImage: `url(${currentTrack.coverUrl})`,
                       backgroundSize: '220% 220%',
                       backgroundPosition: 'center 70%',
-                      filter: 'blur(80px) saturate(1.4) hue-rotate(8deg)',
+                      filter: 'blur(180px) saturate(1.4) hue-rotate(8deg)',
                       transform: 'scale(1.4)',
                       opacity: 0.35,
                     }}
@@ -258,7 +258,7 @@ export function FullscreenPlayer() {
 
           <div className="relative z-[20] flex items-center justify-between px-5 py-4">
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
-              <ChevronDown size={20} className="fs-readable" />
+              <ChevronDown size={20} />
             </Button>
             <span className="pointer-events-none absolute inset-x-0 top-0 flex h-full items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Сейчас играет
@@ -316,7 +316,7 @@ export function FullscreenPlayer() {
                 aria-haspopup="menu"
                 aria-expanded={moreOpen}
               >
-                <MoreHorizontal size={18} className="fs-readable" />
+                <MoreHorizontal size={18} />
               </Button>
               <PopoverMenu
                 open={moreOpen}
@@ -486,30 +486,21 @@ export function FullscreenPlayer() {
               className="relative w-full max-w-md"
             >
               {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
-                // Halo wrapper is sized LARGER than the cover (`-inset-12`)
-                // and has no overflow-hidden anywhere up the chain. The
-                // reason: iOS Safari, when motion animates `filter` on a
-                // composited layer, sizes the layer to the element's natural
-                // box at first paint and then clips subsequent filtered
-                // output to that initial layer. With the halo at `inset-0`
-                // (== cover bounds) the blur expansion past the cover edges
-                // got cropped on later pulses — the user reported this as
-                // 'works for a fraction of a second, then clips at the top'.
-                //
-                // Pre-sizing the halo's box past the cover edges gives the
-                // filter:blur layer enough room from the start, so the glow
-                // remains continuous on every pulse. `will-change` keeps the
-                // layer promoted up-front rather than re-promoted per frame.
                 <motion.div
                   aria-hidden
-                  className="pointer-events-none absolute -inset-12 -z-10"
+                  className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
                   animate={reduce ? undefined : {
-                    scale: 1.0 + pulse * 0.06,
-                    opacity: 0.32 + pulse * 0.40,
-                    filter: `blur(${28 + pulse * 18}px) saturate(${1.15 + pulse * 0.4}) brightness(${1 + pulse * 0.28})`,
+                    // ~20% smoother than before: smaller animated ranges
+                    // and a softer spring so the glow swells with the
+                    // bass instead of snapping. Still kick-locked because
+                    // the underlying amplitude hook uses a 25ms attack;
+                    // we just damp the visual response on this side.
+                    scale: 1.0 + pulse * 0.18,
+                    opacity: 0.32 + pulse * 0.44,
+                    filter: `blur(${56 + pulse * 32}px) saturate(${1.2 + pulse * 0.6}) brightness(${1 + pulse * 0.36})`,
                   }}
                   transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                  style={{ borderRadius: 'var(--radius-xl)', willChange: 'filter, transform, opacity' }}
+                  style={{ borderRadius: 'var(--radius-xl)' }}
                 >
                   {currentTrack.coverVideoUrl ? (
                     <video
@@ -594,7 +585,7 @@ export function FullscreenPlayer() {
                   initial={reduce ? false : { opacity: 0, y: 8 }}
                   animate={reduce ? undefined : { opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  className="fs-readable line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+                  className="line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
                 >
                   {currentTrack.title}
                 </motion.h1>
@@ -602,12 +593,12 @@ export function FullscreenPlayer() {
                   <button
                     type="button"
                     onClick={goToArtist}
-                    className="fs-readable truncate text-left text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
+                    className="truncate text-left text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
                   >
                     {currentTrack.artist}
                   </button>
                 ) : (
-                  <p className="fs-readable truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
+                  <p className="truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
                 )}
                 {error && (
                   <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
@@ -623,7 +614,7 @@ export function FullscreenPlayer() {
                 onClick={() => currentTrack && toggle(currentTrack)}
                 className={'shrink-0 h-10 w-10 ' + (liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
               >
-                <Heart size={20} fill={liked ? 'currentColor' : 'none'} className="fs-readable" />
+                <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
               </Button>
             </div>
 
@@ -666,22 +657,15 @@ export function FullscreenPlayer() {
                     className="absolute inset-y-0 left-0 rounded-full bg-white/85"
                     style={{ width: progressWidth }}
                   />
+                  <motion.div
+                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
+                    style={{ left: progressWidth }}
+                  />
                 </div>
-                {/* Thumb is a SIBLING of the rail, not a child — the rail
-                    has overflow-hidden to clip the gradient fill, but the
-                    thumb (h-3) has to extend above and below the 1.5px
-                    rail without being cropped. Sits on the outer h-6 hit
-                    area which has no overflow constraint, with z-10 so
-                    nothing in the rail (buffered/progress fills) paints
-                    on top of it. */}
-                <motion.div
-                  className="pointer-events-none absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
-                  style={{ left: progressWidth }}
-                />
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
-                <span className="fs-readable">{formatTime(progress)}</span>
-                <span className="fs-readable">{formatTime(duration)}</span>
+                <span>{formatTime(progress)}</span>
+                <span>{formatTime(duration)}</span>
               </div>
             </div>
 
@@ -690,15 +674,15 @@ export function FullscreenPlayer() {
                 <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
               <Button variant="ghost" size="icon" onClick={previous} aria-label="Назад" className="h-12 w-12">
-                <SkipBack size={22} className="fs-readable" />
+                <SkipBack size={22} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} className="h-16 w-16 rounded-full" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
-                  {isPlaying ? <Pause size={24} fill="currentColor" strokeWidth={0} className="fs-readable" /> : <Play size={24} fill="currentColor" className="fs-readable" />}
+                  {isPlaying ? <Pause size={24} fill="currentColor" strokeWidth={0} /> : <Play size={24} fill="currentColor" />}
                 </Button>
               </motion.div>
               <Button variant="ghost" size="icon" onClick={nextManual} aria-label="Вперёд" className="h-12 w-12">
-                <SkipForward size={22} className="fs-readable" />
+                <SkipForward size={22} />
               </Button>
               <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label="Повтор">
                 {repeat === 'one' ? (
