@@ -284,11 +284,23 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
                       setAutoScroll(true);
                     }
                   }}
+                  // We deliberately do NOT add `transition-transform` /
+                  // `active:scale-[0.98]` here. Those Tailwind classes
+                  // emit a CSS `transition: transform 150ms` + a
+                  // `:active`-only `transform: scale(0.98)`, which
+                  // fight with motion's spring-driven `scale` (motion
+                  // writes the inline `transform` every frame; the
+                  // browser's CSS transition tries to interpolate
+                  // between consecutive inline writes too, and on the
+                  // line that just deactivated this manifests as a
+                  // brief "scale flicker" that snaps back — exactly
+                  // the artefact the user reported. Letting motion
+                  // own the transform fully eliminates the conflict.
                   className={
                     (isActive
                       ? 'origin-left text-foreground drop-shadow-[0_2px_18px_var(--color-accent-soft)]'
                       : 'origin-left text-muted-foreground')
-                    + (onSeek ? ' cursor-pointer select-none active:scale-[0.98] transition-transform' : '')
+                    + (onSeek ? ' cursor-pointer select-none' : '')
                   }
                 >
                   {l.text || '\u00a0'}
