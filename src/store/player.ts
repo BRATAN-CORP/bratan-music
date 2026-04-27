@@ -60,6 +60,11 @@ interface PlayerState {
   setError: (err: string | null) => void;
   openFullscreen: () => void;
   closeFullscreen: () => void;
+  /** Wipe everything the user accumulated during a session — current
+   *  track, queue, progress, error, fullscreen flag. Called from
+   *  useAuthStore.logout so the bottom player disappears immediately
+   *  after sign-out without leaking the previous user's state. */
+  reset: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
@@ -160,6 +165,15 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   setError: (error) => set({ error }),
   openFullscreen: () => set({ fullscreen: true }),
   closeFullscreen: () => set({ fullscreen: false }),
+  reset: () => set({
+    currentTrack: null,
+    queue: [],
+    isPlaying: false,
+    progress: 0,
+    duration: 0,
+    error: null,
+    fullscreen: false,
+  }),
 }), {
   name: 'bratan-player',
   partialize: (s) => ({
