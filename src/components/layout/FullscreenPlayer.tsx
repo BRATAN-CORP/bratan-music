@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronDown, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
-  SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
+  ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
+  SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -133,6 +133,50 @@ export function FullscreenPlayer() {
     } finally {
       setDownloading(false);
     }
+  };
+
+  const [shareCopied, setShareCopied] = useState(false);
+  const handleShare = async () => {
+    if (!currentTrack) return;
+    // The repo deploys under a sub-path on GitHub Pages
+    // (`/bratan-music/`). `window.location.origin + import.meta.env.BASE_URL`
+    // gives us the canonical public URL prefix in any environment
+    // (dev, preview, production) without hard-coding it.
+    const base = window.location.origin + import.meta.env.BASE_URL.replace(/\/$/, '');
+    const url = `${base}/track/${currentTrack.id}`;
+    const shareText = `${currentTrack.artist} — ${currentTrack.title}`;
+    try {
+      // Native share sheet on mobile (Android intent picker, iOS sheet,
+      // desktop Edge / mobile Safari). Falls back to clipboard copy.
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title: shareText, text: shareText, url });
+        setMoreOpen(false);
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      // Keep the menu open just long enough to show the confirmation,
+      // then dismiss so it doesn't linger.
+      window.setTimeout(() => {
+        setShareCopied(false);
+        setMoreOpen(false);
+      }, 1400);
+    } catch (err) {
+      // AbortError: user dismissed the share sheet — silently ignore
+      // and close the menu (matches the success path).
+      if (err instanceof Error && err.name === 'AbortError') {
+        setMoreOpen(false);
+        return;
+      }
+      console.error('[share]', err);
+      setMoreOpen(false);
+    }
+  };
+
+  const goToAlbum = () => {
+    if (!currentTrack?.albumId) return;
+    closeFullscreen();
+    navigate(`/album/${currentTrack.albumId}`);
   };
 
   return (
@@ -282,6 +326,9 @@ export function FullscreenPlayer() {
                 align="end"
                 width={240}
               >
+                      {/* Mobile-only group: surfaces the four track-side
+                          actions that are inline buttons on md+ but
+                          collapse here on narrow widths. */}
                       <button
                         type="button"
                         role="menuitem"
@@ -319,7 +366,74 @@ export function FullscreenPlayer() {
                         <Sliders size={14} />
                         {eqOpen ? 'Скрыть эквалайзер' : 'Эквалайзер'}
                       </button>
+                      {/* Mobile-only — also surface shuffle/repeat in the
+                          menu so the user has a discoverable place to
+                          toggle them; the inline icons in the bottom
+                          control row are tiny on small phones. */}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { toggleShuffle(); setMoreOpen(false); }}
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                      >
+                        <Shuffle size={14} className={shuffle ? 'text-foreground' : ''} />
+                        Перемешать{shuffle ? ' (вкл.)' : ''}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { cycleRepeat(); setMoreOpen(false); }}
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                      >
+                        {repeat === 'one' ? <Repeat1 size={14} className="text-foreground" /> : <Repeat size={14} className={repeat === 'all' ? 'text-foreground' : ''} />}
+                        Повтор{repeat === 'all' ? ' (всё)' : repeat === 'one' ? ' (один)' : ''}
+                      </button>
                       <div className="relative z-[1] h-px bg-white/10 md:hidden" />
+
+                      {/* Always-shown: track navigation + library actions.
+                          Most of these would otherwise require closing
+                          the fullscreen player to reach. */}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setAddToPlaylistOpen(true); setMoreOpen(false); }}
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
+                      >
+                        <ListPlus size={14} />
+                        Добавить в плейлист
+                      </button>
+                      {currentTrack.artistId && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => { goToArtist(); setMoreOpen(false); }}
+                          className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
+                        >
+                          <User size={14} />
+                          Перейти к артисту
+                        </button>
+                      )}
+                      {currentTrack.albumId && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => { goToAlbum(); setMoreOpen(false); }}
+                          className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
+                        >
+                          <Disc size={14} />
+                          Перейти к альбому
+                        </button>
+                      )}
+                      <div className="relative z-[1] h-px bg-white/10" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { handleShare(); /* keep the menu open briefly so the user sees the copy confirmation; setMoreOpen(false) is called by the share sheet flow on mobile via the AbortError catch */ }}
+                        className="relative z-[1] flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
+                      >
+                        {shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
+                        {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                      </button>
                       <button
                         type="button"
                         role="menuitem"
