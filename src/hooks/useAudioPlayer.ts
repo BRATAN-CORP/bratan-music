@@ -261,6 +261,7 @@ export function useAudioPlayer() {
 
   const currentQualityRef = useRef<string>(tidalQuality);
   currentQualityRef.current = tidalQuality;
+  const fallbackInProgressRef = useRef(false);
 
   /** Load the given track into the active slot and start playback from 0.
    *  If `quality` is provided it overrides the user setting (used for fallback). */
@@ -296,12 +297,15 @@ export function useAudioPlayer() {
         await b.ctx.resume().catch(() => {});
       }
       await safePlay(slot);
+      fallbackInProgressRef.current = false;
     } catch (err) {
       if (loadingRef.current !== trackId) return;
       const message = err instanceof Error ? err.message : String(err);
       console.error('[stream]', message);
-      setError(message || 'Не удалось загрузить трек');
-      pause();
+      if (!fallbackInProgressRef.current) {
+        setError(message || 'Не удалось загрузить трек');
+        pause();
+      }
     }
   }, [pause, setError]);
 
@@ -371,11 +375,13 @@ export function useAudioPlayer() {
     const audio = b.audios[slot];
     if (!audio.src || b.loaded[slot] !== currentTrack?.id) return;
     if (isPlaying) {
+      if (fallbackInProgressRef.current) return;
       const ctxBundle = ensureAudioGraph();
       if (ctxBundle.ctx && ctxBundle.ctx.state === 'suspended') {
         ctxBundle.ctx.resume().catch(() => {});
       }
       safePlay(slot).catch((err) => {
+        if (fallbackInProgressRef.current) return;
         setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
         pause();
       });
@@ -510,6 +516,7 @@ export function useAudioPlayer() {
           const fallback = getNextFallbackQuality(current);
           if (fallback) {
             console.warn(`[stream] quality ${current} failed (code ${code}), falling back to ${fallback}`);
+            fallbackInProgressRef.current = true;
             setError(null);
             currentQualityRef.current = fallback;
             loadTrack(currentTrack, fallback);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Reorder } from 'motion/react';
+import { Reorder, motion } from 'motion/react';
 import { ChevronLeft, Heart, ListMusic, Pencil, Pin, PinOff } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
@@ -115,10 +115,12 @@ export function PlaylistPage() {
                     </button>
                   )}
                   {playlist && !playlist.isLiked && (
-                    <button
+                    <motion.button
                       type="button"
                       onClick={() => pinPlaylist.mutate({ id: playlist.id, pinned: !isPinned })}
-                      className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-all active:scale-90 ${
+                      whileTap={{ scale: 0.82 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                      className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
                         isPinned
                           ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -127,7 +129,7 @@ export function PlaylistPage() {
                       title={isPinned ? 'Открепить с панели' : 'Закрепить на панели'}
                     >
                       {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
-                    </button>
+                    </motion.button>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
