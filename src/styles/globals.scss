@@ -326,17 +326,75 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
    The selector is scoped to the fullscreen container so the rest of
    the app keeps its flat type. */
 .fullscreen-player {
-  /* Re-tint the design-token text colours inside the fullscreen player
-     so labels read as white-on-cover regardless of theme — `text-shadow`
-     below carries them through bright/pastel covers, and pure white
-     reads cleanly on dark covers without us needing a per-cover
-     adaptive colour. We override the SCSS-level vars so every
-     descendant Tailwind utility (`text-foreground`,
-     `text-muted-foreground`, etc.) inherits the new tint instead of
-     reaching back to the dark-theme grays. */
-  --color-text: #ffffff;
-  --color-text-muted: rgba(255, 255, 255, 0.78);
-  --color-text-subtle: rgba(255, 255, 255, 0.56);
+  /* Theme-independent palette. The fullscreen player is always rendered
+     against the blurred cover artwork + a vertical dark gradient — i.e.
+     the canvas is *always* dark regardless of which theme the rest of
+     the app is in. Forcing the dark-theme palette inside this scope
+     keeps every control (button hovers, slider rails, popover menus,
+     the eq backdrop, etc.) readable on the dark canvas in both light
+     and dark site themes.
+
+     We override the *base* design tokens that ripple through every
+     Tailwind utility (`text-foreground`, `bg-surface`, `border-border`,
+     hover overlays) plus the `--background / --foreground / --card / …`
+     aliases that some shadcn-style utilities reach for. This makes the
+     fullscreen player visually identical regardless of the user's theme
+     preference. */
+
+  /* Surfaces — used by popovers, eq panel, queue, dialogs */
+  --color-bg:           #0a0a0c;
+  --color-bg-subtle:    #111114;
+  --color-bg-muted:     #18181d;
+  --color-surface:      #0f0f12;
+  --color-surface-raised: #15151a;
+  --color-surface-elevated: #1c1c22;
+
+  /* Text — pure white on dark canvas */
+  --color-text:         #ffffff;
+  --color-text-muted:   rgba(255, 255, 255, 0.78);
+  --color-text-subtle:  rgba(255, 255, 255, 0.56);
+  --color-text-on-accent: #ffffff;
+
+  /* Accent — dark-theme indigo (kept consistent across themes) */
+  --color-accent:       #7E89E8;
+  --color-accent-hover: #8d97ed;
+  --color-accent-glow:  rgba(126, 137, 232, 0.22);
+  --color-accent-soft:  rgba(126, 137, 232, 0.10);
+
+  --color-sub-accent:   #f472b6;
+  --color-sub-accent-hover: #f9a8d4;
+
+  --color-danger:       #ef4444;
+  --color-danger-muted: rgba(239, 68, 68, 0.10);
+
+  /* Borders — light tint, since canvas is dark */
+  --color-border:       rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.20);
+
+  /* Hover overlays — light tint that LIGHTENS on dark surface (ghost
+     buttons, menu rows, etc.) */
+  --color-hover-overlay: rgba(255, 255, 255, 0.08);
+  --color-hover-overlay-strong: rgba(255, 255, 255, 0.14);
+
+  --color-overlay:      rgba(0, 0, 0, 0.7);
+  --color-media-overlay: rgba(0, 0, 0, 0.6);
+
+  /* shadcn aliases — keep in sync with the base tokens above */
+  --background:         var(--color-bg);
+  --foreground:         var(--color-text);
+  --card:               var(--color-surface);
+  --card-foreground:    var(--color-text);
+  --primary:            var(--color-accent);
+  --primary-foreground: var(--color-text-on-accent);
+  --secondary:          var(--color-bg-subtle);
+  --secondary-foreground: var(--color-text);
+  --muted:              var(--color-bg-muted);
+  --muted-foreground:   var(--color-text-muted);
+  --destructive:        var(--color-danger);
+  --destructive-foreground: #ffffff;
+  --border:             var(--color-border);
+  --input:              var(--color-border);
+  --ring:               var(--color-accent);
 
   color: rgba(255, 255, 255, 0.96);
 

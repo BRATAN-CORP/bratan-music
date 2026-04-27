@@ -458,11 +458,16 @@ export function FullscreenPlayer() {
             // and the cover-wrapper's height-aware maxWidth clamp
             // (see below) can actually take effect.
             //
-            // Symmetric `py-4 sm:py-6` padding gives the cover a
-            // *visible* breathing gap from the top bar (so "Сейчас
-            // играет" no longer overlays the cover) and matches it
-            // with an equal pad below the volume slider.
-            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:py-6"
+            // Padding rules:
+            //   - Mobile: symmetric `py-4` — the user explicitly said
+            //     mobile reads correctly, so we don't touch it.
+            //   - Desktop: `sm:pt-6 sm:pb-10` — the user reported the
+            //     volume slider visually "fell to the bottom" on wide
+            //     screens. Bumping the bottom pad to 40px lifts it
+            //     into the visible area while keeping the breathing
+            //     gap above the cover (sm:pt-6) symmetric to the
+            //     header bar's own `py-4`.
+            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:pt-6 sm:pb-10"
           >
             {/* Cover artwork wrapper. Width is `w-full max-w-md` so
                 on a tall enough viewport it renders at the full
@@ -474,12 +479,12 @@ export function FullscreenPlayer() {
                 slider was getting clipped:
 
                   header 72 + title 56 + progress 30 + transport 56 +
-                  volume 40 + 4×gap-8 128 + py-6 48 ≈ 430px ≈ 27rem
+                  volume 40 + 4×gap-8 128 + sm:pt-6 24 + sm:pb-10 40
+                  ≈ 446px ≈ 28rem
 
-                We reserve 26rem to leave a tiny safety margin for
-                the cover to still feel large; the remaining slack
-                distributes equally above and below via
-                `justify-center`. We add `aspect-square mx-auto` so
+                We reserve 28rem to match this stack on desktop; the
+                remaining slack distributes equally above and below
+                via `justify-center`. We add `aspect-square mx-auto` so
                 both dimensions of the wrapper shrink together with
                 the maxWidth clamp — without it, only width
                 shrinks and the TiltCard inside (which derives its
@@ -490,7 +495,7 @@ export function FullscreenPlayer() {
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative mx-auto aspect-square w-full max-w-md"
-              style={{ maxWidth: 'min(28rem, calc(100vh - 26rem))' }}
+              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
