@@ -486,29 +486,30 @@ export function FullscreenPlayer() {
               className="relative w-full max-w-md"
             >
               {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
+                // Halo wrapper is sized LARGER than the cover (`-inset-12`)
+                // and has no overflow-hidden anywhere up the chain. The
+                // reason: iOS Safari, when motion animates `filter` on a
+                // composited layer, sizes the layer to the element's natural
+                // box at first paint and then clips subsequent filtered
+                // output to that initial layer. With the halo at `inset-0`
+                // (== cover bounds) the blur expansion past the cover edges
+                // got cropped on later pulses — the user reported this as
+                // 'works for a fraction of a second, then clips at the top'.
+                //
+                // Pre-sizing the halo's box past the cover edges gives the
+                // filter:blur layer enough room from the start, so the glow
+                // remains continuous on every pulse. `will-change` keeps the
+                // layer promoted up-front rather than re-promoted per frame.
                 <motion.div
                   aria-hidden
-                  // No `overflow-hidden` here on purpose. With overflow-hidden
-                  // + border-radius + filter:blur on the same element,
-                  // Safari clips the blurred output to the element's rounded
-                  // box — producing a sharp horizontal cut at the top of the
-                  // glow on portrait mobile (the user's report). Letting the
-                  // blur extend naturally past the (rectangular) source gives
-                  // a continuous soft halo with no visible edge.
-                  //
-                  // The expansion ranges are also tighter than before so the
-                  // glow stays inside the viewport on small phones (iPhone SE
-                  // ~568px tall): max scale 1.10 (was 1.18), max blur 56px
-                  // (was 88px). The bass response is still very visible —
-                  // we just keep it from punching through the top safe area.
-                  className="pointer-events-none absolute inset-0 -z-10"
+                  className="pointer-events-none absolute -inset-12 -z-10"
                   animate={reduce ? undefined : {
-                    scale: 1.0 + pulse * 0.10,
-                    opacity: 0.32 + pulse * 0.44,
-                    filter: `blur(${32 + pulse * 24}px) saturate(${1.15 + pulse * 0.5}) brightness(${1 + pulse * 0.32})`,
+                    scale: 1.0 + pulse * 0.06,
+                    opacity: 0.32 + pulse * 0.40,
+                    filter: `blur(${28 + pulse * 18}px) saturate(${1.15 + pulse * 0.4}) brightness(${1 + pulse * 0.28})`,
                   }}
                   transition={{ type: 'spring', stiffness: 200, damping: 18, mass: 0.55 }}
-                  style={{ borderRadius: 'var(--radius-xl)' }}
+                  style={{ borderRadius: 'var(--radius-xl)', willChange: 'filter, transform, opacity' }}
                 >
                   {currentTrack.coverVideoUrl ? (
                     <video
