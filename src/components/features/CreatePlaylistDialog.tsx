@@ -25,13 +25,12 @@ export function CreatePlaylistDialog({ open, onClose }: CreatePlaylistDialogProp
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'var(--color-overlay)' }}
+      className="liquid-glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
       role="dialog"
     >
       <div
-        className="w-full max-w-sm rounded-[var(--radius-md)] border border-border bg-card p-6 shadow-[var(--shadow-lg)]"
+        className="liquid-glass w-full max-w-sm rounded-[var(--radius-lg)] p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
