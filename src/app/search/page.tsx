@@ -45,6 +45,7 @@ export function SearchPage() {
           artist: t.artist,
           artistId: t.artistId,
           coverUrl: t.coverUrl,
+          coverVideoUrl: t.coverVideoUrl,
           duration: t.duration,
         }))
       );

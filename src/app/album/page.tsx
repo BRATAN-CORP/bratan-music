@@ -20,7 +20,7 @@ export function AlbumPage() {
     setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
     if (album?.tracks) {
       setQueue(
-        album.tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, duration: t.duration }))
+        album.tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration }))
       );
     }
   };

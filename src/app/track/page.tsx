@@ -26,13 +26,13 @@ export function TrackPage() {
     if (radio?.items) {
       setQueue([
         { id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration },
-        ...radio.items.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, duration: t.duration })),
+        ...radio.items.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration })),
       ]);
     }
   };
 
   const handlePlayRadioTrack = (t: Track) => {
-    setTrack({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, duration: t.duration });
+    setTrack({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration });
   };
 
   // Auto-play when the page is opened via a share link (?autoplay=1).
