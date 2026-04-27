@@ -202,7 +202,7 @@ export function FullscreenPlayer() {
                   key={currentTrack.coverVideoUrl + '-bg'}
                   src={currentTrack.coverVideoUrl}
                   className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-60 saturate-150"
-                  style={{ filter: 'blur(140px) saturate(1.6)', transform: 'scale(1.4)' }}
+                  style={{ filter: 'blur(60px) saturate(1.5)', transform: 'scale(1.4)' }}
                   autoPlay
                   muted
                   loop
@@ -220,7 +220,7 @@ export function FullscreenPlayer() {
                       backgroundImage: `url(${currentTrack.coverUrl})`,
                       backgroundSize: '180% 180%',
                       backgroundPosition: 'center 30%',
-                      filter: 'blur(140px) saturate(1.6)',
+                      filter: 'blur(60px) saturate(1.5)',
                       transform: 'scale(1.4)',
                       opacity: 0.6,
                     }}
@@ -232,7 +232,7 @@ export function FullscreenPlayer() {
                       backgroundImage: `url(${currentTrack.coverUrl})`,
                       backgroundSize: '220% 220%',
                       backgroundPosition: 'center 70%',
-                      filter: 'blur(180px) saturate(1.4) hue-rotate(8deg)',
+                      filter: 'blur(80px) saturate(1.4) hue-rotate(8deg)',
                       transform: 'scale(1.4)',
                       opacity: 0.35,
                     }}
@@ -258,7 +258,7 @@ export function FullscreenPlayer() {
 
           <div className="relative z-[20] flex items-center justify-between px-5 py-4">
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
-              <ChevronDown size={20} />
+              <ChevronDown size={20} className="fs-readable" />
             </Button>
             <span className="pointer-events-none absolute inset-x-0 top-0 flex h-full items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Сейчас играет
@@ -316,7 +316,7 @@ export function FullscreenPlayer() {
                 aria-haspopup="menu"
                 aria-expanded={moreOpen}
               >
-                <MoreHorizontal size={18} />
+                <MoreHorizontal size={18} className="fs-readable" />
               </Button>
               <PopoverMenu
                 open={moreOpen}
@@ -585,7 +585,7 @@ export function FullscreenPlayer() {
                   initial={reduce ? false : { opacity: 0, y: 8 }}
                   animate={reduce ? undefined : { opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  className="line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+                  className="fs-readable line-clamp-2 text-2xl font-semibold tracking-tight sm:text-3xl"
                 >
                   {currentTrack.title}
                 </motion.h1>
@@ -593,12 +593,12 @@ export function FullscreenPlayer() {
                   <button
                     type="button"
                     onClick={goToArtist}
-                    className="truncate text-left text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
+                    className="fs-readable truncate text-left text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
                   >
                     {currentTrack.artist}
                   </button>
                 ) : (
-                  <p className="truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
+                  <p className="fs-readable truncate text-sm text-muted-foreground sm:text-base">{currentTrack.artist}</p>
                 )}
                 {error && (
                   <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
@@ -614,7 +614,7 @@ export function FullscreenPlayer() {
                 onClick={() => currentTrack && toggle(currentTrack)}
                 className={'shrink-0 h-10 w-10 ' + (liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
               >
-                <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
+                <Heart size={20} fill={liked ? 'currentColor' : 'none'} className="fs-readable" />
               </Button>
             </div>
 
@@ -664,8 +664,8 @@ export function FullscreenPlayer() {
                 </div>
               </div>
               <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
-                <span>{formatTime(progress)}</span>
-                <span>{formatTime(duration)}</span>
+                <span className="fs-readable">{formatTime(progress)}</span>
+                <span className="fs-readable">{formatTime(duration)}</span>
               </div>
             </div>
 
@@ -674,15 +674,15 @@ export function FullscreenPlayer() {
                 <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
               <Button variant="ghost" size="icon" onClick={previous} aria-label="Назад" className="h-12 w-12">
-                <SkipBack size={22} />
+                <SkipBack size={22} className="fs-readable" />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} className="h-16 w-16 rounded-full" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
-                  {isPlaying ? <Pause size={24} fill="currentColor" strokeWidth={0} /> : <Play size={24} fill="currentColor" />}
+                  {isPlaying ? <Pause size={24} fill="currentColor" strokeWidth={0} className="fs-readable" /> : <Play size={24} fill="currentColor" className="fs-readable" />}
                 </Button>
               </motion.div>
               <Button variant="ghost" size="icon" onClick={nextManual} aria-label="Вперёд" className="h-12 w-12">
-                <SkipForward size={22} />
+                <SkipForward size={22} className="fs-readable" />
               </Button>
               <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label="Повтор">
                 {repeat === 'one' ? (
