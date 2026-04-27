@@ -371,16 +371,50 @@ export function Player() {
               <Button onClick={toggleMute} variant="ghost" size="icon" className="h-9 w-9" aria-label="Звук">
                 {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
               </Button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={muted ? 0 : volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
-                className="w-24 accent-[var(--color-accent)]"
+              {/* Custom volume slider — same thickness/visuals as the
+                  progress bar (h-1 default, h-1.5 on hover/drag). Native
+                  <input type=range> couldn't match the rail height
+                  reliably across browsers. */}
+              <div
+                className="group/volume relative flex h-6 w-24 cursor-pointer touch-none items-center select-none"
+                role="slider"
                 aria-label="Громкость"
-              />
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round((muted ? 0 : volume) * 100)}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const setFromX = (clientX: number) => {
+                    const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                    setVolume(pct);
+                  };
+                  setFromX(e.clientX);
+                  const target = e.currentTarget;
+                  const onMove = (ev: PointerEvent) => setFromX(ev.clientX);
+                  const onUp = (ev: PointerEvent) => {
+                    setFromX(ev.clientX);
+                    target.removeEventListener('pointermove', onMove);
+                    target.removeEventListener('pointerup', onUp);
+                    target.removeEventListener('pointercancel', onUp);
+                    try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+                  };
+                  target.addEventListener('pointermove', onMove);
+                  target.addEventListener('pointerup', onUp);
+                  target.addEventListener('pointercancel', onUp);
+                }}
+              >
+                <div className="relative h-1 w-full rounded-full bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/volume:h-1.5 group-active/volume:h-1.5">
+                  <div
+                    className="h-full rounded-full bg-foreground/85 transition-[width] duration-100"
+                    style={{ width: `${(muted ? 0 : volume) * 100}%` }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-[0_2px_8px_rgba(0,0,0,0.4)] transition-transform duration-150 group-hover/volume:scale-110 group-active/volume:scale-125"
+                    style={{ left: `${(muted ? 0 : volume) * 100}%` }}
+                  />
+                </div>
+              </div>
               <Button onClick={openFullscreen} variant="ghost" size="icon" aria-label="Развернуть">
                 <Maximize2 size={15} />
               </Button>
