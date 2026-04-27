@@ -137,18 +137,12 @@ export function FullscreenPlayer() {
                 style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
                 aria-hidden
               />
-              {/* Smooth bg darkener — the previous from/via/to with three
-                  stops produced a visible band at the via point that read as
-                  a hard shadow line under the "Сейчас играет" header. */}
               <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 to-black/80" aria-hidden />
-              {/* Top-bar soft fade. Adds a gentle, evenly-spread darkening
-                  band across the very top of the player so the header never
-                  shows a hard ridge against the blurred cover behind it.
-                  Solves the "грубая обрывающая тень на левой половине"
-                  artefact: the cover blur falls off asymmetrically across
-                  the wide viewport, so we layer a uniform top fade on top. */}
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-44 bg-gradient-to-b from-black/55 via-black/15 to-transparent"
+                className="pointer-events-none absolute inset-x-0 top-0 -z-[5] h-52"
+                style={{
+                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 25%, rgba(0,0,0,0.18) 50%, rgba(0,0,0,0.06) 75%, transparent 100%)',
+                }}
                 aria-hidden
               />
             </>
@@ -158,7 +152,7 @@ export function FullscreenPlayer() {
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
               <ChevronDown size={20} />
             </Button>
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
+            <span className="pointer-events-none absolute inset-x-0 top-0 flex h-full items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Сейчас играет
             </span>
             <div className="flex items-center gap-1">
