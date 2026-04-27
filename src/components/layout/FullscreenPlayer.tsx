@@ -247,8 +247,13 @@ export function FullscreenPlayer() {
                   aria-hidden
                 />
               )}
+              {/* Lighter than the original 40/60/80 — the user said
+                  the previous gradient darkened the cover too much.
+                  This curve still clears the white-on-white case
+                  (white cover + white text) but leaves the cover's
+                  saturation mostly intact. */}
               <div
-                className="absolute inset-0 -z-10 bg-gradient-to-b from-black/40 via-black/60 to-black/80"
+                className="absolute inset-0 -z-10 bg-gradient-to-b from-black/15 via-black/30 to-black/50"
                 aria-hidden
               />
             </>
@@ -447,17 +452,25 @@ export function FullscreenPlayer() {
             transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
             className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8"
           >
-            {/* Cover artwork wrapper — restored to the simple
-                `relative w-full max-w-md` from commit 49360f3. No
-                `aspect-square` here (the TiltCard inside owns it),
-                no viewport-height-aware maxWidth clamp. The user
-                confirmed this exact sizing reads correctly. */}
+            {/* Cover artwork wrapper. Width is `w-full max-w-md` so it
+                renders at the full 28rem (448px) the user marked as
+                ideal, but on short viewports the height-aware clamp
+                below keeps the cover from pushing the volume slider
+                off the bottom of the screen. The reservation
+                (`100vh - 22rem`) is the minimum room the rest of the
+                stack needs (header 72 + title row 56 + progress 30 +
+                transport 56 + volume 40 + 4×gap 96 + pb-4 16 ≈ 22rem)
+                — at any viewport tall enough to fit that, the cover
+                stays at full 28rem; below that the cover shrinks
+                gracefully and aspect-square on the TiltCard inside
+                follows. */}
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative w-full max-w-md"
+              style={{ maxWidth: 'min(28rem, calc(100vh - 22rem))' }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
