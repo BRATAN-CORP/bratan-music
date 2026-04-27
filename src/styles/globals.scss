@@ -245,13 +245,15 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
      rule loses the cascade and the player ends up 24px from each edge
      (the sm: utility), not aligned to the grid. */
   .fixed.player-desktop-grid {
-    /* `15rem` = sidebar width; `2.5rem` = page padding (lg p-10).
-       The `max(...)` clamp keeps the player flush with the content
-       stripe at viewport widths < ~1500px and aligns it with
-       `max-w-6xl` (72rem) once the stripe is narrower than the
-       remaining horizontal space. */
-    left: max(calc(15rem + 2.5rem), calc(50vw + 7.5rem - 36rem));
-    right: max(2.5rem, calc(50vw - 7.5rem - 36rem));
+    /* Align with the page-content TEXT edges, not the outer section
+       edges, so the player visually sits inside the same column the
+       library / search / artist pages render their content in
+       (`max-w-6xl` + `lg:p-10`). The clamp pins to the minimum
+       (sidebar 15rem + lg:p-10 2.5rem = 17.5rem) until the viewport
+       is wide enough that the centred 72rem content box pulls the
+       text edges outwards. */
+    left: max(17.5rem, calc(50vw - 26rem));
+    right: max(2.5rem, calc(50vw - 41rem));
   }
 }
 
