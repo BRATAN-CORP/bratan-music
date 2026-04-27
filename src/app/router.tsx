@@ -7,6 +7,7 @@ import { Player } from '@/components/layout/Player';
 import { FullscreenPlayer } from '@/components/layout/FullscreenPlayer';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
+import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { LandingPage } from '@/app/landing/page';
 import { SearchPage } from '@/app/search/page';
 import { LibraryPage } from '@/app/library/page';
@@ -35,6 +36,7 @@ function AppLayout() {
       <FullscreenPlayer />
       <BottomNav />
       <SubscriptionDialog />
+      <GlassFilter />
     </div>
   );
 }

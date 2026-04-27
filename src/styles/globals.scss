@@ -154,72 +154,104 @@ img {
   border: 1px solid var(--color-border);
 }
 
-/* Liquid-glass surface used for modals & sheets. Apple-style: heavy
-   backdrop blur, very low surface alpha so the background bleeds through
-   coloured, faint inner highlight + outer shadow. Falls back to the solid
-   elevated surface when backdrop-filter is unsupported.
+/* Liquid-glass surface — ported from the 21st.dev `LiquidButton`
+   recipe (https://21st.dev/community/components/aliimam/liquid-glass-button).
+   The look is composed of three things:
 
-   Inspired by 21st.dev/community/components/suraj-xd/liquid-glass. */
+   1. A multi-layer `box-shadow` that paints the chrome bezel and inner
+      highlights without any actual gradient bitmap. The inset shadows
+      give the top-edge "lip" and the bottom-edge "foot"; the modifiers
+      `.no-lip` / `.no-foot` remove the relevant slice when this surface
+      is fused to another (e.g. mobile mini-player + bottom nav).
+   2. The SVG `#container-glass` filter (mounted globally via
+      `<GlassFilter />` in the app root) applied as `backdrop-filter:
+      url(...)` to refract the page behind it. Falls back gracefully to
+      blur+saturate on browsers that don't honour `url()` in
+      `backdrop-filter`.
+   3. A very faint translucent surface tint so unsupported browsers
+      still get an elevated look. */
+
+/* Shadow recipe shared by the base + modifiers. We list each inset
+   highlight separately so the `.no-lip` / `.no-foot` modifiers can drop
+   only the slice they need to hide. */
+$lg-drop: 0 30px 80px -20px rgba(0, 0, 0, 0.55);
+$lg-tl-1: inset 3px 3px 0.5px -3.5px rgba(255, 255, 255, 0.55); // top-left highlight (lip)
+$lg-tl-2: inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.45);
+$lg-br-1: inset -3px -3px 0.5px -3.5px rgba(255, 255, 255, 0.55); // bottom-right highlight (foot)
+$lg-br-2: inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.45);
+$lg-inner-soft: inset 0 0 6px 6px rgba(255, 255, 255, 0.05);
+$lg-inner-tight: inset 0 0 2px 2px rgba(255, 255, 255, 0.04);
+$lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
+
 .liquid-glass {
-  background: rgba(20, 20, 24, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow:
-    0 30px 80px -20px rgba(0, 0, 0, 0.65),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 1px 0 0 rgba(255, 255, 255, 0.08) inset;
-  position: relative;
   isolation: isolate;
+  background: rgba(20, 20, 24, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: $lg-drop, $lg-tl-1, $lg-br-1, $lg-tl-2, $lg-br-2,
+    $lg-inner-soft, $lg-inner-tight, $lg-glow;
+}
+
+/* Default to `position: relative` ONLY when the consumer hasn't already
+   declared a positioning utility — otherwise this class would clobber
+   the `.fixed` Tailwind utility on the bottom player + nav and they'd
+   collapse into the document flow. The `:not()` carries the same
+   specificity as `.liquid-glass.fixed` so the chain unambiguously wins
+   for the modal/sheet cases that need a positioning context for their
+   absolutely-positioned children. */
+.liquid-glass:not(.fixed):not(.absolute):not(.sticky) {
+  position: relative;
 }
 
 @supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) {
   .liquid-glass {
-    background: rgba(20, 20, 24, 0.32);
-    backdrop-filter: blur(36px) saturate(180%);
-    -webkit-backdrop-filter: blur(36px) saturate(180%);
+    background: rgba(20, 20, 24, 0.22);
+    backdrop-filter: url(#container-glass) blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
 }
 
-/* Subtle top-edge highlight that gives the panel a glassy lip. */
-.liquid-glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.10) 0%,
-    rgba(255, 255, 255, 0.02) 30%,
-    transparent 50%
-  );
-  mix-blend-mode: overlay;
-  z-index: -1;
-}
-
-/* Suppress the top-edge highlight when this surface is glued to another
-   liquid-glass card above it (e.g. mobile bottom nav under the mini-player).
-   Without this the lip would draw a visible line across the seam. The
-   inset 1px top highlight from the base box-shadow is also dropped so
-   the seam reads as one continuous surface. */
+/* Drop the top-edge highlights when this surface is glued to another
+   liquid-glass card above it (e.g. mobile bottom nav under the
+   mini-player). Without this the lip would draw a visible line across
+   the seam. */
 .liquid-glass.no-lip {
-  box-shadow:
-    0 30px 80px -20px rgba(0, 0, 0, 0.65),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-}
-.liquid-glass.no-lip::before {
-  display: none;
+  box-shadow: $lg-drop, $lg-br-1, $lg-br-2, $lg-inner-soft, $lg-inner-tight,
+    $lg-glow;
 }
 
-/* Companion to `.no-lip` for the surface above the seam (e.g. the mobile
-   mini-player sitting on top of the bottom nav). Drops the bottom drop
-   shadow so it doesn't darken the navbar's top edge, fusing the two
-   into one card. The big drop-shadow is only useful when the surface
-   floats on its own — desktop keeps it via the media query gate. */
+/* Companion to `.no-lip` for the surface above the seam (e.g. the
+   mobile mini-player sitting on top of the bottom nav). Drops the
+   bottom highlights AND the big drop shadow so the seam reads as one
+   continuous card. Desktop keeps the full shadow via the media query
+   gate — the player floats free there. */
 @media (max-width: 1023px) {
   .liquid-glass.no-foot {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-      0 1px 0 0 rgba(255, 255, 255, 0.08) inset;
+    box-shadow: $lg-tl-1, $lg-tl-2, $lg-inner-soft, $lg-inner-tight;
+  }
+}
+
+/* Floating mini-player on lg+ — width and side offsets are aligned to
+   the app's main `max-w-6xl` content stripe, with the sidebar (15rem)
+   eating into the left margin. We intentionally do NOT use Tailwind
+   arbitrary-property syntax here because nested `calc(..., calc(...))`
+   with commas inside `lg:[left:max(...)]` doesn't survive Tailwind 3's
+   JIT scanner — the rule is silently dropped and the player ends up
+   1900px wide. A plain `@media` block sidesteps the issue entirely. */
+@media (min-width: 1024px) {
+  /* Selector intentionally chained via `.fixed` to get specificity
+     (0,2,0), beating Tailwind's single-class utilities like
+     `.sm\:left-6` and `.left-4` which Tailwind 3 emits AFTER any custom
+     SCSS that sits below `@tailwind utilities`. Without the chain my
+     rule loses the cascade and the player ends up 24px from each edge
+     (the sm: utility), not aligned to the grid. */
+  .fixed.player-desktop-grid {
+    /* `15rem` = sidebar width; `2.5rem` = page padding (lg p-10).
+       The `max(...)` clamp keeps the player flush with the content
+       stripe at viewport widths < ~1500px and aligns it with
+       `max-w-6xl` (72rem) once the stripe is narrower than the
+       remaining horizontal space. */
+    left: max(calc(15rem + 2.5rem), calc(50vw + 7.5rem - 36rem));
+    right: max(2.5rem, calc(50vw - 7.5rem - 36rem));
   }
 }
 
