@@ -257,7 +257,7 @@ export function Player() {
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} size="icon" className="h-10 w-10" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
-                  {isPlaying ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
+                  {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" />}
                 </Button>
               </motion.div>
               <Button onClick={next} variant="ghost" size="icon" aria-label="Следующий">
