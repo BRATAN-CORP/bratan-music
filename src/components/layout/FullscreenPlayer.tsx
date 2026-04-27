@@ -130,7 +130,10 @@ export function FullscreenPlayer() {
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="fixed inset-0 z-50 flex flex-col overflow-hidden"
         >
-          {/* Background layers: solid bg → blurred cover → soft vignette */}
+          {/* Background layers: solid bg → ambient blurred cover → vignette
+              The cover is heavily blurred and over-scaled so the player
+              backdrop reads as a single tinted ambient field — no visible
+              edges or contrast bands from the source image. */}
           <div className="absolute inset-0 z-0 bg-[var(--color-bg)]" aria-hidden />
           {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
             <>
@@ -138,7 +141,8 @@ export function FullscreenPlayer() {
                 <video
                   key={currentTrack.coverVideoUrl + '-bg'}
                   src={currentTrack.coverVideoUrl}
-                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-50 blur-3xl saturate-150 scale-110"
+                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover opacity-60 saturate-150"
+                  style={{ filter: 'blur(140px) saturate(1.6)', transform: 'scale(1.4)' }}
                   autoPlay
                   muted
                   loop
@@ -149,16 +153,46 @@ export function FullscreenPlayer() {
                   controlsList="nofullscreen nodownload noremoteplayback"
                 />
               ) : (
-                <div
-                  className="absolute inset-0 z-[1] bg-cover bg-center opacity-50 blur-3xl saturate-150 scale-110"
-                  style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
-                  aria-hidden
-                />
+                <>
+                  <div
+                    className="absolute inset-0 z-[1]"
+                    style={{
+                      backgroundImage: `url(${currentTrack.coverUrl})`,
+                      backgroundSize: '180% 180%',
+                      backgroundPosition: 'center 30%',
+                      filter: 'blur(140px) saturate(1.6)',
+                      transform: 'scale(1.4)',
+                      opacity: 0.6,
+                    }}
+                    aria-hidden
+                  />
+                  <div
+                    className="absolute inset-0 z-[1]"
+                    style={{
+                      backgroundImage: `url(${currentTrack.coverUrl})`,
+                      backgroundSize: '220% 220%',
+                      backgroundPosition: 'center 70%',
+                      filter: 'blur(180px) saturate(1.4) hue-rotate(8deg)',
+                      transform: 'scale(1.4)',
+                      opacity: 0.35,
+                    }}
+                    aria-hidden
+                  />
+                </>
               )}
               <div
                 className="absolute inset-0 z-[2]"
                 style={{
-                  background: 'linear-gradient(to bottom, transparent 0%, transparent 75%, rgba(0,0,0,0.45) 100%)',
+                  background:
+                    'radial-gradient(ellipse 120% 90% at 50% 35%, transparent 0%, transparent 55%, rgba(0,0,0,0.35) 100%)',
+                }}
+                aria-hidden
+              />
+              <div
+                className="absolute inset-0 z-[2]"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, transparent 0%, transparent 75%, rgba(0,0,0,0.45) 100%)',
                 }}
                 aria-hidden
               />
