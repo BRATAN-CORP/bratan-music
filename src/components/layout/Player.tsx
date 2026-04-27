@@ -4,6 +4,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
   MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
+  Download, Upload,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -12,7 +13,9 @@ import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
+import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { startTrackRadio } from '@/lib/trackRadio';
+import { downloadTrack } from '@/lib/trackActions';
 import type { Track } from '@/types';
 
 function formatTime(seconds: number): string {
@@ -46,7 +49,21 @@ export function Player() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+
+  const handleDownload = async () => {
+    if (!currentTrack || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadTrack(currentTrack);
+    } catch (err) {
+      console.error('[download]', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -315,6 +332,25 @@ export function Player() {
                       <button
                         type="button"
                         role="menuitem"
+                        onClick={() => { handleDownload(); setMenuOpen(false); }}
+                        disabled={downloading}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary disabled:opacity-60"
+                      >
+                        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                        Скачать
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setOverrideOpen(true); setMenuOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                      >
+                        <Upload size={14} />
+                        Загрузить свою версию
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
                         onClick={handleShare}
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
                       >
@@ -376,6 +412,14 @@ export function Player() {
         />
       )}
       <QueueDialog open={queueOpen} onClose={() => setQueueOpen(false)} />
+      {currentTrack && (
+        <TrackOverrideModal
+          open={overrideOpen}
+          onClose={() => setOverrideOpen(false)}
+          trackId={currentTrack.id}
+          trackTitle={`${currentTrack.artist} — ${currentTrack.title}`}
+        />
+      )}
     </AnimatePresence>
   );
 }

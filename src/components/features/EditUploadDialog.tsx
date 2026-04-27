@@ -89,7 +89,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
           <button
             type="button"
             aria-label="Закрыть"
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="liquid-glass-scrim absolute inset-0"
             onClick={onClose}
           />
           <motion.div
@@ -97,7 +97,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 24, opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="relative z-10 flex w-full max-w-md flex-col gap-4 rounded-t-[var(--radius-lg)] border border-border/60 bg-[var(--color-surface-elevated)] p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-[var(--shadow-xl)] ring-1 ring-white/5 sm:rounded-[var(--radius-lg)] sm:pb-5 supports-[backdrop-filter]:bg-[var(--color-surface-elevated)]/85 supports-[backdrop-filter]:backdrop-blur-xl"
+            className="liquid-glass relative z-10 flex w-full max-w-md flex-col gap-4 rounded-t-[var(--radius-lg)] p-5 pb-[calc(20px+env(safe-area-inset-bottom))] sm:rounded-[var(--radius-lg)] sm:pb-5"
           >
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Редактировать трек</h2>

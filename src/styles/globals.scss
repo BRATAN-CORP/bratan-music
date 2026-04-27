@@ -149,6 +149,56 @@ img {
   border: 1px solid var(--color-border);
 }
 
+/* Liquid-glass surface used for modals & sheets. Apple-style: heavy
+   backdrop blur, very low surface alpha so the background bleeds through
+   coloured, faint inner highlight + outer shadow. Falls back to the solid
+   elevated surface when backdrop-filter is unsupported.
+
+   Inspired by 21st.dev/community/components/suraj-xd/liquid-glass. */
+.liquid-glass {
+  background: rgba(20, 20, 24, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 30px 80px -20px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.08) inset;
+  position: relative;
+  isolation: isolate;
+}
+
+@supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) {
+  .liquid-glass {
+    background: rgba(20, 20, 24, 0.32);
+    backdrop-filter: blur(36px) saturate(180%);
+    -webkit-backdrop-filter: blur(36px) saturate(180%);
+  }
+}
+
+/* Subtle top-edge highlight that gives the panel a glassy lip. */
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.10) 0%,
+    rgba(255, 255, 255, 0.02) 30%,
+    transparent 50%
+  );
+  mix-blend-mode: overlay;
+  z-index: -1;
+}
+
+/* Backdrop scrim companion to liquid-glass — mid-darkness with a slight
+   blur so layered modals don't feel fully opaque. */
+.liquid-glass-scrim {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 .surface-panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

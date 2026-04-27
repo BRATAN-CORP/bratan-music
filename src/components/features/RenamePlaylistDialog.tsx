@@ -40,8 +40,7 @@ export function RenamePlaylistDialog({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: 'var(--color-overlay)' }}
+          className="liquid-glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => !rename.isPending && onClose()}
           role="dialog"
           aria-modal="true"
@@ -51,7 +50,7 @@ export function RenamePlaylistDialog({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.94, opacity: 0 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-sm rounded-[var(--radius-md)] border border-border bg-card p-6 shadow-[var(--shadow-lg)]"
+            className="liquid-glass w-full max-w-sm rounded-[var(--radius-lg)] p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between">

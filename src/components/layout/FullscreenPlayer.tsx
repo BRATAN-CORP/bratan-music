@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronDown, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
+  ChevronDown, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -51,6 +51,18 @@ export function FullscreenPlayer() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [radioBusy, setRadioBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [moreOpen]);
   const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
   // amp is 0..~0.6 from the bass band; scale up a touch so weaker bass is
   // still visible. The smoothing is now lighter (tau=110ms in the hook),
@@ -207,6 +219,10 @@ export function FullscreenPlayer() {
               Сейчас играет
             </span>
             <div className="flex items-center gap-1">
+              {/* Desktop: spell out the track-side actions inline. On mobile
+                  these collapse into the 3-dots dropdown below to keep the
+                  header uncluttered. Download/upload always live in the menu
+                  to avoid crowding the volume row. */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -214,6 +230,7 @@ export function FullscreenPlayer() {
                 aria-label="Запустить волну"
                 disabled={radioBusy}
                 title="Запустить волну на основе этого трека"
+                className="hidden md:inline-flex"
               >
                 {radioBusy ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
               </Button>
@@ -222,6 +239,7 @@ export function FullscreenPlayer() {
                 size="icon"
                 onClick={() => setQueueOpen(true)}
                 aria-label="Очередь"
+                className="hidden md:inline-flex"
               >
                 <ListOrdered size={18} />
               </Button>
@@ -230,7 +248,7 @@ export function FullscreenPlayer() {
                 size="icon"
                 onClick={() => setLyricsOpen((v) => !v)}
                 aria-label="Текст песни"
-                className={lyricsOpen ? 'text-foreground' : ''}
+                className={(lyricsOpen ? 'text-foreground ' : '') + 'hidden md:inline-flex'}
               >
                 <Mic2 size={18} />
               </Button>
@@ -239,10 +257,93 @@ export function FullscreenPlayer() {
                 size="icon"
                 onClick={() => setEqOpen((v) => !v)}
                 aria-label="Эквалайзер"
-                className={eqOpen ? 'text-foreground' : ''}
+                className={(eqOpen ? 'text-foreground ' : '') + 'hidden md:inline-flex'}
               >
                 <Sliders size={18} />
               </Button>
+
+              <div className="relative" ref={moreRef}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setMoreOpen((v) => !v)}
+                  aria-label="Действия с треком"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                >
+                  <MoreHorizontal size={18} />
+                </Button>
+                <AnimatePresence>
+                  {moreOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      role="menu"
+                      className="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-[var(--radius-md)] border border-white/10 bg-[var(--color-surface-elevated)]/85 shadow-[var(--shadow-xl)] ring-1 ring-white/5 backdrop-blur-2xl"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { handleStartRadio(); setMoreOpen(false); }}
+                        disabled={radioBusy}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60 md:hidden"
+                      >
+                        {radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+                        Запустить волну
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setQueueOpen(true); setMoreOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                      >
+                        <ListOrdered size={14} />
+                        Очередь
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setLyricsOpen((v) => !v); setMoreOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                      >
+                        <Mic2 size={14} />
+                        {lyricsOpen ? 'Скрыть текст' : 'Текст песни'}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setEqOpen((v) => !v); setMoreOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 md:hidden"
+                      >
+                        <Sliders size={14} />
+                        {eqOpen ? 'Скрыть эквалайзер' : 'Эквалайзер'}
+                      </button>
+                      <div className="h-px bg-white/10 md:hidden" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { handleDownload(); setMoreOpen(false); }}
+                        disabled={downloading}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10 disabled:opacity-60"
+                      >
+                        {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                        Скачать
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setOverrideOpen(true); setMoreOpen(false); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-white/10"
+                      >
+                        <Upload size={14} />
+                        Загрузить свою версию
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
 
@@ -454,35 +555,50 @@ export function FullscreenPlayer() {
                 <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
                   {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </Button>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={muted ? 0 : volume}
-                  onChange={(e) => setVolume(Number(e.target.value))}
-                  className="flex-1 accent-white"
+                {/* Custom volume slider — same look & thickness as the
+                    progress bar above (h-1 default, h-1.5 on hover/drag,
+                    same 3px round thumb). Native <input type=range> couldn't
+                    match the rail thickness reliably across browsers. */}
+                <div
+                  className="group/volume relative flex h-6 flex-1 cursor-pointer touch-none items-center select-none"
+                  role="slider"
                   aria-label="Громкость"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Скачать"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  className="text-muted-foreground hover:text-foreground"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round((muted ? 0 : volume) * 100)}
+                  onPointerDown={(e) => {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const setFromX = (clientX: number) => {
+                      const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                      setVolume(pct);
+                    };
+                    setFromX(e.clientX);
+                    const target = e.currentTarget;
+                    const onMove = (ev: PointerEvent) => setFromX(ev.clientX);
+                    const onUp = (ev: PointerEvent) => {
+                      setFromX(ev.clientX);
+                      target.removeEventListener('pointermove', onMove);
+                      target.removeEventListener('pointerup', onUp);
+                      target.removeEventListener('pointercancel', onUp);
+                      try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+                    };
+                    target.addEventListener('pointermove', onMove);
+                    target.addEventListener('pointerup', onUp);
+                    target.addEventListener('pointercancel', onUp);
+                  }}
                 >
-                  <Download size={16} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Загрузить свою версию"
-                  onClick={() => setOverrideOpen(true)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Upload size={16} />
-                </Button>
+                  <div className="relative h-1 w-full rounded-full bg-white/15 transition-[height] duration-150 group-hover/volume:h-1.5 group-active/volume:h-1.5">
+                    <div
+                      className="h-full rounded-full bg-white/85 transition-[width] duration-100"
+                      style={{ width: `${(muted ? 0 : volume) * 100}%` }}
+                    />
+                    <div
+                      className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/volume:scale-110 group-active/volume:scale-125"
+                      style={{ left: `${(muted ? 0 : volume) * 100}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             )}
             <AnimatePresence>
