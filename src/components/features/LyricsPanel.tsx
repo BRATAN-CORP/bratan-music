@@ -152,10 +152,17 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
     if (!autoScroll) return;
     if (activeIndex < 0) return;
     const el = lineRefs.current[activeIndex];
-    if (!el) return;
-    el.scrollIntoView({
+    const container = containerRef.current;
+    if (!el || !container) return;
+    // Manual scroll on the lyrics container only — `el.scrollIntoView` walks
+    // up every scrollable ancestor and on mobile browsers ends up scrolling
+    // the page (or the fullscreen player root) too, which makes the whole
+    // fullscreen overlay shift up and exposes the mini-player below it.
+    const target =
+      el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2;
+    container.scrollTo({
+      top: Math.max(0, target),
       behavior: reduce ? 'auto' : 'smooth',
-      block: 'center',
     });
   }, [activeIndex, autoScroll, reduce]);
 
