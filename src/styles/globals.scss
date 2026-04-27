@@ -326,6 +326,20 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
    The selector is scoped to the fullscreen container so the rest of
    the app keeps its flat type. */
 .fullscreen-player {
+  /* Re-tint the design-token text colours inside the fullscreen player
+     so labels read as white-on-cover regardless of theme — `text-shadow`
+     below carries them through bright/pastel covers, and pure white
+     reads cleanly on dark covers without us needing a per-cover
+     adaptive colour. We override the SCSS-level vars so every
+     descendant Tailwind utility (`text-foreground`,
+     `text-muted-foreground`, etc.) inherits the new tint instead of
+     reaching back to the dark-theme grays. */
+  --color-text: #ffffff;
+  --color-text-muted: rgba(255, 255, 255, 0.78);
+  --color-text-subtle: rgba(255, 255, 255, 0.56);
+
+  color: rgba(255, 255, 255, 0.96);
+
   /* All text descendants. Use shorthand `text-shadow` so it composes
      cleanly with motion's transform changes (no stacking-context
      surprises). Two-stop softness — tight then wide. */
