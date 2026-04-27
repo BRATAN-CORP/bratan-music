@@ -292,24 +292,46 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
 
    The selector is scoped to the fullscreen container so the rest of
    the app keeps its flat type. */
-/* Performance note: an earlier version of this rule applied two-stop
-   text-shadow to EVERY text descendant and a two-stop drop-shadow filter
-   to EVERY <svg> in the fullscreen player. iOS Safari composites those
-   filters every frame of the opacity fade-in (and on every motion
-   value change behind the playhead), which makes the player feel
-   sluggish on otherwise fast hardware (latest iPhone reported ~600ms
-   delay).
+.fullscreen-player {
+  /* All text descendants. Use shorthand `text-shadow` so it composes
+     cleanly with motion's transform changes (no stacking-context
+     surprises). Two-stop softness — tight then wide. */
+  h1, h2, h3, p, span, button, a, label, input, time {
+    text-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      0 4px 14px rgba(0, 0, 0, 0.30);
+  }
 
-   The new contract:
-   - Apply a SINGLE-stop shadow only to elements that opt in via the
-     `.fs-readable` class (title, artist, time, primary controls).
-   - Don't paint shadows on dropdown/menu content — those have their
-     own glass surface and shadows there are pure overhead. */
-.fullscreen-player .fs-readable {
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-}
+  /* Inputs and decorative containers shouldn't inherit the shadow
+     onto their backgrounds; reset on shells that already paint their
+     own surface (popovers, dropdowns, modals, the seek-bar rail
+     itself, the cover image, controls). */
+  .liquid-glass,
+  [role="menu"],
+  [role="menuitem"],
+  [role="dialog"],
+  [data-popover-content],
+  img,
+  video {
+    text-shadow: none;
+  }
 
-.fullscreen-player .fs-readable svg,
-.fullscreen-player svg.fs-readable {
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+  /* Icons (lucide ships them as inline <svg>). Apply a matching soft
+     drop-shadow on the SVG layer — text-shadow doesn't reach SVG
+     children. Same two-stop curve so icons and text feel cohesive. */
+  svg {
+    filter:
+      drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35))
+      drop-shadow(0 4px 12px rgba(0, 0, 0, 0.28));
+  }
+
+  /* Reset the SVG drop-shadow inside structural surfaces — the menu
+     icons, dialog content and the cover artwork itself shouldn't
+     carry it. */
+  .liquid-glass svg,
+  [role="menu"] svg,
+  [role="dialog"] svg,
+  img + svg {
+    filter: none;
+  }
 }
