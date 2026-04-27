@@ -447,14 +447,26 @@ export function FullscreenPlayer() {
           <motion.div
             animate={reduce ? undefined : { x: lyricsOpen && isMdUp ? '-22%' : '0%' }}
             transition={{ type: 'spring', stiffness: 240, damping: 32, mass: 0.85 }}
-            className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8 md:transform-gpu"
+            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 pb-4 sm:gap-8 md:transform-gpu"
           >
+            {/* Cover artwork wrapper. We clamp `max-width` against
+                `100vh - 24rem` so the (aspect-square) cover never
+                grows tall enough to overflow into the header bar on
+                short or wide-screen viewports — the header sits in
+                the same flex column and `justify-center` was happily
+                centring a 28rem-tall cover inside a 24rem-tall row,
+                eating the title bar visually. The 24rem reserve covers
+                header + title + progress + controls + volume + safe
+                areas. The cover stays a clean square because both
+                width and height are governed by the aspect-square
+                rule on the same box, with `max-width` doing the work. */}
             <motion.div
               key={currentTrack.id}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="relative w-full max-w-md"
+              className="relative mx-auto aspect-square w-full max-w-md"
+              style={{ maxWidth: 'min(28rem, calc(100vh - 24rem))' }}
             >
               {(currentTrack.coverUrl || currentTrack.coverVideoUrl) && (
                 <motion.div

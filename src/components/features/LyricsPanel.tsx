@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { animate, motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { Loader2, X } from 'lucide-react';
 import { useLyrics, parseLrc, type LyricLine } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/store/player';
@@ -176,12 +176,31 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
     // up every scrollable ancestor and on mobile browsers ends up scrolling
     // the page (or the fullscreen player root) too, which makes the whole
     // fullscreen overlay shift up and exposes the mini-player below it.
-    const target =
-      el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2;
-    container.scrollTo({
-      top: Math.max(0, target),
-      behavior: reduce ? 'auto' : 'smooth',
+    const target = Math.max(
+      0,
+      el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2,
+    );
+    if (reduce) {
+      container.scrollTop = target;
+      return;
+    }
+    // Drive `scrollTop` with motion's spring animator instead of the
+    // browser's `behavior: 'smooth'`. The native smooth-scroll has
+    // wildly different easing/duration across browsers (especially
+    // mobile Safari, where it visibly stutters when a new active
+    // line lands while a previous scroll is still resolving). A
+    // soft spring lets each new target hand off cleanly to the
+    // next without the previous tween "fighting" it.
+    const controls = animate(container.scrollTop, target, {
+      type: 'spring',
+      stiffness: 70,
+      damping: 24,
+      mass: 0.9,
+      onUpdate: (v) => {
+        container.scrollTop = v;
+      },
     });
+    return () => controls.stop();
   }, [activeIndex, autoScroll, reduce]);
 
   if (isLoading) {
@@ -247,7 +266,18 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
                     scale: isActive ? 1.04 : 1,
                     filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
                   }}
-                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  // Spring-based handoff so consecutive line changes
+                  // don't visibly "step" — the previous tween's easing
+                  // tail blends into the next instead of cutting it
+                  // off mid-curve. `opacity`/`filter` use a short
+                  // ease tween (springs on opacity/filter look mushy
+                  // because their start/end values are so close that
+                  // any overshoot reads as wobble).
+                  transition={{
+                    scale: { type: 'spring', stiffness: 130, damping: 22, mass: 0.9 },
+                    opacity: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                    filter: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+                  }}
                   onClick={() => {
                     if (onSeek && l.time != null) {
                       onSeek(l.time);
