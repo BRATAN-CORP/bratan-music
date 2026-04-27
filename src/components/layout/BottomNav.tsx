@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { Search, Library, User, Home } from 'lucide-react';
+import { usePlayerStore } from '@/store/player';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -9,6 +10,8 @@ const navItems = [
 ];
 
 export function BottomNav() {
+  const fullscreen = usePlayerStore((s) => s.fullscreen);
+  if (fullscreen) return null;
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-40 flex justify-around border-t border-border bg-background pt-1.5 lg:hidden"

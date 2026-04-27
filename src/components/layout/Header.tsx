@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
+import { usePlayerStore } from '@/store/player';
 
 export function Header() {
+  const fullscreen = usePlayerStore((s) => s.fullscreen);
+  if (fullscreen) return null;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border glass px-4">
