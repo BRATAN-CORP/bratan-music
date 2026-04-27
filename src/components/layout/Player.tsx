@@ -404,16 +404,16 @@ export function Player() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div className="relative h-1 w-full rounded-full bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/volume:h-1.5 group-active/volume:h-1.5">
+                <div className="relative h-1 w-full overflow-hidden rounded-full bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/volume:h-1.5 group-active/volume:h-1.5">
                   <div
-                    className="h-full rounded-full bg-foreground/85 transition-[width] duration-100"
+                    className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)] transition-[width] duration-100"
                     style={{ width: `${(muted ? 0 : volume) * 100}%` }}
                   />
-                  <div
-                    className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-[0_2px_8px_rgba(0,0,0,0.4)] transition-transform duration-150 group-hover/volume:scale-110 group-active/volume:scale-125"
-                    style={{ left: `${(muted ? 0 : volume) * 100}%` }}
-                  />
                 </div>
+                <div
+                  className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-0 transition-opacity group-hover/volume:opacity-100 group-active/volume:opacity-100"
+                  style={{ left: `${(muted ? 0 : volume) * 100}%` }}
+                />
               </div>
               <Button onClick={openFullscreen} variant="ghost" size="icon" aria-label="Развернуть">
                 <Maximize2 size={15} />

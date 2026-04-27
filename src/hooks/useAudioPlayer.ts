@@ -159,12 +159,22 @@ function ensureAudioGraph(): AudioBundle {
     filters[filters.length - 1]!.connect(analyser);
     analyser.connect(ctx.destination);
 
-    // Wire each slot: source -> gain -> filters[0]
+    // Wire each slot: source -> gain -> filters[0]. Initial gain on the
+    // active slot must reflect the user's persisted volume — graph is
+    // built lazily on first play, after Zustand persist has rehydrated, so
+    // hardcoding 1 here means the user hears the track at full volume
+    // even though the slider says e.g. 30%. Read from the store directly
+    // instead of going through the React closure (which may have a stale
+    // value at graph-creation time).
+    const ps = usePlayerStore.getState();
+    const userVol = ps.muted ? 0 : ps.volume;
     for (const slot of ['a', 'b'] as const) {
       const src = ctx.createMediaElementSource(b.audios[slot]);
       const gain = ctx.createGain();
-      // Inactive slot starts muted.
-      gain.gain.value = slot === b.active ? 1 : 0;
+      gain.gain.value = slot === b.active ? userVol : 0;
+      // Mirror to audio.volume so even crossfaded slots without graph
+      // attention land on the right level.
+      b.audios[slot].volume = slot === b.active ? userVol : 0;
       src.connect(gain);
       gain.connect(filters[0]!);
       b.sources[slot] = src;
@@ -385,18 +395,23 @@ export function useAudioPlayer() {
 
     b.loaded[slot] = trackId;
     ensureAudioGraph();
-    setSlotGain(slot, 1);
+    {
+      const ps = usePlayerStore.getState();
+      setSlotGain(slot, ps.muted ? 0 : ps.volume);
+    }
     setSlotGain(inactiveSlot(b), 0);
     if (b.ctx && b.ctx.state === 'suspended') {
       await b.ctx.resume().catch(() => {});
     }
     // If loadedmetadata never fired our seek (e.g. cached/already-decoded
     // src), execute it now while we have a known-good audio.duration.
+    // Restart the seek if loadedmetadata's listener didn't get a chance
+    // to set it (cached/decoded src). Don't clear the ref — onTimeUpdate
+    // clears it once the seek actually lands. See onTimeUpdate for why.
     if (pendingRestoreProgressRef.current !== null) {
       const dur = audio.duration;
       if (isFinite(dur) && dur > 0) {
         audio.currentTime = Math.min(pendingRestoreProgressRef.current, dur);
-        pendingRestoreProgressRef.current = null;
       }
     }
     // Only auto-play if the store says we should be playing (avoids
@@ -641,12 +656,19 @@ export function useAudioPlayer() {
       const audio = b.audios[slot];
       const onTimeUpdate = () => {
         if (slot !== b.active) return;
-        // While a restore-seek is still pending, ignore any timeupdate the
-        // audio element fires from the initial src/load: the value will be
-        // close to 0 and would clobber the persisted progress before our
-        // seek lands. The ref is cleared in onLoadedMetadata once we've
-        // applied the seek, after which timeupdate values are trustworthy.
-        if (pendingRestoreProgressRef.current !== null) return;
+        // Restore-seek gating: keep suppressing timeupdates until the
+        // audio element actually lands at the persisted target. Some
+        // browsers fire timeupdate(0) AFTER we set currentTime=target if
+        // the seek hasn't completed yet (data not buffered) — clearing
+        // the ref unconditionally inside loadedmetadata used to let
+        // those zero-updates clobber persisted progress, which is what
+        // the user saw as "timeline shows 1:23 then snaps back to 0:00".
+        const target = pendingRestoreProgressRef.current;
+        if (target !== null) {
+          // Within 1.5s of the requested target → seek has landed.
+          if (Math.abs(audio.currentTime - target) > 1.5) return;
+          pendingRestoreProgressRef.current = null;
+        }
         setProgress(audio.currentTime);
         const dur = audio.duration;
         if (
@@ -667,12 +689,13 @@ export function useAudioPlayer() {
         if (slot !== b.active) return;
         const target = pendingRestoreProgressRef.current;
         if (target !== null && isFinite(audio.duration) && audio.duration > 0) {
+          // Kick off the seek but DON'T clear the ref here — onTimeUpdate
+          // clears it only once audio.currentTime actually reaches the
+          // target. Browsers can fire timeupdate(0) after the seek call
+          // when data isn't buffered yet; if we cleared the ref now those
+          // zero updates would clobber the persisted progress.
           audio.currentTime = Math.min(target, audio.duration);
-          pendingRestoreProgressRef.current = null;
         }
-        // If duration isn't known yet, KEEP the ref armed: loadTrack's
-        // post-canplay block (line ~375) will land the seek once duration
-        // is available. Clearing here would lose the restore target.
       };
       const onEnded = () => {
         if (slot !== b.active) return;
@@ -850,7 +873,14 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
       }
       const dt = Math.min(64, now - lastAt);
       lastAt = now;
-      const tau = band === 'bass' ? 110 : 90;
+      // Asymmetric smoothing: the attack (when the new value is louder than
+      // the smoothed one) tracks the kick fast for a snappy, kick-locked
+      // pulse, while the release (decay back to silence) lingers a touch
+      // so the glow doesn't strobe on every sample. Asymmetry > pure tau
+      // for music: kicks read as *visible* but the glow stays smooth.
+      const attackTau = band === 'bass' ? 25 : 30;
+      const releaseTau = band === 'bass' ? 90 : 80;
+      const tau = value > last ? attackTau : releaseTau;
       const k = 1 - Math.exp(-dt / tau);
       last = last + (value - last) * k;
       setAmp(last);
