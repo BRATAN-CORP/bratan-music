@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, Reorder, useReducedMotion } from 'motion/react';
-import { GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react';
+import { GripVertical, ListOrdered, Play, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 
@@ -19,8 +19,6 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
   const reduce = useReducedMotion();
   const queue = usePlayerStore((s) => s.queue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const togglePlay = usePlayerStore((s) => s.togglePlay);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const jumpToQueue = usePlayerStore((s) => s.jumpToQueue);
@@ -88,26 +86,19 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
                     className="flex flex-col"
                     layoutScroll
                   >
-                    {queue.map((t, i) => {
-                      const active = currentTrack?.id === t.id;
-                      return (
-                        <QueueRow
-                          key={t.id}
-                          track={t}
-                          index={i}
-                          active={active}
-                          isPlaying={active && isPlaying}
-                          dragging={draggingId === t.id}
-                          onDragStart={() => setDraggingId(t.id)}
-                          onDragEnd={() => setDraggingId(null)}
-                          // Active row toggles play/pause; inactive
-                          // rows jump-and-play. Single click = single
-                          // intent, mirrors how TrackItem behaves.
-                          onJump={() => (active ? togglePlay() : jumpToQueue(i))}
-                          onRemove={() => removeFromQueue(t.id)}
-                        />
-                      );
-                    })}
+                    {queue.map((t, i) => (
+                      <QueueRow
+                        key={t.id}
+                        track={t}
+                        index={i}
+                        active={currentTrack?.id === t.id}
+                        dragging={draggingId === t.id}
+                        onDragStart={() => setDraggingId(t.id)}
+                        onDragEnd={() => setDraggingId(null)}
+                        onJump={() => jumpToQueue(i)}
+                        onRemove={() => removeFromQueue(t.id)}
+                      />
+                    ))}
                   </Reorder.Group>
                 )}
               </div>
@@ -123,7 +114,6 @@ interface RowProps {
   track: Track;
   index: number;
   active: boolean;
-  isPlaying: boolean;
   dragging: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -140,7 +130,6 @@ interface RowProps {
 function QueueRow({
   track,
   active,
-  isPlaying,
   dragging,
   onDragStart,
   onDragEnd,
@@ -201,13 +190,8 @@ function QueueRow({
           <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
         </div>
         {active && (
-          <span
-            aria-label={isPlaying ? 'Сейчас играет' : 'На паузе'}
-            className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
-          >
-            {isPlaying
-              ? <Pause size={12} fill="currentColor" strokeWidth={0} />
-              : <Play size={12} fill="currentColor" />}
+          <span className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+            <Play size={12} fill="currentColor" />
           </span>
         )}
       </button>
