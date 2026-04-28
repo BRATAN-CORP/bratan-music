@@ -62,17 +62,61 @@ let corsRetried: Record<Slot, boolean> = { a: false, b: false };
 
 export const EQ_BANDS = [60, 170, 350, 1000, 3500, 10000] as const;
 
+/**
+ * iOS Safari / iOS PWA detection. Web Audio (`AudioContext` +
+ * `createMediaElementSource`) suspends the moment the tab is hidden or
+ * the home button is pressed, which silences playback because the audio
+ * is routed through the graph. To get true background audio (P12) we
+ * skip the graph entirely on iOS and let the `<audio>` element output
+ * natively. We pay for that with no EQ + no visualiser on iOS, but the
+ * trade is worth it — those features only animate while the user is
+ * looking at the app anyway.
+ */
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/i.test(ua)) return true;
+  // iPadOS 13+ reports as MacIntel; sniff via touch capability.
+  const nav = navigator as Navigator & { maxTouchPoints?: number };
+  return navigator.platform === 'MacIntel' && (nav.maxTouchPoints ?? 0) > 1;
+}
+
 function makeAudio(): HTMLAudioElement {
   const a = new Audio();
   a.preload = 'auto';
   a.crossOrigin = 'anonymous';
+  // iOS Safari refuses to play audio inline (i.e. with the screen
+  // unlocked while in background) unless this attribute is explicitly
+  // set on the element.
+  a.setAttribute('playsinline', '');
+  // Hint to the browser that this is the primary media of the page so
+  // Media Session UI surfaces (lock screen, command centre on iOS,
+  // notification on Android) get the right metadata.
+  a.setAttribute('x-webkit-airplay', 'allow');
   return a;
 }
 
 function getBundle(): AudioBundle {
   if (!bundle) {
+    const audioA = makeAudio();
+    const audioB = makeAudio();
+    // Some mobile browsers (notably iOS Safari) are stricter about
+    // background playback for detached <audio> elements than for ones
+    // attached to the DOM. Mounting them off-screen lets the same
+    // singleton survive across React unmounts while still satisfying
+    // the "this is on the page" heuristic that iOS uses to decide
+    // whether the lock-screen / control-center transport applies.
+    if (typeof document !== 'undefined' && document.body) {
+      const host = document.createElement('div');
+      host.style.cssText =
+        'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;clip:rect(0 0 0 0);';
+      host.setAttribute('aria-hidden', 'true');
+      host.appendChild(audioA);
+      host.appendChild(audioB);
+      document.body.appendChild(host);
+    }
     bundle = {
-      audios: { a: makeAudio(), b: makeAudio() },
+      audios: { a: audioA, b: audioB },
       sources: { a: null, b: null },
       gains: { a: null, b: null },
       loaded: { a: null, b: null },
@@ -147,6 +191,20 @@ async function safePause(slot: Slot) {
 function ensureAudioGraph(): AudioBundle {
   const b = getBundle();
   if (b.ctx || b.ctxFailed) return b;
+
+  // P12 — never wire up Web Audio on iOS. createMediaElementSource binds
+  // the <audio> element's output to the graph permanently; once the
+  // graph is suspended (which iOS does aggressively when the tab is
+  // hidden or the device locks), there is no way to fall back to the
+  // element's native output, so the user just hears silence in the
+  // background. Leaving the bundle in `ctxFailed` mode causes
+  // `setSlotGain` to write straight to `audio.volume` and the
+  // visualiser hooks to gracefully render zeros — both already have
+  // graph-less fallbacks.
+  if (isIOS()) {
+    b.ctxFailed = true;
+    return b;
+  }
 
   try {
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -802,6 +860,41 @@ export function useAudioPlayer() {
       setProgress(0);
     }
   }, [_seekToZero, setProgress]);
+
+  // P12 — when the tab comes back from being hidden (browser switched
+  // back, screen unlocked, etc.), the AudioContext on Chromium-based
+  // platforms is often left in `suspended` state. If the user was
+  // mid-playback the <audio> element keeps decoding but there's no
+  // signal reaching speakers. Force-resume on visibility recovery and
+  // also on any media event that fires while we're trying to play.
+  useEffect(() => {
+    const resumeIfNeeded = () => {
+      const b = getBundle();
+      if (b.ctx && b.ctx.state === 'suspended') {
+        b.ctx.resume().catch(() => {});
+      }
+      // On iOS, where we deliberately skipped Web Audio, just nudge
+      // the active <audio> element back into play state if the store
+      // says it should be playing — Safari pauses on visibility hide.
+      if (usePlayerStore.getState().isPlaying) {
+        const audio = b.audios[b.active];
+        if (audio.paused && audio.src) {
+          audio.play().catch(() => {});
+        }
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') resumeIfNeeded();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', resumeIfNeeded);
+    window.addEventListener('pageshow', resumeIfNeeded);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', resumeIfNeeded);
+      window.removeEventListener('pageshow', resumeIfNeeded);
+    };
+  }, []);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
