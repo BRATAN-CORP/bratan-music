@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { Search, Library, User, Home, Heart, ListMusic, Pin } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
 import { usePlaylistsList } from '@/hooks/useLibrary';
@@ -28,7 +28,17 @@ export function Sidebar() {
     });
 
   return (
-    <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-border bg-background py-6 lg:flex">
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-border bg-background py-6 lg:flex">
+      {/* Brand mark — only shown on desktop, where the sidebar is the
+          home for both navigation and identity. The accent dot scales up
+          on hover, mirroring the original Header micro-interaction. */}
+      <Link
+        to="/"
+        className="group mb-6 flex items-center gap-2 px-6 text-sm font-semibold uppercase tracking-[0.22em] text-foreground"
+      >
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] transition-transform duration-300 group-hover:scale-150" />
+        Bratan&nbsp;Music
+      </Link>
       <nav className="flex flex-col gap-0.5 px-3">
         {navItems.map(({ to, icon: Icon, label }) => (
           <NavLink

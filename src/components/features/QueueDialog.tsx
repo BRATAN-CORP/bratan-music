@@ -111,7 +111,9 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
                           onDragEnd={handleDragEnd}
                           className={[
                             'group relative flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 transition-colors',
-                            isActive ? 'bg-secondary' : 'hover:bg-secondary/60',
+                            isActive
+                              ? 'bg-[var(--color-hover-overlay-strong)]'
+                              : 'hover:bg-[var(--color-hover-overlay-strong)] focus-within:bg-[var(--color-hover-overlay-strong)]',
                             isDragOver ? 'ring-1 ring-[var(--color-accent)]' : '',
                             dragIndex === i ? 'opacity-60' : '',
                           ].join(' ')}
