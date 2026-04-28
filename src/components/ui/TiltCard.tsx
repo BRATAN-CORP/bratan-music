@@ -81,7 +81,12 @@ export function TiltCard({
       style={{ rotateX, rotateY, scale, z, transformStyle: 'preserve-3d', perspective: 1100 }}
       className={cn('relative will-change-transform', className)}
     >
-      <div style={{ transformStyle: 'preserve-3d' }}>{children}</div>
+      {/* Fill the outer transform wrapper so children laid out with
+          `h-full` / `absolute inset-0` resolve correctly. Without
+          explicit dimensions this static div is `auto`-sized and
+          percentage heights on children collapsed to zero — which is
+          what made the fullscreen cover disappear. */}
+      <div className="relative h-full w-full" style={{ transformStyle: 'preserve-3d' }}>{children}</div>
       {glare && (
         <motion.div
           aria-hidden

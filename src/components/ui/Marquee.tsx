@@ -172,17 +172,16 @@ export function Marquee({
       className={'block w-full whitespace-nowrap ' + className}
       aria-label={ariaLabel ?? text}
       style={{
-        // Only constrain the box when we're actually marqueeing — short
-        // text that fits the column should let `text-shadow` halation
-        // bleed freely past the box (otherwise a `flex-1` column with
-        // narrow neighbours chops the shadow at the column edges).
-        // When marqueeing, we keep a vertical bleed so the shadow has
-        // room above/below the line, while the horizontal mask handles
-        // the side fades.
+        // Always clip horizontally at the box edge so a long single
+        // line of text can't push the surrounding flex layout sideways
+        // before the JS measurement loop has had a chance to compute
+        // the marquee distance. Vertical insets are negative so the
+        // text-shadow halation can still bleed above/below the line —
+        // the layout-break the user reported was strictly horizontal.
+        clipPath: 'inset(-1.5em 0 -1.5em 0)',
+        WebkitClipPath: 'inset(-1.5em 0 -1.5em 0)',
         ...(isMarqueeing
           ? {
-              clipPath: 'inset(-1.5em 0 -1.5em 0)',
-              WebkitClipPath: 'inset(-1.5em 0 -1.5em 0)',
               WebkitMaskImage: maskImage,
               maskImage: maskImage,
             }
