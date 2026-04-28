@@ -42,6 +42,12 @@ interface PlaylistRow {
   created_at: number;
   updated_at: number;
   track_count?: number | null;
+  // 0009_playlist_share columns (see playlists.ts).
+  is_public?: number | null;
+  share_token?: string | null;
+  source_kind?: 'user' | 'tidal' | null;
+  source_playlist_id?: string | null;
+  source_user_id?: string | null;
 }
 
 function rowToTrack(r: DbRow) {
@@ -69,6 +75,11 @@ function rowToPlaylist(r: PlaylistRow) {
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),
+    isPublic: Boolean(r.is_public),
+    shareToken: r.share_token ?? null,
+    sourceKind: (r.source_kind ?? null) as 'user' | 'tidal' | null,
+    sourcePlaylistId: r.source_playlist_id ?? null,
+    sourceUserId: r.source_user_id ?? null,
   };
 }
 
