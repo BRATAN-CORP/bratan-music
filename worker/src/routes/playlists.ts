@@ -1,10 +1,24 @@
 import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
+import { TidalService } from '../services/tidal/TidalService';
 
 const playlists = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 playlists.use('/*', jwtAuth);
+
+/**
+ * Generate a URL-safe random share token. Long enough to be
+ * effectively unguessable (≈26 chars of base62 ≈ 154 bits) but
+ * short enough to fit in a friendly share URL.
+ */
+function generateShareToken(): string {
+  const bytes = new Uint8Array(20);
+  crypto.getRandomValues(bytes);
+  // base64url without padding
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 
 interface TrackSnapshot {
   title?: string;
@@ -42,6 +56,13 @@ interface PlaylistRow {
   created_at: number;
   updated_at: number;
   track_count?: number | null;
+  // 0009_playlist_share columns. Optional on the type so older D1
+  // result rows (from before the migration applied) decode cleanly.
+  is_public?: number | null;
+  share_token?: string | null;
+  source_kind?: 'user' | 'tidal' | null;
+  source_playlist_id?: string | null;
+  source_user_id?: string | null;
 }
 
 // Hard cap to keep D1 rows small. Frontend should resize+JPEG-compress
@@ -76,7 +97,24 @@ function rowToPlaylist(r: PlaylistRow) {
     trackCount: Number(r.track_count ?? 0),
     updatedAt: Number(r.updated_at ?? 0),
     createdAt: Number(r.created_at ?? 0),
+    isPublic: Boolean(r.is_public),
+    shareToken: r.share_token ?? null,
+    sourceKind: (r.source_kind ?? null) as 'user' | 'tidal' | null,
+    sourcePlaylistId: r.source_playlist_id ?? null,
+    sourceUserId: r.source_user_id ?? null,
   };
+}
+
+/**
+ * Whether this playlist is read-only for the requester. True when:
+ * - the row carries a `source_kind` (it's a saved reference); OR
+ * - the requester is not the owner (e.g. accessing via /shared/:token).
+ * Read-only enforcement happens in the routes below — the flag is
+ * only echoed in responses so the UI can hide editing affordances.
+ */
+function isReadOnly(r: PlaylistRow, requesterId: string): boolean {
+  if (r.source_kind) return true;
+  return r.user_id !== requesterId;
 }
 
 playlists.get('/', async (c) => {
@@ -109,6 +147,38 @@ playlists.post('/', async (c) => {
   return c.json(playlist ? rowToPlaylist(playlist) : { id, name: body.name.trim(), isLiked: false, trackCount: 0, updatedAt: now, createdAt: now }, 201);
 });
 
+/**
+ * Resolve the tracks for a saved-reference playlist:
+ * - `source_kind = 'user'`: read the original playlist's tracks
+ *   (only if it's still public, otherwise return empty).
+ * - `source_kind = 'tidal'`: fetch on demand from TidalService using
+ *   the stored `source_playlist_id` (Tidal UUID). Network failures
+ *   degrade gracefully to an empty list rather than 500-ing.
+ */
+async function resolveLinkedTracks(c: { env: Env }, p: PlaylistRow): Promise<unknown[]> {
+  const sourceId = p.source_playlist_id;
+  if (!sourceId) return [];
+  if (p.source_kind === 'user') {
+    const orig = await c.env.DB.prepare(
+      'SELECT id, is_public FROM playlists WHERE id = ?'
+    ).bind(sourceId).first<{ id: string; is_public: number | null }>();
+    if (!orig || !orig.is_public) return [];
+    const tracks = await c.env.DB.prepare(
+      'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
+    ).bind(sourceId).all<PtRow>();
+    return (tracks.results ?? []).map(rowToTrack);
+  }
+  if (p.source_kind === 'tidal') {
+    try {
+      const tidal = new TidalService(c.env);
+      return await tidal.getPlaylistTracks(sourceId);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 playlists.get('/:id', async (c) => {
   const userId = c.get('userId');
   const id = c.req.param('id');
@@ -121,11 +191,23 @@ playlists.get('/:id', async (c) => {
     return c.json({ error: 'Плейлист не найден' }, 404);
   }
 
-  const tracks = await c.env.DB.prepare(
-    'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
-  ).bind(id).all<PtRow>();
+  // Linked playlists resolve their tracks from the source on every
+  // read, so changes to the original automatically propagate.
+  const tracks = playlist.source_kind
+    ? await resolveLinkedTracks(c, playlist)
+    : (await c.env.DB.prepare(
+        'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
+      ).bind(id).all<PtRow>()).results?.map(rowToTrack) ?? [];
 
-  return c.json({ ...rowToPlaylist(playlist), tracks: (tracks.results ?? []).map(rowToTrack) });
+  return c.json({
+    ...rowToPlaylist(playlist),
+    tracks,
+    readOnly: isReadOnly(playlist, userId),
+    // For linked playlists the cached track_count is meaningless
+    // (it counts the empty `playlist_tracks` rows in the requester's
+    // copy, not the source). Override with the resolved length.
+    trackCount: playlist.source_kind ? tracks.length : Number(playlist.track_count ?? 0),
+  });
 });
 
 playlists.put('/:id', async (c) => {
@@ -134,8 +216,8 @@ playlists.put('/:id', async (c) => {
   const body = await c.req.json<{ name: string }>();
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, is_liked FROM playlists WHERE id = ? AND user_id = ?'
-  ).bind(id, userId).first<{ id: string; is_liked: number }>();
+    'SELECT id, is_liked, source_kind FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; is_liked: number; source_kind: string | null }>();
 
   if (!existing) {
     return c.json({ error: 'Плейлист не найден' }, 404);
@@ -143,6 +225,10 @@ playlists.put('/:id', async (c) => {
 
   if (existing.is_liked === 1) {
     return c.json({ error: 'Системный плейлист нельзя переименовать' }, 400);
+  }
+
+  if (existing.source_kind) {
+    return c.json({ error: 'Сохранённый плейлист нельзя переименовать' }, 400);
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -194,10 +280,13 @@ playlists.put('/:id/cover', async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
-  ).bind(id, userId).first<{ id: string }>();
+    'SELECT id, source_kind FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; source_kind: string | null }>();
   if (!existing) {
     return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+  if (existing.source_kind) {
+    return c.json({ error: 'Обложку сохранённого плейлиста нельзя менять' }, 400);
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -263,11 +352,15 @@ playlists.post('/:id/tracks', async (c) => {
   const body = await c.req.json<{ trackId: string; source?: string; snapshot?: TrackSnapshot }>();
 
   const playlist = await c.env.DB.prepare(
-    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
-  ).bind(id, userId).first();
+    'SELECT id, source_kind FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; source_kind: string | null }>();
 
   if (!playlist) {
     return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  if (playlist.source_kind) {
+    return c.json({ error: 'В сохранённый плейлист нельзя добавлять треки' }, 400);
   }
 
   const source = body.source ?? 'tidal';
@@ -305,11 +398,15 @@ playlists.put('/:id/reorder', async (c) => {
   }
 
   const playlist = await c.env.DB.prepare(
-    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
-  ).bind(id, userId).first();
+    'SELECT id, source_kind FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; source_kind: string | null }>();
 
   if (!playlist) {
     return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  if (playlist.source_kind) {
+    return c.json({ error: 'Порядок сохранённого плейлиста нельзя изменять' }, 400);
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -330,11 +427,15 @@ playlists.delete('/:id/tracks/:trackId', async (c) => {
   const trackId = c.req.param('trackId');
 
   const playlist = await c.env.DB.prepare(
-    'SELECT id FROM playlists WHERE id = ? AND user_id = ?'
-  ).bind(id, userId).first();
+    'SELECT id, source_kind FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; source_kind: string | null }>();
 
   if (!playlist) {
     return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+
+  if (playlist.source_kind) {
+    return c.json({ error: 'Из сохранённого плейлиста нельзя удалять треки' }, 400);
   }
 
   await c.env.DB.prepare(
@@ -344,6 +445,182 @@ playlists.delete('/:id/tracks/:trackId', async (c) => {
   const now = Math.floor(Date.now() / 1000);
   await c.env.DB.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?').bind(now, id).run();
   return c.json({ ok: true });
+});
+
+// ── Sharing ─────────────────────────────────────────────────────────────────
+
+/**
+ * Toggle a playlist's public visibility. Owner-only. Lazily generates
+ * a `share_token` the first time the playlist is published so the UI
+ * can build a link straight away. Subsequent toggles preserve the
+ * token (so re-enabling sharing keeps the same URL).
+ *
+ * Body: `{ public: boolean }`. Response: `{ isPublic, shareToken }`.
+ */
+playlists.put('/:id/share', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ public?: boolean }>().catch(() => ({} as { public?: boolean }));
+  const wantPublic = Boolean(body.public);
+
+  const row = await c.env.DB.prepare(
+    'SELECT id, is_liked, share_token, source_kind FROM playlists WHERE id = ? AND user_id = ?'
+  ).bind(id, userId).first<{ id: string; is_liked: number; share_token: string | null; source_kind: string | null }>();
+  if (!row) {
+    return c.json({ error: 'Плейлист не найден' }, 404);
+  }
+  if (row.is_liked === 1) {
+    return c.json({ error: 'Системный плейлист нельзя сделать публичным' }, 400);
+  }
+  if (row.source_kind) {
+    return c.json({ error: 'Сохранённый плейлист нельзя поделить — поделитесь оригиналом' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  let token = row.share_token;
+  if (wantPublic && !token) {
+    // Generate-until-unique. The token space is 2^160 so collisions
+    // are vanishingly unlikely, but we still check defensively to
+    // avoid 500s if the impossible happens.
+    for (let i = 0; i < 5; i++) {
+      const candidate = generateShareToken();
+      const taken = await c.env.DB.prepare('SELECT 1 FROM playlists WHERE share_token = ?').bind(candidate).first();
+      if (!taken) { token = candidate; break; }
+    }
+  }
+  await c.env.DB.prepare(
+    'UPDATE playlists SET is_public = ?, share_token = ?, updated_at = ? WHERE id = ?'
+  ).bind(wantPublic ? 1 : 0, token ?? null, now, id).run();
+
+  return c.json({ ok: true, isPublic: wantPublic, shareToken: token ?? null });
+});
+
+/**
+ * Save a Tidal editorial playlist as a linked-tidal playlist in the
+ * user's library. Body: `{ tidalId, name, coverUrl?, curator? }`.
+ *
+ * The created row carries `source_kind='tidal'` + `source_playlist_id`,
+ * so subsequent reads resolve tracks via TidalService and all mutate
+ * routes block with 400. Re-saving the same Tidal playlist returns
+ * the existing row (idempotent).
+ */
+playlists.post('/external/tidal', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json<{
+    tidalId: string;
+    name: string;
+    coverUrl?: string | null;
+    curator?: string | null;
+  }>().catch(() => null);
+  if (!body || !body.tidalId || !body.name?.trim()) {
+    return c.json({ error: 'tidalId и name обязательны' }, 400);
+  }
+  if (!/^[a-fA-F0-9-]{36}$/.test(body.tidalId)) {
+    return c.json({ error: 'Неверный UUID Tidal-плейлиста' }, 400);
+  }
+
+  const existing = await c.env.DB.prepare(
+    "SELECT * FROM playlists WHERE user_id = ? AND source_kind = 'tidal' AND source_playlist_id = ? LIMIT 1"
+  ).bind(userId, body.tidalId).first<PlaylistRow>();
+  if (existing) {
+    return c.json(rowToPlaylist(existing));
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    "INSERT INTO playlists (id, user_id, name, is_liked, cover_url, created_at, updated_at, source_kind, source_playlist_id) VALUES (?, ?, ?, 0, ?, ?, ?, 'tidal', ?)"
+  ).bind(id, userId, body.name.trim(), body.coverUrl ?? null, now, now, body.tidalId).run();
+
+  const row = await c.env.DB.prepare('SELECT * FROM playlists WHERE id = ?').bind(id).first<PlaylistRow>();
+  return c.json(row ? rowToPlaylist(row) : { id }, 201);
+});
+
+/**
+ * Fetch a playlist by its public share token. JWT-required (we only
+ * surface public content to authenticated users), but no ownership
+ * check — anyone with the link gets read-only access. Returns the
+ * full track list and a minimal `owner` block (display name only,
+ * never tg_username) so the UI can credit the curator.
+ */
+playlists.get('/shared/:token', async (c) => {
+  const requesterId = c.get('userId');
+  const token = c.req.param('token');
+  if (!token || token.length < 16 || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    return c.json({ error: 'Неверная ссылка' }, 400);
+  }
+
+  const row = await c.env.DB.prepare(
+    'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.share_token = ? AND p.is_public = 1'
+  ).bind(token).first<PlaylistRow>();
+  if (!row) {
+    return c.json({ error: 'Плейлист недоступен или больше не публичный' }, 404);
+  }
+
+  const ownerRow = await c.env.DB.prepare(
+    'SELECT tg_name, tg_username FROM users WHERE id = ?'
+  ).bind(row.user_id).first<{ tg_name: string | null; tg_username: string | null }>();
+
+  const tracks = (await c.env.DB.prepare(
+    'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
+  ).bind(row.id).all<PtRow>()).results?.map(rowToTrack) ?? [];
+
+  // Surface whether the requester has already saved this playlist
+  // so the UI can show "Открыть" instead of "Сохранить".
+  const savedRow = await c.env.DB.prepare(
+    "SELECT id FROM playlists WHERE user_id = ? AND source_kind = 'user' AND source_playlist_id = ? LIMIT 1"
+  ).bind(requesterId, row.id).first<{ id: string }>();
+
+  return c.json({
+    ...rowToPlaylist(row),
+    tracks,
+    trackCount: tracks.length,
+    readOnly: row.user_id !== requesterId,
+    isOwner: row.user_id === requesterId,
+    owner: ownerRow ? { name: ownerRow.tg_name ?? 'Пользователь' } : null,
+    savedPlaylistId: savedRow?.id ?? null,
+  });
+});
+
+/**
+ * Save a public playlist into the requester's library as a linked
+ * reference. Idempotent — re-saving returns the existing row. The
+ * created row is read-only and resolves tracks from the source on
+ * every fetch, so future changes to the original automatically
+ * propagate.
+ */
+playlists.post('/shared/:token/save', async (c) => {
+  const userId = c.get('userId');
+  const token = c.req.param('token');
+  if (!token || token.length < 16 || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    return c.json({ error: 'Неверная ссылка' }, 400);
+  }
+
+  const source = await c.env.DB.prepare(
+    'SELECT id, user_id, name, cover_url FROM playlists WHERE share_token = ? AND is_public = 1'
+  ).bind(token).first<{ id: string; user_id: string; name: string; cover_url: string | null }>();
+  if (!source) {
+    return c.json({ error: 'Плейлист недоступен' }, 404);
+  }
+  if (source.user_id === userId) {
+    return c.json({ error: 'Это ваш плейлист' }, 400);
+  }
+
+  const existing = await c.env.DB.prepare(
+    "SELECT * FROM playlists WHERE user_id = ? AND source_kind = 'user' AND source_playlist_id = ? LIMIT 1"
+  ).bind(userId, source.id).first<PlaylistRow>();
+  if (existing) {
+    return c.json(rowToPlaylist(existing));
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    "INSERT INTO playlists (id, user_id, name, is_liked, cover_url, created_at, updated_at, source_kind, source_playlist_id, source_user_id) VALUES (?, ?, ?, 0, ?, ?, ?, 'user', ?, ?)"
+  ).bind(id, userId, source.name, source.cover_url ?? null, now, now, source.id, source.user_id).run();
+
+  const row = await c.env.DB.prepare('SELECT * FROM playlists WHERE id = ?').bind(id).first<PlaylistRow>();
+  return c.json(row ? rowToPlaylist(row) : { id }, 201);
 });
 
 export { playlists };

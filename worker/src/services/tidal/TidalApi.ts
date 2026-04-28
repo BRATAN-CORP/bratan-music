@@ -176,6 +176,21 @@ export class TidalApi {
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/tracks/${trackId}/radio?limit=${limit}&offset=0&countryCode=${cc}`);
   }
 
+  /**
+   * Fetch tracks of an editorial Tidal playlist by UUID. The
+   * upstream endpoint paginates; for now we ask for a single window
+   * up to `limit` (Tidal allows up to 100 per request).
+   */
+  async getPlaylistTracks(uuid: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      limit: String(limit),
+      offset: '0',
+    });
+    return this.get<{ items: TidalTrackRaw[] }>(`/v1/playlists/${uuid}/tracks?${params}`);
+  }
+
   async getTrackLyrics(trackId: string): Promise<TidalLyricsRaw | null> {
     const cc = await this.auth.getCountryCode();
     try {

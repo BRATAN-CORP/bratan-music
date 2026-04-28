@@ -255,8 +255,10 @@ export class TidalService implements MusicService {
   }
 
   /**
-   * Fetch full tracklist of an editorial playlist by UUID. Used by
-   * the explore detail view when the user opens a curated playlist.
+   * Resolve tracks of an editorial Tidal playlist by UUID. Used by
+   * linked playlists (sourceKind='tidal') so the saved reference
+   * always reflects the upstream contents, and by the explore detail
+   * view when a curated playlist is opened directly.
    */
   async getPlaylistTracks(uuid: string, limit = 100): Promise<Track[]> {
     const raw = await this.api.getPlaylistTracks(uuid, limit);

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Reorder, motion } from 'motion/react';
-import { ChevronLeft, Heart, ListMusic, Pencil, Pin, PinOff } from 'lucide-react';
+import { ChevronLeft, Globe, Heart, ListMusic, Pencil, Pin, PinOff, Share2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
 import { RenamePlaylistDialog } from '@/components/features/RenamePlaylistDialog';
+import { SharePlaylistDialog } from '@/components/features/SharePlaylistDialog';
 import { PlaylistCoverButton } from '@/components/features/PlaylistCoverButton';
 import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
@@ -37,9 +38,15 @@ export function PlaylistPage() {
   }, [playlist?.tracks, playlist?.isLiked]);
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const ownPlaylist = useMemo(() => Boolean(playlist && id), [playlist, id]);
-  const hideRemoveMenu = Boolean(playlist?.isLiked);
-  const canRename = Boolean(playlist && !playlist.isLiked);
+  // Linked (saved-reference) playlists are read-only: hide rename,
+  // cover edit, reorder, per-track menu actions. Keep pin / delete
+  // (those affect only the local copy and are explicitly allowed).
+  const isLinked = Boolean(playlist?.sourceKind);
+  const hideRemoveMenu = Boolean(playlist?.isLiked) || isLinked;
+  const canRename = Boolean(playlist && !playlist.isLiked && !isLinked);
+  const canShare = Boolean(playlist && !playlist.isLiked && !isLinked);
 
   useEffect(() => {
     setLocalTracks(tracks);
@@ -154,6 +161,23 @@ export function PlaylistPage() {
                       <Pencil size={16} />
                     </button>
                   )}
+                  {canShare && (
+                    <motion.button
+                      type="button"
+                      onClick={() => setShareOpen(true)}
+                      whileTap={{ scale: 0.82 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                      className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
+                        playlist?.isPublic
+                          ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
+                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      }`}
+                      aria-label={playlist?.isPublic ? 'Управлять публикацией' : 'Поделиться'}
+                      title={playlist?.isPublic ? 'Доступен по ссылке' : 'Поделиться'}
+                    >
+                      {playlist?.isPublic ? <Globe size={16} /> : <Share2 size={16} />}
+                    </motion.button>
+                  )}
                   {playlist && !playlist.isLiked && (
                     <motion.button
                       type="button"
@@ -174,6 +198,11 @@ export function PlaylistPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
+                  {isLinked && (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                      Ссылка · {playlist.sourceKind === 'tidal' ? 'Tidal' : 'Пользователь'}
+                    </span>
+                  )}
                 </p>
                 {canRename && (
                   <PlaylistCoverButton
@@ -185,12 +214,19 @@ export function PlaylistPage() {
               </div>
             </div>
             {playlist && (
-              <RenamePlaylistDialog
-                open={renameOpen}
-                onClose={() => setRenameOpen(false)}
-                playlistId={playlist.id}
-                initialName={playlist.name}
-              />
+              <>
+                <RenamePlaylistDialog
+                  open={renameOpen}
+                  onClose={() => setRenameOpen(false)}
+                  playlistId={playlist.id}
+                  initialName={playlist.name}
+                />
+                <SharePlaylistDialog
+                  open={shareOpen}
+                  onClose={() => setShareOpen(false)}
+                  playlist={playlist}
+                />
+              </>
             )}
             {ownPlaylist && !hideRemoveMenu ? (
               <Reorder.Group
