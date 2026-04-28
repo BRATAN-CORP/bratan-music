@@ -929,6 +929,80 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
 }
 
 /**
+ * Bass-band visualisation signals for the fullscreen player (П6). The
+ * existing `useAnalyserAmplitude(_, 'bass')` returns a single smoothed
+ * amplitude — visually that maps to a near-static halo because the
+ * smoothed value moves slowly and clings to a high baseline whenever
+ * the track has any sustained bass content.
+ *
+ * For richer visuals we want two signals:
+ *
+ *   - `amp` — fast-attack / slow-release smoothed bass amplitude, same
+ *     as before but tuned to give a wider dynamic range (we apply a
+ *     square-rooted gain in the consumer).
+ *   - `kick` — a transient detector. We track a slow baseline of the
+ *     bass level and trigger an envelope every time the instantaneous
+ *     amplitude jumps above it. The envelope has near-instant attack
+ *     and ~280ms release, so visible kicks look like flashes rather
+ *     than a constantly-on glow.
+ *
+ * Both signals are bass-band only (30–180 Hz). The hook re-renders at
+ * the animation frame rate, matching the cost profile of
+ * useAnalyserAmplitude.
+ */
+export function useBassPulse(active: boolean): { amp: number; kick: number } {
+  const [state, setState] = useState({ amp: 0, kick: 0 });
+  useEffect(() => {
+    if (!active) {
+      setState({ amp: 0, kick: 0 });
+      return;
+    }
+    const b = ensureAudioGraph();
+    if (!b.analyser || !b.ctx) return;
+    const analyser = b.analyser;
+    const sampleRate = b.ctx.sampleRate || 44100;
+    const binHz = sampleRate / analyser.fftSize;
+    const bassLo = Math.max(1, Math.floor(30 / binHz));
+    const bassHi = Math.max(bassLo + 1, Math.ceil(180 / binHz));
+    const buffer = new Uint8Array(analyser.frequencyBinCount);
+    let raf = 0;
+    let smoothed = 0;
+    let baseline = 0;
+    let kickEnv = 0;
+    let lastAt = performance.now();
+    const tick = (now: number) => {
+      analyser.getByteFrequencyData(buffer);
+      let sum = 0;
+      let count = 0;
+      for (let i = bassLo; i < bassHi && i < buffer.length; i++) {
+        sum += (buffer[i] ?? 0) / 255;
+        count++;
+      }
+      const raw = count > 0 ? sum / count : 0;
+      const dt = Math.min(64, now - lastAt);
+      lastAt = now;
+      // Asymmetric smoothing for the visible amplitude.
+      const attackTau = raw > smoothed ? 25 : 90;
+      smoothed = smoothed + (raw - smoothed) * (1 - Math.exp(-dt / attackTau));
+      // Slow baseline tracks the average bass level over ~600ms, so we
+      // can detect spikes above it as transients.
+      baseline = baseline + (raw - baseline) * (1 - Math.exp(-dt / 600));
+      const transient = Math.max(0, smoothed - baseline - 0.04);
+      const target = Math.min(1, transient * 6);
+      // Instant attack to the new target if it's higher, then a slow
+      // exponential decay back toward zero.
+      if (target > kickEnv) kickEnv = target;
+      else kickEnv = kickEnv + (0 - kickEnv) * (1 - Math.exp(-dt / 280));
+      setState({ amp: smoothed, kick: kickEnv });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [active]);
+  return state;
+}
+
+/**
  * Smooth progress + buffered-range visualisation values driven from the
  * active audio element via requestAnimationFrame. The store's `progress`
  * still updates on `timeupdate` events (every 200–300ms in most browsers,
