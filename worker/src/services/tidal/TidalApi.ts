@@ -66,6 +66,56 @@ interface TidalSearchBucket<T> {
   totalNumberOfItems?: number;
 }
 
+export interface TidalPlaylistRaw {
+  uuid: string;
+  title: string;
+  description?: string | null;
+  type?: string;
+  url?: string;
+  /** Wide cover. */
+  image?: string | null;
+  /** Square cover (preferred for grids). */
+  squareImage?: string | null;
+  duration?: number;
+  numberOfTracks?: number;
+  numberOfVideos?: number;
+  creator?: { id?: number; name?: string } | null;
+  promotedArtists?: { id: number; name: string }[];
+}
+
+export interface TidalPageLinkRaw {
+  title: string;
+  apiPath?: string;
+  icon?: string;
+  imageId?: string;
+}
+
+export interface TidalPagedListRaw<T> {
+  dataApiPath?: string;
+  limit?: number;
+  offset?: number;
+  totalNumberOfItems?: number;
+  items: T[];
+}
+
+export interface TidalPageModuleRaw {
+  id: string;
+  type: string;
+  title?: string;
+  description?: string;
+  width?: number;
+  pagedList?: TidalPagedListRaw<unknown>;
+  /** PAGE_LINKS / PAGE_LINKS_CLOUD */
+  showMore?: { title?: string; apiPath?: string };
+}
+
+export interface TidalPageRaw {
+  selfLink?: string | null;
+  id: string;
+  title: string;
+  rows: { modules: TidalPageModuleRaw[] }[];
+}
+
 export class TidalApi {
   constructor(private auth: TidalAuth) {}
 
@@ -138,6 +188,53 @@ export class TidalApi {
       if (err instanceof Error && /\b404\b/.test(err.message)) return null;
       throw err;
     }
+  }
+
+  /**
+   * Fetch tracks of an editorial Tidal playlist by UUID. The
+   * upstream endpoint paginates; for now we ask for a single window
+   * up to `limit` (Tidal allows up to 100 per request).
+   */
+  async getPlaylistTracks(uuid: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      limit: String(limit),
+      offset: '0',
+    });
+    return this.get<{ items: TidalTrackRaw[] }>(`/v1/playlists/${uuid}/tracks?${params}`);
+  }
+
+  /**
+   * Fetch a Tidal "page" — what their web/desktop apps render for
+   * Explore, Genre, Mood, Decade, etc. screens. The response is a
+   * structured tree of "modules" (PLAYLIST_LIST, TRACK_LIST,
+   * PAGE_LINKS_CLOUD, …). Caller is responsible for normalising
+   * each module type into our Track/Album/Artist/Playlist shapes.
+   */
+  async getPage<T = TidalPageRaw>(slug: string): Promise<T> {
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      locale: this.auth.getLocale(),
+      deviceType: 'BROWSER',
+    });
+    return this.get<T>(`/v1/pages/${slug}?${params}`);
+  }
+
+  /**
+   * Some modules paginate via a `dataApiPath` like `pages/data/<uuid>`
+   * — useful when the user clicks "View as list".
+   */
+  async getPageData<T = TidalPagedListRaw<unknown>>(dataApiPath: string): Promise<T> {
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      locale: this.auth.getLocale(),
+      deviceType: 'BROWSER',
+    });
+    const cleaned = dataApiPath.startsWith('/') ? dataApiPath : `/${dataApiPath}`;
+    return this.get<T>(`/v1${cleaned}?${params}`);
   }
 
   unwrapSearchItems<T>(bucket?: TidalSearchBucket<T>): T[] {

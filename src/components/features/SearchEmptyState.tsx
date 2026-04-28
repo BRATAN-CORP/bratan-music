@@ -1,6 +1,7 @@
-import { Clock, Sparkles, TrendingUp, X } from 'lucide-react';
+import { AlertCircle, Clock, Loader2, X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { TiltCard } from '@/components/ui/TiltCard';
+import { ExploreModules } from '@/components/features/ExploreModules';
+import { useExplore } from '@/hooks/useExplore';
 
 interface SearchEmptyStateProps {
   recent: string[];
@@ -9,34 +10,24 @@ interface SearchEmptyStateProps {
   onClear: () => void;
 }
 
-// Curated themes — keep light and rotated so the empty state never feels static.
-// Order matters: first row reads as "trending", second as "moods/genres".
-const TRENDING: { label: string; query: string }[] = [
-  { label: 'Brazilian Phonk', query: 'brazilian phonk' },
-  { label: 'Hyperpop 2025', query: 'hyperpop 2025' },
-  { label: 'Drift Phonk', query: 'drift phonk' },
-  { label: 'Lo-fi Beats', query: 'lo-fi beats' },
-  { label: 'Russian Rap', query: 'русский рэп' },
-  { label: 'Synthwave', query: 'synthwave' },
-];
+const recentCx =
+  'group relative flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm transition-colors hover:bg-secondary';
 
-const MOODS: { label: string; query: string }[] = [
-  { label: 'Сфокусироваться', query: 'focus instrumental' },
-  { label: 'Спортзал', query: 'workout hits' },
-  { label: 'За рулём', query: 'driving playlist' },
-  { label: 'Уснуть', query: 'sleep ambient' },
-  { label: 'Танцевать', query: 'club dance hits' },
-  { label: 'Кодить', query: 'coding lo-fi' },
-];
-
-const cardCx =
-  'group relative flex items-center gap-2 rounded-[var(--radius-md)] border border-border bg-card px-3 py-2 text-sm transition-colors hover:bg-secondary';
-
+/**
+ * Search-page empty state. The user explicitly asked us to retire the
+ * standalone /explore page and surface its content here instead so the
+ * search tab is the single discovery hub. We render:
+ *   1. Recent queries (when present)
+ *   2. The full live Tidal Explore feed via `<ExploreModules>` —
+ *      genre tiles, mood/decade rows, editorial playlists, new
+ *      tracks, top artists. Same modules ExplorePage rendered.
+ */
 export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEmptyStateProps) {
   const hasRecent = recent.length > 0;
+  const { data: explore, isLoading: exploreLoading, error: exploreError } = useExplore();
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       {hasRecent && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -59,7 +50,7 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, delay: i * 0.02 }}
-                className={cardCx}
+                className={recentCx}
               >
                 <button
                   type="button"
@@ -82,74 +73,24 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
         </section>
       )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-          <TrendingUp size={14} className="text-[var(--color-accent)]" />
-          В тренде
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {TRENDING.map((it, i) => (
-            <motion.div
-              key={it.query}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22, delay: i * 0.03, ease: [0.16, 1, 0.3, 1] }}
-            >
-              {/* Same TiltCard treatment as the landing-page feature
-                  cards: parallax tilt, scale-on-hover, glare follows the
-                  cursor. The inner element stays a real <button> so
-                  click-to-search and keyboard activation behave normally. */}
-              <TiltCard intensity={8} className="h-full rounded-[var(--radius-md)]">
-                <button
-                  type="button"
-                  onClick={() => onPick(it.query)}
-                  className="group relative flex h-full w-full flex-col items-start justify-end gap-1 overflow-hidden rounded-[var(--radius-md)] border border-border bg-card p-4 text-left transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
-                >
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
-                    style={{
-                      background:
-                        'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
-                    }}
-                  />
-                  <span
-                    className="relative text-xs uppercase tracking-[0.2em] text-muted-foreground"
-                    style={{ transform: 'translateZ(20px)' }}
-                  >
-                    #{i + 1}
-                  </span>
-                  <span
-                    className="relative text-sm font-semibold leading-snug"
-                    style={{ transform: 'translateZ(30px)' }}
-                  >
-                    {it.label}
-                  </span>
-                </button>
-              </TiltCard>
-            </motion.div>
-          ))}
+      {exploreLoading && (
+        <div className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
+          <Loader2 size={14} className="animate-spin" />
+          Загружаем подборки Tidal…
         </div>
-      </section>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-          <Sparkles size={14} className="text-muted-foreground" />
-          Под настроение
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {MOODS.map((it) => (
-            <button
-              key={it.query}
-              type="button"
-              onClick={() => onPick(it.query)}
-              className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              {it.label}
-            </button>
-          ))}
+      {exploreError && (
+        <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-12 text-center">
+          <AlertCircle size={20} className="text-[var(--color-danger)]" />
+          <div className="text-sm">Не удалось загрузить подборки</div>
+          <div className="text-xs text-muted-foreground">
+            {exploreError instanceof Error ? exploreError.message : 'Неизвестная ошибка'}
+          </div>
         </div>
-      </section>
+      )}
+
+      {explore && <ExploreModules modules={explore.modules} />}
     </div>
   );
 }
