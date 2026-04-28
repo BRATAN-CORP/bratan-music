@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
-import { useAudioPlayer, useAnalyserAmplitude, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
+import { useAudioPlayer, useBassPulse, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu, MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
@@ -69,12 +69,17 @@ export function FullscreenPlayer() {
   const [radioBusy, setRadioBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
-  const amp = useAnalyserAmplitude(Boolean(fullscreen) && isPlaying, 'bass');
-  // amp is 0..~0.6 from the bass band (30–180Hz). We subtract a small noise
-  // floor first so room tone / mid-bleed doesn't keep the glow swimming
-  // when there's no actual kick — the glow should sit still during quiet
-  // passages and only react to real bass content.
-  const pulse = Math.min(1, Math.sqrt(Math.max(0, amp - 0.06) * 3.4));
+  // Bass-only signals (П6). `amp` is the smoothed envelope (0..~0.6),
+  // `kick` is a transient detector that briefly spikes whenever the bass
+  // amplitude jumps above its slow baseline. We translate those into two
+  // visual scalars:
+  //   - `pulse` (0..1) drives sustained breathing: scale, opacity, blur.
+  //   - `flash` (0..1) drives short visible flashes for visible kicks.
+  // `flash` decays in ~280ms so even quiet passages with the occasional
+  // soft thump still register visibly.
+  const { amp, kick } = useBassPulse(Boolean(fullscreen) && isPlaying);
+  const pulse = Math.min(1, Math.sqrt(Math.max(0, amp - 0.05) * 4));
+  const flash = Math.min(1, kick);
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   // `touchOnly` is stricter than the legacy `useCoarsePointer` —
@@ -520,8 +525,19 @@ export function FullscreenPlayer() {
               // instead, while the wrapper itself only animates once on
               // first mount.
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
-              animate={reduce ? undefined : { opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              animate={reduce ? undefined : {
+                opacity: 1,
+                // Subtle bass-kick "thump" on the cover itself (П6) — a
+                // ~2% scale bump on every detected kick, on top of a
+                // very soft sustained breathe driven by the smoothed
+                // amplitude. Without this the cover sat completely
+                // still while only the halo behind it moved; the
+                // user's note was that the visualisation "stays in
+                // one position" — the cover IS the visual centre, so
+                // it should react too, just much less than the halo.
+                scale: 1 + pulse * 0.012 + flash * 0.022,
+              }}
+              transition={{ type: 'spring', stiffness: 220, damping: 22, mass: 0.5 }}
               className="relative mx-auto aspect-square w-full max-w-md"
               style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
             >
@@ -530,19 +546,20 @@ export function FullscreenPlayer() {
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10"
                   animate={reduce ? undefined : {
-                    // Halo around the cover ("обложка дубликат —
-                    // создаёт свет от баса"). Restored to the spring
-                    // params from commit 49360f3: gentler scale
-                    // breathing, less aggressive blur growth — the
-                    // user confirmed this curve felt right. The
-                    // amplitude hook is band-passed to bass
-                    // (30-180Hz) so the halo only reacts to bass
-                    // hits, not full-spectrum loudness.
-                    scale: 1.04 + pulse * 0.12,
-                    opacity: 0.45 + pulse * 0.3,
-                    filter: `blur(${72 + pulse * 22}px) saturate(${1.3 + pulse * 0.35})`,
+                    // Halo around the cover — "обложка-дубликат”
+                    // bass-driven glow. Wider dynamic range than
+                    // before (the user said the previous numbers
+                    // looked "в одном положении"): scale breathes
+                    // 1.02→1.30 instead of 1.04→1.16, opacity 0.35→0.92,
+                    // blur 56→120px. `flash` adds a short brightness +
+                    // scale kick on every detected bass transient so
+                    // even within a sustained bass line you see the
+                    // halo react beat-by-beat.
+                    scale: 1.02 + pulse * 0.18 + flash * 0.10,
+                    opacity: 0.35 + pulse * 0.45 + flash * 0.20,
+                    filter: `blur(${56 + pulse * 64}px) saturate(${1.2 + pulse * 0.5 + flash * 0.4})`,
                   }}
-                  transition={{ type: 'spring', stiffness: 70, damping: 18, mass: 0.6 }}
+                  transition={{ type: 'spring', stiffness: 110, damping: 20, mass: 0.6 }}
                   style={{
                     // No backgroundImage here — the cover-specific halo
                     // image lives in the inner AnimatePresence layer
