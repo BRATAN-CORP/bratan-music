@@ -8,7 +8,9 @@ import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { LandingPage } from '@/app/landing/page';
+import { Navigate } from 'react-router-dom';
 import { SearchPage } from '@/app/search/page';
+import { ExploreSlugPage } from '@/app/explore/slug';
 import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
 import { ProfilePage } from '@/app/profile/page';
@@ -61,6 +63,14 @@ const router = createBrowserRouter(
       children: [
         { index: true, element: <LandingPage /> },
         { path: 'search', element: <SearchPage /> },
+        // The user explicitly retired the standalone /explore landing —
+        // its content lives inside SearchEmptyState now. We keep
+        // /explore/:slug because individual genre pages are still
+        // linked from the empty-state genre tiles. Anything hitting
+        // bare /explore bounces back to /search where the discovery
+        // surface now lives.
+        { path: 'explore', element: <Navigate to="/search" replace /> },
+        { path: 'explore/:slug', element: <ExploreSlugPage /> },
         { path: 'library', element: <LibraryPage /> },
         { path: 'library/uploads', element: <UploadsPage /> },
         { path: 'profile', element: <ProfilePage /> },

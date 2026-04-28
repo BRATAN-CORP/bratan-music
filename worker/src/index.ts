@@ -14,6 +14,7 @@ import { overrides } from './routes/overrides';
 import { uploads } from './routes/uploads';
 import { webhook } from './routes/webhook';
 import { admin } from './routes/admin';
+import { explore } from './routes/explore';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -53,6 +54,7 @@ app.route('/tracks', overrides);
 app.route('/uploads', uploads);
 app.route('/webhook', webhook);
 app.route('/admin', admin);
+app.route('/explore', explore);
 
 app.notFound((c) => c.json({ error: 'Маршрут не найден' }, 404));
 
