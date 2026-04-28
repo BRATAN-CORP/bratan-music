@@ -204,11 +204,17 @@ export function FullscreenPlayer() {
       {fullscreen && currentTrack && (
         <motion.div
           key="fullscreen-player"
-          initial={reduce ? false : { opacity: 0 }}
-          animate={reduce ? undefined : { opacity: 1 }}
-          exit={reduce ? undefined : { opacity: 0 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          // Mini→fullscreen transition (П12). The mini-player lives at the
+          // bottom of the viewport, so we lift the fullscreen surface up
+          // from there with a small scale: feels like the same bar
+          // expanding into a full sheet rather than a separate page
+          // appearing on top. `reduce` users get a plain crossfade.
+          initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 24 }}
+          animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+          exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 24 }}
+          transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
           className="fullscreen-player fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--color-bg)]"
+          style={{ transformOrigin: '50% 100%' }}
         >
           {/* Background — restored to the simpler approach the user
               confirmed worked correctly (commit 49360f3). One bg-cover
@@ -226,27 +232,43 @@ export function FullscreenPlayer() {
               contrast back. */}
           {(currentTrack.coverUrl || coverVideoUrl) && (
             <>
-              {coverVideoUrl ? (
-                <video
-                  key={coverVideoUrl + '-bg'}
-                  src={coverVideoUrl}
-                  className="absolute inset-0 -z-10 h-full w-full object-cover opacity-50 blur-3xl saturate-150"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="auto"
-                  aria-hidden
-                  disablePictureInPicture
-                  controlsList="nofullscreen nodownload noremoteplayback"
-                />
-              ) : (
-                <div
-                  className="absolute inset-0 -z-10 bg-cover bg-center opacity-50 blur-3xl saturate-150"
-                  style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
-                  aria-hidden
-                />
-              )}
+              {/* Ambience layer crossfade (П11) — when the track changes,
+                  the blurred backdrop should melt into the new artwork
+                  rather than snap. AnimatePresence with `mode="sync"`
+                  keeps both layers mounted simultaneously during the
+                  transition so we get a real opacity blend. */}
+              <AnimatePresence initial={false} mode="sync">
+                {coverVideoUrl ? (
+                  <motion.video
+                    key={coverVideoUrl + '-bg'}
+                    src={coverVideoUrl}
+                    className="absolute inset-0 -z-10 h-full w-full object-cover blur-3xl saturate-150"
+                    initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
+                    animate={{ opacity: 0.5 }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0 }}
+                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="auto"
+                    aria-hidden
+                    disablePictureInPicture
+                    controlsList="nofullscreen nodownload noremoteplayback"
+                  />
+                ) : (
+                  <motion.div
+                    key={(currentTrack.coverUrl ?? '') + '-bg'}
+                    className="absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
+                    style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
+                    initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
+                    animate={{ opacity: 0.5 }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0 }}
+                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    aria-hidden
+                  />
+                )}
+              </AnimatePresence>
               {/* Lighter than the original 40/60/80 — the user said
                   the previous gradient darkened the cover too much.
                   This curve still clears the white-on-white case
@@ -490,7 +512,13 @@ export function FullscreenPlayer() {
                 shrinks and the TiltCard inside (which derives its
                 own size from `aspect-square`) wouldn't follow. */}
             <motion.div
-              key={currentTrack.id}
+              // Outer wrapper keeps a stable position across track changes
+              // (П11). Previously this was keyed by `currentTrack.id`, which
+              // unmounted-and-remounted the entire halo + TiltCard subtree
+              // on every skip — causing the visible "резкая" snap of the
+              // cover. We crossfade the cover content INSIDE the TiltCard
+              // instead, while the wrapper itself only animates once on
+              // first mount.
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : { opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
@@ -516,27 +544,44 @@ export function FullscreenPlayer() {
                   }}
                   transition={{ type: 'spring', stiffness: 70, damping: 18, mass: 0.6 }}
                   style={{
-                    backgroundImage: currentTrack.coverUrl ? `url(${currentTrack.coverUrl})` : undefined,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
+                    // No backgroundImage here — the cover-specific halo
+                    // image lives in the inner AnimatePresence layer
+                    // below so it can crossfade with the cover. This
+                    // outer halo just owns the bass-driven transform.
                     borderRadius: 'var(--radius-xl)',
                   }}
                 >
-                  {coverVideoUrl ? (
-                    <video
-                      key={coverVideoUrl + '-glow'}
-                      src={coverVideoUrl}
-                      className="h-full w-full object-cover pointer-events-none"
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      preload="auto"
-                      aria-hidden
-                      disablePictureInPicture
-                      controlsList="nofullscreen nodownload noremoteplayback"
-                    />
-                  ) : null}
+                  <AnimatePresence initial={false} mode="sync">
+                    {coverVideoUrl ? (
+                      <motion.video
+                        key={coverVideoUrl + '-glow'}
+                        src={coverVideoUrl}
+                        className="absolute inset-0 h-full w-full object-cover pointer-events-none"
+                        initial={reduce ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={reduce ? { opacity: 0 } : { opacity: 0 }}
+                        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        preload="auto"
+                        aria-hidden
+                        disablePictureInPicture
+                        controlsList="nofullscreen nodownload noremoteplayback"
+                      />
+                    ) : currentTrack.coverUrl ? (
+                      <motion.div
+                        key={currentTrack.coverUrl + '-glow'}
+                        className="absolute inset-0 bg-cover bg-center"
+                        style={{ backgroundImage: `url(${currentTrack.coverUrl})`, borderRadius: 'var(--radius-xl)' }}
+                        initial={reduce ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={reduce ? { opacity: 0 } : { opacity: 0 }}
+                        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                      />
+                    ) : null}
+                  </AnimatePresence>
                 </motion.div>
               )}
               <TiltCard
@@ -546,6 +591,19 @@ export function FullscreenPlayer() {
                 glare
                 className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
               >
+                {/* Inner cover layer crossfades between tracks (П11). The
+                    AnimatePresence is keyed by track id so a skip
+                    fades the previous cover out while the next fades
+                    in, in place. */}
+                <AnimatePresence initial={false} mode="sync">
+                  <motion.div
+                    key={currentTrack.id + (coverVideoUrl ? '-v' : '-i')}
+                    className="absolute inset-0 h-full w-full"
+                    initial={reduce ? false : { opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0 }}
+                    transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                  >
                 {coverVideoUrl ? (
                   // Animated cover (Tidal mp4). Falls back gracefully — the
                   // <img> stays under the <video> as a poster so even if
@@ -603,12 +661,14 @@ export function FullscreenPlayer() {
                     />
                   </div>
                 ) : currentTrack.coverUrl ? (
-                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
+                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
                     Без обложки
                   </div>
                 )}
+                  </motion.div>
+                </AnimatePresence>
               </TiltCard>
             </motion.div>
 
