@@ -1,10 +1,11 @@
 import { useParams, Link } from 'react-router-dom';
-import { Play, Disc3, Heart } from 'lucide-react';
+import { Pause, Play, Disc3, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useAlbum } from '@/hooks/useTrack';
 import { useToggleAlbumLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 
@@ -13,8 +14,14 @@ export function AlbumPage() {
   const { data: album, isLoading } = useAlbum(id ?? '');
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
   const albumLike = useToggleAlbumLike();
   const liked = album ? albumLike.isLiked(album.id) : false;
+
+  // Hero "Play" button: shows Pause when any track from this album is the
+  // current player track, and clicking toggles instead of restarting.
+  const trackIds = album?.tracks?.map((t) => t.id) ?? [];
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
   const handlePlayTrack = (track: Track) => {
     setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
@@ -26,8 +33,13 @@ export function AlbumPage() {
   };
 
   const handlePlayAll = () => {
-    const first = album?.tracks?.[0];
-    if (first) handlePlayTrack(first);
+    if (isCollectionActive) {
+      togglePlay();
+      return;
+    }
+    if (album?.tracks?.length) {
+      playCollection(album.tracks);
+    }
   };
 
   return (
@@ -60,7 +72,15 @@ export function AlbumPage() {
                 )}
                 <div className="flex items-center gap-2 pt-2">
                   <Button onClick={handlePlayAll}>
-                    <Play size={14} fill="currentColor" /> Слушать
+                    {isCollectionPlaying ? (
+                      <>
+                        <Pause size={14} fill="currentColor" /> Пауза
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} fill="currentColor" /> {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                      </>
+                    )}
                   </Button>
                   <button
                     type="button"

@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { Play, Heart } from 'lucide-react';
+import { Pause, Play, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useTrack, useTrackRadio } from '@/hooks/useTrack';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 
@@ -18,10 +19,17 @@ export function TrackPage() {
   const liked = track ? isLiked(track.id) : false;
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
   const autoplayedRef = useRef<string | null>(null);
+  // Hero "Play" button mirrors the global player state for this track.
+  const { isActive, isActivePlaying } = useTrackPlayback(track?.id ?? '');
 
   const handlePlay = () => {
     if (!track) return;
+    if (isActive) {
+      togglePlay();
+      return;
+    }
     setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
     if (radio?.items) {
       setQueue([
@@ -74,7 +82,15 @@ export function TrackPage() {
                 </Link>
                 <div className="flex gap-2 pt-2">
                   <Button onClick={handlePlay}>
-                    <Play size={14} fill="currentColor" /> Слушать
+                    {isActivePlaying ? (
+                      <>
+                        <Pause size={14} fill="currentColor" /> Пауза
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} fill="currentColor" /> {isActive ? 'Продолжить' : 'Слушать'}
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={() => toggle(track)}

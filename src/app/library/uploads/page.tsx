@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronLeft, Loader2, Music, Upload as UploadIcon, Pencil, Trash2, Play, Plus } from 'lucide-react';
+import { ChevronLeft, Loader2, Music, Upload as UploadIcon, Pencil, Trash2, Pause, Play, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,7 @@ import {
   type UploadTrack,
 } from '@/hooks/useUploads';
 import { usePlayerStore } from '@/store/player';
+import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { EditUploadDialog } from '@/components/features/EditUploadDialog';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 
@@ -21,6 +22,8 @@ export function UploadsPage() {
   const remove = useDeleteUpload();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [progress, setProgress] = useState<number | null>(null);
@@ -47,6 +50,10 @@ export function UploadsPage() {
   };
 
   const playUpload = (upload: UploadTrack) => {
+    if (currentTrackId === upload.id) {
+      togglePlay();
+      return;
+    }
     const all = data ?? [];
     const idx = all.findIndex((u) => u.id === upload.id);
     setQueue(idx >= 0 ? all.slice(idx + 1) : []);
@@ -161,21 +168,31 @@ interface RowProps {
 }
 
 function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowProps) {
+  const { isActive, isActivePlaying } = useTrackPlayback(upload.id);
   return (
     <div className="group flex items-center gap-3 rounded-[var(--radius-md)] border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-secondary">
       <button
         type="button"
         onClick={onPlay}
         className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground"
-        aria-label="Воспроизвести"
+        aria-label={isActivePlaying ? 'Пауза' : 'Воспроизвести'}
       >
         {upload.coverUrl ? (
           <img src={upload.coverUrl} alt="" className="h-full w-full object-cover" />
         ) : (
           <Music size={16} />
         )}
-        <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
-          <Play size={14} className="fill-white text-white" />
+        <span
+          className={
+            'absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ' +
+            (isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')
+          }
+        >
+          {isActivePlaying ? (
+            <Pause size={14} className="fill-white text-white" />
+          ) : (
+            <Play size={14} className="fill-white text-white" />
+          )}
         </span>
       </button>
       <button
