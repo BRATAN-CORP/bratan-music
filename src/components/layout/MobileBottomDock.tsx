@@ -159,7 +159,7 @@ export function MobileBottomDock() {
               <SwipeTrackStrip className="min-w-0 flex-1">
                 {(t, position) => (
                   <div
-                    className="flex items-center gap-3"
+                    className="flex min-w-0 items-center gap-3"
                     style={{ opacity: position === 'current' ? 1 : 0.6 }}
                   >
                     <button
@@ -180,12 +180,12 @@ export function MobileBottomDock() {
                         </div>
                       )}
                     </button>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <button
                         type="button"
                         onClick={position === 'current' ? openFullscreen : undefined}
                         tabIndex={position === 'current' ? 0 : -1}
-                        className="block w-full text-left text-sm font-medium leading-tight"
+                        className="block w-full max-w-full min-w-0 overflow-hidden text-left text-sm font-medium leading-tight"
                         aria-label="Открыть плеер"
                       >
                         <Marquee text={t.title} />
