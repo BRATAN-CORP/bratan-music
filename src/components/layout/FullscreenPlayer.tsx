@@ -627,17 +627,12 @@ export function FullscreenPlayer() {
                 glare
                 className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
               >
-                {/* Inner cover layer crossfades between tracks (П11). The
+                {/* Inner cover layer crossfades between tracks (П11).
                     AnimatePresence is keyed by track id so a skip
                     fades the previous cover out while the next fades
-                    in, in place. The explicit `relative h-full w-full`
-                    wrapper gives the absolute-positioned crossfade
-                    layers a positioned ancestor with the right size —
-                    without it, layout was resolving up to the TiltCard
-                    outer through its preserve-3d static child, which
-                    on some browsers collapsed the absolute children
-                    to zero height (cover disappeared entirely). */}
-                <div className="relative h-full w-full">
+                    in, in place. TiltCard's inner div is now
+                    `relative h-full w-full` so the absolute-positioned
+                    crossfade layers below resolve cleanly. */}
                 <AnimatePresence initial={false} mode="sync">
                   <motion.div
                     key={currentTrack.id + (coverVideoUrl ? '-v' : '-i')}
@@ -712,7 +707,6 @@ export function FullscreenPlayer() {
                 )}
                   </motion.div>
                 </AnimatePresence>
-                </div>
               </TiltCard>
             </motion.div>
 
