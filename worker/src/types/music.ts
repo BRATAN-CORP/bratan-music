@@ -39,6 +39,55 @@ export interface SearchResult {
   artists: Artist[];
 }
 
+/**
+ * Tidal-style editorial playlist (i.e. one curated by Tidal staff,
+ * not a user playlist). UUID-keyed instead of numeric to match the
+ * upstream identifier — keeps deep links stable across page loads.
+ */
+export interface ExplorePlaylist {
+  id: string;
+  source: string;
+  title: string;
+  description?: string;
+  coverUrl?: string;
+  /** Author / curator of the playlist (e.g. "Tidal" or a user name). */
+  curator?: string;
+  trackCount?: number;
+  duration?: number;
+}
+
+/**
+ * Hyperlink to another Tidal page (genre/mood/decade/etc.). Caller
+ * uses `slug` to fetch the next page; `imageId` is rendered as a
+ * background tile.
+ */
+export interface ExplorePageLink {
+  title: string;
+  /** Page slug like "genre_world", suitable for `/explore/page/:slug`. */
+  slug: string;
+  /** Tidal-internal short name (e.g. "world", "pop"). */
+  icon?: string;
+  /** Tidal-internal image identifier. */
+  imageId?: string;
+}
+
+/**
+ * Normalised explore module. Each row from the Tidal page response
+ * collapses into one of these so the frontend doesn't have to know
+ * about the upstream module-type taxonomy.
+ */
+export type ExploreModule =
+  | { type: 'pageLinks'; title: string; items: ExplorePageLink[] }
+  | { type: 'tracks'; title: string; items: Track[] }
+  | { type: 'albums'; title: string; items: Album[] }
+  | { type: 'artists'; title: string; items: Artist[] }
+  | { type: 'playlists'; title: string; items: ExplorePlaylist[] };
+
+export interface ExplorePage {
+  title: string;
+  modules: ExploreModule[];
+}
+
 export interface MusicService {
   search(query: string, filter: 'all' | 'tracks' | 'albums' | 'artists'): Promise<SearchResult>;
   getTrack(id: string): Promise<Track>;

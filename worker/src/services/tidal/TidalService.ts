@@ -1,8 +1,25 @@
 import type { Env } from '../../types/env';
-import type { Track, Album, Artist, SearchResult, MusicService } from '../../types/music';
+import type {
+  Track,
+  Album,
+  Artist,
+  SearchResult,
+  MusicService,
+  ExplorePage,
+  ExploreModule,
+  ExplorePlaylist,
+  ExplorePageLink,
+} from '../../types/music';
 import { TidalAuth } from './TidalAuth';
 import { TidalApi } from './TidalApi';
-import type { TidalTrackRaw, TidalAlbumRaw, TidalArtistRaw } from './TidalApi';
+import type {
+  TidalTrackRaw,
+  TidalAlbumRaw,
+  TidalArtistRaw,
+  TidalPageModuleRaw,
+  TidalPlaylistRaw,
+  TidalPageLinkRaw,
+} from './TidalApi';
 import { TidalWeb } from './TidalWeb';
 
 const IMG_BASE = 'https://resources.tidal.com/images';
@@ -69,6 +86,82 @@ function mapArtist(raw: TidalArtistRaw): Artist {
     name: raw.name,
     imageUrl: artistImageUrl(raw.picture),
   };
+}
+
+function mapExplorePlaylist(raw: TidalPlaylistRaw): ExplorePlaylist {
+  // Square cover renders better in our grids; fall back to wide image.
+  const cover = raw.squareImage ?? raw.image ?? null;
+  return {
+    id: raw.uuid,
+    source: 'tidal',
+    title: raw.title,
+    description: raw.description ?? undefined,
+    coverUrl: coverUrl(cover, 480),
+    curator: raw.creator?.name ?? undefined,
+    trackCount: raw.numberOfTracks,
+    duration: raw.duration,
+  };
+}
+
+function mapPageLink(raw: TidalPageLinkRaw): ExplorePageLink | null {
+  // The slug is everything after `pages/` — stable across countries.
+  const apiPath = raw.apiPath ?? '';
+  const slug = apiPath.replace(/^pages\//, '');
+  if (!slug) return null;
+  return {
+    title: raw.title,
+    slug,
+    icon: raw.icon ?? undefined,
+    imageId: raw.imageId ?? undefined,
+  };
+}
+
+/**
+ * Map a single Tidal page module into our normalised shape. Returns
+ * null for module types we don't render — keeps the response payload
+ * lean and lets the frontend assume every entry is renderable.
+ */
+function mapPageModule(raw: TidalPageModuleRaw): ExploreModule | null {
+  const title = raw.title ?? '';
+  const list = raw.pagedList?.items ?? [];
+
+  switch (raw.type) {
+    case 'PAGE_LINKS':
+    case 'PAGE_LINKS_CLOUD': {
+      const items = (list as TidalPageLinkRaw[])
+        .map(mapPageLink)
+        .filter((l): l is ExplorePageLink => l !== null);
+      if (items.length === 0) return null;
+      return { type: 'pageLinks', title, items };
+    }
+    case 'TRACK_LIST': {
+      const items = (list as TidalTrackRaw[]).map(mapTrack);
+      if (items.length === 0) return null;
+      return { type: 'tracks', title, items };
+    }
+    case 'ALBUM_LIST': {
+      const items = (list as TidalAlbumRaw[]).map((a) => mapAlbum(a));
+      if (items.length === 0) return null;
+      return { type: 'albums', title, items };
+    }
+    case 'ARTIST_LIST': {
+      const items = (list as TidalArtistRaw[]).map(mapArtist);
+      if (items.length === 0) return null;
+      return { type: 'artists', title, items };
+    }
+    case 'PLAYLIST_LIST':
+    case 'MIX_LIST': {
+      const items = (list as TidalPlaylistRaw[])
+        .filter((p) => p && p.uuid)
+        .map(mapExplorePlaylist);
+      if (items.length === 0) return null;
+      return { type: 'playlists', title, items };
+    }
+    default:
+      // VIDEO_LIST, FEATURED, MIX_HEADER, etc. — nothing to do until
+      // we ship video / mix surfaces in the player.
+      return null;
+  }
 }
 
 export class TidalService implements MusicService {
@@ -142,5 +235,31 @@ export class TidalService implements MusicService {
 
   async getDownloadUrl(trackId: string): Promise<string> {
     return this.web.getDownloadUrl(trackId, 'LOSSLESS');
+  }
+
+  /**
+   * Fetch a Tidal page (Explore, Genre, Mood, Decade, …) and return
+   * a normalised `ExplorePage` ready for the frontend. Unknown
+   * modules are dropped — see `mapPageModule`.
+   */
+  async getExplorePage(slug: string): Promise<ExplorePage> {
+    const raw = await this.api.getPage(slug);
+    const modules: ExploreModule[] = [];
+    for (const row of raw.rows ?? []) {
+      for (const m of row.modules ?? []) {
+        const normalised = mapPageModule(m);
+        if (normalised) modules.push(normalised);
+      }
+    }
+    return { title: raw.title, modules };
+  }
+
+  /**
+   * Fetch full tracklist of an editorial playlist by UUID. Used by
+   * the explore detail view when the user opens a curated playlist.
+   */
+  async getPlaylistTracks(uuid: string, limit = 100): Promise<Track[]> {
+    const raw = await this.api.getPlaylistTracks(uuid, limit);
+    return raw.items.map(mapTrack);
   }
 }

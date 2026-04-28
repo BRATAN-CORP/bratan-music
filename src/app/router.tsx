@@ -9,6 +9,8 @@ import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { LandingPage } from '@/app/landing/page';
 import { SearchPage } from '@/app/search/page';
+import { ExplorePage as ExploreLandingPage } from '@/app/explore/page';
+import { ExploreSlugPage } from '@/app/explore/slug';
 import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
 import { ProfilePage } from '@/app/profile/page';
@@ -61,6 +63,8 @@ const router = createBrowserRouter(
       children: [
         { index: true, element: <LandingPage /> },
         { path: 'search', element: <SearchPage /> },
+        { path: 'explore', element: <ExploreLandingPage /> },
+        { path: 'explore/:slug', element: <ExploreSlugPage /> },
         { path: 'library', element: <LibraryPage /> },
         { path: 'library/uploads', element: <UploadsPage /> },
         { path: 'profile', element: <ProfilePage /> },
