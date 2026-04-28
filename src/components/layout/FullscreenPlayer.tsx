@@ -524,6 +524,25 @@ export function FullscreenPlayer() {
               // cover. We crossfade the cover content INSIDE the TiltCard
               // instead, while the wrapper itself only animates once on
               // first mount.
+              //
+              // P10 — horizontal drag commits to next/prev. We let the
+              // user physically pull the cover sideways (with mild
+              // elasticity) instead of just sniffing the gesture, so
+              // the swipe has tactile feedback. `dragSnapToOrigin`
+              // springs the cover back if the user releases below the
+              // commit threshold.
+              drag={reduce ? false : 'x'}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.45}
+              dragMomentum={false}
+              dragSnapToOrigin
+              onDragEnd={(_e, info) => {
+                if (info.offset.x < -90 || info.velocity.x < -500) {
+                  nextManual();
+                } else if (info.offset.x > 90 || info.velocity.x > 500) {
+                  previous();
+                }
+              }}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
               animate={reduce ? undefined : {
                 opacity: 1,
@@ -538,8 +557,8 @@ export function FullscreenPlayer() {
                 scale: 1 + pulse * 0.012 + flash * 0.022,
               }}
               transition={{ type: 'spring', stiffness: 220, damping: 22, mass: 0.5 }}
-              className="relative mx-auto aspect-square w-full max-w-md"
-              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
+              className="relative mx-auto aspect-square w-full max-w-md cursor-grab active:cursor-grabbing"
+              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))', touchAction: 'pan-y' }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div

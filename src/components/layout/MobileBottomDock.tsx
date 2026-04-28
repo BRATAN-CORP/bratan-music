@@ -5,6 +5,7 @@ import { usePlayerStore } from '@/store/player';
 import { seekAudio, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { Marquee } from '@/components/ui/Marquee';
+import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -150,46 +151,61 @@ export function MobileBottomDock() {
                 }
               }}
             >
-              {/* Cover + title open the fullscreen player; the artist
-                  is a separate inline link. */}
-              <button
-                type="button"
-                onClick={openFullscreen}
-                aria-label="Открыть плеер"
-                className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
-              >
-                {currentTrack.coverUrl ? (
-                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full bg-white/5" />
-                )}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                  <Maximize2 size={14} className="text-white" />
-                </div>
-              </button>
-
-              <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={openFullscreen}
-                  className="block w-full text-left text-sm font-medium leading-tight"
-                  aria-label="Открыть плеер"
-                >
-                  <Marquee text={currentTrack.title} />
-                </button>
-                {currentTrack.artistId ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
-                    className="block w-full text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={`Открыть артиста ${currentTrack.artist}`}
+              {/* П9 — swipe horizontally on the cover/title strip to
+                  navigate prev/next. Tapping still opens fullscreen
+                  via the parent click handler. The strip mounts both
+                  prev and next track ghosts behind the soft edge
+                  fade so the gesture has clear visual affordance. */}
+              <SwipeTrackStrip className="min-w-0 flex-1">
+                {(t, position) => (
+                  <div
+                    className="flex items-center gap-3"
+                    style={{ opacity: position === 'current' ? 1 : 0.6 }}
                   >
-                    <Marquee text={currentTrack.artist} />
-                  </button>
-                ) : (
-                  <Marquee text={currentTrack.artist} className="text-xs text-muted-foreground" />
+                    <button
+                      type="button"
+                      onClick={position === 'current' ? openFullscreen : undefined}
+                      aria-label="Открыть плеер"
+                      tabIndex={position === 'current' ? 0 : -1}
+                      className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
+                    >
+                      {t.coverUrl ? (
+                        <img src={t.coverUrl} alt={t.title} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full bg-white/5" />
+                      )}
+                      {position === 'current' && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Maximize2 size={14} className="text-white" />
+                        </div>
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={position === 'current' ? openFullscreen : undefined}
+                        tabIndex={position === 'current' ? 0 : -1}
+                        className="block w-full text-left text-sm font-medium leading-tight"
+                        aria-label="Открыть плеер"
+                      >
+                        <Marquee text={t.title} />
+                      </button>
+                      {position === 'current' && t.artistId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/artist/${t.artistId}`)}
+                          className="block w-full text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          aria-label={`Открыть артиста ${t.artist}`}
+                        >
+                          <Marquee text={t.artist} />
+                        </button>
+                      ) : (
+                        <Marquee text={t.artist} className="text-xs text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
                 )}
-              </div>
+              </SwipeTrackStrip>
 
               <button
                 type="button"
