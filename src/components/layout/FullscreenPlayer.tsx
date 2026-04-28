@@ -544,18 +544,7 @@ export function FullscreenPlayer() {
                 }
               }}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
-              animate={reduce ? undefined : {
-                opacity: 1,
-                // Subtle bass-kick "thump" on the cover itself (П6) — a
-                // ~2% scale bump on every detected kick, on top of a
-                // very soft sustained breathe driven by the smoothed
-                // amplitude. Without this the cover sat completely
-                // still while only the halo behind it moved; the
-                // user's note was that the visualisation "stays in
-                // one position" — the cover IS the visual centre, so
-                // it should react too, just much less than the halo.
-                scale: 1 + pulse * 0.012 + flash * 0.022,
-              }}
+              animate={reduce ? undefined : { opacity: 1 }}
               transition={{ type: 'spring', stiffness: 220, damping: 22, mass: 0.5 }}
               className="relative mx-auto aspect-square w-full max-w-md cursor-grab active:cursor-grabbing"
               style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))', touchAction: 'pan-y' }}
