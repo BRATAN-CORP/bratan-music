@@ -218,11 +218,20 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     repeat: s.repeat,
     progress: s.progress,
     duration: s.duration,
-    // Persist isPlaying so UI state matches what the user left the player at.
-    // useAudioPlayer's loadTrack honours this on rehydrate: if the browser
-    // blocks autoplay (no user gesture yet), the play() rejection path
-    // falls back to pause() which writes isPlaying=false — keeping UI and
-    // audio in sync regardless of whether the resume actually starts.
-    isPlaying: s.isPlaying,
+    // П8 — fullscreen state survives reload: if the user was inside the
+    // expanded player when they refreshed, we re-open it on rehydrate so
+    // the experience picks up exactly where it left off.
+    fullscreen: s.fullscreen,
   }),
+  // П2 — never auto-resume playback after a page reload. We deliberately
+  // do NOT persist `isPlaying`. Even when the browser would technically
+  // allow autoplay (because the user has interacted with the site
+  // before), starting a track that the user didn't explicitly resume
+  // feels like the page is hijacking their session. The rest of the
+  // player state (current track, queue, progress, fullscreen) is
+  // restored so a single tap on the play button picks up at the
+  // previous timecode.
+  onRehydrateStorage: () => (state) => {
+    if (state) state.isPlaying = false;
+  },
 }));
