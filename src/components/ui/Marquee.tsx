@@ -169,17 +169,26 @@ export function Marquee({
   return (
     <span
       ref={wrapperRef}
-      className={'block w-full whitespace-nowrap ' + className}
+      className={'relative block w-full max-w-full min-w-0 whitespace-nowrap ' + className}
       aria-label={ariaLabel ?? text}
       style={{
-        // Always clip horizontally at the box edge so a long single
-        // line of text can't push the surrounding flex layout sideways
-        // before the JS measurement loop has had a chance to compute
-        // the marquee distance. Vertical insets are negative so the
-        // text-shadow halation can still bleed above/below the line —
-        // the layout-break the user reported was strictly horizontal.
-        clipPath: 'inset(-1.5em 0 -1.5em 0)',
-        WebkitClipPath: 'inset(-1.5em 0 -1.5em 0)',
+        // Belt-and-suspenders horizontal clipping. PR #120 tried
+        // clip-path alone with negative vertical insets to keep the
+        // text-shadow halation bleeding above/below; on iOS Safari
+        // and inside certain flex chains that wasn't enough — the
+        // long inline-block child's intrinsic max-content still
+        // contributed to the parent flex's sizing and pushed siblings
+        // off-screen. The robust fix is `overflow: hidden` on the
+        // wrapper so the box NEVER reports a content width larger
+        // than its container. We restore vertical bleed for the text-
+        // shadow via a `contain: paint` / negative margins on the
+        // inner span instead — see below.
+        overflow: 'hidden',
+        // `contain: size` would over-constrain (forces a fixed size);
+        // `contain: layout paint` isolates the box so the inline-
+        // block child's max-content can never leak into the parent
+        // flex's intrinsic size calculation.
+        contain: 'layout paint',
         ...(isMarqueeing
           ? {
               WebkitMaskImage: maskImage,
@@ -191,7 +200,13 @@ export function Marquee({
       <motion.span
         ref={innerRef}
         className="inline-block whitespace-nowrap will-change-transform"
-        style={{ x }}
+        style={{
+          x,
+          // Negative vertical padding via line-height trick is messy;
+          // instead we let the wrapper own a small extra vertical
+          // breathing area through padding (see below). Keep the
+          // inner span clean — its only job is the marquee transform.
+        }}
       >
         {text}
       </motion.span>

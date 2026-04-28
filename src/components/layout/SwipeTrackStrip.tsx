@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
@@ -39,6 +39,14 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
 
   const containerRef = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
+  // Tracks whether the user is actively dragging the strip. We use
+  // this to gate the symmetric edge-fade mask: at rest the cover and
+  // its left edge should be fully opaque (no phantom darkening eating
+  // into the cover artwork). The mask should only fade in once the
+  // user starts a horizontal swipe so neighbour-track ghosts can
+  // peek through. `dragging` stays true through the post-release
+  // settle animation and is cleared on completion below.
+  const [dragging, setDragging] = useState(false);
 
   // Reset offset whenever the active track changes — otherwise after a
   // commit the new strip would mount with a stale x and snap back from
@@ -63,7 +71,9 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
         if (direction === 'prev') previous();
         else nextManual();
         // The store update will re-render this component with new
-        // current/prev/next; the effect above will reset x to 0.
+        // current/prev/next; the effect above will reset x to 0 and
+        // clears the drag mask.
+        setDragging(false);
       },
     });
   };
@@ -71,13 +81,21 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
   return (
     <div
       ref={containerRef}
-      className={
-        'relative w-full overflow-hidden ' +
+      className={'relative w-full overflow-hidden ' + className}
+      style={
         // Symmetric edge mask so neighbour ghosts fade into transparency
-        // instead of being hard-clipped at the container border.
-        '[mask-image:linear-gradient(to_right,transparent_0%,black_8%,black_92%,transparent_100%)] ' +
-        '[-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_8%,black_92%,transparent_100%)] ' +
-        className
+        // instead of being hard-clipped at the container border. Only
+        // applied while the user is actively dragging — at rest the
+        // cover/title row should be fully opaque without a phantom
+        // dark band on the left edge eating into the artwork.
+        dragging
+          ? {
+              WebkitMaskImage:
+                'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
+              maskImage:
+                'linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%)',
+            }
+          : undefined
       }
     >
       <motion.div
@@ -87,6 +105,7 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
         dragMomentum={false}
         // Skip native horizontal scroll inside the strip on mobile.
         style={{ x, touchAction: 'pan-y' }}
+        onDragStart={() => setDragging(true)}
         onDragEnd={(_e, info) => {
           const w = containerRef.current?.offsetWidth ?? 320;
           const dist = info.offset.x;
@@ -99,7 +118,12 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
             commit('prev');
             return;
           }
-          animate(x, 0, { type: 'spring', stiffness: 350, damping: 32 });
+          animate(x, 0, {
+            type: 'spring',
+            stiffness: 350,
+            damping: 32,
+            onComplete: () => setDragging(false),
+          });
         }}
         className="relative flex w-full"
       >
