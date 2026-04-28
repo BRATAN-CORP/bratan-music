@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { Download, Heart, MoreHorizontal, Play, Trash2, GripVertical, Upload } from 'lucide-react';
+import { Download, Heart, MoreHorizontal, Pause, Play, Trash2, GripVertical, Upload } from 'lucide-react';
 import { Reorder, useDragControls, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
+import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -43,6 +44,7 @@ export function PlaylistTrackItem({
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
+  const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
   const removeMutation = useRemoveTrackFromPlaylist();
   const coarse = useCoarsePointer();
   const dragControls = useDragControls();
@@ -100,8 +102,21 @@ export function PlaylistTrackItem({
         {track.coverUrl ? (
           <div className="relative h-10 w-10 overflow-hidden rounded-[var(--radius-sm)]">
             <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 hidden items-center justify-center bg-[var(--color-media-overlay)] group-hover:flex">
-              <Play size={14} fill="currentColor" className="text-[var(--color-text-on-accent)]" />
+            {/* Match TrackItem's overlay logic: when this row is the
+                currently-loaded track we always show the overlay
+                (Pause if audio is advancing, Play if it's paused);
+                otherwise the overlay only appears on hover. */}
+            <div
+              className={
+                'absolute inset-0 items-center justify-center bg-[var(--color-media-overlay)] ' +
+                (isActive ? 'flex opacity-100' : 'hidden group-hover:flex')
+              }
+            >
+              {isActivePlaying ? (
+                <Pause size={14} fill="currentColor" className="text-[var(--color-text-on-accent)]" />
+              ) : (
+                <Play size={14} fill="currentColor" className="text-[var(--color-text-on-accent)]" />
+              )}
             </div>
           </div>
         ) : (
@@ -112,7 +127,7 @@ export function PlaylistTrackItem({
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{track.title}</p>
+        <p className={'truncate text-sm font-medium ' + (isActive ? 'text-[var(--color-accent)]' : '')}>{track.title}</p>
         <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
       </div>
 
@@ -217,7 +232,14 @@ export function PlaylistTrackItem({
           'group flex cursor-pointer items-center gap-3 border-b border-border bg-[var(--color-bg)] px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary ' +
           (dragging ? 'z-10 shadow-[var(--shadow-lg)] ring-1 ring-[var(--color-border-strong)]' : '')
         }
-        onClick={() => !dragging && onPlay(track)}
+        onClick={() => {
+          if (dragging) return;
+          if (isActive) {
+            playOrToggle(track);
+            return;
+          }
+          onPlay(track);
+        }}
       >
         {content}
       </Reorder.Item>
@@ -227,7 +249,13 @@ export function PlaylistTrackItem({
   return (
     <div
       className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
-      onClick={() => onPlay(track)}
+      onClick={() => {
+        if (isActive) {
+          playOrToggle(track);
+          return;
+        }
+        onPlay(track);
+      }}
     >
       {content}
     </div>

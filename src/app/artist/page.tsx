@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { Play, User, Heart } from 'lucide-react';
+import { Pause, Play, User, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { AlbumCard } from '@/components/features/AlbumCard';
@@ -7,6 +7,7 @@ import { ArtistCard } from '@/components/features/ArtistCard';
 import { useArtist } from '@/hooks/useTrack';
 import { useToggleArtistLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 
@@ -18,6 +19,12 @@ export function ArtistPage() {
   const artistLike = useToggleArtistLike();
   const liked = artist ? artistLike.isLiked(artist.id) : false;
 
+  // Hero "Play" button on the artist page targets the current top-track
+  // queue — if anything in that list is the active player track, the
+  // button mirrors play state and toggles instead of restarting.
+  const topTrackIds = artist?.topTracks?.map((t) => t.id) ?? [];
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(topTrackIds);
+
   const handlePlayTrack = (track: Track) => {
     setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
     if (artist?.topTracks) {
@@ -28,8 +35,9 @@ export function ArtistPage() {
   };
 
   const handlePlayAll = () => {
-    const first = artist?.topTracks?.[0];
-    if (first) handlePlayTrack(first);
+    if (artist?.topTracks?.length) {
+      playCollection(artist.topTracks);
+    }
   };
 
   return (
@@ -56,7 +64,15 @@ export function ArtistPage() {
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{artist.name}</h1>
                 <div className="flex items-center gap-2 pt-2">
                   <Button onClick={handlePlayAll}>
-                    <Play size={14} fill="currentColor" /> Слушать
+                    {isCollectionPlaying ? (
+                      <>
+                        <Pause size={14} fill="currentColor" /> Пауза
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} fill="currentColor" /> {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                      </>
+                    )}
                   </Button>
                   <button
                     type="button"
