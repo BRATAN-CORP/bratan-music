@@ -211,7 +211,28 @@ export function Player() {
             />
           </div>
 
-          <div className="flex flex-1 items-center gap-3 px-3 sm:gap-4 sm:px-4">
+          <div
+            className="flex flex-1 cursor-pointer items-center gap-3 px-3 sm:gap-4 sm:px-4"
+            role="button"
+            tabIndex={0}
+            aria-label="Открыть плеер"
+            onClick={(e) => {
+              // Click anywhere on the mini-player background opens fullscreen.
+              // Inner buttons (cover/title also call openFullscreen on their
+              // own; artist/like/transport/menu/volume each handle their own
+              // action) are detected via closest('button, a, input') and
+              // skipped to avoid swallowing their clicks.
+              const t = e.target as HTMLElement | null;
+              if (t?.closest('button, a, input, [role="slider"]')) return;
+              openFullscreen();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openFullscreen();
+              }
+            }}
+          >
             {/* Cover + title open the fullscreen player; the artist name is
                 a separate inline link to the artist page so users can jump
                 straight to the artist without going through the 3-dot menu. */}

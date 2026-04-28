@@ -1,6 +1,5 @@
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { useAutoAuth } from '@/hooks/useAuth';
-import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileBottomDock } from '@/components/layout/MobileBottomDock';
 import { Player } from '@/components/layout/Player';
@@ -32,7 +31,11 @@ function AppLayout() {
   // and Sidebar is parked sticky-below-Header so it still feels pinned.
   return (
     <div className="flex min-h-dvh flex-col">
-      <Header />
+      {/* Header has been retired — the desktop sidebar carries the
+          brandmark + nav, and on mobile the bottom dock owns navigation.
+          The previous sticky top bar duplicated the search affordance
+          already in the sidebar / bottom dock and ate vertical space on
+          short viewports. */}
       <div className="flex flex-1">
         <Sidebar />
         <main className="min-w-0 flex-1 pb-44 lg:pb-32">

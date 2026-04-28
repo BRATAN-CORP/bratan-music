@@ -146,7 +146,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                           type="button"
                           onClick={() => handleAdd(p.id)}
                           disabled={addTrack.isPending || isAdded}
-                          className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm transition-colors hover:bg-secondary disabled:opacity-70"
+                          className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--color-hover-overlay-strong)] focus-visible:bg-[var(--color-hover-overlay-strong)] focus-visible:outline-none disabled:opacity-70"
                         >
                           <div className="flex min-w-0 items-center gap-2.5">
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-card text-muted-foreground">

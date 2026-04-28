@@ -129,7 +129,27 @@ export function MobileBottomDock() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 px-3 py-2.5">
+            <div
+              className="flex cursor-pointer items-center gap-3 px-3 py-2.5"
+              role="button"
+              tabIndex={0}
+              aria-label="Открыть плеер"
+              onClick={(e) => {
+                // Whole row opens fullscreen, except when the click lands on
+                // an interactive control (cover/title also openFullscreen on
+                // their own; artist/like/play/next handle their own actions
+                // and the closest('button') guard prevents a second call).
+                const t = e.target as HTMLElement | null;
+                if (t?.closest('button, a')) return;
+                openFullscreen();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openFullscreen();
+                }
+              }}
+            >
               {/* Cover + title open the fullscreen player; the artist
                   is a separate inline link. */}
               <button
