@@ -4,7 +4,7 @@ import {
   ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
+import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useBassPulse, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -204,6 +204,17 @@ export function FullscreenPlayer() {
     navigate(`/album/${currentTrack.albumId}`);
   };
 
+  // Vertical drag-to-dismiss (the "swipe down from the top to collapse"
+  // gesture the user asked for). The whole fullscreen sheet follows
+  // the finger via `sheetY` so the dismiss feels tactile, but the
+  // gesture is gated to a 96-px-tall drag handle at the very top of
+  // the viewport — that way it never intercepts the cover's
+  // horizontal swipe (next/prev) or any other content-area gestures.
+  const sheetY = useMotionValue(0);
+  // Soft fade as the sheet drags down so the dismiss reads as more
+  // than just a translation.
+  const sheetOpacity = useTransform(sheetY, [0, 200, 360], [1, 0.8, 0.4]);
+
   return (
     <AnimatePresence>
       {fullscreen && currentTrack && (
@@ -219,7 +230,10 @@ export function FullscreenPlayer() {
           exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 24 }}
           transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
           className="fullscreen-player fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--color-bg)]"
-          style={{ transformOrigin: '50% 100%' }}
+          // `sheetY` rides on top of the AnimatePresence-driven y; we
+          // apply it via the inline style so the drag-to-dismiss
+          // translation is independent of the entrance/exit spring.
+          style={{ transformOrigin: '50% 100%', y: sheetY, opacity: sheetOpacity }}
         >
           {/* Background — restored to the simpler approach the user
               confirmed worked correctly (commit 49360f3). One bg-cover
@@ -284,6 +298,46 @@ export function FullscreenPlayer() {
                 aria-hidden
               />
             </>
+          )}
+
+          {/* Drag-to-dismiss handle. A small pill-shaped grab area
+              centered above the header — the same affordance iOS uses
+              on bottom-sheets, mirrored upside-down for "drag down to
+              dismiss". We deliberately keep the touch zone narrow
+              (~120px wide × 32px tall) so it doesn't intercept the
+              ChevronDown close button on the left or the More-menu
+              cluster on the right of the header below.
+              On release, if the user pulled the sheet down past 120 px
+              or with velocity > 500 px·s the sheet dismisses (the
+              AnimatePresence exit animation finishes the job); below
+              the threshold the sheet springs back to origin.
+              `touchAction: 'pan-x'` lets the OS still interpret
+              horizontal pan as a normal scroll, we only own the
+              vertical axis. */}
+          {!reduce && (
+            <motion.div
+              aria-label="Свернуть"
+              role="button"
+              className="absolute left-1/2 top-0 z-[60] flex h-8 w-32 -translate-x-1/2 cursor-grab items-center justify-center active:cursor-grabbing"
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={0.55}
+              dragMomentum={false}
+              style={{ touchAction: 'pan-x' }}
+              onDrag={(_e, info) => {
+                if (info.offset.y > 0) sheetY.set(info.offset.y);
+              }}
+              onDragEnd={(_e, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 500) {
+                  closeFullscreen();
+                  return;
+                }
+                animate(sheetY, 0, { type: 'spring', stiffness: 320, damping: 28 });
+              }}
+              onClick={closeFullscreen}
+            >
+              <div aria-hidden className="h-1.5 w-10 rounded-full bg-white/30" />
+            </motion.div>
           )}
 
           <div className="relative z-[20] flex items-center justify-between px-5 py-4">

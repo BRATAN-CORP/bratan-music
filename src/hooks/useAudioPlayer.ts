@@ -900,25 +900,42 @@ export function useAudioPlayer() {
     if (!('mediaSession' in navigator)) return;
     const ms = navigator.mediaSession;
     const store = () => usePlayerStore.getState();
+    // The iOS Now-Playing widget (Control Centre + Lock Screen) only
+    // shows two media buttons next to play/pause and it picks them
+    // based on which action handlers are currently registered: if both
+    // `seekbackward`/`seekforward` AND `previoustrack`/`nexttrack` are
+    // registered, iOS prefers the seek pair and renders ⏪ / ⏩ (10 s
+    // skip). Most music apps want the prev/next track icons
+    // (⏮ / ⏭) instead. The way to force them is to leave the seek
+    // handlers unregistered — `seekto` still works for the scrubber
+    // because it's a separate slot from the two transport buttons.
+    // We keep `seekto` so the platform scrubber stays interactive,
+    // and let the user rely on it for fine-grained seeking.
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', () => store().play()],
       ['pause', () => store().pause()],
       ['previoustrack', () => store().previous()],
       ['nexttrack', () => store().nextManual()],
-      ['seekbackward', (d) => seek(Math.max(0, progress - (d.seekOffset ?? 10)))],
-      ['seekforward', (d) => seek(Math.min(usePlayerStore.getState().duration, progress + (d.seekOffset ?? 10)))],
       ['seekto', (d) => { if (typeof d.seekTime === 'number') seek(d.seekTime); }],
       ['stop', () => { store().pause(); }],
     ];
     for (const [action, handler] of handlers) {
       try { ms.setActionHandler(action, handler); } catch { /* not supported */ }
     }
+    // Belt-and-suspenders: actively clear the seek-by-offset handlers
+    // in case a previous session/effect run (HMR, route swap, …)
+    // registered them. iOS caches the action set across navigations,
+    // so an explicit null is required to flip the widget back to
+    // prev/next. Browsers that never had these handlers throw on
+    // setActionHandler with an unsupported action — we swallow.
+    try { ms.setActionHandler('seekbackward', null); } catch { /* ignore */ }
+    try { ms.setActionHandler('seekforward', null); } catch { /* ignore */ }
     return () => {
       for (const [action] of handlers) {
         try { ms.setActionHandler(action, null); } catch { /* ignore */ }
       }
     };
-  }, [progress, seek]);
+  }, [seek]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
