@@ -1,11 +1,12 @@
 import { Link, NavLink } from 'react-router-dom';
-import { Search, Library, User, Home, Heart, ListMusic, Pin } from 'lucide-react';
+import { Compass, Search, Library, User, Home, Heart, ListMusic, Pin } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
 import { usePlaylistsList } from '@/hooks/useLibrary';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
   { to: '/search', icon: Search, label: 'Поиск' },
+  { to: '/explore', icon: Compass, label: 'Обзор' },
   { to: '/library', icon: Library, label: 'Библиотека' },
   { to: '/profile', icon: User, label: 'Профиль' },
 ];
