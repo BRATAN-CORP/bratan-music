@@ -4,7 +4,7 @@ import {
   ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
+import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, useBassPulse, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -204,6 +204,34 @@ export function FullscreenPlayer() {
     navigate(`/album/${currentTrack.albumId}`);
   };
 
+  // Vertical drag-to-dismiss (the "swipe down from the top to
+  // collapse" gesture the user asked for). The whole fullscreen
+  // sheet follows the finger via `sheetY` while dragging — but
+  // crucially `sheetY` is applied to an INNER wrapper, separate
+  // from the outer `<motion.div>` that owns the AnimatePresence
+  // entrance / exit spring. Combining both transforms on the same
+  // element kills the open/close animation (the drag style
+  // overrides the animate prop). With the inner-wrapper split the
+  // entrance scales/translates the surface from the mini-player
+  // origin while the inner wrapper sits at y:0, then drag takes
+  // over after the entrance finishes.
+  const sheetY = useMotionValue(0);
+  // Soft fade and gentle scale-down as the sheet drags down so the
+  // dismiss reads as more than just a translation.
+  const sheetOpacity = useTransform(sheetY, [0, 240, 480], [1, 0.85, 0.45]);
+  const sheetScale = useTransform(sheetY, [0, 480], [1, 0.96]);
+  // We use programmatic drag controls so the gesture only initiates
+  // from explicit "drag-zone" wrappers (the empty header strip and
+  // the negative-space band around the cover). That way taps on the
+  // ChevronDown button, the more-menu, the title, the like heart,
+  // the transport row and the volume slider all behave as plain
+  // buttons / sliders rather than getting eaten by a pan-y drag.
+  const sheetDragControls = useDragControls();
+  const startSheetDrag = (e: React.PointerEvent) => {
+    if (reduce) return;
+    sheetDragControls.start(e);
+  };
+
   return (
     <AnimatePresence>
       {fullscreen && currentTrack && (
@@ -286,7 +314,57 @@ export function FullscreenPlayer() {
             </>
           )}
 
-          <div className="relative z-[20] flex items-center justify-between px-5 py-4">
+          {/* Inner wrapper — owns the drag-to-dismiss transform so the
+              outer AnimatePresence entrance/exit spring keeps working
+              independently. `dragListener={false}` means the gesture
+              never starts from the wrapper itself; only the explicit
+              `onPointerDown={startSheetDrag}` callbacks below initiate
+              the drag, on the empty header strip and the negative
+              space around the cover. Threshold and spring are tuned
+              up: 200 px or 900 px·s velocity to commit (was 120/500),
+              with a softer `stiffness:280 damping:24` return so a
+              short pull pings back tactilely instead of snapping.
+
+              `pointerEvents` stays default — child UI (buttons,
+              sliders, scroll areas) keeps working normally. */}
+          <motion.div
+            className="relative flex h-full flex-col"
+            drag={reduce ? false : 'y'}
+            dragControls={sheetDragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            dragMomentum={false}
+            onDrag={(_e, info) => {
+              if (info.offset.y > 0) sheetY.set(info.offset.y);
+            }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 200 || info.velocity.y > 900) {
+                closeFullscreen();
+                return;
+              }
+              animate(sheetY, 0, {
+                type: 'spring',
+                stiffness: 280,
+                damping: 24,
+                mass: 0.9,
+              });
+            }}
+            style={{ y: sheetY, opacity: sheetOpacity, scale: sheetScale }}
+          >
+
+          <div
+            className="relative z-[20] flex items-center justify-between px-5 py-4"
+            // The header bar's empty middle area (between the
+            // ChevronDown on the left and the icon cluster on the
+            // right) is the natural "drag handle" — it's empty space
+            // anyway. Pointer-down on this row starts the dismiss
+            // drag; clicks on the buttons themselves still work
+            // because they stop propagation via React's synthetic
+            // event system the moment they handle the click.
+            onPointerDown={startSheetDrag}
+            style={{ touchAction: 'pan-y' }}
+          >
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
               <ChevronDown size={20} />
             </Button>
@@ -464,6 +542,22 @@ export function FullscreenPlayer() {
               horizontal band right under the header on light-coloured
               covers. The outer fullscreen <motion.div> already has
               overflow-hidden so nothing escapes the viewport. */}
+          {/* Hidden swipe-down catcher above the cover. The empty band
+              between the header and the cover artwork is, on most
+              viewports, the most ergonomic place to pull the sheet
+              down from — but the cover column is `justify-center`
+              and the gap is dynamic, so we lay a transparent
+              full-width 56-px-tall strip over its top via absolute
+              positioning. `pointer-events-auto` only on this strip
+              (the rest of the column listens normally). */}
+          {!reduce && (
+            <div
+              aria-hidden
+              className="pointer-events-auto absolute inset-x-0 top-[56px] z-[15] h-14"
+              style={{ touchAction: 'pan-y' }}
+              onPointerDown={startSheetDrag}
+            />
+          )}
           <div className="relative z-[3] flex flex-1 min-h-0">
           {/* Cover column. Uses the simple flex layout from commit
               49360f3 — the user explicitly asked for that. The lyrics
@@ -544,7 +638,18 @@ export function FullscreenPlayer() {
                 }
               }}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
-              animate={reduce ? undefined : { opacity: 1 }}
+              animate={reduce ? undefined : {
+                opacity: 1,
+                // Subtle bass-kick "thump" on the cover itself (П6) — a
+                // ~2% scale bump on every detected kick, on top of a
+                // very soft sustained breathe driven by the smoothed
+                // amplitude. Without this the cover sat completely
+                // still while only the halo behind it moved; the
+                // user's note was that the visualisation "stays in
+                // one position" — the cover IS the visual centre, so
+                // it should react too, just much less than the halo.
+                scale: 1 + pulse * 0.012 + flash * 0.022,
+              }}
               transition={{ type: 'spring', stiffness: 220, damping: 22, mass: 0.5 }}
               className="relative mx-auto aspect-square w-full max-w-md cursor-grab active:cursor-grabbing"
               style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))', touchAction: 'pan-y' }}
@@ -699,7 +804,7 @@ export function FullscreenPlayer() {
               </TiltCard>
             </motion.div>
 
-            <div className="flex w-full max-w-md items-center gap-2">
+            <div className="flex w-full max-w-md items-center gap-2 overflow-hidden">
               <Button
                 variant="ghost"
                 size="icon"
@@ -710,15 +815,15 @@ export function FullscreenPlayer() {
                 <ListPlus size={20} />
               </Button>
 
-              <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1">
+              <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1 overflow-hidden">
                 <motion.div
                   key={currentTrack.id + '-title'}
                   initial={reduce ? false : { opacity: 0, y: 8 }}
                   animate={reduce ? undefined : { opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                  className="text-center"
+                  className="block w-full min-w-0 text-center"
                 >
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                  <h1 className="block w-full min-w-0 text-2xl font-semibold tracking-tight sm:text-3xl">
                     <Marquee text={currentTrack.title} />
                   </h1>
                 </motion.div>
@@ -984,6 +1089,7 @@ export function FullscreenPlayer() {
               </>
             )}
           </AnimatePresence>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
