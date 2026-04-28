@@ -246,7 +246,7 @@ export function FullscreenPlayer() {
                     initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
                     animate={{ opacity: 0.5 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
-                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1] }}
                     autoPlay
                     muted
                     loop
@@ -264,7 +264,7 @@ export function FullscreenPlayer() {
                     initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
                     animate={{ opacity: 0.5 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
-                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1] }}
                     aria-hidden
                   />
                 )}
@@ -560,7 +560,7 @@ export function FullscreenPlayer() {
                         initial={reduce ? false : { opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={reduce ? { opacity: 0 } : { opacity: 0 }}
-                        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                        transition={{ duration: 0.75, ease: [0.4, 0, 0.2, 1] }}
                         autoPlay
                         muted
                         loop
@@ -578,7 +578,7 @@ export function FullscreenPlayer() {
                         initial={reduce ? false : { opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={reduce ? { opacity: 0 } : { opacity: 0 }}
-                        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                        transition={{ duration: 0.75, ease: [0.4, 0, 0.2, 1] }}
                       />
                     ) : null}
                   </AnimatePresence>
@@ -594,15 +594,22 @@ export function FullscreenPlayer() {
                 {/* Inner cover layer crossfades between tracks (П11). The
                     AnimatePresence is keyed by track id so a skip
                     fades the previous cover out while the next fades
-                    in, in place. */}
+                    in, in place. The explicit `relative h-full w-full`
+                    wrapper gives the absolute-positioned crossfade
+                    layers a positioned ancestor with the right size —
+                    without it, layout was resolving up to the TiltCard
+                    outer through its preserve-3d static child, which
+                    on some browsers collapsed the absolute children
+                    to zero height (cover disappeared entirely). */}
+                <div className="relative h-full w-full">
                 <AnimatePresence initial={false} mode="sync">
                   <motion.div
                     key={currentTrack.id + (coverVideoUrl ? '-v' : '-i')}
-                    className="absolute inset-0 h-full w-full"
+                    className="absolute inset-0"
                     initial={reduce ? false : { opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
-                    transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.75, ease: [0.4, 0, 0.2, 1] }}
                   >
                 {coverVideoUrl ? (
                   // Animated cover (Tidal mp4). Falls back gracefully — the
@@ -663,12 +670,13 @@ export function FullscreenPlayer() {
                 ) : currentTrack.coverUrl ? (
                   <img src={currentTrack.coverUrl} alt={currentTrack.title} className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
+                  <div className="absolute inset-0 flex items-center justify-center bg-secondary text-muted-foreground">
                     Без обложки
                   </div>
                 )}
                   </motion.div>
                 </AnimatePresence>
+                </div>
               </TiltCard>
             </motion.div>
 
