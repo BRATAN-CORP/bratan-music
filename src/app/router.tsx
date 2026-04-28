@@ -15,6 +15,7 @@ import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
 import { ProfilePage } from '@/app/profile/page';
 import { PlaylistPage } from '@/app/playlist/page';
+import { SharedPlaylistPage } from '@/app/shared/page';
 import { TrackPage } from '@/app/track/page';
 import { AlbumPage } from '@/app/album/page';
 import { ArtistPage } from '@/app/artist/page';
@@ -72,6 +73,7 @@ const router = createBrowserRouter(
         { path: 'album/:id', element: <AlbumPage /> },
         { path: 'artist/:id', element: <ArtistPage /> },
         { path: 'playlist/:id', element: <PlaylistPage /> },
+        { path: 'p/:token', element: <SharedPlaylistPage /> },
         { path: '*', element: <NotFoundPage /> },
       ],
     },

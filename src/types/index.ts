@@ -45,6 +45,26 @@ export interface Playlist {
   coverUrl?: string | null;
   pinnedAt?: number | null;
   updatedAt: number;
+  /** Owner's "make public" toggle. */
+  isPublic?: boolean;
+  /** Opaque token used in `/p/:token` share URLs. Null if never published. */
+  shareToken?: string | null;
+  /**
+   * "user" — saved reference to another user's public playlist.
+   * "tidal" — saved reference to a Tidal editorial playlist.
+   * null — playlist owned and authored by this user.
+   *
+   * Linked playlists are read-only: rename / cover / reorder / add /
+   * remove are all blocked on the backend and hidden in the UI.
+   */
+  sourceKind?: 'user' | 'tidal' | null;
+  /** ID of the source playlist (Tidal UUID for tidal sources, user
+   *  playlist id for user sources). */
+  sourcePlaylistId?: string | null;
+  /** ID of the original owner. Only meaningful when sourceKind='user'. */
+  sourceUserId?: string | null;
+  /** Echoed by `/playlists/:id` so the UI doesn't re-derive it. */
+  readOnly?: boolean;
 }
 
 /**
