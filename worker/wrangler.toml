@@ -11,6 +11,10 @@ APP_URL = "https://bratan-corp.github.io/bratan-music/"
 binding = "DB"
 database_name = "bratan-music-db"
 database_id = "af567808-4d71-4248-89f0-4681371dc771"
+# `wrangler d1 migrations apply` reads .sql files from this directory
+# in lexicographic order. The CI workflow `.github/workflows/apply-d1-migrations.yml`
+# runs this automatically when migration files change on `main`.
+migrations_dir = "src/db/migrations"
 
 # KV Namespace
 [[kv_namespaces]]
