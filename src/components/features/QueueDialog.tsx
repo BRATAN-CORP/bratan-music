@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { motion, AnimatePresence, Reorder, useReducedMotion } from 'motion/react';
 import { GripVertical, ListOrdered, Play, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
+import type { Track } from '@/types';
 
 interface QueueDialogProps {
   open: boolean;
@@ -10,41 +11,22 @@ interface QueueDialogProps {
 
 /**
  * Queue editor in the same glass-card vocabulary as AddToPlaylistDialog —
- * bottom-sheet on mobile, centered modal on md+. Lets the user reorder via
- * native HTML5 drag-and-drop, drop a track onto the trash zone or remove it
- * inline, and jump to any track by clicking it.
+ * bottom-sheet on mobile, centered modal on md+. Uses motion's
+ * `Reorder.Group` so the surrounding tracks visibly flow around the
+ * dragged item (П5) instead of just being marked with a ring.
  */
 export function QueueDialog({ open, onClose }: QueueDialogProps) {
   const reduce = useReducedMotion();
   const queue = usePlayerStore((s) => s.queue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
-  const reorderQueue = usePlayerStore((s) => s.reorderQueue);
+  const setQueue = usePlayerStore((s) => s.setQueue);
   const jumpToQueue = usePlayerStore((s) => s.jumpToQueue);
 
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  const handleDragStart = (index: number) => (e: React.DragEvent) => {
-    setDragIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    // Some browsers refuse to start the drag without payload.
-    try { e.dataTransfer.setData('text/plain', String(index)); } catch { /* noop */ }
-  };
-  const handleDragOver = (index: number) => (e: React.DragEvent) => {
-    e.preventDefault();
-    setOverIndex(index);
-  };
-  const handleDrop = (index: number) => (e: React.DragEvent) => {
-    e.preventDefault();
-    if (dragIndex == null) return;
-    if (dragIndex !== index) reorderQueue(dragIndex, index);
-    setDragIndex(null);
-    setOverIndex(null);
-  };
-  const handleDragEnd = () => {
-    setDragIndex(null);
-    setOverIndex(null);
+  const handleReorder = (next: Track[]) => {
+    setQueue(next);
   };
 
   return (
@@ -97,76 +79,27 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
                     Очередь пуста
                   </p>
                 ) : (
-                  <ul className="flex flex-col">
-                    {queue.map((t, i) => {
-                      const isActive = currentTrack?.id === t.id;
-                      const isDragOver = overIndex === i && dragIndex !== i;
-                      return (
-                        <li
-                          key={`${t.id}-${i}`}
-                          draggable
-                          onDragStart={handleDragStart(i)}
-                          onDragOver={handleDragOver(i)}
-                          onDrop={handleDrop(i)}
-                          onDragEnd={handleDragEnd}
-                          className={[
-                            'group relative flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 transition-colors',
-                            isActive
-                              ? 'bg-[var(--color-hover-overlay-strong)]'
-                              : 'hover:bg-[var(--color-hover-overlay-strong)] focus-within:bg-[var(--color-hover-overlay-strong)]',
-                            isDragOver ? 'ring-1 ring-[var(--color-accent)]' : '',
-                            dragIndex === i ? 'opacity-60' : '',
-                          ].join(' ')}
-                        >
-                          <span
-                            className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/70 active:cursor-grabbing"
-                            aria-hidden
-                          >
-                            <GripVertical size={14} />
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => jumpToQueue(i)}
-                            className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                            aria-label={`Воспроизвести ${t.title}`}
-                          >
-                            {t.coverUrl ? (
-                              <img
-                                src={t.coverUrl}
-                                alt=""
-                                className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] object-cover"
-                              />
-                            ) : (
-                              <div className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] bg-secondary" />
-                            )}
-                            <div className="min-w-0">
-                              <p
-                                className={`truncate text-sm ${isActive ? 'font-semibold text-[var(--color-accent)]' : 'font-medium'}`}
-                              >
-                                {t.title}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">{t.artist}</p>
-                            </div>
-                            {isActive && (
-                              <span className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
-                                <Play size={12} fill="currentColor" />
-                              </span>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeFromQueue(t.id)}
-                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-[var(--color-danger-muted)] hover:text-[var(--color-danger)]"
-                            aria-label={`Убрать ${t.title} из очереди`}
-                            disabled={isActive}
-                            title={isActive ? 'Сейчас играет' : 'Убрать из очереди'}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <Reorder.Group
+                    axis="y"
+                    values={queue}
+                    onReorder={handleReorder}
+                    className="flex flex-col"
+                    layoutScroll
+                  >
+                    {queue.map((t, i) => (
+                      <QueueRow
+                        key={t.id}
+                        track={t}
+                        index={i}
+                        active={currentTrack?.id === t.id}
+                        dragging={draggingId === t.id}
+                        onDragStart={() => setDraggingId(t.id)}
+                        onDragEnd={() => setDraggingId(null)}
+                        onJump={() => jumpToQueue(i)}
+                        onRemove={() => removeFromQueue(t.id)}
+                      />
+                    ))}
+                  </Reorder.Group>
                 )}
               </div>
             </motion.div>
@@ -174,5 +107,104 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+interface RowProps {
+  track: Track;
+  index: number;
+  active: boolean;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onJump: () => void;
+  onRemove: () => void;
+}
+
+/**
+ * Single queue row. The whole row is a `Reorder.Item` keyed by track —
+ * surrounding rows automatically reflow around it via motion's layout
+ * animation while the user drags. We bump the dragged row's z-index and
+ * scale slightly so it visually lifts above its neighbours.
+ */
+function QueueRow({
+  track,
+  active,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onJump,
+  onRemove,
+}: RowProps) {
+  return (
+    <Reorder.Item
+      value={track}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      // Spring tuned to feel "liquid" — neighbours reflow with a soft
+      // bounce-free curve, but the dragged item snaps tightly to the
+      // pointer so it doesn't feel rubbery.
+      transition={{ type: 'spring', stiffness: 600, damping: 50, mass: 1 }}
+      whileDrag={{
+        scale: 1.03,
+        boxShadow: '0 18px 36px -12px rgba(0,0,0,0.45)',
+        cursor: 'grabbing',
+        zIndex: 5,
+      }}
+      style={{ position: 'relative' }}
+      className={[
+        'group relative flex items-center gap-2 rounded-[var(--radius-md)] px-2 py-2 transition-colors',
+        active
+          ? 'bg-[var(--color-hover-overlay-strong)]'
+          : 'hover:bg-[var(--color-hover-overlay-strong)] focus-within:bg-[var(--color-hover-overlay-strong)]',
+        dragging ? 'shadow-lg' : '',
+      ].join(' ')}
+    >
+      <span
+        className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/70 active:cursor-grabbing"
+        aria-hidden
+      >
+        <GripVertical size={14} />
+      </span>
+      <button
+        type="button"
+        onClick={onJump}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        aria-label={`Воспроизвести ${track.title}`}
+      >
+        {track.coverUrl ? (
+          <img
+            src={track.coverUrl}
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] object-cover"
+          />
+        ) : (
+          <div className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] bg-secondary" />
+        )}
+        <div className="min-w-0">
+          <p
+            className={`truncate text-sm ${active ? 'font-semibold text-[var(--color-accent)]' : 'font-medium'}`}
+          >
+            {track.title}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+        </div>
+        {active && (
+          <span className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+            <Play size={12} fill="currentColor" />
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-[var(--color-danger-muted)] hover:text-[var(--color-danger)]"
+        aria-label={`Убрать ${track.title} из очереди`}
+        disabled={active}
+        title={active ? 'Сейчас играет' : 'Убрать из очереди'}
+      >
+        <Trash2 size={13} />
+      </button>
+    </Reorder.Item>
   );
 }

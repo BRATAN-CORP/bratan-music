@@ -228,9 +228,19 @@ export function PlaylistTrackItem({
         dragListener={false}
         dragControls={dragControls}
         onDragEnd={handleDragEnd}
+        // Spring tuned to feel "liquid" — neighbours reflow with a soft
+        // bounce-free curve, but the dragged item snaps tightly to the
+        // pointer so it doesn't feel rubbery (П5).
+        transition={{ type: 'spring', stiffness: 600, damping: 50, mass: 1 }}
+        whileDrag={{
+          scale: 1.02,
+          boxShadow: '0 18px 36px -12px rgba(0,0,0,0.45)',
+          cursor: 'grabbing',
+          zIndex: 5,
+        }}
+        style={{ position: 'relative' }}
         className={
-          'group flex cursor-pointer items-center gap-3 border-b border-border bg-[var(--color-bg)] px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary ' +
-          (dragging ? 'z-10 shadow-[var(--shadow-lg)] ring-1 ring-[var(--color-border-strong)]' : '')
+          'group flex cursor-pointer items-center gap-3 border-b border-border bg-[var(--color-bg)] px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary'
         }
         onClick={() => {
           if (dragging) return;
