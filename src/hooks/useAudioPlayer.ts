@@ -911,31 +911,42 @@ export function useAudioPlayer() {
     // because it's a separate slot from the two transport buttons.
     // We keep `seekto` so the platform scrubber stays interactive,
     // and let the user rely on it for fine-grained seeking.
+    // Strict-minimum handler set for iOS Now-Playing. Empirically
+    // iOS Safari falls back to the 10-second skip layout (⏪/⏩)
+    // whenever ANY of `seekbackward`, `seekforward`, OR `seekto` is
+    // registered while `setPositionState` reports a finite duration —
+    // the platform classifies the audio as "podcast-shaped" and
+    // overrides the prev/next buttons. The fix that works
+    // consistently across iOS 16/17/18 is to keep ONLY play, pause,
+    // previoustrack, nexttrack, stop registered, and to leave all
+    // three seek-style handlers unset. The platform scrubber still
+    // works (it derives from the underlying <audio> element's
+    // `seekable` / `currentTime` range, not from the seekto handler).
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', () => store().play()],
       ['pause', () => store().pause()],
       ['previoustrack', () => store().previous()],
       ['nexttrack', () => store().nextManual()],
-      ['seekto', (d) => { if (typeof d.seekTime === 'number') seek(d.seekTime); }],
       ['stop', () => { store().pause(); }],
     ];
     for (const [action, handler] of handlers) {
       try { ms.setActionHandler(action, handler); } catch { /* not supported */ }
     }
-    // Belt-and-suspenders: actively clear the seek-by-offset handlers
-    // in case a previous session/effect run (HMR, route swap, …)
-    // registered them. iOS caches the action set across navigations,
-    // so an explicit null is required to flip the widget back to
-    // prev/next. Browsers that never had these handlers throw on
-    // setActionHandler with an unsupported action — we swallow.
-    try { ms.setActionHandler('seekbackward', null); } catch { /* ignore */ }
-    try { ms.setActionHandler('seekforward', null); } catch { /* ignore */ }
+    // Aggressively null the three seek handlers. iOS caches the
+    // action set across navigations and even across PWA installs, so
+    // a stale registration from a previous build can keep the seek
+    // layout active for hours. Setting null is the documented way
+    // to revoke a handler; browsers that never had the action throw
+    // and we swallow.
+    for (const action of ['seekbackward', 'seekforward', 'seekto'] as const) {
+      try { ms.setActionHandler(action, null); } catch { /* ignore */ }
+    }
     return () => {
       for (const [action] of handlers) {
         try { ms.setActionHandler(action, null); } catch { /* ignore */ }
       }
     };
-  }, [seek]);
+  }, []);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;

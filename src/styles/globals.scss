@@ -199,7 +199,20 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
 @supports ((backdrop-filter: blur(0)) or (-webkit-backdrop-filter: blur(0))) {
   .liquid-glass {
     background: rgba(20, 20, 24, 0.22);
-    backdrop-filter: url(#container-glass) blur(22px) saturate(180%);
+    /* `backdrop-filter` in Chromium/Edge does NOT accept SVG filter
+       url() references — the spec leaves them out of the allowed
+       <filter-function-list>, and the moment the parser hits an
+       unrecognised function it throws away the ENTIRE declaration.
+       Earlier we tried `url(#container-glass) blur(22px) saturate(180%)`
+       which worked only on Safari (which still happens to honour the
+       url() ref) and silently dropped to zero blur on every other
+       desktop / Android browser — that's the "blur disappeared" the
+       user reported on the navbar / mini-player. The displacement
+       glass effect lives on the LiquidButton's `filter` (NOT
+       backdrop-filter) which still accepts SVG urls. The container
+       backdrop now uses a portable two-layer recipe: stronger blur
+       + saturate, identical on all engines. */
+    backdrop-filter: blur(22px) saturate(180%);
     -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
 }

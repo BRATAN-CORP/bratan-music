@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ListMusic, Loader2, Play, Sparkles } from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight, ListMusic, Loader2, Play, Sparkles } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import type {
   ExploreModule,
@@ -161,6 +161,15 @@ function GenreTile({
   // Larger CDN size on hero tiles so they stay crisp on retina
   // screens; row tiles stay at 480 to keep payloads light.
   const img = tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
+  // Decades and a handful of mood pages don't ship with cover images,
+  // and the previous fallback was a thin diagonal gradient that read
+  // as "broken card". When there's no image we render the same
+  // shape as the landing-page "Что внутри" feature card: a solid
+  // surface with an icon mark + label, plus a hover-revealed
+  // accent-glow blob blurring under the icon. This keeps a missing
+  // image from ever looking like a layout bug.
+  const isDecade = /\b(19|20)\d0s?\b/i.test(item.title) || item.slug.toLowerCase().includes('decade');
+  const FallbackIcon = isDecade ? CalendarRange : Sparkles;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -171,39 +180,63 @@ function GenreTile({
       <Link
         to={`/explore/${item.slug}`}
         className={
-          'relative block w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary transition-transform duration-300 will-change-transform hover:-translate-y-0.5 hover:shadow-xl ' +
+          'relative block w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-card transition-all duration-300 will-change-transform hover:-translate-y-0.5 hover:border-[var(--color-border-strong)] hover:shadow-xl ' +
           (variant === 'hero' ? 'aspect-[4/5]' : 'aspect-square')
         }
       >
-        {img ? (
-          <img
-            src={img}
-            alt={item.title}
-            loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-accent)]/30 to-transparent" />
-        )}
-        {/* Top-down dark gradient so the title stays readable on
-            bright covers. Slightly stronger on hero variants where
-            cards are taller. */}
+        {/* Hover accent-glow blob — same recipe as the landing page's
+            feature cards. Lives behind the content layer so the icon
+            mark and label visibly catch its glow on hover. */}
         <div
-          className={
-            'absolute inset-0 ' +
-            (variant === 'hero'
-              ? 'bg-gradient-to-t from-black/75 via-black/15 to-black/0'
-              : 'bg-gradient-to-t from-black/65 via-black/10 to-black/0')
-          }
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+          style={{
+            background:
+              'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+          }}
         />
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
-          <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/60">
-            {variant === 'hero' ? 'Жанр' : 'Подборка'}
-          </span>
-          <span className="line-clamp-2 text-sm font-semibold text-white sm:text-base">
-            {item.title}
-          </span>
-        </div>
+        {img ? (
+          <>
+            <img
+              src={img}
+              alt={item.title}
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+            />
+            <div
+              className={
+                'absolute inset-0 ' +
+                (variant === 'hero'
+                  ? 'bg-gradient-to-t from-black/75 via-black/15 to-black/0'
+                  : 'bg-gradient-to-t from-black/65 via-black/10 to-black/0')
+              }
+            />
+            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
+              <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/60">
+                {variant === 'hero' ? 'Жанр' : 'Подборка'}
+              </span>
+              <span className="line-clamp-2 text-sm font-semibold text-white sm:text-base">
+                {item.title}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="relative flex h-full w-full flex-col justify-between p-4">
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-foreground"
+            >
+              <FallbackIcon size={16} className="text-[var(--color-accent)]" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                {isDecade ? 'Декада' : 'Подборка'}
+              </span>
+              <span className="line-clamp-2 text-base font-semibold tracking-tight">
+                {item.title}
+              </span>
+            </div>
+          </div>
+        )}
       </Link>
     </motion.div>
   );
@@ -285,6 +318,17 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
+  // Desktop click-and-drag state. We track whether a drag is in
+  // progress so child links can be suppressed if the user actually
+  // dragged (vs. clicked-without-moving). `dragMovedRef` is a ref
+  // because the click handler runs synchronously after pointerup
+  // and React state batching would race the value.
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startScroll: number;
+    moved: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -295,11 +339,24 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
       setCanPrev(el.scrollLeft > 1);
       setCanNext(el.scrollLeft + el.clientWidth + 1 < el.scrollWidth);
     };
-    update();
+    // Initial measure happens on the next frame so the row's children
+    // have laid out their final width — without this the chevrons
+    // briefly flash on first paint when the row genuinely doesn't
+    // overflow yet.
+    const raf = requestAnimationFrame(update);
     el.addEventListener('scroll', update, { passive: true });
     const ro = new ResizeObserver(update);
     ro.observe(el);
+    // Also observe each child so chevrons re-evaluate when card
+    // images load (their layout width is finalised post-image
+    // decode and ResizeObserver on the row alone may miss this on
+    // some browsers).
+    const items = el.firstElementChild?.children;
+    if (items) {
+      Array.from(items).forEach((c) => ro.observe(c));
+    }
     return () => {
+      cancelAnimationFrame(raf);
       el.removeEventListener('scroll', update);
       ro.disconnect();
     };
@@ -311,27 +368,96 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' });
   };
 
+  // Mouse drag-to-scroll on desktop. We deliberately scope the drag
+  // initiator to the mouse button: touch users get the native flick
+  // momentum scroll and we'd just fight it by hijacking pointer
+  // events here. On pointerdown we capture the pointer and listen
+  // for moves on the document so the drag survives the cursor
+  // crossing the scroller edge.
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startScroll: el.scrollLeft,
+      moved: false,
+    };
+    try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragStateRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const dx = e.clientX - drag.startX;
+    if (!drag.moved && Math.abs(dx) > 4) drag.moved = true;
+    el.scrollLeft = drag.startScroll - dx;
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragStateRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const el = scrollerRef.current;
+    if (el) {
+      try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+    // Clear after a microtask so the click handler that runs after
+    // pointerup can still see `moved` to suppress link navigation.
+    const wasMoved = drag.moved;
+    setTimeout(() => {
+      if (dragStateRef.current === drag) dragStateRef.current = null;
+    }, 0);
+    if (wasMoved) {
+      // Suppress the synthetic click that fires after a drag-release.
+      // Without this the user's drag-to-scroll would also activate
+      // whatever link/card their cursor happens to be over.
+      const suppress = (ev: MouseEvent) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        document.removeEventListener('click', suppress, true);
+      };
+      document.addEventListener('click', suppress, true);
+      // Defensive removal in case no click ever fires.
+      setTimeout(() => document.removeEventListener('click', suppress, true), 200);
+    }
+  };
+
   return (
     <section className="relative flex flex-col gap-3">
       <SectionHeader title={title} />
       <div className="relative">
         <div
           ref={scrollerRef}
-          className="-mx-4 overflow-x-auto overflow-y-hidden px-4 pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10"
+          className="-mx-4 overflow-x-auto overflow-y-hidden px-4 pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 cursor-grab active:cursor-grabbing"
           style={{
-            // CSS snap — feels native on mobile flick and keeps cards
-            // aligned on desktop click-to-scroll. `mandatory` because
-            // partial cards look messy with our card-grid spacing.
             scrollSnapType: 'x mandatory',
             scrollPaddingLeft: 16,
             scrollPaddingRight: 16,
+            // Soft horizontal mask so cards near the gutter dissolve
+            // into the page background instead of getting hard-clipped
+            // — fixes the "rough crop on PC" the user reported on
+            // album / playlist scrollers.
+            WebkitMaskImage:
+              'linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%)',
+            maskImage:
+              'linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%)',
           }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
         >
           <div className="flex gap-4">{children}</div>
         </div>
 
         {/* Desktop scroll affordances. Hidden on touch (< md) where
-            swipe is the natural input. */}
+            swipe is the natural input. Each chevron only renders
+            when there's actually content to reach in that direction
+            — `canPrev` / `canNext` are recomputed on scroll, on
+            container resize AND on every child resize so a partial
+            measure during image decode doesn't leave a phantom
+            chevron at the edges of a fully-visible row. */}
         {canPrev && (
           <button
             type="button"

@@ -1,5 +1,5 @@
 import { useNavigate, NavLink } from 'react-router-dom';
-import { Play, Pause, SkipForward, Heart, Maximize2, Compass, Search, Library, User as UserIcon, Home } from 'lucide-react';
+import { Play, Pause, SkipForward, Heart, Maximize2, Search, Library, User as UserIcon, Home } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion, useTransform, type MotionValue } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { seekAudio, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
@@ -10,7 +10,6 @@ import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
   { to: '/search', icon: Search, label: 'Поиск' },
-  { to: '/explore', icon: Compass, label: 'Обзор' },
   { to: '/library', icon: Library, label: 'Библиотека' },
   { to: '/profile', icon: UserIcon, label: 'Профиль' },
 ] as const;

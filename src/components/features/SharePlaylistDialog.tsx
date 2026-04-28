@@ -122,13 +122,11 @@ export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDi
                   {isPublic ? <Globe size={18} /> : <Lock size={18} />}
                 </span>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium">
-                    {isPublic ? 'Доступен по ссылке' : 'Только для вас'}
-                  </span>
+                  <span className="text-sm font-medium">Поделиться по ссылке</span>
                   <span className="text-xs text-muted-foreground">
                     {isPublic
-                      ? 'Любой авторизованный пользователь сможет открыть и сохранить'
-                      : 'Включите, чтобы сгенерировать ссылку'}
+                      ? 'Включено — любой с ссылкой может открыть'
+                      : 'Сейчас плейлист доступен только вам'}
                   </span>
                 </div>
               </div>
