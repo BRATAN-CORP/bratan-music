@@ -9,6 +9,8 @@ import { usePlayerStore } from '@/store/player';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { toPlayerTrack } from '@/lib/playerTrack';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 
 export function TrackPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,17 +32,14 @@ export function TrackPage() {
       togglePlay();
       return;
     }
-    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
+    setTrack(toPlayerTrack(track));
     if (radio?.items) {
-      setQueue([
-        { id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration },
-        ...radio.items.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration })),
-      ]);
+      setQueue([toPlayerTrack(track), ...radio.items.map(toPlayerTrack)]);
     }
   };
 
   const handlePlayRadioTrack = (t: Track) => {
-    setTrack({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration });
+    setTrack(toPlayerTrack(t));
   };
 
   // Auto-play when the page is opened via a share link (?autoplay=1).
@@ -74,9 +73,14 @@ export function TrackPage() {
               <div className="flex flex-col justify-end gap-3">
                 <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Трек</span>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{track.title}</h1>
-                <Link to={`/artist/${track.artistId}`} className="text-sm text-muted-foreground hover:text-foreground">
-                  {track.artist}
-                </Link>
+                <div className="text-sm text-muted-foreground">
+                  <ArtistLinks
+                    artists={track.artists}
+                    fallbackName={track.artist}
+                    fallbackId={track.artistId}
+                    className="hover:text-foreground hover:underline"
+                  />
+                </div>
                 <Link to={`/album/${track.albumId}`} className="text-xs text-muted-foreground hover:text-foreground">
                   {track.album}
                 </Link>

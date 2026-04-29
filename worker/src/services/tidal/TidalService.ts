@@ -47,14 +47,35 @@ function artistImageUrl(pictureId: string | null | undefined, size: number = 480
   return `${IMG_BASE}/${pictureId.replace(/-/g, '/')}/${size}x${size}.jpg`;
 }
 
+/**
+ * Dedupe contributor list while preserving upstream order. Tidal
+ * occasionally repeats the same artist across `MAIN`/`FEATURED`
+ * entries — we keep just the first occurrence so the UI doesn't
+ * render the same name twice.
+ */
+function dedupeArtistRefs(list: { id: number; name: string }[] | undefined): { id: string; name: string }[] | undefined {
+  if (!list || list.length === 0) return undefined;
+  const seen = new Set<string>();
+  const out: { id: string; name: string }[] = [];
+  for (const a of list) {
+    const id = String(a.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: a.name });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 function mapTrack(raw: TidalTrackRaw): Track {
+  const artists = dedupeArtistRefs(raw.artists);
   const mainArtist = raw.artist ?? raw.artists?.[0];
   return {
     id: String(raw.id),
     source: 'tidal',
     title: raw.title + (raw.version ? ` (${raw.version})` : ''),
-    artist: raw.artists?.map(a => a.name).join(', ') || mainArtist?.name || 'Unknown Artist',
+    artist: artists?.map(a => a.name).join(', ') || mainArtist?.name || 'Unknown Artist',
     artistId: mainArtist ? String(mainArtist.id) : undefined,
+    artists,
     album: raw.album?.title ?? '',
     albumId: raw.album ? String(raw.album.id) : undefined,
     duration: raw.duration,
@@ -66,13 +87,15 @@ function mapTrack(raw: TidalTrackRaw): Track {
 }
 
 function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = []): Album {
+  const artists = dedupeArtistRefs(raw.artists);
   const mainArtist = raw.artist ?? raw.artists?.[0];
   return {
     id: String(raw.id),
     source: 'tidal',
     title: raw.title,
-    artist: mainArtist?.name ?? 'Unknown Artist',
+    artist: artists?.map(a => a.name).join(', ') || mainArtist?.name || 'Unknown Artist',
     artistId: mainArtist ? String(mainArtist.id) : undefined,
+    artists,
     coverUrl: coverUrl(raw.cover),
     coverVideoUrl: videoCoverUrl(raw.videoCover),
     releaseDate: raw.releaseDate,

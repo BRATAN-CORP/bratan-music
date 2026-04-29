@@ -10,6 +10,7 @@ import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 
 interface PlaylistTrackItemProps {
   track: Track;
@@ -128,7 +129,14 @@ export function PlaylistTrackItem({
 
       <div className="min-w-0 flex-1">
         <p className={'truncate text-sm font-medium ' + (isActive ? 'text-[var(--color-accent)]' : '')}>{track.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          <ArtistLinks
+            artists={track.artists}
+            fallbackName={track.artist}
+            fallbackId={track.artistId}
+            className="hover:text-foreground hover:underline"
+          />
+        </p>
       </div>
 
       <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:block">
