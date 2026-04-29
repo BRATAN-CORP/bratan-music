@@ -11,6 +11,7 @@ import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
+import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
 
 interface GrantResponse {
@@ -310,6 +311,7 @@ export function ProfilePage() {
         <ResetRecommendationsPanel />
 
         {profile?.isAdmin && <AdminGrantPanel />}
+        {profile?.isAdmin && <AdminAdminFlagPanel />}
         {profile?.isAdmin && (
           <div className="md:col-span-2">
             <AdminTidalPanel />
