@@ -97,8 +97,8 @@ export function ProfilePage() {
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, openSubscriptionPrompt } = useUiStore();
   const {
-    crossfade, crossfadeDuration, tidalQuality,
-    setCrossfade, setCrossfadeDuration, setTidalQuality,
+    crossfade, crossfadeDuration, tidalQuality, infinitePlayback,
+    setCrossfade, setCrossfadeDuration, setTidalQuality, setInfinitePlayback,
   } = useSettingsStore();
   const { data: profile } = useQuery({
     queryKey: ['profile'],
@@ -225,6 +225,30 @@ export function ProfilePage() {
               />
             </div>
           )}
+
+          <label className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4 text-sm">
+            <span className="flex flex-col">
+              <span>Бесконечная музыка</span>
+              <span className="text-xs text-muted-foreground">
+                Когда очередь почти пуста, добавляем рекомендации на основе того, что играет. Если выключено — плеер остановится на последнем треке.
+              </span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={infinitePlayback}
+              onClick={() => setInfinitePlayback(!infinitePlayback)}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                infinitePlayback ? 'bg-[var(--color-accent)]' : 'bg-secondary'
+              }`}
+            >
+              <motion.span
+                animate={{ x: infinitePlayback ? 24 : 4 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                className="inline-block h-4 w-4 rounded-full bg-white shadow"
+              />
+            </button>
+          </label>
         </section>
 
         <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">

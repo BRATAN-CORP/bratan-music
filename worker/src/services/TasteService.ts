@@ -125,14 +125,20 @@ export class TasteService {
 
     await this.env.DB
       .prepare(
-        `INSERT INTO user_taste_profile (user_id, profile, genre_seeds, computed_at, updated_at)
-         VALUES (?, ?, COALESCE((SELECT genre_seeds FROM user_taste_profile WHERE user_id = ?), '[]'), ?, ?)
+        `INSERT INTO user_taste_profile
+             (user_id, profile, genre_seeds, seed_artist_ids, computed_at, updated_at)
+         VALUES (
+           ?, ?,
+           COALESCE((SELECT genre_seeds     FROM user_taste_profile WHERE user_id = ?), '[]'),
+           COALESCE((SELECT seed_artist_ids FROM user_taste_profile WHERE user_id = ?), '[]'),
+           ?, ?
+         )
          ON CONFLICT(user_id) DO UPDATE SET
-           profile = excluded.profile,
+           profile     = excluded.profile,
            computed_at = excluded.computed_at,
-           updated_at = excluded.updated_at`,
+           updated_at  = excluded.updated_at`,
       )
-      .bind(userId, JSON.stringify(profile), userId, now, now)
+      .bind(userId, JSON.stringify(profile), userId, userId, now, now)
       .run();
 
     return profile;
@@ -145,42 +151,78 @@ export class TasteService {
    * across all users (cron-driven recompute + lazy refresh on first
    * request of the day).
    */
-  async getOrCompute(userId: string): Promise<{ profile: TasteProfile; genreSeeds: string[] }> {
+  async getOrCompute(
+    userId: string,
+  ): Promise<{ profile: TasteProfile; genreSeeds: string[]; seedArtistIds: string[] }> {
     const row = await this.env.DB
-      .prepare(`SELECT profile, genre_seeds, computed_at FROM user_taste_profile WHERE user_id = ?`)
+      .prepare(
+        `SELECT profile, genre_seeds, seed_artist_ids, computed_at
+           FROM user_taste_profile WHERE user_id = ?`,
+      )
       .bind(userId)
-      .first<{ profile: string; genre_seeds: string; computed_at: number }>();
+      .first<{
+        profile: string;
+        genre_seeds: string;
+        seed_artist_ids: string;
+        computed_at: number;
+      }>();
 
     const now = Date.now();
     if (row && now - row.computed_at < 24 * 60 * 60 * 1000) {
       return {
         profile: JSON.parse(row.profile) as TasteProfile,
-        genreSeeds: parseGenreSeeds(row.genre_seeds),
+        genreSeeds: parseStringArray(row.genre_seeds),
+        seedArtistIds: parseStringArray(row.seed_artist_ids),
       };
     }
 
     const profile = await this.recompute(userId);
     const seedsRow = await this.env.DB
-      .prepare(`SELECT genre_seeds FROM user_taste_profile WHERE user_id = ?`)
+      .prepare(
+        `SELECT genre_seeds, seed_artist_ids FROM user_taste_profile WHERE user_id = ?`,
+      )
       .bind(userId)
-      .first<{ genre_seeds: string }>();
+      .first<{ genre_seeds: string; seed_artist_ids: string }>();
     return {
       profile,
-      genreSeeds: parseGenreSeeds(seedsRow?.genre_seeds ?? '[]'),
+      genreSeeds: parseStringArray(seedsRow?.genre_seeds ?? '[]'),
+      seedArtistIds: parseStringArray(seedsRow?.seed_artist_ids ?? '[]'),
     };
   }
 
-  /** Replace the cold-start genre seeds. Called from the onboarding flow. */
+  /** Replace the cold-start genre seeds. Kept for back-compat; the
+   *  current onboarding flow prefers `setSeedArtists` for tighter
+   *  signal. */
   async setGenreSeeds(userId: string, slugs: string[]): Promise<void> {
+    await this.upsertSeedColumn(userId, 'genre_seeds', slugs.slice(0, 8));
+  }
+
+  /** Replace the cold-start artist seeds. Used by the new onboarding
+   *  flow where the user picks 1–6 artists they like; we then seed
+   *  Tidal track-radio off those artist ids. */
+  async setSeedArtists(userId: string, artistIds: string[]): Promise<void> {
+    await this.upsertSeedColumn(userId, 'seed_artist_ids', artistIds.slice(0, 12));
+  }
+
+  private async upsertSeedColumn(
+    userId: string,
+    column: 'genre_seeds' | 'seed_artist_ids',
+    values: string[],
+  ): Promise<void> {
     const now = Date.now();
-    const json = JSON.stringify(slugs.slice(0, 8));
+    const json = JSON.stringify(values);
     const exists = await this.env.DB
       .prepare(`SELECT user_id FROM user_taste_profile WHERE user_id = ?`)
       .bind(userId)
       .first();
     if (exists) {
+      // Column name is constrained to a literal union above, so
+      // string-interpolation here is safe and unavoidable (D1's
+      // prepare() doesn't bind identifiers).
       await this.env.DB
-        .prepare(`UPDATE user_taste_profile SET genre_seeds = ?, updated_at = ? WHERE user_id = ?`)
+        .prepare(
+          `UPDATE user_taste_profile SET ${column} = ?, updated_at = ? WHERE user_id = ?`,
+        )
         .bind(json, now, userId)
         .run();
     } else {
@@ -190,10 +232,12 @@ export class TasteService {
         totalPlays: 0,
         version: 1,
       };
+      const otherCol = column === 'genre_seeds' ? 'seed_artist_ids' : 'genre_seeds';
       await this.env.DB
         .prepare(
-          `INSERT INTO user_taste_profile (user_id, profile, genre_seeds, computed_at, updated_at)
-           VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO user_taste_profile
+             (user_id, profile, ${column}, ${otherCol}, computed_at, updated_at)
+           VALUES (?, ?, ?, '[]', ?, ?)`,
         )
         .bind(userId, JSON.stringify(empty), json, now, now)
         .run();
@@ -201,7 +245,7 @@ export class TasteService {
   }
 }
 
-function parseGenreSeeds(raw: string): string[] {
+function parseStringArray(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');

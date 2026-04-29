@@ -3,6 +3,7 @@ import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
 import { RecommendationService } from '../services/RecommendationService';
 import { TasteService } from '../services/TasteService';
+import { TidalService } from '../services/tidal/TidalService';
 
 const recommendations = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -86,6 +87,92 @@ recommendations.post('/dislikes', async (c) => {
     .bind(userId, body.itemId, body.kind, source, Date.now())
     .run();
   return c.json({ ok: true });
+});
+
+/**
+ * Cold-start onboarding (preferred): user picks 1–6 artists they like.
+ * This is a tighter signal than genre slugs and lets the wave start
+ * meaningfully on the user's first session.
+ */
+recommendations.post('/seed-artists', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req
+    .json<{ artistIds?: unknown }>()
+    .catch(() => ({} as { artistIds?: unknown }));
+  if (!Array.isArray(body.artistIds) || body.artistIds.length === 0) {
+    return c.json({ error: 'artistIds обязателен' }, 400);
+  }
+  const ids = body.artistIds
+    .filter((s: unknown): s is string => typeof s === 'string' && s.length > 0)
+    .slice(0, 12);
+  if (ids.length === 0) {
+    return c.json({ error: 'нужен хотя бы один artistId' }, 400);
+  }
+  await new TasteService(c.env).setSeedArtists(userId, ids);
+  return c.json({ ok: true, artistIds: ids });
+});
+
+recommendations.get('/seed-artists', async (c) => {
+  const userId = c.get('userId');
+  const taste = new TasteService(c.env);
+  const { seedArtistIds, profile } = await taste.getOrCompute(userId);
+  return c.json({ artistIds: seedArtistIds, hasHistory: profile.totalPlays > 0 });
+});
+
+/**
+ * Search Tidal artists for the cold-start picker. Free-text query —
+ * the picker calls this on debounce as the user types.
+ */
+recommendations.get('/artists/search', async (c) => {
+  const q = c.req.query('q')?.trim() ?? '';
+  if (q.length < 2) return c.json({ items: [] });
+  try {
+    const tidal = new TidalService(c.env);
+    const result = await tidal.search(q, 'artists', { limit: 24 });
+    return c.json({ items: result.artists });
+  } catch (err) {
+    console.error('artists/search failed', err);
+    return c.json({ items: [] });
+  }
+});
+
+/**
+ * "Suggested" pool the cold-start picker shows when the search input is
+ * empty. Pulled from a curated explore page (popular artists across
+ * genres) and KV-cached for 24h since this is a public-feeling list.
+ */
+recommendations.get('/artists/suggested', async (c) => {
+  const cacheKey = 'rec_suggested_artists:v1';
+  const cached = await c.env.SESSIONS.get(cacheKey, 'json');
+  if (cached && Array.isArray(cached)) return c.json({ items: cached });
+  try {
+    const tidal = new TidalService(c.env);
+    const seen = new Set<string>();
+    const collected: Array<{ id: string; name: string; imageUrl?: string }> = [];
+    for (const slug of ['genre_pop', 'genre_rap', 'genre_rock', 'genre_electronic']) {
+      try {
+        const page = await tidal.getExplorePage(slug);
+        for (const m of page.modules) {
+          if (m.type === 'artists') {
+            for (const a of m.items) {
+              if (!seen.has(a.id) && a.imageUrl) {
+                seen.add(a.id);
+                collected.push({ id: a.id, name: a.name, imageUrl: a.imageUrl });
+                if (collected.length >= 24) break;
+              }
+            }
+          }
+          if (collected.length >= 24) break;
+        }
+      } catch { /* one bad slug shouldn't kill the whole list */ }
+      if (collected.length >= 24) break;
+    }
+    await c.env.SESSIONS.put(cacheKey, JSON.stringify(collected), { expirationTtl: 24 * 60 * 60 });
+    return c.json({ items: collected });
+  } catch (err) {
+    console.error('artists/suggested failed', err);
+    return c.json({ items: [] });
+  }
 });
 
 recommendations.delete('/dislikes/:kind/:itemId', async (c) => {
