@@ -27,10 +27,34 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
   const albumsQ = useArtistAlbumsInfinite(kind === 'albums' ? artistId : '');
   const singlesQ = useArtistSinglesInfinite(kind === 'singles' ? artistId : '');
   const active = kind === 'albums' ? albumsQ : singlesQ;
-  const items = useMemo(
-    () => active.data?.pages.flatMap((p) => p.items) ?? [],
-    [active.data?.pages],
-  );
+  const items = useMemo(() => {
+    // Cross-page dedupe. Server-side dedupe runs inside each page
+    // bucket, but it can't see other pages — and Tidal's editorial
+    // pagedList sometimes ships the same release across page
+    // boundaries (different id, identical title/cover; or the same
+    // id surfacing twice when the cursor backtracks). We collapse
+    // on id first, then on `(artistId, normalisedTitle)` so the
+    // user never sees the same album card twice in the grid.
+    const flat = active.data?.pages.flatMap((p) => p.items) ?? [];
+    const seenIds = new Set<string>();
+    const seenFp = new Set<string>();
+    const out: typeof flat = [];
+    for (const a of flat) {
+      if (seenIds.has(a.id)) continue;
+      const norm = a.title
+        .toLowerCase()
+        .replace(/\s*[([][^()[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)[^()[\]]*[)\]]\s*/gi, ' ')
+        .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)\b[^,]*$/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const fp = `${a.artistId ?? ''}::${norm}`;
+      if (seenFp.has(fp)) continue;
+      seenIds.add(a.id);
+      seenFp.add(fp);
+      out.push(a);
+    }
+    return out;
+  }, [active.data?.pages]);
   const total = active.data?.pages?.[0]?.totalItems ?? items.length;
   const heading = kind === 'albums' ? 'Все альбомы' : 'Все синглы';
 

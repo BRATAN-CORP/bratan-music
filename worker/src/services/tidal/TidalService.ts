@@ -93,6 +93,101 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
 }
 
 /**
+ * Unwrap a single item from a Tidal `pagedList` so we end up with a
+ * raw album record — or `undefined` if the item is anything else
+ * (playlist, mix, video, track, page-link, ad placeholder).
+ *
+ * Tidal's editorial "page module" pagedLists (the ones reached via
+ * the opaque `dataApiPath` returned alongside the artist page's
+ * `ARTIST_ALBUMS` / `ARTIST_TOP_SINGLES` / `ARTIST_COMPILATIONS`
+ * modules) sometimes return:
+ *
+ *   - direct album rows: `{ id: 12345, title: …, type: 'ALBUM', … }`
+ *   - wrapped rows:      `{ item: { id: 12345, … }, type: 'ALBUM' }`
+ *   - heterogeneous rows: `{ item: { uuid: …, title: … }, type: 'PLAYLIST' }`
+ *                         `{ item: { id: … }, type: 'MIX' | 'VIDEO' }`
+ *
+ * The previous implementation simply cast `pagedList.items` to
+ * `TidalAlbumRaw[]` and `mapAlbum`'d every entry, so playlists and
+ * mixes leaked into the artist's "All albums" feed and rendered as
+ * malformed album cards (the user reported "on the /albums page more
+ * than half are someone's playlists from Tidal"). This helper drops
+ * any non-album entity and unwraps the rest.
+ */
+function unwrapPagedAlbum(input: unknown): TidalAlbumRaw | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const raw = input as { item?: unknown; type?: unknown; id?: unknown; uuid?: unknown };
+  // Wrapped shape: `{ item, type }`. Reject upfront if the wrapper
+  // labels this as something we know isn't an album.
+  if (raw.item && typeof raw.item === 'object') {
+    if (typeof raw.type === 'string' && raw.type.toUpperCase() !== 'ALBUM') {
+      return undefined;
+    }
+    return unwrapPagedAlbum(raw.item);
+  }
+  // Direct shape — albums always carry a numeric `id`. Playlists use
+  // string `uuid`s; mixes use prefixed string ids; ad placeholders
+  // have neither. Anything that doesn't pass the numeric-id check is
+  // not an album for our purposes.
+  if (typeof raw.id !== 'number') return undefined;
+  return input as TidalAlbumRaw;
+}
+
+/**
+ * Strip release-edition decoration so that two album entries that
+ * differ only by suffix — e.g. "Scorpion" vs "Scorpion (Deluxe)" vs
+ * "Scorpion - Deluxe Edition" — collapse to the same fingerprint.
+ * Used by the second-tier album dedupe (see {@link dedupeAlbums}).
+ */
+function normaliseAlbumTitle(title: string): string {
+  return title
+    .toLowerCase()
+    // Parenthesised edition tags: "(Deluxe)", "(Expanded Edition)",
+    // "(Remastered 2021)", "(Anniversary Edition)", …
+    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)[^()\[\]]*[)\]]\s*/gi, ' ')
+    // Trailing " - Deluxe" / " — Remastered 2018" suffixes.
+    .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)\b[^,]*$/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Two-tier album dedupe.
+ *
+ *   1. Drop entries with duplicate ids (Tidal can return the same id
+ *      across the `ARTIST_ALBUMS` and `ARTIST_COMPILATIONS` modules).
+ *   2. Drop entries that look like the same release under a different
+ *      id — a deluxe reissue, regional re-release or the like — by
+ *      collapsing on `(artistId, normalisedTitle)`. We keep whichever
+ *      entry has the newer `releaseDate` (the deluxe / anniversary
+ *      cut), falling back to higher track count, falling back to the
+ *      first-seen entry.
+ *
+ * The user reported that some Drake albums repeat 2–4 times on the
+ * artist page "identical from the outside" — different ids, same
+ * title, same cover. Tier 1 doesn't catch this; tier 2 does.
+ */
+function dedupeAlbums(items: Album[]): Album[] {
+  const byId = dedupeById(items);
+  const byFingerprint = new Map<string, Album>();
+  const better = (a: Album, b: Album): Album => {
+    const da = a.releaseDate ?? '';
+    const db = b.releaseDate ?? '';
+    if (da !== db) return da > db ? a : b;
+    const ta = a.tracks?.length ?? 0;
+    const tb = b.tracks?.length ?? 0;
+    if (ta !== tb) return ta > tb ? a : b;
+    return b; // keep first-seen
+  };
+  for (const album of byId) {
+    const fp = `${album.artistId ?? ''}::${normaliseAlbumTitle(album.title)}`;
+    const existing = byFingerprint.get(fp);
+    byFingerprint.set(fp, existing ? better(existing, album) : album);
+  }
+  return Array.from(byFingerprint.values());
+}
+
+/**
  * Coerce Tidal's freeform `type` string into our four-bucket enum.
  * Tidal mostly returns `ALBUM` / `EP` / `SINGLE` / `COMPILATION`, but
  * we defensively normalise unknown values to `ALBUM`.
@@ -348,7 +443,15 @@ export class TidalService implements MusicService {
     const empty: ModuleBucket = { items: [] };
     const bucketFromModule = (mod: TidalPageModuleRaw | undefined, fallback: Album['releaseType']): ModuleBucket => {
       if (!mod?.pagedList) return empty;
-      const items = (mod.pagedList.items as TidalAlbumRaw[]).map((raw) => mapAlbum(raw, [], fallback));
+      // Strip any non-album entries (playlists, mixes, page-links
+      // — see {@link unwrapPagedAlbum}) before mapping. Tidal's
+      // editorial modules occasionally splice these in, and without
+      // the filter they'd be cast straight to `TidalAlbumRaw` and
+      // rendered as broken album cards.
+      const albumItems = (mod.pagedList.items ?? [])
+        .map(unwrapPagedAlbum)
+        .filter((x): x is TidalAlbumRaw => x !== undefined);
+      const items = albumItems.map((raw) => mapAlbum(raw, [], fallback));
       const total = mod.pagedList.totalNumberOfItems;
       const hasMore = total !== undefined && total > items.length;
       return {
@@ -371,7 +474,7 @@ export class TidalService implements MusicService {
       console.error('[getArtistAlbumsAndSingles] page fetch failed, falling back to v1 buckets', err);
     }
 
-    let albums = dedupeById([...albumsMod.items, ...compsMod.items]);
+    let albums = dedupeAlbums([...albumsMod.items, ...compsMod.items]);
     let singles = singlesMod.items;
     let albumsMore = albumsMod.morePath ?? compsMod.morePath;
     const albumsMoreTotal = albumsMod.moreTotal !== undefined || compsMod.moreTotal !== undefined
@@ -512,9 +615,15 @@ export class TidalService implements MusicService {
     opts: { limit?: number; offset?: number } = {},
   ): Promise<{ items: Album[]; totalItems?: number; morePath: string }> {
     const raw = await this.api.getPageData<TidalPagedListRaw<unknown>>(moreApiPath, opts);
-    const list = (raw.items ?? []) as TidalAlbumRaw[];
+    // Same unwrap+filter as the first-page bucket: drop wrapped
+    // playlists / mixes that Tidal interleaves into the editorial
+    // module's `dataApiPath` response, then dedupe so the same
+    // release reissued under multiple ids doesn't double-bill.
+    const list = (raw.items ?? [])
+      .map(unwrapPagedAlbum)
+      .filter((x): x is TidalAlbumRaw => x !== undefined);
     return {
-      items: list.map((a) => mapAlbum(a)),
+      items: dedupeAlbums(list.map((a) => mapAlbum(a))),
       totalItems: raw.totalNumberOfItems,
       morePath: moreApiPath,
     };
