@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Sliders, RotateCcw } from 'lucide-react';
 import { EQ_BANDS, setEqGain, isEqAvailable } from '@/hooks/useAudioPlayer';
+import { useSettingsStore } from '@/store/settings';
 import { Button } from '@/components/ui/Button';
 
 const PRESETS: Record<string, number[]> = {
@@ -18,25 +19,41 @@ function freqLabel(hz: number): string {
 }
 
 export function Equalizer() {
-  const [gains, setGains] = useState<number[]>(() => Array.from({ length: EQ_BANDS.length }, () => 0));
-  const [available, setAvailable] = useState(false);
+  // Settings store is the source of truth for EQ gains — they roam
+  // across devices via /user/preferences. The local component only
+  // mirrors the slice and forwards updates back into the store. The
+  // store's setter pushes to the audio graph (when up) and persists.
+  const gains = useSettingsStore((s) => s.eqGains);
+  const setStoreEqGain = useSettingsStore((s) => s.setEqGain);
+  const setStoreEqGains = useSettingsStore((s) => s.setEqGains);
 
+  // Whether the audio graph is up. Re-checked when the user
+  // interacts with a slider — the graph is created lazily on first
+  // user gesture (Safari requires it for `new AudioContext()`), so
+  // the initial mount-time check often returns false even though
+  // the very next slider drag would succeed. Re-running the check
+  // after each interaction means the warning disappears as soon as
+  // the user does anything that actually starts the graph.
+  const [available, setAvailable] = useState(false);
   useEffect(() => {
     setAvailable(isEqAvailable());
   }, []);
+  const refreshAvailability = () => setAvailable(isEqAvailable());
 
   const updateBand = (i: number, value: number) => {
-    setGains((prev) => {
-      const next = [...prev];
-      next[i] = value;
-      return next;
-    });
+    setStoreEqGain(i, value);
+    // Live update on the graph — when the graph isn't up yet
+    // (first interaction on Safari before any track played) the
+    // setter will spin it up, so by the next render `available`
+    // flips to true.
     setEqGain(i, value);
+    refreshAvailability();
   };
 
   const applyPreset = (preset: number[]) => {
-    setGains(preset);
+    setStoreEqGains(preset);
     preset.forEach((g, i) => setEqGain(i, g));
+    refreshAvailability();
   };
 
   const reduce = useReducedMotion();
@@ -76,8 +93,13 @@ export function Equalizer() {
       </motion.div>
 
       {!available && (
+        // Soft-cue for the case where the graph hasn't come up yet
+        // (typically because the user is on the settings page and
+        // hasn't played anything this session). Sliders still write
+        // into the persisted store, so the curve is captured and
+        // applied to the graph the moment a track starts.
         <motion.p {...fadeIn(0.22)} className="text-xs text-muted-foreground">
-          Аудио-движок недоступен (требуется CORS). Регуляторы видны, но не повлияют на звук.
+          Запустите любой трек, чтобы регуляторы начали влиять на звук — текущие значения сохранятся и применятся автоматически.
         </motion.p>
       )}
 

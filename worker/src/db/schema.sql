@@ -190,3 +190,9 @@ CREATE TABLE recommendation_seen (
     PRIMARY KEY (user_id, track_id, source)
 );
 CREATE INDEX idx_recommendation_seen_user_seen ON recommendation_seen(user_id, last_seen_at DESC);
+
+CREATE TABLE user_preferences (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    prefs      TEXT NOT NULL DEFAULT '{}',
+    updated_at INTEGER NOT NULL
+);

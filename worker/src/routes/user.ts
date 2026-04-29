@@ -72,6 +72,60 @@ user.get('/limits', async (c) => {
  * for the caller to specify someone else's id, so this can't be used
  * to reset another user's recommendations.
  */
+/**
+ * Roaming user preferences (crossfade on/off + duration, infinite
+ * playback, requested Tidal stream quality, EQ band gains, etc.).
+ * Stored as a single JSON blob in `user_preferences.prefs` so we
+ * can add fields without churning the schema. The worker doesn't
+ * coerce shape — it just persists whatever the client sent under
+ * `prefs` after a sanity check that it's a plain object — and the
+ * client is responsible for merging server-returned prefs over its
+ * defaults on hydration.
+ */
+user.get('/preferences', async (c) => {
+  const userId = c.get('userId');
+  const row = await c.env.DB
+    .prepare('SELECT prefs FROM user_preferences WHERE user_id = ?')
+    .bind(userId)
+    .first<{ prefs: string }>();
+  if (!row) return c.json({ prefs: {} });
+  let parsed: unknown = {};
+  try {
+    parsed = JSON.parse(row.prefs);
+  } catch {
+    parsed = {};
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return c.json({ prefs: {} });
+  }
+  return c.json({ prefs: parsed });
+});
+
+user.put('/preferences', async (c) => {
+  const userId = c.get('userId');
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Некорректный JSON' }, 400);
+  }
+  const prefs =
+    body && typeof body === 'object' && !Array.isArray(body) && 'prefs' in body
+      ? (body as { prefs: unknown }).prefs
+      : null;
+  if (!prefs || typeof prefs !== 'object' || Array.isArray(prefs)) {
+    return c.json({ error: 'prefs должен быть объектом' }, 400);
+  }
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    `INSERT INTO user_preferences (user_id, prefs, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at`,
+  )
+    .bind(userId, JSON.stringify(prefs), now)
+    .run();
+  return c.json({ ok: true });
+});
+
 user.post('/reset-recommendations', async (c) => {
   const userId = c.get('userId');
   const tables = [
