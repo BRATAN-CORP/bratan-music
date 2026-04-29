@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CalendarRange, ChevronLeft, ChevronRight, ListMusic, Loader2, Play, Sparkles } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion } from 'motion/react';
 import type {
   ExploreModule,
   ExplorePlaylist,
@@ -80,14 +80,10 @@ function ModuleRow({ module: m, hero }: { module: ExploreModule; hero: boolean }
       // grid; otherwise we fall back to the compact pill cloud so
       // an icon-only row doesn't get awkwardly large empty cards.
       {
-        // Decade rows (`m_1980s`, `m_1990s`, …) skip the photo
-        // background even when Tidal returns one — the stock
-        // decade artwork reads as visual clutter alongside genre /
-        // mood photos. Instead we render decades in a flat grid
-        // (no horizontal scroller) using the same icon + label
-        // fallback the GenreTile already renders when no image is
-        // available — matching the landing-page "Что внутри"
-        // card recipe (bg-card + border + accent-glow on hover).
+        // Decade rows (`m_1980s`, `m_1990s`, …) render as a compact
+        // pill cloud — see `PageLinksDecadeGrid`. The previous big
+        // image grid was visually disproportionate to the row's
+        // payload (a 4-character label).
         const isDecadeRow =
           m.items.length > 0 &&
           m.items.every(
@@ -167,22 +163,35 @@ function PageLinksImageRow({ title, items }: { title: string; items: ExplorePage
 }
 
 /**
- * Decade ladder rendered as a flat grid (not a snap-scrolling row)
- * so the whole 1950s → 2020s range is visible at once and aligns
- * vertically with the rest of the explore content. Each tile uses
- * the same icon + label fallback GenreTile renders when no image
- * is available — i.e. the landing-page "Что внутри" card recipe.
+ * Decade ladder rendered as a compact pill cloud — same visual
+ * weight as the icon-only "Mood & Activity" row (`PageLinksCloud`).
+ * The previous tile grid was visually dominant (2/3/4-col aspect-
+ * square cards) for a row whose only payload is a 4-character label,
+ * which made the search empty state look unbalanced. Pill cloud is
+ * dense, scannable, and matches the rest of the page's rhythm.
  */
 function PageLinksDecadeGrid({ title, items }: { title: string; items: ExplorePageLink[] }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-3">
       <SectionHeader
         title={title}
         icon={<CalendarRange size={14} className="text-[var(--color-accent)]" />}
       />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="flex flex-wrap gap-2">
         {items.map((it, i) => (
-          <GenreTile key={it.slug} item={it} index={i} variant="row" forceFallback />
+          <motion.div
+            key={it.slug}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(i, 12) * 0.012, duration: 0.18 }}
+          >
+            <Link
+              to={`/explore/${it.slug}`}
+              className="inline-flex items-center rounded-full border border-border bg-card px-4 py-1.5 text-sm transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
+            >
+              {it.title}
+            </Link>
+          </motion.div>
         ))}
       </div>
     </section>
@@ -193,19 +202,14 @@ function GenreTile({
   item,
   index,
   variant,
-  forceFallback = false,
 }: {
   item: ExplorePageLink;
   index: number;
   variant: 'hero' | 'row';
-  /** Skip the photo background even if Tidal returned an imageId.
-   *  Used by the decade grid where stock decade artwork reads as
-   *  visual noise next to mood / genre photos. */
-  forceFallback?: boolean;
 }) {
   // Larger CDN size on hero tiles so they stay crisp on retina
   // screens; row tiles stay at 480 to keep payloads light.
-  const img = forceFallback ? null : tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
+  const img = tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
   // Decades and a handful of mood pages don't ship with cover images,
   // and the previous fallback was a thin diagonal gradient that read
   // as "broken card". When there's no image we render the same
@@ -359,6 +363,20 @@ function TrackListRow({ title, items }: { title: string; items: Track[] }) {
  *   on whether more content exists in that direction so we don't
  *   leave a phantom button at the start/end of the row.
  */
+/**
+ * Builds the CSS mask used to fade the scroller edges. We selectively
+ * blank out either edge: a 12-px transparency stripe on the side that
+ * still has hidden content, and a hard `black 0` on the side that's
+ * already at its terminus. The CSS is identical between
+ * `WebkitMaskImage` and `maskImage` — split only because Safari still
+ * required the prefix at the time of writing.
+ */
+function buildEdgeMask(canPrev: boolean, canNext: boolean): string {
+  const left = canPrev ? 'transparent 0, black 12px' : 'black 0';
+  const right = canNext ? 'black calc(100% - 12px), transparent 100%' : 'black 100%';
+  return `linear-gradient(to right, ${left}, ${right})`;
+}
+
 function SnapScroller({ title, children }: { title: string; children: React.ReactNode }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
@@ -489,11 +507,13 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
             // Soft horizontal mask so cards near the gutter dissolve
             // into the page background instead of getting hard-clipped
             // — fixes the "rough crop on PC" the user reported on
-            // album / playlist scrollers.
-            WebkitMaskImage:
-              'linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%)',
-            maskImage:
-              'linear-gradient(to right, transparent 0, black 12px, black calc(100% - 12px), transparent 100%)',
+            // album / playlist scrollers. The fade is **only applied
+            // on the side that can actually scroll**: when we're at
+            // the start the left edge stays sharp, when we're at the
+            // end the right edge stays sharp. Otherwise fading off
+            // the last visible card looks like the row is dim/disabled.
+            WebkitMaskImage: buildEdgeMask(canPrev, canNext),
+            maskImage: buildEdgeMask(canPrev, canNext),
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -587,7 +607,6 @@ function ExplorePlaylistCard({
   const setQueue = usePlayerStore((s) => s.setQueue);
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
-  const reduce = useReducedMotion();
 
   const handlePlay = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -620,21 +639,17 @@ function ExplorePlaylistCard({
     }
   };
 
+  // Hover model matches AlbumCard exactly: only the cover lifts /
+  // scales (`group-hover:scale-[1.04]`), the surrounding card stays
+  // anchored. Previously the whole tile was wrapped in a `motion.div`
+  // with `whileHover={{ y: -2 }}` which made playlist rows visually
+  // "jiggle" while neighbouring album rows stayed still — inconsistent.
   return (
-    <motion.div
-      whileHover={reduce ? undefined : { y: -2 }}
-      transition={{ duration: 0.18 }}
-      className="group flex flex-col gap-2.5"
+    <Link
+      to={`/explore/playlist/${playlist.id}`}
+      className="group flex flex-col gap-2.5 focus:outline-none"
+      aria-label={`Открыть плейлист ${playlist.title}`}
     >
-      {/* Whole card navigates to the Tidal playlist detail. The Play
-          button below stops propagation so the user can either open
-          the detail (tap the card) or just start playback in place
-          (tap the Play CTA), matching the Spotify / Tidal pattern. */}
-      <Link
-        to={`/explore/playlist/${playlist.id}`}
-        className="block focus:outline-none"
-        aria-label={`Открыть плейлист ${playlist.title}`}
-      >
       <div className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary shadow-sm transition-shadow duration-300 group-hover:shadow-xl">
         {playlist.coverUrl ? (
           <img
@@ -682,7 +697,6 @@ function ExplorePlaylistCard({
           </p>
         )}
       </div>
-      </Link>
-    </motion.div>
+    </Link>
   );
 }
