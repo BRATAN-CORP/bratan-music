@@ -976,7 +976,7 @@ export function FullscreenPlayer() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/15 transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+                <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/15">
                   {/* Buffered range — light bar that runs ahead of the
                       played portion to show how far the audio is already
                       downloaded. Sits behind the played bar and gets
@@ -999,7 +999,7 @@ export function FullscreenPlayer() {
                     thumb on the rail regardless of the rail's animated
                     height (1px → 1.5px on hover/drag). */}
                 <motion.div
-                  className="pointer-events-none absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/progress:scale-110 group-active/progress:scale-125"
+                  className="pointer-events-none absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
                   style={{ left: progressWidth }}
                   aria-hidden
                 />
@@ -1072,13 +1072,13 @@ export function FullscreenPlayer() {
                     target.addEventListener('pointercancel', onUp);
                   }}
                 >
-                  <div className="relative h-1 w-full rounded-full bg-white/15 transition-[height] duration-150 group-hover/volume:h-1.5 group-active/volume:h-1.5">
+                  <div className="relative h-1 w-full rounded-full bg-white/15">
                     <div
                       className="h-full rounded-full bg-white/85 transition-[width] duration-100"
                       style={{ width: `${(muted ? 0 : volume) * 100}%` }}
                     />
                     <div
-                      className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-150 group-hover/volume:scale-110 group-active/volume:scale-125"
+                      className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
                       style={{ left: `${(muted ? 0 : volume) * 100}%` }}
                     />
                   </div>

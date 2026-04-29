@@ -110,7 +110,7 @@ export function MobileBottomDock() {
                 target.addEventListener('pointercancel', onUp);
               }}
             >
-              <div className="relative h-[3px] w-full overflow-hidden bg-white/[0.08] transition-[height] duration-150 group-hover/progress:h-1.5 group-active/progress:h-1.5">
+              <div className="relative h-[3px] w-full overflow-hidden bg-white/[0.08]">
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
                   style={{ width: progressWidth }}
