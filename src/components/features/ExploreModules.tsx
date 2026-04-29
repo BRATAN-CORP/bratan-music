@@ -465,7 +465,15 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
       startScroll: el.scrollLeft,
       moved: false,
     };
-    try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    // Pointer capture is deferred until the drag threshold is crossed
+    // (see `onPointerMove` below). Capturing on pointerdown re-targets
+    // every pointer event for that pointer to the scroller, which —
+    // on cards wrapped in <Link> — could prevent the click event from
+    // reaching the link in browsers that resolve the click target via
+    // the active capture target rather than via hit-testing at
+    // pointerup. Capturing only once we know the user is actually
+    // dragging keeps simple taps unaffected and still lets the drag
+    // survive the cursor crossing the scroller's edge.
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragStateRef.current;
@@ -473,7 +481,21 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     const el = scrollerRef.current;
     if (!el) return;
     const dx = e.clientX - drag.startX;
-    if (!drag.moved && Math.abs(dx) > 4) drag.moved = true;
+    // Drag activation threshold: 8 px. Below that, treat the gesture
+    // as a click and DO NOT touch `scrollLeft` — laptop trackpads can
+    // shift the cursor 3-5 px between mousedown and mouseup on a
+    // normal tap, and any synthetic scroll during that window would
+    // (a) drag the row out from under the cursor so the click target
+    // moves, and (b) trip the `moved` flag so the post-pointerup
+    // click suppressor swallows the user's tap on an album / playlist
+    // tile. Once moved=true we keep scrolling as before.
+    if (!drag.moved) {
+      if (Math.abs(dx) <= 8) return;
+      drag.moved = true;
+      // Now that the user has committed to a drag, capture the pointer
+      // so the gesture survives the cursor crossing the scroller edge.
+      try { el.setPointerCapture(drag.pointerId); } catch { /* ignore */ }
+    }
     el.scrollLeft = drag.startScroll - dx;
   };
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
