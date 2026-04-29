@@ -34,6 +34,16 @@ function buildShareUrl(trackId: string): string {
   return `${base}/track/${trackId}?autoplay=1`;
 }
 
+/**
+ * Horizontal inset (px) applied to the timeline rail and thumb so they
+ * never extend into the player surface's rounded-corner zone. Roughly
+ * matches the corner radius (`--radius-xl` = 20px) but slightly
+ * smaller — the bar fill underneath is already clipped by the surface,
+ * so visually nothing changes; this just keeps the thumb away from the
+ * bezel where it would otherwise appear to float on transparent space.
+ */
+const RAIL_INSET_PX = 14;
+
 export function Player() {
   const {
     currentTrack, isPlaying, togglePlay, nextManual, previous,
@@ -51,6 +61,17 @@ export function Player() {
     d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%');
   const bufferedWidth = useTransform([bufferedSeconds, durationSeconds] as unknown as never, ([b, d]: [number, number]) =>
     d > 0 ? `${Math.min(100, (b / d) * 100)}%` : '0%');
+  // Thumb travels along the rail, which is inset by RAIL_INSET_PX from
+  // each edge of the player surface so the thumb can never sit on top
+  // of the rounded bezel corners (where it visually "levitates"
+  // because the surface has been clipped away). The progress fill
+  // itself is unchanged — it lives inside the inset rail and stays
+  // visually identical to before, since the corner rounding was already
+  // clipping that strip anyway.
+  const thumbLeft = useTransform([progressSeconds, durationSeconds] as unknown as never, ([t, d]: [number, number]) => {
+    const r = d > 0 ? Math.min(1, Math.max(0, t / d)) : 0;
+    return `calc(${RAIL_INSET_PX}px + (100% - ${RAIL_INSET_PX * 2}px) * ${r})`;
+  });
   const reduce = useReducedMotion();
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
@@ -500,11 +521,13 @@ export function Player() {
               so its top half can extend above the player's rounded top
               edge without being cropped by overflow-hidden. Visibility is
               driven by the seekHover / seekActive flags. Centred on the
-              rail's vertical centre via `top: 2px` (= half of the 4px rail). */}
+              rail's vertical centre via `top: 2px` (= half of the 4px rail).
+              `left` is calc'd against the same inset as the rail so the
+              thumb never sits on top of the rounded bezel corners. */}
           <motion.div
             aria-hidden
             className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] transition-opacity duration-150"
-            style={{ left: progressWidth, top: '2px', opacity: thumbVisible ? 1 : 0 }}
+            style={{ left: thumbLeft, top: '2px', opacity: thumbVisible ? 1 : 0 }}
           />
         </motion.div>
       )}
