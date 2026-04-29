@@ -6,6 +6,7 @@ import { seekAudio, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { Marquee } from '@/components/ui/Marquee';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -198,7 +199,18 @@ export function MobileBottomDock() {
                       >
                         <Marquee text={t.title} />
                       </button>
-                      {position === 'current' && t.artistId ? (
+                      {position === 'current' && t.artists && t.artists.length > 1 ? (
+                        <div className="block w-full overflow-hidden text-left text-xs text-muted-foreground">
+                          <span className="block truncate">
+                            <ArtistLinks
+                              artists={t.artists}
+                              fallbackName={t.artist}
+                              fallbackId={t.artistId}
+                              className="hover:text-foreground hover:underline"
+                            />
+                          </span>
+                        </div>
+                      ) : position === 'current' && t.artistId ? (
                         <button
                           type="button"
                           onClick={() => navigate(`/artist/${t.artistId}`)}

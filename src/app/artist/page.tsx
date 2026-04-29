@@ -10,6 +10,7 @@ import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { toPlayerTrack } from '@/lib/playerTrack';
 
 export function ArtistPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,11 +27,9 @@ export function ArtistPage() {
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(topTrackIds);
 
   const handlePlayTrack = (track: Track) => {
-    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
+    setTrack(toPlayerTrack(track));
     if (artist?.topTracks) {
-      setQueue(
-        artist.topTracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration }))
-      );
+      setQueue(artist.topTracks.map(toPlayerTrack));
     }
   };
 

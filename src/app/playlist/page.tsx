@@ -66,6 +66,7 @@ export function PlaylistPage() {
       title: track.title,
       artist: track.artist,
       artistId: track.artistId,
+      artists: track.artists,
       coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl,
       duration: track.duration,
     });
@@ -75,6 +76,7 @@ export function PlaylistPage() {
         title: t.title,
         artist: t.artist,
         artistId: t.artistId,
+        artists: t.artists,
         coverUrl: t.coverUrl,
         coverVideoUrl: t.coverVideoUrl,
         duration: t.duration,

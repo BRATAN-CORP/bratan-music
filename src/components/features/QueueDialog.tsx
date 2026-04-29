@@ -3,6 +3,7 @@ import { motion, AnimatePresence, Reorder, useReducedMotion } from 'motion/react
 import { GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 
 interface QueueDialogProps {
   open: boolean;
@@ -198,7 +199,14 @@ function QueueRow({
           >
             {track.title}
           </p>
-          <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            <ArtistLinks
+              artists={track.artists}
+              fallbackName={track.artist}
+              fallbackId={track.artistId}
+              className="hover:text-foreground hover:underline"
+            />
+          </p>
         </div>
         {active && (
           <span

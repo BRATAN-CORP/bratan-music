@@ -9,6 +9,12 @@ interface Track {
    * player. Optional because some legacy callsites don't pass it
    * (liked tracks loaded from older snapshots, etc.). */
   artistId?: string;
+  /**
+   * Full credit list when the upstream surfaces multiple contributors.
+   * Preserved through the player so the mini-player and fullscreen
+   * UI can render every name as its own clickable link.
+   */
+  artists?: { id: string; name: string }[];
   /** Tidal album id — needed for the 'перейти к альбому' action in the
    * fullscreen 3-dot menu. Optional for the same reason as artistId. */
   albumId?: string;

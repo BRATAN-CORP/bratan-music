@@ -672,6 +672,7 @@ function toTrack(r: RecentTrack): Track {
     title: r.title,
     artist: r.artist,
     artistId: r.artistId,
+    artists: r.artists,
     album: r.album,
     albumId: r.albumId,
     coverUrl: r.coverUrl,

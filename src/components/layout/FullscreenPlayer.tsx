@@ -22,6 +22,7 @@ import { useTrack } from '@/hooks/useTrack';
 import { useTouchOnlyDevice } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 import type { Track } from '@/types';
 
 function formatTime(seconds: number): string {
@@ -920,7 +921,17 @@ export function FullscreenPlayer() {
                     previously the no-artistId branch let the Marquee
                     inherit the parent flex column's `items-stretch`
                     default and the text drifted to the left edge. */}
-                {currentTrack.artistId ? (
+                {currentTrack.artists && currentTrack.artists.length > 1 ? (
+                  <div className="block w-full text-center text-sm text-muted-foreground sm:text-base">
+                    <ArtistLinks
+                      artists={currentTrack.artists}
+                      fallbackName={currentTrack.artist}
+                      fallbackId={currentTrack.artistId}
+                      className="hover:text-foreground hover:underline"
+                      wrapperClassName="justify-center"
+                    />
+                  </div>
+                ) : currentTrack.artistId ? (
                   <button
                     type="button"
                     onClick={goToArtist}

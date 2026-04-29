@@ -18,6 +18,7 @@ import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 import type { Track } from '@/types';
 
 function formatTime(seconds: number): string {
@@ -307,7 +308,18 @@ export function Player() {
                 >
                   <Marquee text={currentTrack.title} />
                 </button>
-                {currentTrack.artistId ? (
+                {currentTrack.artists && currentTrack.artists.length > 1 ? (
+                  <div className="block w-full overflow-hidden text-xs text-muted-foreground">
+                    <span className="block truncate">
+                      <ArtistLinks
+                        artists={currentTrack.artists}
+                        fallbackName={currentTrack.artist}
+                        fallbackId={currentTrack.artistId}
+                        className="hover:text-foreground hover:underline"
+                      />
+                    </span>
+                  </div>
+                ) : currentTrack.artistId ? (
                   <button
                     type="button"
                     onClick={() => navigate(`/artist/${currentTrack.artistId}`)}

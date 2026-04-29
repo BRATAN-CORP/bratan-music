@@ -1,9 +1,21 @@
+/**
+ * Lightweight credit reference for multi-artist authorship. Tidal
+ * returns each contributor as `{id, name}`; we forward the whole
+ * list so the frontend can render every name as its own link.
+ */
+export interface ArtistRef {
+  id: string;
+  name: string;
+}
+
 export interface Track {
   id: string;
   source: 'tidal' | 'soundcloud' | 'youtube';
   title: string;
   artist: string;
   artistId?: string;
+  /** Full credit list when upstream provides multiple contributors. */
+  artists?: ArtistRef[];
   album?: string;
   albumId?: string;
   duration: number;
@@ -20,6 +32,8 @@ export interface Album {
   title: string;
   artist: string;
   artistId?: string;
+  /** Full credit list — see `Track.artists`. */
+  artists?: ArtistRef[];
   coverUrl?: string;
   coverVideoUrl?: string;
   releaseDate?: string;

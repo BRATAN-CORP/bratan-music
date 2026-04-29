@@ -12,6 +12,7 @@ import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
+import { ArtistLinks } from '@/components/features/ArtistLinks';
 
 interface TrackItemProps {
   track: Track;
@@ -93,6 +94,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       title: track.title,
       artist: track.artist,
       artistId: track.artistId,
+      artists: track.artists,
       coverUrl: track.coverUrl,
       duration: track.duration,
     });
@@ -107,6 +109,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       title: track.title,
       artist: track.artist,
       artistId: track.artistId,
+      artists: track.artists,
       coverUrl: track.coverUrl,
       duration: track.duration,
     });
@@ -166,7 +169,14 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{track.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          <ArtistLinks
+            artists={track.artists}
+            fallbackName={track.artist}
+            fallbackId={track.artistId}
+            className="hover:text-foreground hover:underline"
+          />
+        </p>
       </div>
 
       <span className="hidden shrink-0 text-xs tabular-nums text-muted-foreground sm:block">

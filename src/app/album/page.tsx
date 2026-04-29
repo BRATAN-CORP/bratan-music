@@ -8,6 +8,7 @@ import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { toPlayerTrack } from '@/lib/playerTrack';
 
 export function AlbumPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +25,9 @@ export function AlbumPage() {
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
   const handlePlayTrack = (track: Track) => {
-    setTrack({ id: track.id, title: track.title, artist: track.artist, artistId: track.artistId, coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl, duration: track.duration });
+    setTrack(toPlayerTrack(track));
     if (album?.tracks) {
-      setQueue(
-        album.tracks.map((t) => ({ id: t.id, title: t.title, artist: t.artist, artistId: t.artistId, coverUrl: t.coverUrl, coverVideoUrl: t.coverVideoUrl, duration: t.duration }))
-      );
+      setQueue(album.tracks.map(toPlayerTrack));
     }
   };
 
@@ -64,9 +63,25 @@ export function AlbumPage() {
               <div className="flex flex-col justify-end gap-3">
                 <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Альбом</span>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{album.title}</h1>
-                <Link to={`/artist/${album.artistId}`} className="text-sm text-muted-foreground hover:text-foreground">
-                  {album.artist}
-                </Link>
+                {album.artists && album.artists.length > 1 ? (
+                  <div className="text-sm text-muted-foreground">
+                    {album.artists.map((a, i) => (
+                      <span key={a.id + ':' + i}>
+                        <Link
+                          to={`/artist/${a.id}`}
+                          className="hover:text-foreground hover:underline"
+                        >
+                          {a.name}
+                        </Link>
+                        {i < album.artists!.length - 1 && ', '}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <Link to={`/artist/${album.artistId}`} className="text-sm text-muted-foreground hover:text-foreground">
+                    {album.artist}
+                  </Link>
+                )}
                 {album.releaseDate && (
                   <p className="text-xs text-muted-foreground">{album.releaseDate}</p>
                 )}
