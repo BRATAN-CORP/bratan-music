@@ -588,7 +588,20 @@ export function FullscreenPlayer() {
             //     into the visible area while keeping the breathing
             //     gap above the cover (sm:pt-6) symmetric to the
             //     header bar's own `py-4`.
-            className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:pt-6 sm:pb-10"
+            // `min-w-0 w-full` are essential here. The fullscreen
+            // player is `flex flex-col overflow-hidden` and this is
+            // its single growing flex item — without `min-w-0` the
+            // flex parent refuses to shrink the column below its
+            // min-content (driven by the cover wrapper's intrinsic
+            // aspect-ratio and the `max-w-md` title/transport rows).
+            // On a narrow viewport (≈250–300 px wide DevTools, the
+            // user's exact repro) flex would leave the column
+            // ~496 px wide while the player itself is clipped to the
+            // viewport, so every inner row would slide past the
+            // right edge. With `min-w-0 w-full` the column shrinks
+            // to fill the narrow player exactly, and the inner
+            // `w-full max-w-md` rows resolve to `min(player_width, 28rem)`.
+            className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:pt-6 sm:pb-10"
           >
             {/* Cover artwork wrapper. Width is `w-full max-w-md` so
                 on a tall enough viewport it renders at the full
