@@ -44,6 +44,52 @@ admin.post('/grant', async (c) => {
   });
 });
 
+/**
+ * Toggle the `is_admin` flag on any user. Accepts the same shape as
+ * /admin/grant: either `userId` (TG numeric id stored as our PK) or
+ * `tgUsername`. Refuses to demote the requesting admin themselves to
+ * avoid a foot-gun where the only admin removes their own access.
+ */
+admin.post('/admin-flag', async (c) => {
+  interface Body { userId?: string; tgUsername?: string; isAdmin?: boolean }
+  const body = await c.req.json<Body>().catch(() => ({} as Body));
+  const requesterId = c.get('userId');
+  const isAdmin = body.isAdmin ?? true;
+
+  if (!body.userId && !body.tgUsername) {
+    return c.json({ error: 'userId или tgUsername обязателен' }, 400);
+  }
+
+  const userService = new UserService(c.env);
+  let user = body.userId ? await userService.findById(body.userId) : null;
+  if (!user && body.tgUsername) {
+    user = await c.env.DB.prepare(
+      'SELECT * FROM users WHERE LOWER(tg_username) = LOWER(?) LIMIT 1'
+    ).bind(body.tgUsername.replace(/^@/, '')).first();
+  }
+  if (!user) return c.json({ error: 'Пользователь не найден' }, 404);
+
+  if (user.id === requesterId && !isAdmin) {
+    return c.json({ error: 'Нельзя снять админку с самого себя' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB
+    .prepare('UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?')
+    .bind(isAdmin ? 1 : 0, now, user.id)
+    .run();
+
+  return c.json({
+    ok: true,
+    user: {
+      id: user.id,
+      username: user.tg_username,
+      name: user.tg_name,
+      isAdmin,
+    },
+  });
+});
+
 admin.get('/users/search', async (c) => {
   const q = (c.req.query('q') ?? '').trim();
   if (!q) return c.json({ items: [] });
