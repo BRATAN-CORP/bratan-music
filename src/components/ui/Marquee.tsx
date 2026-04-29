@@ -185,11 +185,17 @@ export function Marquee({
         // freely, so descenders and any text-shadow halation render
         // in full.
         clipPath: 'polygon(0% -200%, 100% -200%, 100% 300%, 0% 300%)',
-        // `contain: size` would over-constrain (forces a fixed size);
-        // `contain: layout paint` isolates the box so the inline-
-        // block child's max-content can never leak into the parent
-        // flex's intrinsic size calculation.
-        contain: 'layout paint',
+        // `contain: layout` isolates the inline-block child's
+        // max-content from the parent flex's intrinsic-size calc
+        // (the iOS Safari bug PR #120 was originally fixing).
+        // `contain: paint` was here too, but it forces the element
+        // to clip its own painting to the bounding box — overriding
+        // the vertical bleed we want from `clip-path` and re-
+        // introducing the descender clipping the user reported on
+        // the fullscreen player title (Cyrillic "у", lowercase "y",
+        // etc. cut off below the baseline). `layout` alone is
+        // sufficient for the original size-isolation fix.
+        contain: 'layout',
         ...(isMarqueeing
           ? {
               WebkitMaskImage: maskImage,

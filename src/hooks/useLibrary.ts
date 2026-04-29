@@ -51,9 +51,22 @@ export function usePlaylistsList() {
 export const usePlaylists = usePlaylistsList;
 
 export function usePlaylist(id: string) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['playlist', id],
-    queryFn: () => api.get<PlaylistWithTracks>(`/playlists/${id}`),
+    queryFn: async () => {
+      const data = await api.get<PlaylistWithTracks>(`/playlists/${id}`);
+      // Detail-view fetch refreshes the backend's cached
+      // `source_track_count` for linked playlists. Invalidate the
+      // library list so the card count picks up the freshly cached
+      // value on next render — otherwise the user sees the correct
+      // count on the detail page but a stale 0 (or stale older value)
+      // back on the Library tab.
+      if (data?.sourceKind) {
+        qc.invalidateQueries({ queryKey: ['playlists'] });
+      }
+      return data;
+    },
     enabled: !!id,
   });
 }
