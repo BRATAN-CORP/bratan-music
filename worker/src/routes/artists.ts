@@ -26,4 +26,23 @@ artists.get('/:id', async (c) => {
   });
 });
 
+/**
+ * Artist radio. Returned as a flat track list ready to drop straight
+ * into the player queue. Errors are surfaced to the frontend as an
+ * empty list — this endpoint is purely additive and shouldn't break
+ * the artist page if upstream is degraded.
+ */
+artists.get('/:id/radio', async (c) => {
+  const id = c.req.param('id');
+  const limit = Number(c.req.query('limit')) || 50;
+  const tidal = new TidalService(c.env);
+  try {
+    const items = await tidal.getArtistRadio(id, Math.min(100, Math.max(1, limit)));
+    return c.json({ items });
+  } catch (err) {
+    console.error('[artist-radio]', err);
+    return c.json({ items: [] satisfies unknown[] }, 200);
+  }
+});
+
 export { artists };

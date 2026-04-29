@@ -43,3 +43,17 @@ export function useArtist(id: string) {
     enabled: !!id,
   });
 }
+
+/**
+ * Tidal "artist radio" — a seeded mix anchored to the given artist.
+ * Backed by `/artists/:id/radio` and rendered as its own section on
+ * the artist page. The endpoint resolves to an empty list on upstream
+ * errors so the rest of the page keeps working.
+ */
+export function useArtistRadio(id: string) {
+  return useQuery({
+    queryKey: ['artist-radio', id],
+    queryFn: () => api.get<{ items: Track[] }>(`/artists/${id}/radio`),
+    enabled: !!id,
+  });
+}

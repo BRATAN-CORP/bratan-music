@@ -177,6 +177,47 @@ export class TidalApi {
   }
 
   /**
+   * "Artist radio" — Tidal's seeded mix that starts from a given
+   * artist and fans out into similar / collaborator territory.
+   *
+   * Tidal exposes two different shapes here:
+   *   - `/v1/artists/{id}/radio` returns `{ items: TidalTrackRaw[] }`
+   *     directly — same envelope as `/tracks/{id}/radio`.
+   *   - `/v1/artists/{id}/mix` returns a Mix descriptor with a UUID
+   *     that then has to be resolved against `/v1/mixes/{id}/items`.
+   *
+   * Web-tidal hits the mix flow; the radio flow is fewer round-trips
+   * and matches our existing track-radio code path. We try `/radio`
+   * first and fall back to the mix flow if upstream returns 404 — that
+   * way the call works regardless of which endpoint a given Tidal
+   * region keeps on. The fallback uses two sequential requests, but
+   * only when needed.
+   */
+  async getArtistRadio(artistId: string, limit: number = 50): Promise<{ items: TidalTrackRaw[] }> {
+    const cc = await this.auth.getCountryCode();
+    try {
+      return await this.get<{ items: TidalTrackRaw[] }>(
+        `/v1/artists/${artistId}/radio?limit=${limit}&offset=0&countryCode=${cc}`,
+      );
+    } catch (err) {
+      // `/radio` is region-gated; fall back to the mix flow only on
+      // not-found / bad-request, mirroring the lyrics fallback above.
+      const msg = err instanceof Error ? err.message : '';
+      if (!/\b404\b/.test(msg) && !/\b400\b/.test(msg)) throw err;
+      const mix = await this.get<{ id: string }>(
+        `/v1/artists/${artistId}/mix?countryCode=${cc}`,
+      );
+      const res = await this.get<{ items: { item?: TidalTrackRaw; type?: string }[] }>(
+        `/v1/mixes/${mix.id}/items?limit=${limit}&offset=0&countryCode=${cc}`,
+      );
+      const items = res.items
+        .filter((row) => (row.type ?? 'track') === 'track' && row.item)
+        .map((row) => row.item as TidalTrackRaw);
+      return { items };
+    }
+  }
+
+  /**
    * Fetch tracks of an editorial Tidal playlist by UUID. The
    * upstream endpoint paginates; for now we ask for a single window
    * up to `limit` (Tidal allows up to 100 per request).

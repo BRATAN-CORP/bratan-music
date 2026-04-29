@@ -269,6 +269,17 @@ export class TidalService implements MusicService {
     return res.items.map(mapTrack);
   }
 
+  /**
+   * Artist radio — Tidal's seeded mix anchored to a specific artist.
+   * Surfaces collaborators and similar acts; the radio endpoint is
+   * usually richer than `topTracks`, so we expose it as a separate
+   * section on the artist page.
+   */
+  async getArtistRadio(id: string, limit: number = 50): Promise<Track[]> {
+    const res = await this.api.getArtistRadio(id, limit);
+    return res.items.map(mapTrack);
+  }
+
   async getStreamUrl(trackId: string, quality?: string): Promise<string> {
     return this.web.getStreamUrl(trackId, quality ?? 'HIGH');
   }
