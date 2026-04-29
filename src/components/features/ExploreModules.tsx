@@ -386,12 +386,30 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
   // dragged (vs. clicked-without-moving). `dragMovedRef` is a ref
   // because the click handler runs synchronously after pointerup
   // and React state batching would race the value.
+  //
+  // `pendingScroll` is the most recent desired scrollLeft from a
+  // pointermove that hasn't been flushed to the DOM yet — we batch
+  // every pointermove through a single rAF so the browser only does
+  // one layout/scroll-event roundtrip per frame instead of one per
+  // pointermove (the previous synchronous writes caused the visible
+  // jankiness on long horizontal drags). `velocity` and the recent
+  // sample buffer feed the momentum/inertia animation that runs
+  // after pointerup so the row keeps gliding for a few hundred ms
+  // like a native horizontal scroller, instead of stopping dead at
+  // the cursor.
   const dragStateRef = useRef<{
     pointerId: number;
     startX: number;
     startScroll: number;
     moved: boolean;
+    pendingScroll: number | null;
+    rafId: number | null;
+    samples: { t: number; x: number }[];
   } | null>(null);
+  // rAF id for the pointer-up momentum animation. Kept on the
+  // component (not on dragStateRef) so a fresh pointerdown can
+  // cancel an in-flight glide cleanly.
+  const inertiaRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -459,6 +477,17 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
   // would tear down our `pointermove` listening and the carousel
   // would just refuse to scroll on PC — exactly the regression the
   // user reported after the previous click-suppression fix).
+  // Stop any glide animation that's still running. Called on a fresh
+  // pointerdown so the user can grab the scroller mid-glide and
+  // immediately drag it from the new position, and at the end of the
+  // glide itself once velocity decays.
+  const cancelInertia = () => {
+    if (inertiaRafRef.current !== null) {
+      cancelAnimationFrame(inertiaRafRef.current);
+      inertiaRafRef.current = null;
+    }
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse') return;
     const el = scrollerRef.current;
@@ -469,6 +498,17 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     // pointerdown only cancels the default UA behaviours, not the
     // synthetic click that follows pointerup with no movement.
     e.preventDefault();
+    // Stop any in-flight inertia glide so the row "grabs" instantly
+    // under the cursor instead of fighting the new drag.
+    cancelInertia();
+    // Disable scroll-snap for the duration of the drag. With snap
+    // enabled the browser fights every `scrollLeft` write, slewing
+    // the row toward the nearest snap-point and producing a
+    // step-wise / sticky feel — exactly what the user reported as
+    // "коряво и не плавно". Snap is restored at the end of the
+    // post-release inertia animation so the final resting position
+    // still aligns to a card.
+    el.style.scrollSnapType = 'none';
     // Capture the pointer up-front so pointermove keeps firing on the
     // scroller even when the cursor leaves its bounding box. The
     // earlier "defer capture until threshold" approach broke
@@ -484,6 +524,9 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
       startX: e.clientX,
       startScroll: el.scrollLeft,
       moved: false,
+      pendingScroll: null,
+      rafId: null,
+      samples: [{ t: performance.now(), x: e.clientX }],
     };
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -506,7 +549,33 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
       if (Math.abs(dx) <= 6) return;
       drag.moved = true;
     }
-    el.scrollLeft = drag.startScroll - dx;
+    // Keep a short rolling window of pointer samples so the inertia
+    // animation can compute the release velocity from the LAST few
+    // moves only — sampling over the entire drag would average out
+    // direction reversals (user dragging back-and-forth) and produce
+    // a misleading flick speed.
+    const now = performance.now();
+    drag.samples.push({ t: now, x: e.clientX });
+    while (drag.samples.length > 6) drag.samples.shift();
+    // Stash the desired scrollLeft and let the rAF coalesce multiple
+    // pointermoves into a single DOM write per frame. Browsers can
+    // fire 4+ pointermoves between frames, and each synchronous
+    // `el.scrollLeft = …` triggers layout + dispatches a `scroll`
+    // event whose handler updates React state — that's the chain
+    // that makes the row feel jerky on long drags.
+    drag.pendingScroll = drag.startScroll - dx;
+    if (drag.rafId === null) {
+      drag.rafId = requestAnimationFrame(() => {
+        const d = dragStateRef.current;
+        const elNow = scrollerRef.current;
+        if (!d || !elNow) return;
+        d.rafId = null;
+        if (d.pendingScroll !== null) {
+          elNow.scrollLeft = d.pendingScroll;
+          d.pendingScroll = null;
+        }
+      });
+    }
   };
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragStateRef.current;
@@ -515,9 +584,22 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     if (el) {
       try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
     }
+    // Flush any pending rAF write before computing release velocity
+    // so the inertia animation starts from the actual final cursor
+    // position, not whatever the last fully-flushed frame happened
+    // to be.
+    if (drag.rafId !== null) {
+      cancelAnimationFrame(drag.rafId);
+      drag.rafId = null;
+    }
+    if (el && drag.pendingScroll !== null) {
+      el.scrollLeft = drag.pendingScroll;
+      drag.pendingScroll = null;
+    }
     // Clear after a microtask so the click handler that runs after
     // pointerup can still see `moved` to suppress link navigation.
     const wasMoved = drag.moved;
+    const samples = drag.samples;
     setTimeout(() => {
       if (dragStateRef.current === drag) dragStateRef.current = null;
     }, 0);
@@ -533,7 +615,68 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
       document.addEventListener('click', suppress, true);
       // Defensive removal in case no click ever fires.
       setTimeout(() => document.removeEventListener('click', suppress, true), 200);
+      // Compute release velocity from the last ~80 ms of samples
+      // (the rolling buffer). Sub-ms windows pick up trackpad jitter
+      // as huge spikes, so we floor the dt at 10 ms. The horizontal
+      // velocity is in pixels-per-millisecond; a casual flick lands
+      // around 1 px/ms, an aggressive throw 3-4 px/ms.
+      const last = samples[samples.length - 1];
+      const first = (last && samples.find((s) => last.t - s.t <= 80)) ?? samples[0];
+      if (!last || !first) {
+        if (el) el.style.scrollSnapType = '';
+        return;
+      }
+      const dt = Math.max(10, last.t - first.t);
+      const velocity = (last.x - first.x) / dt;
+      // Below ~0.05 px/ms the user is releasing the drag deliberately
+      // close to a stop — skip the glide entirely and just restore
+      // snap so the row settles on the nearest card.
+      if (el && Math.abs(velocity) > 0.05) {
+        // Exponential decay momentum: each frame the remaining
+        // velocity is multiplied by `friction`, and we apply
+        // `velocity * frameMs` to scrollLeft. 0.94 / 16 ms gives a
+        // ~250-300 ms glide which feels close to native trackpad
+        // inertia without overshooting half the row on a normal
+        // flick. Drag direction is INVERTED to match drag-to-pull
+        // semantics: cursor moved RIGHT → scrollLeft DECREASES → we
+        // continue decreasing.
+        let v = -velocity;
+        let lastT = performance.now();
+        const friction = 0.94;
+        const step = (now: number) => {
+          const elNow = scrollerRef.current;
+          if (!elNow) {
+            inertiaRafRef.current = null;
+            return;
+          }
+          const frameDt = now - lastT;
+          lastT = now;
+          elNow.scrollLeft += v * frameDt;
+          // Stop early if we hit either edge — without this the
+          // animation keeps "pushing" against a clamped scrollLeft
+          // for the full decay window and just looks like a frozen
+          // bar at the end.
+          const hitEdge = elNow.scrollLeft <= 0
+            || elNow.scrollLeft >= elNow.scrollWidth - elNow.clientWidth - 1;
+          v *= Math.pow(friction, frameDt / 16);
+          if (Math.abs(v) < 0.02 || hitEdge) {
+            inertiaRafRef.current = null;
+            // Re-enable snap so the final resting position aligns
+            // to a card. Removing the inline override hands control
+            // back to the SCSS class (`x proximity`).
+            elNow.style.scrollSnapType = '';
+            return;
+          }
+          inertiaRafRef.current = requestAnimationFrame(step);
+        };
+        inertiaRafRef.current = requestAnimationFrame(step);
+        return;
+      }
     }
+    // No glide → restore snap immediately. Doing this synchronously
+    // (vs. in the rAF step path) avoids a perceptible "wait" before
+    // the row latches to a card after a non-flick release.
+    if (el) el.style.scrollSnapType = '';
   };
 
   return (
