@@ -878,7 +878,17 @@ export function FullscreenPlayer() {
               </TiltCard>
             </motion.div>
 
-            <div className="flex w-full max-w-md min-w-0 items-center gap-2 overflow-hidden">
+            {/* Title row. Important: NO `overflow-hidden` and an
+                explicit `shrink-0` here. The fullscreen layout puts
+                this row inside a `flex-col flex-1 min-h-0` parent, so
+                without `shrink-0` flexbox happily compresses the row
+                BELOW its natural line-height when the cover above
+                takes most of the viewport — which clips the entire
+                top half of the artist text the way the user reported
+                in the >640px screenshot. Horizontal long-name
+                clipping is owned by each `<Marquee>` child via its
+                own clip-path, so we don't need overflow-hidden here. */}
+            <div className="flex w-full max-w-md min-w-0 shrink-0 items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
@@ -894,19 +904,12 @@ export function FullscreenPlayer() {
                   after the fixed-size ListPlus + Heart buttons (so a
                   long title can never push Heart off the right edge,
                   which is the bug the user reported on mobile fullscreen).
-                  The redundant `max-w-[calc(100%-...)]` would over-
-                  constrain on desktop where the row is `max-w-md` —
-                  flex-1 basis-0 is the right vehicle.
-                  Font size is `clamp()`-fluid rather than the previous
-                  `text-xl sm:text-3xl` jump at 640px — the user reported
-                  the abrupt step-up at exactly 640px was jarring and
-                  it also paired with vertical clipping on the
-                  smaller-then-larger transition. The clamp scales
-                  smoothly between mobile and desktop with no breakpoint.
-                  The column drops its old `overflow-hidden` so Cyrillic
-                  ascenders / descenders aren't chopped at top and bottom
-                  — horizontal clipping is already enforced by each
-                  Marquee child. */}
+                  No `overflow-hidden` on this column — horizontal
+                  clipping is already enforced by each `<Marquee>`
+                  child via its own clip-path, and overflow-hidden on
+                  the column would re-introduce vertical clipping of
+                  the line-box (Cyrillic ascenders/descenders, latin
+                  `y`/`g`/`j`). */}
               <div className="flex flex-1 basis-0 min-w-0 flex-col items-stretch gap-1">
                 <motion.div
                   key={currentTrack.id + '-title'}
@@ -915,10 +918,7 @@ export function FullscreenPlayer() {
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   className="block w-full min-w-0 text-center"
                 >
-                  <h1
-                    className="block w-full min-w-0 font-semibold tracking-tight leading-tight"
-                    style={{ fontSize: 'clamp(1.25rem, 1rem + 1.5vw, 1.875rem)' }}
-                  >
+                  <h1 className="block w-full min-w-0 text-xl font-semibold tracking-tight sm:text-3xl">
                     <Marquee text={currentTrack.title} />
                   </h1>
                 </motion.div>
@@ -932,16 +932,12 @@ export function FullscreenPlayer() {
                   <button
                     type="button"
                     onClick={goToArtist}
-                    className="block w-full text-center leading-snug text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4"
-                    style={{ fontSize: 'clamp(0.875rem, 0.8rem + 0.4vw, 1rem)' }}
+                    className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
                   >
                     <Marquee text={currentTrack.artist} />
                   </button>
                 ) : (
-                  <div
-                    className="block w-full text-center leading-snug text-muted-foreground"
-                    style={{ fontSize: 'clamp(0.875rem, 0.8rem + 0.4vw, 1rem)' }}
-                  >
+                  <div className="block w-full text-center text-sm text-muted-foreground sm:text-base">
                     <Marquee text={currentTrack.artist} />
                   </div>
                 )}
