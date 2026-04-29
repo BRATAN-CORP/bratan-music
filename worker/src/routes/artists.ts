@@ -12,35 +12,46 @@ artists.get('/:id', async (c) => {
   const tidal = new TidalService(c.env);
   const artist = await tidal.getArtist(id);
 
-  const [topTracks, artistAlbums, similar] = await Promise.all([
+  const [topTracks, releases, similar] = await Promise.all([
     tidal.getArtistTopTracks(id),
-    tidal.getArtistReleases(id),
+    tidal.getArtistAlbumsAndSingles(id),
     tidal.getSimilarArtists(id),
   ]);
 
   return c.json({
     ...artist,
     topTracks,
-    albums: artistAlbums,
+    albums: releases.albums,
+    singles: releases.singles,
     similarArtists: similar,
   });
 });
 
 /**
- * Full deduped release feed for the artist, suitable for the
- * "/artist/:id/releases" page. Tidal caps each filter bucket at 50
- * items per request, so we reach for the underlying buckets with a
- * higher limit (default 200) and let the service merge them. The
- * frontend paginates client-side over the resulting list — typical
- * artists have well under 200 releases, and re-running the merge per
- * page is wasteful.
+ * Paginated "all albums" feed for the artist (ALBUM + EP +
+ * COMPILATION buckets, deduped). Tidal caps each filter bucket at 50
+ * items per request so we ask the service for up to 200 in one shot
+ * and let the frontend paginate client-side.
  */
-artists.get('/:id/releases', async (c) => {
+artists.get('/:id/albums', async (c) => {
   const id = c.req.param('id');
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit')) || 200));
   const tidal = new TidalService(c.env);
-  const items = await tidal.getArtistReleases(id, limit);
-  return c.json({ items, totalItems: items.length });
+  const { albums } = await tidal.getArtistAlbumsAndSingles(id, limit);
+  return c.json({ items: albums, totalItems: albums.length });
+});
+
+/**
+ * Paginated "all singles" feed for the artist. Same shape as the
+ * /albums route above — kept on a separate URL so the frontend can
+ * route the two "Показать все" links to dedicated pages.
+ */
+artists.get('/:id/singles', async (c) => {
+  const id = c.req.param('id');
+  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit')) || 200));
+  const tidal = new TidalService(c.env);
+  const { singles } = await tidal.getArtistAlbumsAndSingles(id, limit);
+  return c.json({ items: singles, totalItems: singles.length });
 });
 
 /**

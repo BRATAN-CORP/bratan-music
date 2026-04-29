@@ -49,16 +49,6 @@ export function ArtistPage() {
     setQueue(items.map(toPlayerTrack));
   };
 
-  const handlePlayRadioTrack = (t: Track) => {
-    if (!radio?.items) {
-      setTrack(toPlayerTrack(t));
-      return;
-    }
-    const idx = radio.items.findIndex((x) => x.id === t.id);
-    setTrack(toPlayerTrack(t));
-    setQueue(radio.items.slice(idx >= 0 ? idx : 0).map(toPlayerTrack));
-  };
-
   return (
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
@@ -136,32 +126,13 @@ export function ArtistPage() {
               </section>
             )}
 
-            {radio?.items?.length ? (
-              <section className="mb-12">
-                <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-                  <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
-                    <Radio size={16} className="text-[var(--color-accent)]" />
-                    Радио {artist.name}
-                  </h2>
-                  <Button variant="outline" size="sm" onClick={handlePlayRadio}>
-                    <Play size={12} fill="currentColor" /> Слушать
-                  </Button>
-                </div>
-                <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
-                  {radio.items.slice(0, 25).map((track, i) => (
-                    <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayRadioTrack} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
             {artist.albums?.length > 0 && (
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-                  <h2 className="text-base font-semibold tracking-tight">Релизы</h2>
+                  <h2 className="text-base font-semibold tracking-tight">Альбомы</h2>
                   {artist.albums.length > 10 && (
                     <Link
-                      to={`/artist/${artist.id}/releases`}
+                      to={`/artist/${artist.id}/albums`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     >
                       Показать все →
@@ -170,6 +141,27 @@ export function ArtistPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {artist.albums.slice(0, 10).map((album) => (
+                    <AlbumCard key={album.id} album={album} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {artist.singles?.length > 0 && (
+              <section className="mb-12">
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                  <h2 className="text-base font-semibold tracking-tight">Синглы</h2>
+                  {artist.singles.length > 10 && (
+                    <Link
+                      to={`/artist/${artist.id}/singles`}
+                      className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Показать все →
+                    </Link>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+                  {artist.singles.slice(0, 10).map((album) => (
                     <AlbumCard key={album.id} album={album} />
                   ))}
                 </div>
