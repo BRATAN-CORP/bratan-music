@@ -176,20 +176,6 @@ export class TidalApi {
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/tracks/${trackId}/radio?limit=${limit}&offset=0&countryCode=${cc}`);
   }
 
-  async getTrackLyrics(trackId: string): Promise<TidalLyricsRaw | null> {
-    const cc = await this.auth.getCountryCode();
-    try {
-      return await this.get<TidalLyricsRaw>(
-        `/v1/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${this.auth.getLocale()}&deviceType=BROWSER`,
-      );
-    } catch (err) {
-      // Tidal returns 404 for tracks that have no lyrics — surface that as
-      // null so callers don't have to special-case the error message.
-      if (err instanceof Error && /\b404\b/.test(err.message)) return null;
-      throw err;
-    }
-  }
-
   /**
    * Fetch tracks of an editorial Tidal playlist by UUID. The
    * upstream endpoint paginates; for now we ask for a single window
@@ -203,6 +189,20 @@ export class TidalApi {
       offset: '0',
     });
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/playlists/${uuid}/tracks?${params}`);
+  }
+
+  async getTrackLyrics(trackId: string): Promise<TidalLyricsRaw | null> {
+    const cc = await this.auth.getCountryCode();
+    try {
+      return await this.get<TidalLyricsRaw>(
+        `/v1/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${this.auth.getLocale()}&deviceType=BROWSER`,
+      );
+    } catch (err) {
+      // Tidal returns 404 for tracks that have no lyrics — surface that as
+      // null so callers don't have to special-case the error message.
+      if (err instanceof Error && /\b404\b/.test(err.message)) return null;
+      throw err;
+    }
   }
 
   /**
