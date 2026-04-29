@@ -512,7 +512,16 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
           ref={scrollerRef}
           className="-mx-4 overflow-x-auto overflow-y-hidden px-4 pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 cursor-grab active:cursor-grabbing"
           style={{
-            scrollSnapType: 'x mandatory',
+            // `proximity` instead of `mandatory`: mandatory was pulling
+            // the row back to scrollLeft ≈ 16 (the first child's
+            // `snap-start` target offset by `scroll-padding-left`)
+            // *immediately on release*, even when the user had dragged
+            // the scroller all the way to its true 0 position. That made
+            // the left chevron flicker back into view a frame after the
+            // user reached the start. Proximity only snaps when the
+            // scroll-end is genuinely close to a snap-point, so dragging
+            // to the boundary stays at the boundary.
+            scrollSnapType: 'x proximity',
             scrollPaddingLeft: 16,
             scrollPaddingRight: 16,
             // Soft horizontal mask so cards near the gutter dissolve
