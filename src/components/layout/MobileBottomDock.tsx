@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { Play, Pause, SkipForward, Heart, Maximize2, Search, Library, User as UserIcon, Home } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion, useTransform, type MotionValue } from 'motion/react';
@@ -7,6 +8,17 @@ import { useToggleLike } from '@/hooks/useLibrary';
 import { Marquee } from '@/components/ui/Marquee';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+
+/**
+ * Horizontal inset (px) applied to the timeline thumb so it never
+ * extends into the dock's rounded-corner zone. Mirrors the desktop
+ * Player constant of the same name. The progress fill itself is
+ * unchanged — it lives inside the clipped surface and is already
+ * rounded along with it; the inset only matters for the standalone
+ * thumb (which is rendered as a sibling of the clipped surface so its
+ * top/bottom halves can sit outside the rail without being cropped).
+ */
+const RAIL_INSET_PX = 12;
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -50,13 +62,44 @@ export function MobileBottomDock() {
       return d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%';
     },
   );
+  // Thumb travels along the rail, but is rendered as a sibling of the
+  // clipped surface (see Player.tsx) so its top/bottom halves can extend
+  // beyond the 3 px rail without being cropped, and so the leftmost /
+  // rightmost positions don't fall inside the rounded-corner zone.
+  // `left` matches the desktop computation: rail-inset, then a fraction
+  // of the remaining width.
+  const thumbLeft = useTransform(
+    [progressSeconds as MotionValue<number>, durationSeconds as MotionValue<number>],
+    (values) => {
+      const [t, d] = values as [number, number];
+      const r = d > 0 ? Math.min(1, Math.max(0, t / d)) : 0;
+      return `calc(${RAIL_INSET_PX}px + (100% - ${RAIL_INSET_PX * 2}px) * ${r})`;
+    },
+  );
+
+  // Mini-player timeline thumb visibility. The thumb is rendered as a
+  // sibling of the clipped player surface so it can extend above the
+  // dock's rounded top edge without being cut off — which means it
+  // can't rely on `group-hover/progress` (its parent is no longer the
+  // hit-area). We track hover and active drag explicitly instead.
+  const [seekHover, setSeekHover] = useState(false);
+  const [seekActive, setSeekActive] = useState(false);
+  const thumbVisible = seekHover || seekActive;
 
   if (fullscreen) return null;
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
 
   return (
+    // Outer wrapper deliberately has NO overflow-hidden / NO rounded /
+    // NO liquid-glass. It only positions the dock; the visual surface is
+    // the child below, while the timeline thumb is rendered as a sibling
+    // of the surface so it can poke above the dock's rounded top edge
+    // without being clipped.
     <div
-      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-4 right-4 z-40 flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-4 right-4 z-40 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
+    >
+    <div
+      className="flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass"
     >
       <AnimatePresence initial={false}>
         {currentTrack && (
@@ -83,12 +126,14 @@ export function MobileBottomDock() {
                 neighbouring buttons, and nothing extends above the
                 rail to steal taps from the cover button. */}
             <div
-              className="group/progress relative w-full shrink-0 cursor-pointer touch-none select-none"
+              className="relative h-[3px] w-full shrink-0 cursor-pointer touch-none select-none overflow-hidden bg-white/[0.08]"
               role="slider"
               aria-label="Перемотка"
               aria-valuemin={0}
               aria-valuemax={Math.max(1, Math.round(duration))}
               aria-valuenow={Math.round(progress)}
+              onPointerEnter={() => setSeekHover(true)}
+              onPointerLeave={() => setSeekHover(false)}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -97,6 +142,7 @@ export function MobileBottomDock() {
                   seekAudio(pct * duration);
                 };
                 seekFromX(e.clientX);
+                setSeekActive(true);
                 const target = e.currentTarget;
                 const onMove = (ev: PointerEvent) => seekFromX(ev.clientX);
                 const onUp = (ev: PointerEvent) => {
@@ -105,30 +151,17 @@ export function MobileBottomDock() {
                   target.removeEventListener('pointerup', onUp);
                   target.removeEventListener('pointercancel', onUp);
                   try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+                  setSeekActive(false);
                 };
                 target.addEventListener('pointermove', onMove);
                 target.addEventListener('pointerup', onUp);
                 target.addEventListener('pointercancel', onUp);
               }}
             >
-              <div className="relative h-[3px] w-full overflow-hidden bg-white/[0.08]">
-                <motion.div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
-                  style={{ width: progressWidth }}
-                />
-                {/* Thumb lives INSIDE the rail container so it
-                    inherits the rail's expanded height. At rest the
-                    rail is 3px tall and the 1.5×1.5 thumb is barely
-                    visible inside it (matches Spotify's "no thumb at
-                    rest" feel). On hover/active the rail grows to 6px
-                    and the thumb scales up to 2.5×2.5 — fully
-                    contained by the rail, no clipping. */}
-                <motion.div
-                  aria-hidden
-                  className="pointer-events-none absolute top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 transition-opacity duration-150 group-hover/progress:opacity-100 group-active/progress:opacity-100"
-                  style={{ left: progressWidth }}
-                />
-              </div>
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                style={{ width: progressWidth }}
+              />
             </div>
 
             <div
@@ -280,6 +313,22 @@ export function MobileBottomDock() {
           </NavLink>
         ))}
       </nav>
+    </div>
+    {/* Draggable thumb — rendered as a sibling of the clipped surface
+        so its top half can extend above the dock's rounded top edge
+        without being cropped by overflow-hidden, and so the leftmost /
+        rightmost positions don't get clipped by the rounded-corner
+        zone. Visibility is driven by the seekHover / seekActive flags;
+        `top: 1px` centres the dot on the 3 px rail at the top of the
+        surface (which itself is at top: 0 of this positioning
+        wrapper). */}
+    {currentTrack && (
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] transition-opacity duration-150"
+        style={{ left: thumbLeft, top: '1px', opacity: thumbVisible ? 1 : 0 }}
+      />
+    )}
     </div>
   );
 }
