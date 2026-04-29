@@ -804,7 +804,7 @@ export function FullscreenPlayer() {
               </TiltCard>
             </motion.div>
 
-            <div className="flex w-full max-w-md items-center gap-2 overflow-hidden">
+            <div className="flex w-full max-w-md min-w-0 items-center gap-2 overflow-hidden">
               <Button
                 variant="ghost"
                 size="icon"
@@ -815,7 +815,20 @@ export function FullscreenPlayer() {
                 <ListPlus size={20} />
               </Button>
 
-              <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1 overflow-hidden">
+              {/* Title/artist column. `flex-1 basis-0 min-w-0` makes
+                  the column width derive purely from leftover space
+                  after the fixed-size ListPlus + Heart buttons (so a
+                  long title can never push Heart off the right edge,
+                  which is the bug the user reported on mobile fullscreen).
+                  The redundant `max-w-[calc(100%-...)]` would over-
+                  constrain on desktop where the row is `max-w-md` —
+                  flex-1 basis-0 is the right vehicle. Reducing font
+                  size from `text-2xl sm:text-3xl` to `text-xl sm:text-3xl`
+                  on mobile shaves ~6px of marquee width per character
+                  so more of the title is readable before the slide
+                  kicks in, addressing the user's "адаптивом сжимать
+                  зону, где видно текст" request. */}
+              <div className="flex flex-1 basis-0 min-w-0 flex-col items-stretch gap-1 overflow-hidden">
                 <motion.div
                   key={currentTrack.id + '-title'}
                   initial={reduce ? false : { opacity: 0, y: 8 }}
@@ -823,7 +836,7 @@ export function FullscreenPlayer() {
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   className="block w-full min-w-0 text-center"
                 >
-                  <h1 className="block w-full min-w-0 text-2xl font-semibold tracking-tight sm:text-3xl">
+                  <h1 className="block w-full min-w-0 text-xl font-semibold tracking-tight sm:text-3xl">
                     <Marquee text={currentTrack.title} />
                   </h1>
                 </motion.div>
