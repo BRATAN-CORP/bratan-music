@@ -510,11 +510,25 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
       <div className="relative">
         <div
           ref={scrollerRef}
-          className="-mx-4 overflow-x-auto overflow-y-hidden px-4 pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 cursor-grab active:cursor-grabbing"
+          // `scroll-pl-*` / `scroll-pr-*` MUST mirror the responsive
+          // `px-*` values exactly. Cards use `snap-start`, so the snap
+          // target for the first child is `firstChild.offsetLeft -
+          // scroll-padding-left`. With `px-4 sm:px-6 lg:px-10` the
+          // first child's offsetLeft is 16 / 24 / 40 px depending on
+          // breakpoint; if `scroll-padding-left` stays a fixed 16 px,
+          // the lg snap target becomes 24 px instead of 0. The browser
+          // would then snap the row from `scrollLeft: 0` to
+          // `scrollLeft: 24` after the first paint, the left chevron
+          // would appear, and clicking it would `scrollBy(-clientWidth*
+          // 0.8)` back to 0 — exactly the bug the user reported (left
+          // arrow visible by default → click moves carousel into the
+          // position that should have been the default). Matching
+          // both paddings keeps `scrollLeft: 0` as a valid snap point
+          // on every breakpoint.
+          className="-mx-4 overflow-x-auto overflow-y-hidden px-4 pb-2 scroll-pl-4 scroll-pr-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 sm:scroll-pl-6 sm:scroll-pr-6 lg:-mx-10 lg:px-10 lg:scroll-pl-10 lg:scroll-pr-10 cursor-grab active:cursor-grabbing"
           style={{
             // `proximity` instead of `mandatory`: mandatory was pulling
-            // the row back to scrollLeft ≈ 16 (the first child's
-            // `snap-start` target offset by `scroll-padding-left`)
+            // the row back to the first child's snap target
             // *immediately on release*, even when the user had dragged
             // the scroller all the way to its true 0 position. That made
             // the left chevron flicker back into view a frame after the
@@ -522,8 +536,6 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
             // scroll-end is genuinely close to a snap-point, so dragging
             // to the boundary stays at the boundary.
             scrollSnapType: 'x proximity',
-            scrollPaddingLeft: 16,
-            scrollPaddingRight: 16,
             // Soft horizontal mask so cards near the gutter dissolve
             // into the page background instead of getting hard-clipped
             // — fixes the "rough crop on PC" the user reported on
