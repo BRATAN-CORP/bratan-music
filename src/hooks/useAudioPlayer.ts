@@ -1182,29 +1182,42 @@ export function usePlaybackVisuals(): {
         const dur = audio.duration;
         if (isFinite(dur) && dur > 0) durationSeconds.set(dur);
 
-        // Reload-restore guard: while audio.currentTime is still parked
-        // at 0 because the seek to the persisted progress hasn't landed
-        // yet, mirror store.progress instead so the bar (and the
-        // visuals derived from it) don't flash 0:00 between rehydrate
-        // and the actual seek arriving. Once playback advances or the
-        // seek completes, audio.currentTime takes over normally.
-        if (audio.paused && realT < 0.05) {
-          const storeProgress = usePlayerStore.getState().progress;
-          if (storeProgress > 0.05) {
-            displayed = storeProgress;
-            const dur2 = audio.duration;
-            if (isFinite(dur2) && dur2 > 0) {
-              displayed = Math.max(0, Math.min(displayed, dur2));
-            } else {
-              const storeDuration = usePlayerStore.getState().duration;
-              if (storeDuration > 0) durationSeconds.set(storeDuration);
-            }
-            progressSeconds.set(displayed);
-            // Skip the prediction/buffered branches this frame — they'd
-            // overwrite the restored value with realT (= 0).
-            raf = requestAnimationFrame(tick);
-            return;
+        // Reload-restore guard: while audio.currentTime is significantly
+        // behind the persisted `store.progress` (because the seek to the
+        // persisted position is still pending — common right after page
+        // reload, AND right after the user clicks play before the seek
+        // has had time to land), keep mirroring store.progress so the
+        // bar doesn't visibly drop to 0:00 and then crawl forward. The
+        // guard disengages as soon as `realT` catches up to within 1.5 s
+        // of the stored target, at which point the prediction path
+        // takes over for smooth interpolation.
+        //
+        // We use store.progress (not pendingRestoreProgressRef from the
+        // sibling useAudioPlayer hook, which isn't accessible here)
+        // because it is already gated by `onTimeUpdate`'s restore-seek
+        // logic — `setProgress(audio.currentTime)` is suppressed until
+        // the seek lands, so `store.progress` continues to reflect the
+        // pre-reload target during the restore window.
+        const storeProgress = usePlayerStore.getState().progress;
+        if (storeProgress > 0.5 && realT < storeProgress - 1.5) {
+          displayed = storeProgress;
+          const dur2 = audio.duration;
+          if (isFinite(dur2) && dur2 > 0) {
+            displayed = Math.max(0, Math.min(displayed, dur2));
+          } else {
+            const storeDuration = usePlayerStore.getState().duration;
+            if (storeDuration > 0) durationSeconds.set(storeDuration);
           }
+          progressSeconds.set(displayed);
+          // Mark initialised so the very next tick (after the guard
+          // releases) doesn't fall into the `!initialised` branch and
+          // snap `displayed` back to realT (= 0) — that's what produced
+          // the "bar plays for half a second then jumps to 0:00" bug.
+          initialised = true;
+          // Skip the prediction/buffered branches this frame — they'd
+          // overwrite the restored value with realT (= 0).
+          raf = requestAnimationFrame(tick);
+          return;
         }
 
         if (!initialised) {

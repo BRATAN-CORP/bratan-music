@@ -58,6 +58,14 @@ export function Player() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
+  // Mini-player timeline thumb visibility. The thumb is rendered as a
+  // sibling of the clipped player surface so it can extend above the
+  // player's rounded top edge without being cut off — which means it
+  // can't rely on `group-hover/progress` (its parent is no longer the
+  // hit-area). We track hover and active drag explicitly instead.
+  const [seekHover, setSeekHover] = useState(false);
+  const [seekActive, setSeekActive] = useState(false);
+  const thumbVisible = seekHover || seekActive;
   const [queueOpen, setQueueOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -154,55 +162,64 @@ export function Player() {
           animate={reduce ? undefined : { y: 0, opacity: 1 }}
           exit={reduce ? undefined : { y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 280, damping: 30 }}
-          className="player-desktop-grid fixed bottom-10 left-4 right-4 z-30 hidden flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass sm:left-6 sm:right-6 lg:flex"
+          // Outer wrapper deliberately has NO overflow-hidden / NO rounded /
+          // NO liquid-glass. It only positions the player and runs the
+          // y/opacity animation. The visual surface is a child div, while
+          // the timeline thumb is rendered as a sibling so it can poke
+          // above the player's rounded top edge without being clipped.
+          className="player-desktop-grid fixed bottom-10 left-4 right-4 z-30 hidden sm:left-6 sm:right-6 lg:block"
           style={{ height: 'var(--player-height)' }}
         >
-          {(error || radioError) && (
-            <div className="flex items-center gap-2 bg-[var(--color-danger-muted)] px-4 py-1.5 text-xs text-[var(--color-danger)]">
-              <AlertTriangle size={12} className="shrink-0" />
-              <span className="truncate">{radioError || error}</span>
-            </div>
-          )}
+          {/* Visible surface — clipped + rounded + liquid-glass. Holds the
+              error banner, the thin rail timeline (h-1 / h-1.5 on hover)
+              flush with the top edge as before, and the main mini-player
+              row. Children are clipped against the rounded corners so the
+              bar fill / cover thumbnail respect the bezel. */}
+          <div className="absolute inset-0 flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass">
+            {(error || radioError) && (
+              <div className="flex items-center gap-2 bg-[var(--color-danger-muted)] px-4 py-1.5 text-xs text-[var(--color-danger)]">
+                <AlertTriangle size={12} className="shrink-0" />
+                <span className="truncate">{radioError || error}</span>
+              </div>
+            )}
 
-          {/* Timeline. The outer wrapper is 12 px tall — same as the
-              draggable thumb dot — so the thumb is fully contained
-              vertically and never gets clipped by the player's
-              `overflow-hidden` (the thin 1-1.5 px rail used to be
-              flush with the player's top edge, which cropped the
-              top half of the thumb). The visible rail is absolutely
-              positioned, vertically centred, and stays thin on
-              idle/grows on hover/active so the affordance reads the
-              same as before. The taller hit-area is also a
-              UX win — the user no longer has to pixel-target a
-              1 px line to start a seek. */}
-          <div
-            className="group/progress relative h-3 w-full shrink-0 cursor-pointer touch-none select-none"
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              const rect = e.currentTarget.getBoundingClientRect();
-              const seekFromX = (clientX: number) => {
-                const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-                seek(pct * duration);
-              };
-              seekFromX(e.clientX);
-              const target = e.currentTarget;
-              const onMove = (ev: PointerEvent) => seekFromX(ev.clientX);
-              const onUp = (ev: PointerEvent) => {
-                seekFromX(ev.clientX);
-                target.removeEventListener('pointermove', onMove);
-                target.removeEventListener('pointerup', onUp);
-                target.removeEventListener('pointercancel', onUp);
-                try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
-              };
-              target.addEventListener('pointermove', onMove);
-              target.addEventListener('pointerup', onUp);
-              target.addEventListener('pointercancel', onUp);
-            }}
-          >
-            {/* Rail: thin visible bar, vertically centred inside the
-                taller wrapper. Clipped so the buffered + played bars
-                draw cleanly against the rail's rounded corners. */}
-            <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/progress:h-[5px] group-active/progress:h-[5px]">
+            {/* Timeline rail (and its full-width hit area). Identical to
+                the historical mini-player: a 1 px bar flush with the top
+                edge, growing to 1.5 px on hover/active. The rail itself
+                lives inside the clipped surface so the buffered/played
+                gradients respect the rounded top corners. The draggable
+                thumb is NOT inside this hit-area anymore — it's a sibling
+                of the surface (see below) so it can extend above the
+                rail without being clipped. */}
+            <div
+              className="relative w-full shrink-0 cursor-pointer touch-none select-none overflow-hidden bg-[var(--color-bg-muted)] transition-[height] duration-150"
+              style={{ height: thumbVisible ? '6px' : '4px' }}
+              onPointerEnter={() => setSeekHover(true)}
+              onPointerLeave={() => setSeekHover(false)}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const seekFromX = (clientX: number) => {
+                  const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                  seek(pct * duration);
+                };
+                seekFromX(e.clientX);
+                setSeekActive(true);
+                const target = e.currentTarget;
+                const onMove = (ev: PointerEvent) => seekFromX(ev.clientX);
+                const finish = (ev: PointerEvent) => {
+                  seekFromX(ev.clientX);
+                  target.removeEventListener('pointermove', onMove);
+                  target.removeEventListener('pointerup', finish);
+                  target.removeEventListener('pointercancel', finish);
+                  try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+                  setSeekActive(false);
+                };
+                target.addEventListener('pointermove', onMove);
+                target.addEventListener('pointerup', finish);
+                target.addEventListener('pointercancel', finish);
+              }}
+            >
               {/* Buffered range — a faint bar that runs from the start of
                   the track to whatever the audio element reports as
                   buffered. Sits visually behind the played bar so once
@@ -217,17 +234,6 @@ export function Player() {
                 style={{ width: progressWidth }}
               />
             </div>
-            {/* Draggable thumb — visible while the user hovers the rail
-                or while a drag is in flight. Sits inside the 12 px
-                wrapper (NOT inside the clipped rail) and is centred
-                via top:50% + -translate-y-1/2 so its full height fits
-                within the wrapper without being cropped. */}
-            <motion.div
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-0 transition-opacity duration-150 group-hover/progress:opacity-100 group-active/progress:opacity-100"
-              style={{ left: progressWidth }}
-            />
-          </div>
 
           <div
             className="flex flex-1 cursor-pointer items-center gap-3 px-3 sm:gap-4 sm:px-4"
@@ -489,7 +495,19 @@ export function Player() {
               </Button>
             </div>
           </div>
-
+          </div>
+          {/* Draggable thumb — rendered as a sibling of the clipped surface
+              so its top half can extend above the player's rounded top
+              edge without being cropped by overflow-hidden. Visibility is
+              driven by the same seekHover / seekActive flags that control
+              the rail's hover-grow, so the thumb appears together with
+              the slightly thicker rail. Centred on the rail's vertical
+              centre via `top: 3px` (= half of the hover-state h-1.5 rail). */}
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] transition-opacity duration-150"
+            style={{ left: progressWidth, top: '3px', opacity: thumbVisible ? 1 : 0 }}
+          />
         </motion.div>
       )}
 
