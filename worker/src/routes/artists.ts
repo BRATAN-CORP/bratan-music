@@ -14,7 +14,7 @@ artists.get('/:id', async (c) => {
 
   const [topTracks, artistAlbums, similar] = await Promise.all([
     tidal.getArtistTopTracks(id),
-    tidal.getArtistAlbums(id),
+    tidal.getArtistReleases(id),
     tidal.getSimilarArtists(id),
   ]);
 

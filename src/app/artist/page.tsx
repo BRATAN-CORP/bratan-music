@@ -150,7 +150,7 @@ export function ArtistPage() {
 
             {artist.albums?.length > 0 && (
               <section className="mb-12">
-                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Альбомы</h2>
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Релизы</h2>
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {artist.albums.map((album) => (
                     <AlbumCard key={album.id} album={album} />

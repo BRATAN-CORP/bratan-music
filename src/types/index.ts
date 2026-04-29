@@ -38,6 +38,8 @@ export interface Album {
   artistId: string;
   /** Full credit list — see `Track.artists`. */
   artists?: ArtistRef[];
+  /** Tidal release type — ALBUM | EP | SINGLE | COMPILATION. */
+  releaseType?: 'ALBUM' | 'EP' | 'SINGLE' | 'COMPILATION';
   coverUrl?: string;
   coverVideoUrl?: string;
   releaseDate?: string;
