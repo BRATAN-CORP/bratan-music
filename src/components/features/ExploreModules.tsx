@@ -334,10 +334,17 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     const el = scrollerRef.current;
     if (!el) return;
     const update = () => {
-      // 1px tolerance covers fractional sub-pixel scrollLeft values
-      // some browsers report when content fits exactly.
-      setCanPrev(el.scrollLeft > 1);
-      setCanNext(el.scrollLeft + el.clientWidth + 1 < el.scrollWidth);
+      // 8 px tolerance instead of 1 px because Chromium's smooth-scroll
+      // easing and iOS's rubber-band overscroll routinely park
+      // `scrollLeft` at a fractional value within ±2-4 px of the true
+      // endpoint. 1 px was leaving the right chevron visible at the
+      // very end of long Tidal explore rows (and the left chevron at
+      // the start, after a momentum swipe back) even though the row
+      // could no longer scroll. 8 px is small enough that you can't
+      // feel the chevron disappearing prematurely but kills the jitter.
+      const TOL = 8;
+      setCanPrev(el.scrollLeft > TOL);
+      setCanNext(el.scrollLeft + el.clientWidth + TOL < el.scrollWidth);
     };
     // Initial measure happens on the next frame so the row's children
     // have laid out their final width — without this the chevrons
