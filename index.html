@@ -9,6 +9,28 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      GitHub Pages SPA redirect decoder (https://github.com/rafgraph/spa-github-pages).
+      Pairs with public/404.html, which on a deep-link reload encodes
+      the original path into ?/ and bounces back here. Without this
+      decoder the browser router would just see the bare base path on
+      reload and dump the user back on the home screen — exactly what
+      the user reported when refreshing /artist/<id>.
+    -->
+    <script>
+      (function (l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function (s) {
+            return s.replace(/~and~/g, '&');
+          }).join('?');
+          window.history.replaceState(
+            null,
+            '',
+            l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      })(window.location);
+    </script>
     <title>BRATAN MUSIC — Tidal из Telegram</title>
   </head>
   <body>

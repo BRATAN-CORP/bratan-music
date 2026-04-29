@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import type { Artist } from '@/types';
@@ -32,6 +33,14 @@ function fallbackHue(name: string): number {
 }
 
 export function ArtistCard({ artist }: ArtistCardProps) {
+  // Some Tidal artists carry a stale `imageUrl` whose CDN object has
+  // since been deleted — the URL is truthy but the response is 404.
+  // Without an `onError` swap the browser would render its native
+  // broken-image glyph (the small square with a "?"), which the
+  // user explicitly reported as "не вижу фолбека". Track load
+  // failure and fall through to the initials tile below.
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = !!artist.imageUrl && !imgFailed;
   const initials = artistInitials(artist.name);
   const hue = fallbackHue(artist.name);
   return (
@@ -41,12 +50,13 @@ export function ArtistCard({ artist }: ArtistCardProps) {
         transition={{ type: 'spring', stiffness: 320, damping: 22 }}
         className="relative h-24 w-24 overflow-hidden rounded-full border border-border bg-secondary"
       >
-        {artist.imageUrl ? (
+        {showImage ? (
           <img
             src={artist.imageUrl}
             alt={artist.name}
             className="h-full w-full object-cover"
             loading="lazy"
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <div
