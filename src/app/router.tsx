@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { useAutoAuth } from '@/hooks/useAuth';
+import { useSettingsSync } from '@/hooks/useSettingsSync';
 import { usePlayerStore } from '@/store/player';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileBottomDock } from '@/components/layout/MobileBottomDock';
@@ -72,6 +73,10 @@ function HomeOrLanding() {
 
 function AppLayout() {
   useAutoAuth();
+  // Pull server-stored prefs (crossfade, EQ, etc.) on session start
+  // and debounce-push local changes back. Mounted at the layout
+  // level so it lives across the whole session.
+  useSettingsSync();
   useDocumentPlaybackTitle();
   // Listening-history logger + auto-extend the queue when it nears
   // empty. Mounted at the layout level so it survives navigation

@@ -349,10 +349,16 @@ function ensureAudioGraph(): AudioBundle {
     }
     const ctx = new Ctx();
 
+    // Pull persisted gains from the settings store so an EQ curve
+    // configured in a previous session (or roamed in from the server)
+    // is reflected on the graph the moment it spins up. Without this
+    // the user would briefly hear a flat curve until the React effect
+    // in `useApplySettingsToGraph` runs and pushes the values down.
+    const persistedGains = useSettingsStore.getState().eqGains;
     const filters = EQ_BANDS.map((freq, i) => {
       const f = ctx.createBiquadFilter();
       f.frequency.value = freq;
-      f.gain.value = 0;
+      f.gain.value = persistedGains[i] ?? 0;
       f.Q.value = 1;
       f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
       return f;
@@ -1599,6 +1605,24 @@ export function setEqGain(bandIndex: number, gainDb: number): boolean {
   if (!b.filters[bandIndex]) return false;
   b.filters[bandIndex].gain.value = gainDb;
   return true;
+}
+
+/**
+ * Push every band gain from the persisted store onto the live graph.
+ * Called after server-side hydration completes (server prefs may
+ * differ from local) and as a safety net whenever the EQ array in
+ * the store changes for any other reason. Idempotent and graph-aware
+ * — silently no-ops if the graph never came up (iOS) so callers can
+ * fire-and-forget.
+ */
+export function applyPersistedEqGainsToGraph(): void {
+  const b = getBundle();
+  if (!b.ctx || b.ctxFailed || b.filters.length === 0) return;
+  const gains = useSettingsStore.getState().eqGains;
+  for (let i = 0; i < b.filters.length; i++) {
+    const f = b.filters[i];
+    if (f) f.gain.value = gains[i] ?? 0;
+  }
 }
 
 export function getEqGain(bandIndex: number): number {
