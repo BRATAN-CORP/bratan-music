@@ -77,7 +77,42 @@ interface AudioBundle {
    * seconds.
    */
   lastRealT: Record<Slot, number>;
+  /**
+   * Wall-clock timestamp (`performance.now()`) of the most recent
+   * user-initiated seek on each slot. Used as a hard gate against the
+   * end-of-track auto-crossfade trigger so a scrub INTO the final
+   * `crossfadeDuration` seconds doesn't immediately hijack into a
+   * fade-to-next-track. The previous "set lastRealT to seek target"
+   * approach was actively counter-productive: `isNaturalProgression`
+   * treats SMALL deltas as natural, so writing the seek target into
+   * `lastRealT` made the very next timeupdate (with realT ≈ target)
+   * look like a 0-delta natural step and immediately fire the auto-
+   * crossfade. The wall-clock guard avoids that whole class of bug.
+   */
+  lastSeekAt: Record<Slot, number>;
+  /**
+   * Track id whose end-of-track auto-crossfade has already been
+   * attempted in the current "play this track" cycle. Single-shot
+   * gate so a flaky network failure mid-fade doesn't busy-loop the
+   * trigger every timeupdate. Cleared on track change AND whenever
+   * the user manually aborts an auto-crossfade by scrubbing — that
+   * second case is what ensures playing through to the natural end
+   * a second time DOES fade out (the previous code left this poison
+   * in place, so the second pass played silently to completion).
+   *
+   * Lives on the bundle (rather than a React ref) so module-scope
+   * helpers like `seekAudio` can clear it without re-mounting the
+   * hook.
+   */
+  crossfadeAttemptedTrackId: string | null;
 }
+
+/** How long after a user seek to keep the auto-end-of-track crossfade
+ *  trigger suppressed. Long enough that the post-seek timeupdate(s)
+ *  with stale `currentTime` and the immediate seek-resolution bursts
+ *  can't trip the natural-progression heuristic, short enough that
+ *  the trigger arms again well before a typical track ends. */
+const AUTO_CROSSFADE_SEEK_GUARD_MS = 750;
 
 let bundle: AudioBundle | null = null;
 let corsRetried: Record<Slot, boolean> = { a: false, b: false };
@@ -151,6 +186,8 @@ function getBundle(): AudioBundle {
       crossfadeKind: null,
       playPromises: { a: null, b: null },
       lastRealT: { a: 0, b: 0 },
+      lastSeekAt: { a: 0, b: 0 },
+      crossfadeAttemptedTrackId: null,
     };
   }
   return bundle;
@@ -181,10 +218,15 @@ export function seekAudio(time: number): void {
   // spurious-reset gate in onTimeUpdate doesn't mistake a seek-to-0
   // for an unwanted reset. See the gate in `wireSlot`'s onTimeUpdate.
   usePlayerStore.getState().setProgress(time);
-  // Mark the seek in lastRealT so the jump-detection in onTimeUpdate
-  // doesn't flag the resulting big delta as a natural progression and
-  // re-trigger auto-crossfade.
+  // Stamp the wall-clock seek time so the auto-crossfade trigger in
+  // onTimeUpdate stays gated for `AUTO_CROSSFADE_SEEK_GUARD_MS` after
+  // the scrub. Also keep `lastRealT` synced so `isNaturalProgression`
+  // sees a 0-delta on the very next tick (no spurious "I jumped 145s
+  // forward" detection that would mark playback as unnatural for
+  // non-crossfade purposes — the seek-time guard above is the
+  // authoritative crossfade gate).
   b.lastRealT[slot] = time;
+  b.lastSeekAt[slot] = performance.now();
   audio.currentTime = time;
 }
 
@@ -196,6 +238,12 @@ export function seekAudio(time: number): void {
  */
 function abortAutoCrossfade(b: AudioBundle): void {
   cancelRamp();
+  // Reset the once-per-track gate so playing the same track through to
+  // the end again (e.g. user seeks back to mid-track and lets it run
+  // out a second time) re-arms the auto-crossfade. Without this, the
+  // second pass would play out silently — the store still says the
+  // crossfade has been "attempted" so `startCrossfade` early-returns.
+  b.crossfadeAttemptedTrackId = null;
   const incoming = b.crossfadingInto;
   if (!incoming) {
     b.crossfadeKind = null;
@@ -464,12 +512,10 @@ export function useAudioPlayer() {
 
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
-  /** Track id we already attempted (and failed) to crossfade out of. While
-   *  set, we won't retry crossfade on every timeupdate — otherwise a flaky
-   *  network would make us spam fetchStreamUrl 30 times in the last 6
-   *  seconds of a track. Cleared whenever currentTrack changes. */
-  const crossfadeAttemptedRef = useRef<string | null>(null);
-
+  // The "attempted-once" gate that prevents busy-looping the crossfade
+  // trigger every timeupdate (e.g. on a flaky network) lives on the
+  // bundle as `b.crossfadeAttemptedTrackId` so module-scope helpers
+  // can clear it too — see `abortAutoCrossfade`.
   const currentQualityRef = useRef<string>(tidalQuality);
   currentQualityRef.current = tidalQuality;
   const fallbackInProgressRef = useRef(false);
@@ -676,9 +722,25 @@ export function useAudioPlayer() {
     b.crossfadingInto = incoming;
     b.crossfadeKind = 'manual';
     crossfadingRef.current = true;
-    crossfadeAttemptedRef.current = target.id;
+    b.crossfadeAttemptedTrackId = target.id;
     loadingRef.current = target.id;
     fallbackInProgressRef.current = true;
+
+    const tgt = muted ? 0 : volume;
+    const durMs = Math.max(500, crossfadeDuration * 1000);
+    const rampStart = performance.now();
+
+    // Kick off the OUTGOING fade-out RIGHT NOW, before we touch the
+    // network. The whole point of "smooth switching" is that the
+    // moment the user picks a new track, the audible transition
+    // begins — not "begins after we've fetched a stream URL, decoded
+    // the first frame and resolved play()". The previous behaviour
+    // kept the outgoing slot at full volume during URL fetch + load
+    // (often 1–3s on cellular), then flipped through a ramp; the
+    // user heard a hard cut in the worst cases. Starting here makes
+    // the outgoing fade independent of the incoming load latency.
+    setSlotGain(outgoing, tgt);
+    const outgoingRamp = rampGain(outgoing, tgt, 0, durMs);
 
     const teardown = (success: boolean) => {
       if (success) {
@@ -687,7 +749,11 @@ export function useAudioPlayer() {
         setSlotGain(outgoing, 0);
         // `b.active` was already swapped to `incoming` before the ramp.
       } else {
-        // Failure: restore outgoing as the sole active slot.
+        // Failure: cancel any in-flight ramps, silence + unload the
+        // failed incoming preload, restore outgoing as the sole active
+        // slot at full volume so the caller's fallback (hard loadTrack)
+        // doesn't briefly play into a half-faded outgoing.
+        cancelRamp();
         safePause(incoming);
         b.loaded[incoming] = null;
         setSlotGain(incoming, 0);
@@ -763,6 +829,10 @@ export function useAudioPlayer() {
       try { audio.currentTime = 0; } catch { /* ignore */ }
       b.loaded[incoming] = target.id;
       b.lastRealT[incoming] = 0;
+      // The incoming slot has never been seeked — make sure the auto-
+      // crossfade trigger isn't artificially gated on it once it
+      // becomes the active slot below.
+      b.lastSeekAt[incoming] = 0;
 
       if (b.ctx && b.ctx.state === 'suspended') {
         await b.ctx.resume().catch(() => {});
@@ -794,21 +864,20 @@ export function useAudioPlayer() {
         try { audio.currentTime = 0; } catch { /* ignore */ }
       }
 
-      const tgt = muted ? 0 : volume;
-      const durMs = Math.max(500, crossfadeDuration * 1000);
-      // Explicitly re-assert starting gains right before the ramp. The
-      // volume-effect / prior auto-crossfade teardown / graph init may
-      // have left the outgoing slot at something other than `tgt` and
-      // the incoming at something other than 0 — without this, the
-      // first tick of rampGain would SNAP from that stale value to
-      // `fromValue`, producing the "flip without fade" symptom the user
-      // reports.
-      setSlotGain(outgoing, tgt);
+      // Ramp the incoming slot in over whatever portion of the
+      // crossfade window is left. On a fast network or a preloaded
+      // queue this is the full `durMs`; on slow networks it might be
+      // significantly shorter — that's intentional, the user already
+      // heard the outgoing fade out and now wants the new track to be
+      // audible quickly. We never go below 300ms so even on terrible
+      // networks the new track still has a perceivable swell instead
+      // of a pop.
+      const elapsed = performance.now() - rampStart;
+      const remaining = Math.max(300, durMs - elapsed);
       setSlotGain(incoming, 0);
-      await Promise.all([
-        rampGain(outgoing, tgt, 0, durMs),
-        rampGain(incoming, 0, tgt, durMs),
-      ]);
+      const incomingRamp = rampGain(incoming, 0, tgt, remaining);
+
+      await Promise.all([outgoingRamp, incomingRamp]);
       if (!crossfadingRef.current) return;
       teardown(true);
     } catch (err) {
@@ -827,8 +896,8 @@ export function useAudioPlayer() {
     const b = getBundle();
     // Whenever the playing track changes we re-arm the crossfade-attempt
     // gate so the next track is allowed to fade out exactly once.
-    if (crossfadeAttemptedRef.current !== currentTrack.id) {
-      crossfadeAttemptedRef.current = null;
+    if (b.crossfadeAttemptedTrackId !== currentTrack.id) {
+      b.crossfadeAttemptedTrackId = null;
     }
 
     // If the requested track is already loaded into the inactive slot (the
@@ -985,13 +1054,13 @@ export function useAudioPlayer() {
     const b = getBundle();
     if (crossfadingRef.current) return;
     if (!currentTrack) return;
-    if (crossfadeAttemptedRef.current === currentTrack.id) return;
+    if (b.crossfadeAttemptedTrackId === currentTrack.id) return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
     const nextTrack = queue[idx + 1];
     if (!nextTrack) return;
 
-    crossfadeAttemptedRef.current = currentTrack.id;
+    b.crossfadeAttemptedTrackId = currentTrack.id;
     crossfadingRef.current = true;
     const incoming = inactiveSlot(b);
     const outgoing = b.active;
@@ -1051,6 +1120,8 @@ export function useAudioPlayer() {
           if (!crossfadingRef.current || !ok) return;
           try { audio.currentTime = 0; } catch { /* ignore */ }
           b.loaded[incoming] = nextTrack.id;
+          b.lastRealT[incoming] = 0;
+          b.lastSeekAt[incoming] = 0;
         } else {
           ensureAudioGraph();
           setSlotGain(incoming, 0);
@@ -1060,6 +1131,8 @@ export function useAudioPlayer() {
           // next track-change doesn't think this slot is still a
           // pending preload.
           b.loaded[incoming] = nextTrack.id;
+          b.lastRealT[incoming] = 0;
+          b.lastSeekAt[incoming] = 0;
           if (preloadedIncomingRef.current?.slot === incoming) {
             preloadedIncomingRef.current = null;
           }
@@ -1144,6 +1217,7 @@ export function useAudioPlayer() {
         // and skip the crossfade ramp entirely.
         preloadedIncomingRef.current = { slot: incoming, trackId: nextTrack.id };
         b.lastRealT[incoming] = 0;
+        b.lastSeekAt[incoming] = 0;
       } catch {
         // Swallow — the normal startCrossfade path will retry with its
         // own fallback chain.
@@ -1267,11 +1341,23 @@ export function useAudioPlayer() {
 
         setProgress(realT);
         const dur = audio.duration;
+        // Authoritative seek guard: never fire the end-of-track auto-
+        // crossfade within `AUTO_CROSSFADE_SEEK_GUARD_MS` of a user
+        // scrub. This is the fix for "scrubbing into the final 12s
+        // immediately fades to the next track and skips the audible
+        // tail of the current track". `isNaturalProgression` alone
+        // can't catch that — its window is delta-based, and the very
+        // next timeupdate after a seek has realT ≈ b.lastRealT[slot]
+        // (we sync those together in `seek` so other surfaces don't
+        // see a jump), which trivially satisfies the natural step
+        // heuristic.
+        const sinceSeek = performance.now() - b.lastSeekAt[slot];
         if (
           crossfade
           && !crossfadingRef.current
           && isNaturalProgression
           && !audio.seeking
+          && sinceSeek > AUTO_CROSSFADE_SEEK_GUARD_MS
           && isFinite(dur)
           && dur > 0
           && dur - audio.currentTime <= crossfadeDuration
@@ -1366,10 +1452,16 @@ export function useAudioPlayer() {
     // resulting timeupdate for an unwanted reset (the gate compares
     // realT against `store.progress`).
     setProgress(time);
-    // Record the seek target in lastRealT so the jump-detection gate
-    // above doesn't count the big delta from the resulting timeupdate
-    // as natural progression.
+    // Stamp the wall-clock seek time so the auto-crossfade trigger is
+    // hard-gated for `AUTO_CROSSFADE_SEEK_GUARD_MS` after the scrub.
+    // This is the authoritative gate against the "scrubbed into the
+    // last 12 s and crossfade hijacks immediately" bug — `lastRealT`
+    // alone can't carry that signal because `isNaturalProgression`
+    // treats SMALL deltas as natural, so writing the seek target into
+    // it makes the very next timeupdate look like the most natural
+    // step in the world.
     b.lastRealT[slot] = time;
+    b.lastSeekAt[slot] = performance.now();
     audio.currentTime = time;
   }, [setProgress]);
 
