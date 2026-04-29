@@ -10,23 +10,36 @@ function getAppUrl(env: Env): string {
 }
 
 /**
- * Default keyboard for /start, /help and other generic replies. Crucially,
- * this *does not* include a "Войти на сайте" deeplink button — that button
- * carried a freshly-minted, single-use auth nonce, and forwarding the
- * whole message to a third party effectively handed them the account.
+ * Default keyboard for /start, /login, /help and other generic replies.
  *
- * The login flow is now strictly website-initiated: the user opens the
- * site → the site generates a nonce → opens `t.me/<bot>?start=auth_<nonce>`
- * → the bot writes the (nonce, from.id) mapping. Forwarding *that* deep-
- * link still requires the receiver's own Telegram client to interact
- * with the bot, so the nonce ends up bound to the receiver, not the
- * original user.
+ * Two login surfaces, both forward-safe (no auth payload is embedded
+ * in either button):
+ *   1. `web_app` button — opens the site as a Telegram WebApp inside
+ *      TG; `Telegram.WebApp.initData` is signed by Telegram with the
+ *      tapper's user, so `useAutoAuth()` on the site logs them in
+ *      immediately. Forwarding doesn't expose the original sender —
+ *      Telegram regenerates initData per tapper.
+ *   2. `url` button — opens the bare site URL in the user's browser
+ *      (useful for desktop / non-TG browsers). The site then shows
+ *      its own "Войти через Telegram" button which mints a nonce
+ *      *on the user's device* and opens `t.me/<bot>?start=auth_<nonce>`.
+ *
+ * What we deliberately do NOT do (and what the previous version of
+ * this keyboard did): pre-mint a nonce on the bot side and bake it
+ * into a button URL like `https://site/?auth_nonce=<N>`. That made
+ * the bot's reply forwardable into one-click account takeover —
+ * any third party who tapped the forwarded button would land on the
+ * site holding a nonce already bound to the original sender's
+ * Telegram ID, and the site's polling would sign them in as the
+ * sender. Both buttons here carry zero auth state, so forwarding is
+ * harmless.
  */
 function buildMainKeyboard(env: Env): Record<string, unknown> {
   const appUrl = getAppUrl(env);
   return {
     inline_keyboard: [
-      [{ text: 'Открыть веб-приложение', web_app: { url: appUrl } }],
+      [{ text: 'Войти через Telegram', web_app: { url: appUrl } }],
+      [{ text: 'Открыть на сайте', url: appUrl }],
       [{ text: 'Оформить подписку', callback_data: 'subscribe' }],
     ],
   };
@@ -103,15 +116,20 @@ export async function handleLogin(env: Env, message: TelegramMessage): Promise<v
   await ensureUser(env, message);
   await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
 
-  // We deliberately do NOT auto-mint a login nonce in this reply. The
-  // login flow is now website-initiated (open the site → the site opens
-  // `t.me/<bot>?start=auth_<nonce>` for the user). Embedding a nonce
-  // here would mean any forwarded copy of the bot's reply hands the
-  // sender's account to the receiver in one click.
+  // The login keyboard offers two safe entry points:
+  //   • «Войти через Telegram» (web_app) — opens the WebApp inside TG;
+  //     `Telegram.WebApp.initData` auto-auths on the site.
+  //   • «Открыть на сайте» (url) — opens the bare site URL in a browser;
+  //     the site's own «Войти через Telegram» button then runs the
+  //     website-initiated nonce flow (`t.me/<bot>?start=auth_<nonce>`).
+  //
+  // Neither button embeds an auth nonce, so forwarding the bot's reply
+  // can NOT be turned into one-click account takeover (the regression
+  // that the previous nonce-bearing button had).
   await tg.sendMessage(message.chat.id,
     '<b>Вход в BRATAN MUSIC</b>\n\n' +
-    'Откройте веб-приложение внутри Telegram — вход произойдёт автоматически. ' +
-    'Для входа в десктоп-браузере откройте сайт и нажмите там «Войти через Telegram».',
+    'Нажмите «Войти через Telegram», чтобы открыть веб-приложение и войти автоматически. ' +
+    'Если вы хотите войти в десктоп-браузере — нажмите «Открыть на сайте» и используйте кнопку «Войти через Telegram» там.',
     { replyMarkup: buildMainKeyboard(env) }
   );
 }
