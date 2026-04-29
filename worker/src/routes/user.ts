@@ -61,4 +61,34 @@ user.get('/limits', async (c) => {
   });
 });
 
+/**
+ * Wipe everything that feeds the recommendation engine *for the
+ * caller* — taste profile, recommendation_seen log, dislikes, and any
+ * already-generated daily playlists. Listening history (`play_history`)
+ * is intentionally left alone: it's a user-facing log, not part of the
+ * recommendation state, and the user didn't ask to delete it.
+ *
+ * Pulls the user id from the JWT (`c.get('userId')`); there's no way
+ * for the caller to specify someone else's id, so this can't be used
+ * to reset another user's recommendations.
+ */
+user.post('/reset-recommendations', async (c) => {
+  const userId = c.get('userId');
+  const tables = [
+    'recommendation_seen',
+    'user_taste_profile',
+    'user_dislikes',
+    'daily_playlists',
+  ];
+  const deleted: Record<string, number> = {};
+  for (const table of tables) {
+    const result = await c.env.DB
+      .prepare(`DELETE FROM ${table} WHERE user_id = ?`)
+      .bind(userId)
+      .run();
+    deleted[table] = result.meta?.changes ?? 0;
+  }
+  return c.json({ ok: true, deleted });
+});
+
 export { user };
