@@ -167,6 +167,21 @@ function normaliseAlbumTitle(title: string): string {
  * artist page "identical from the outside" — different ids, same
  * title, same cover. Tier 1 doesn't catch this; tier 2 does.
  */
+/**
+ * `true` if the album genuinely belongs to the requested artist —
+ * either as the main credited artist (`artistId`) or as a member of
+ * the contributors list (`artists[]`). The Tidal artist page's
+ * editorial `ARTIST_ALBUMS` module mixes in compilations where the
+ * artist is merely a featured contributor (Drake's page surfaces
+ * dozens of "Various Artists" / "Chill Vibes Rap"-style sets), and
+ * those should NOT show up under the artist's own albums.
+ */
+function isOwnedByArtist(album: Album, artistId: string): boolean {
+  if (album.artistId === artistId) return true;
+  if (album.artists?.some((a) => a.id === artistId)) return true;
+  return false;
+}
+
 function dedupeAlbums(items: Album[]): Album[] {
   const byId = dedupeById(items);
   const byFingerprint = new Map<string, Album>();
@@ -451,7 +466,13 @@ export class TidalService implements MusicService {
       const albumItems = (mod.pagedList.items ?? [])
         .map(unwrapPagedAlbum)
         .filter((x): x is TidalAlbumRaw => x !== undefined);
-      const items = albumItems.map((raw) => mapAlbum(raw, [], fallback));
+      // Drop compilations where the requested artist is only a
+      // featured contributor — Tidal mixes those into
+      // ARTIST_ALBUMS / ARTIST_COMPILATIONS pagedLists. See
+      // {@link isOwnedByArtist}.
+      const items = albumItems
+        .map((raw) => mapAlbum(raw, [], fallback))
+        .filter((album) => isOwnedByArtist(album, id));
       const total = mod.pagedList.totalNumberOfItems;
       const hasMore = total !== undefined && total > items.length;
       return {
@@ -613,17 +634,22 @@ export class TidalService implements MusicService {
   async getArtistReleasesPage(
     moreApiPath: string,
     opts: { limit?: number; offset?: number } = {},
+    artistId?: string,
   ): Promise<{ items: Album[]; totalItems?: number; morePath: string }> {
     const raw = await this.api.getPageData<TidalPagedListRaw<unknown>>(moreApiPath, opts);
     // Same unwrap+filter as the first-page bucket: drop wrapped
     // playlists / mixes that Tidal interleaves into the editorial
-    // module's `dataApiPath` response, then dedupe so the same
-    // release reissued under multiple ids doesn't double-bill.
+    // module's `dataApiPath` response, then drop compilations where
+    // the requested artist is only a featured contributor (when an
+    // `artistId` is provided), then dedupe so the same release
+    // reissued under multiple ids doesn't double-bill.
     const list = (raw.items ?? [])
       .map(unwrapPagedAlbum)
       .filter((x): x is TidalAlbumRaw => x !== undefined);
+    const mapped = list.map((a) => mapAlbum(a));
+    const owned = artistId ? mapped.filter((a) => isOwnedByArtist(a, artistId)) : mapped;
     return {
-      items: dedupeAlbums(list.map((a) => mapAlbum(a))),
+      items: dedupeAlbums(owned),
       totalItems: raw.totalNumberOfItems,
       morePath: moreApiPath,
     };

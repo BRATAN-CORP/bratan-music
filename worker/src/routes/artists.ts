@@ -44,7 +44,12 @@ artists.get('/:id/albums', async (c) => {
   const morePath = c.req.query('morePath');
   const tidal = new TidalService(c.env);
   if (morePath) {
-    const page = await tidal.getArtistReleasesPage(morePath, { limit, offset });
+    // Thread the artist id so the paginated bucket can drop
+    // compilations where this artist is only a featured contributor
+    // (`isOwnedByArtist`) — same filter the first-page bucket
+    // applies. Otherwise Tidal happily returns 100+ "Various Artists"
+    // sets that include the artist as a guest.
+    const page = await tidal.getArtistReleasesPage(morePath, { limit, offset }, id);
     return c.json(page);
   }
   const { albums, albumsMore, albumsMoreTotal } = await tidal.getArtistAlbumsAndSingles(id);
@@ -68,7 +73,9 @@ artists.get('/:id/singles', async (c) => {
   const morePath = c.req.query('morePath');
   const tidal = new TidalService(c.env);
   if (morePath) {
-    const page = await tidal.getArtistReleasesPage(morePath, { limit, offset });
+    // Pass artist id so paginated singles get the same
+    // ownership filter as the first-page bucket (see /albums above).
+    const page = await tidal.getArtistReleasesPage(morePath, { limit, offset }, id);
     return c.json(page);
   }
   const { singles, singlesMore, singlesMoreTotal } = await tidal.getArtistAlbumsAndSingles(id);
