@@ -125,20 +125,26 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
             onComplete: () => setDragging(false),
           });
         }}
-        className="relative flex w-full"
+        className="relative flex w-full min-w-0"
       >
         {/* Centre column always renders; neighbours render only when the
-            queue actually has a previous / next track to navigate to. */}
+            queue actually has a previous / next track to navigate to.
+            `min-w-0` on the flex children is critical: without it the
+            flex item's intrinsic min-width defaults to `auto` (=
+            max-content), which lets a long track title balloon the
+            column past the wrapper and push the like/play/next
+            buttons off-screen — exactly the bug reported on the
+            mobile mini-player. */}
         {prevTrack && (
-          <div className="pointer-events-none absolute right-full top-0 h-full w-full pr-2">
+          <div className="pointer-events-none absolute right-full top-0 h-full w-full min-w-0 pr-2">
             {children(prevTrack, 'prev')}
           </div>
         )}
-        <div className="w-full">
+        <div className="w-full min-w-0">
           {children(currentTrack, 'current')}
         </div>
         {nextTrack && (
-          <div className="pointer-events-none absolute left-full top-0 h-full w-full pl-2">
+          <div className="pointer-events-none absolute left-full top-0 h-full w-full min-w-0 pl-2">
             {children(nextTrack, 'next')}
           </div>
         )}
