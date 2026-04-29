@@ -206,21 +206,6 @@ export class TidalApi {
   }
 
   /**
-   * Fetch tracks of an editorial Tidal playlist by UUID. The
-   * upstream endpoint paginates; for now we ask for a single window
-   * up to `limit` (Tidal allows up to 100 per request).
-   */
-  async getPlaylistTracks(uuid: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
-    const cc = await this.auth.getCountryCode();
-    const params = new URLSearchParams({
-      countryCode: cc,
-      limit: String(limit),
-      offset: '0',
-    });
-    return this.get<{ items: TidalTrackRaw[] }>(`/v1/playlists/${uuid}/tracks?${params}`);
-  }
-
-  /**
    * Fetch a Tidal "page" — what their web/desktop apps render for
    * Explore, Genre, Mood, Decade, etc. screens. The response is a
    * structured tree of "modules" (PLAYLIST_LIST, TRACK_LIST,
