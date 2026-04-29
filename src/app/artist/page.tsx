@@ -130,7 +130,7 @@ export function ArtistPage() {
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
                   <h2 className="text-base font-semibold tracking-tight">Альбомы</h2>
-                  {artist.albums.length > 10 && (
+                  {((artist.albumsMoreTotal ?? artist.albums.length) > 10) && (
                     <Link
                       to={`/artist/${artist.id}/albums`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -151,7 +151,7 @@ export function ArtistPage() {
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
                   <h2 className="text-base font-semibold tracking-tight">Синглы</h2>
-                  {artist.singles.length > 10 && (
+                  {((artist.singlesMoreTotal ?? artist.singles.length) > 10) && (
                     <Link
                       to={`/artist/${artist.id}/singles`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"

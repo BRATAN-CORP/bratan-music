@@ -86,6 +86,12 @@ function mapTrack(raw: TidalTrackRaw): Track {
   };
 }
 
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Map<string, T>();
+  for (const i of items) if (!seen.has(i.id)) seen.set(i.id, i);
+  return Array.from(seen.values());
+}
+
 /**
  * Coerce Tidal's freeform `type` string into our four-bucket enum.
  * Tidal mostly returns `ALBUM` / `EP` / `SINGLE` / `COMPILATION`, but
@@ -305,20 +311,106 @@ export class TidalService implements MusicService {
    *   4. Sort by release date desc so the newest stuff bubbles up.
    */
   /**
-   * Split version of {@link getArtistReleases}: returns albums (ALBUM
-   * + EP + COMPILATION buckets) and singles (SINGLE) as separate
-   * lists. Mirrors how Tidal's own artist page is structured — singles
-   * sit in their own row distinct from the album discography.
+   * Albums-and-singles split that exactly mirrors what tidal.com
+   * itself shows on the artist page. We reach for `/v1/pages/artist`
+   * and pull the editorial modules (`ARTIST_ALBUMS`,
+   * `ARTIST_TOP_SINGLES`, `ARTIST_COMPILATIONS`) directly — these are
+   * curated/categorised by Tidal, unlike the broad
+   * `/v1/artists/{id}/albums?filter=…` buckets which include
+   * unrelated cross-bucket items.
+   *
+   * Returned shape:
+   *   - `albums`  = ARTIST_ALBUMS + ARTIST_COMPILATIONS modules
+   *                 (deduped by id, sorted release date desc).
+   *   - `singles` = ARTIST_TOP_SINGLES module.
+   *   - `albumsMore` / `singlesMore` are the opaque `dataApiPath`
+   *     values from each `pagedList`, used by the see-all pages to
+   *     paginate beyond the initial window. Either may be undefined
+   *     if the module already returned everything.
+   *
+   * Falls back to the old per-bucket `/v1/artists/{id}/albums` calls
+   * if the artist page response is missing or empty — keeps small
+   * artists with no editorial page from going completely blank.
    */
-  async getArtistAlbumsAndSingles(id: string, limit: number = 50): Promise<{ albums: Album[]; singles: Album[] }> {
-    const releases = await this.getArtistReleases(id, limit);
-    const albums: Album[] = [];
-    const singles: Album[] = [];
-    for (const r of releases) {
-      if (r.releaseType === 'SINGLE') singles.push(r);
-      else albums.push(r);
+  async getArtistAlbumsAndSingles(id: string): Promise<{
+    albums: Album[];
+    singles: Album[];
+    albumsMore?: string;
+    albumsMoreTotal?: number;
+    singlesMore?: string;
+    singlesMoreTotal?: number;
+  }> {
+    interface ModuleBucket {
+      items: Album[];
+      morePath?: string;
+      moreTotal?: number;
     }
-    return { albums, singles };
+    const empty: ModuleBucket = { items: [] };
+    const bucketFromModule = (mod: TidalPageModuleRaw | undefined, fallback: Album['releaseType']): ModuleBucket => {
+      if (!mod?.pagedList) return empty;
+      const items = (mod.pagedList.items as TidalAlbumRaw[]).map((raw) => mapAlbum(raw, [], fallback));
+      const total = mod.pagedList.totalNumberOfItems;
+      const hasMore = total !== undefined && total > items.length;
+      return {
+        items,
+        morePath: hasMore ? mod.pagedList.dataApiPath : undefined,
+        moreTotal: total,
+      };
+    };
+
+    let albumsMod: ModuleBucket = empty;
+    let singlesMod: ModuleBucket = empty;
+    let compsMod: ModuleBucket = empty;
+    try {
+      const page = await this.api.getArtistPage(id);
+      const modules = page.rows.flatMap((r) => r.modules);
+      albumsMod = bucketFromModule(modules.find((m) => m.type === 'ARTIST_ALBUMS'), 'ALBUM');
+      singlesMod = bucketFromModule(modules.find((m) => m.type === 'ARTIST_TOP_SINGLES'), 'SINGLE');
+      compsMod = bucketFromModule(modules.find((m) => m.type === 'ARTIST_COMPILATIONS'), 'COMPILATION');
+    } catch (err) {
+      console.error('[getArtistAlbumsAndSingles] page fetch failed, falling back to v1 buckets', err);
+    }
+
+    let albums = dedupeById([...albumsMod.items, ...compsMod.items]);
+    let singles = singlesMod.items;
+    let albumsMore = albumsMod.morePath ?? compsMod.morePath;
+    const albumsMoreTotal = albumsMod.moreTotal !== undefined || compsMod.moreTotal !== undefined
+      ? (albumsMod.moreTotal ?? 0) + (compsMod.moreTotal ?? 0)
+      : undefined;
+    let singlesMore = singlesMod.morePath;
+    const singlesMoreTotal = singlesMod.moreTotal;
+
+    // Editorial page returned nothing — fall back to the full v1
+    // album-filter merge so small / unfeatured artists still show up.
+    if (albums.length === 0 && singles.length === 0) {
+      const releases = await this.getArtistReleases(id, 200);
+      const a: Album[] = [];
+      const s: Album[] = [];
+      for (const r of releases) {
+        if (r.releaseType === 'SINGLE') s.push(r);
+        else a.push(r);
+      }
+      albums = a;
+      singles = s;
+      albumsMore = undefined;
+      singlesMore = undefined;
+    }
+
+    const sortRelDesc = (xs: Album[]) => xs.sort((x, y) => {
+      const dx = x.releaseDate ?? '';
+      const dy = y.releaseDate ?? '';
+      if (dx === dy) return x.title.localeCompare(y.title);
+      return dy.localeCompare(dx);
+    });
+
+    return {
+      albums: sortRelDesc(albums),
+      singles: sortRelDesc(singles),
+      albumsMore,
+      albumsMoreTotal,
+      singlesMore,
+      singlesMoreTotal,
+    };
   }
 
   async getArtistReleases(id: string, limit: number = 50): Promise<Album[]> {
@@ -407,6 +499,25 @@ export class TidalService implements MusicService {
       }
     }
     return { title: raw.title, modules };
+  }
+
+  /**
+   * Pull more albums/singles from the artist page using the opaque
+   * `dataApiPath` returned alongside the initial release split. Same
+   * mechanism as {@link getExploreList} but typed to albums (the only
+   * thing artist page modules return in their pagedLists).
+   */
+  async getArtistReleasesPage(
+    moreApiPath: string,
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<{ items: Album[]; totalItems?: number; morePath: string }> {
+    const raw = await this.api.getPageData<TidalPagedListRaw<unknown>>(moreApiPath, opts);
+    const list = (raw.items ?? []) as TidalAlbumRaw[];
+    return {
+      items: list.map((a) => mapAlbum(a)),
+      totalItems: raw.totalNumberOfItems,
+      morePath: moreApiPath,
+    };
   }
 
   /**

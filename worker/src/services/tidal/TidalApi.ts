@@ -270,6 +270,27 @@ export class TidalApi {
   }
 
   /**
+   * Fetch the per-artist page (`/v1/pages/artist?artistId=X`). This is
+   * the exact same payload Tidal's web client renders the artist
+   * screen from — including modules `ARTIST_TOP_TRACKS`,
+   * `ARTIST_ALBUMS`, `ARTIST_TOP_SINGLES` (EPs + singles),
+   * `ARTIST_COMPILATIONS`, `ARTIST_PLAYLIST`, and a few promo blocks.
+   * Using this gives us the editorial categorisation that matches
+   * Tidal.com (rather than the broader v1 album-filter buckets, which
+   * mix singles into ALBUMS).
+   */
+  async getArtistPage(artistId: string): Promise<TidalPageRaw> {
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      artistId,
+      countryCode: cc,
+      locale: this.auth.getLocale(),
+      deviceType: 'BROWSER',
+    });
+    return this.get<TidalPageRaw>(`/v1/pages/artist?${params}`);
+  }
+
+  /**
    * Some modules paginate via a `dataApiPath` like `pages/data/<uuid>`
    * — useful when the user clicks "View as list". The `limit`/`offset`
    * pair lets callers page through the full list; Tidal accepts up
