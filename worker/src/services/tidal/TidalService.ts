@@ -116,14 +116,23 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
  */
 function unwrapPagedAlbum(input: unknown): TidalAlbumRaw | undefined {
   if (!input || typeof input !== 'object') return undefined;
-  const raw = input as { item?: unknown; type?: unknown; id?: unknown; uuid?: unknown };
-  // Wrapped shape: `{ item, type }`. Reject upfront if the wrapper
-  // labels this as something we know isn't an album.
-  if (raw.item && typeof raw.item === 'object') {
+  const raw = input as {
+    item?: unknown;
+    data?: unknown;
+    type?: unknown;
+    id?: unknown;
+    uuid?: unknown;
+  };
+  // Wrapped shapes: `{ item, type }` (v1 page modules) and
+  // `{ data, type }` (v2 `/v2/artist/<MODULE>/view-all` view-all
+  // pagination). Reject upfront if the wrapper labels this as
+  // something we know isn't an album.
+  const wrapped = raw.item ?? raw.data;
+  if (wrapped && typeof wrapped === 'object') {
     if (typeof raw.type === 'string' && raw.type.toUpperCase() !== 'ALBUM') {
       return undefined;
     }
-    return unwrapPagedAlbum(raw.item);
+    return unwrapPagedAlbum(wrapped);
   }
   // Direct shape — albums always carry a numeric `id`. Playlists use
   // string `uuid`s; mixes use prefixed string ids; ad placeholders
@@ -168,18 +177,25 @@ function normaliseAlbumTitle(title: string): string {
  * title, same cover. Tier 1 doesn't catch this; tier 2 does.
  */
 /**
- * `true` if the album genuinely belongs to the requested artist —
- * either as the main credited artist (`artistId`) or as a member of
- * the contributors list (`artists[]`). The Tidal artist page's
- * editorial `ARTIST_ALBUMS` module mixes in compilations where the
- * artist is merely a featured contributor (Drake's page surfaces
- * dozens of "Various Artists" / "Chill Vibes Rap"-style sets), and
- * those should NOT show up under the artist's own albums.
+ * `true` if the album / single is genuinely the requested artist's
+ * own release — i.e. they are the *primary* credited artist (first
+ * `main: true` entry, exposed as `artistId` on the mapped album).
+ *
+ * We deliberately do NOT match on "appears anywhere in `artists[]`".
+ * Tidal flags every credited artist as `main: true` for joint
+ * releases, so a single like PARTYNEXTDOOR x Drake x Cash Cobain's
+ * "SOMEBODY LOVES ME PT. 2" would otherwise show up under Drake's
+ * EP & Singles page even though Tidal's own artist view treats it
+ * as a PARTYNEXTDOOR release. Likewise "Various Artists"
+ * compilations carry the requested artist as a contributor on
+ * individual tracks but the artist record itself doesn't appear in
+ * the album-level `artists[]`.
+ *
+ * Net effect: only releases where the requested artist is the lead
+ * survive — which matches what tidal.com/artist/{id} shows.
  */
 function isOwnedByArtist(album: Album, artistId: string): boolean {
-  if (album.artistId === artistId) return true;
-  if (album.artists?.some((a) => a.id === artistId)) return true;
-  return false;
+  return album.artistId === artistId;
 }
 
 function dedupeAlbums(items: Album[]): Album[] {
@@ -393,7 +409,13 @@ export class TidalService implements MusicService {
 
   async getArtistTopTracks(id: string): Promise<Track[]> {
     const res = await this.api.getArtistTopTracks(id);
-    return res.items.map(mapTrack);
+    // Tidal's /v1/artists/{id}/toptracks surfaces every track that
+    // credits this artist, including features on someone else's
+    // singles. Tidal's own artist page shows only tracks where the
+    // artist is the primary credit — match that, since the user
+    // explicitly wants "только конкретно его треки из официальной
+    // карточки тайдал".
+    return res.items.map(mapTrack).filter((t) => t.artistId === id);
   }
 
   async getArtistAlbums(id: string): Promise<Album[]> {
