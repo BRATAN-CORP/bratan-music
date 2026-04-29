@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
-import { Pause, Play, User, Heart, Radio } from 'lucide-react';
+import { Pause, Play, Heart, Radio } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
@@ -109,9 +109,7 @@ export function ArtistPage() {
                   className="h-40 w-40 rounded-full border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
                 />
               ) : (
-                <div className="flex h-40 w-40 items-center justify-center rounded-full border border-white/10 bg-secondary shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]">
-                  <User size={36} className="text-muted-foreground" />
-                </div>
+                <FallbackAvatar name={artist.name} />
               )}
               <div className="flex flex-col gap-3">
                 <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Артист</span>
@@ -230,5 +228,35 @@ export function ArtistPage() {
         )}
       </div>
     </AuthGuard>
+  );
+}
+
+/**
+ * Header-sized initials-on-gradient fallback for artists without a
+ * Tidal portrait. Same visual language as `ArtistCard`'s fallback so
+ * an artist with no photo looks identical between search tiles and
+ * the artist page.
+ */
+function FallbackAvatar({ name }: { name: string }) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const [first, second] = words;
+  const initials = !first
+    ? '?'
+    : !second
+      ? first.slice(0, 2).toUpperCase()
+      : ((first[0] ?? '') + (second[0] ?? '')).toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  const hue = Math.abs(hash) % 360;
+  return (
+    <div
+      className="flex h-40 w-40 items-center justify-center rounded-full border border-white/10 text-3xl font-semibold tracking-wide text-white shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
+      style={{
+        background: `radial-gradient(120% 120% at 30% 25%, hsl(${hue} 65% 45% / 0.95), hsl(${(hue + 40) % 360} 55% 22%))`,
+      }}
+      aria-label={name}
+    >
+      {initials}
+    </div>
   );
 }
