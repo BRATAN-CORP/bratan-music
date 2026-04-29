@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
+import { TidalService } from '../services/tidal/TidalService';
 
 const library = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -224,7 +225,39 @@ library.get('/playlists', async (c) => {
     `SELECT p.*, ${LIST_TRACK_COUNT_SQL} as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC`
   ).bind(userId).all<PlaylistRow>();
 
-  return c.json({ items: (items.results ?? []).map(rowToPlaylist) });
+  const rows = items.results ?? [];
+
+  // One-time lazy backfill for Tidal-linked rows that pre-date the
+  // `source_track_count` column. Their cache is NULL → CASE returns 0,
+  // which is what the user saw on the library card. Resolve via the
+  // Tidal API in parallel and persist the count so subsequent loads are
+  // O(1). Rows that have a cached count (zero or otherwise) are left
+  // alone — the `/playlists/:id` endpoint refreshes the cache on every
+  // detail-view read, so steady-state accuracy is handled there.
+  const stale = rows.filter(
+    (r) => r.source_kind === 'tidal' &&
+      r.source_playlist_id &&
+      (r.source_track_count === null || r.source_track_count === undefined),
+  );
+  if (stale.length > 0) {
+    const tidal = new TidalService(c.env);
+    await Promise.all(stale.map(async (r) => {
+      try {
+        const tracks = await tidal.getPlaylistTracks(r.source_playlist_id!);
+        const count = Array.isArray(tracks) ? tracks.length : 0;
+        await c.env.DB.prepare(
+          'UPDATE playlists SET source_track_count = ? WHERE id = ?'
+        ).bind(count, r.id).run();
+        r.track_count = count;
+        r.source_track_count = count;
+      } catch {
+        // Tidal hiccup — leave the cache NULL so we try again next list
+        // load instead of poisoning it with a 0.
+      }
+    }));
+  }
+
+  return c.json({ items: rows.map(rowToPlaylist) });
 });
 
 // ── Library items (albums & artists) ─────────────────────────────────

@@ -21,7 +21,20 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const pinPlaylist = usePinPlaylist();
   const isPinned = playlist.pinnedAt != null || playlist.isLiked;
 
+  // Linked playlists (saved Tidal editorial / shared via link from another
+  // user) live in the user's library as a *reference* row — the user
+  // doesn't own the underlying tracks, so renaming and changing the cover
+  // are not allowed (the backend rejects them too). Removing one only
+  // deletes the local reference row, not the original.
+  const isLinked = Boolean(playlist.sourceKind);
   const canEdit = !playlist.isLiked;
+  const canRename = canEdit && !isLinked;
+  const removeLabel = isLinked ? 'Убрать из библиотеки' : 'Удалить плейлист';
+  const confirmTitle = isLinked ? 'Убрать из библиотеки?' : 'Удалить плейлист?';
+  const confirmDescription = isLinked
+    ? `«${playlist.name}» больше не будет появляться в вашей библиотеке. Оригинал останется доступен и вы сможете сохранить его снова.`
+    : `«${playlist.name}» будет удалён вместе со всеми треками. Это действие необратимо.`;
+  const confirmButtonLabel = isLinked ? 'Убрать' : 'Удалить';
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -84,19 +97,21 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                 align="end"
                 width={192}
               >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setMenuOpen(false);
-                        setRenameOpen(true);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                    >
-                      <Pencil size={14} />
-                      Переименовать
-                    </button>
+                    {canRename && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setMenuOpen(false);
+                          setRenameOpen(true);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
+                      >
+                        <Pencil size={14} />
+                        Переименовать
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {
@@ -122,7 +137,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)]"
                     >
                       <Trash2 size={14} />
-                      Удалить плейлист
+                      {removeLabel}
                     </button>
               </PopoverMenu>
             </>
@@ -157,10 +172,8 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
               onClick={(e) => e.stopPropagation()}
               className="liquid-glass w-full max-w-sm rounded-[var(--radius-lg)] p-5"
             >
-              <h2 className="text-base font-semibold tracking-tight">Удалить плейлист?</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                «{playlist.name}» будет удалён вместе со всеми треками. Это действие необратимо.
-              </p>
+              <h2 className="text-base font-semibold tracking-tight">{confirmTitle}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{confirmDescription}</p>
               {deletePlaylist.isError && (
                 <p className="mt-3 rounded-[var(--radius-sm)] bg-[var(--color-danger-muted)] px-3 py-2 text-xs text-[var(--color-danger)]">
                   {deletePlaylist.error instanceof Error ? deletePlaylist.error.message : 'Ошибка'}
@@ -180,7 +193,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                   disabled={deletePlaylist.isPending}
                 >
                   {deletePlaylist.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                  Удалить
+                  {confirmButtonLabel}
                 </Button>
               </div>
             </motion.div>
