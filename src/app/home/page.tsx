@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   Play,
+  Pause,
   Sparkles,
   Library,
   History as HistoryIcon,
@@ -34,6 +35,7 @@ import {
 } from '@/lib/recommendations';
 import { startMyWave } from '@/lib/wave';
 import { usePlayerStore } from '@/store/player';
+import { useTrackPlayback, useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import { useAuthStore } from '@/store/auth';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
@@ -147,7 +149,20 @@ function WaveHero({
     staleTime: 60_000,
   });
 
+  // Treat any preview track being currently active as "the wave is on
+  // air" — let the CTA collapse to play/pause behaviour instead of
+  // re-spawning a fresh wave (which would replace the user's queue).
+  const previewIds = useMemo(() => (previewQ.data ?? []).map((t) => t.id), [previewQ.data]);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
+  const waveOnAir = !!currentTrackId && previewIds.includes(currentTrackId);
+
   const start = async () => {
+    if (waveOnAir) {
+      togglePlay();
+      return;
+    }
     setStarting(true);
     setError(null);
     try {
@@ -202,11 +217,26 @@ function WaveHero({
                     className="gap-2 px-7"
                   >
                     {starting ? (
-                      <RefreshCw size={16} className="animate-spin" />
+                      <>
+                        <RefreshCw size={16} className="animate-spin" />
+                        Запускаем…
+                      </>
+                    ) : waveOnAir && isPlaying ? (
+                      <>
+                        <Pause size={16} fill="currentColor" />
+                        Пауза
+                      </>
+                    ) : waveOnAir ? (
+                      <>
+                        <Play size={16} fill="currentColor" />
+                        Продолжить
+                      </>
                     ) : (
-                      <Play size={16} fill="currentColor" />
+                      <>
+                        <Play size={16} fill="currentColor" />
+                        Включить волну
+                      </>
                     )}
-                    {starting ? 'Запускаем…' : 'Включить волну'}
                   </Button>
                 </motion.div>
 
@@ -301,17 +331,6 @@ function CoverStack({ tracks, loading }: { tracks: Track[]; loading: boolean }) 
 
 /** A row of 6 quick previews of the wave under the hero copy. */
 function PreviewStrip({ tracks, loading }: { tracks: Track[]; loading: boolean }) {
-  const setTrack = usePlayerStore((s) => s.setTrack);
-  const setQueue = usePlayerStore((s) => s.setQueue);
-
-  const playFromIndex = (i: number) => {
-    if (tracks.length === 0) return;
-    const reordered = [...tracks.slice(i), ...tracks.slice(0, i)];
-    setQueue(reordered);
-    const head = reordered[0];
-    if (head) setTrack(head);
-  };
-
   if (loading) {
     return (
       <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-6">
@@ -327,28 +346,63 @@ function PreviewStrip({ tracks, loading }: { tracks: Track[]; loading: boolean }
   return (
     <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-6">
       {tracks.slice(0, 6).map((t, i) => (
-        <button
-          key={`${t.id}:${i}`}
-          onClick={() => playFromIndex(i)}
-          className="group flex items-center gap-2.5 overflow-hidden rounded-[var(--radius-md)] border border-transparent p-2 text-left transition-colors hover:border-border hover:bg-[var(--color-hover-overlay)]"
-        >
-          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-[var(--color-bg-muted)]">
-            {t.coverUrl ? (
-              <img src={t.coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-            ) : (
-              <Disc3 className="m-auto h-5 w-5 text-muted-foreground/40" />
-            )}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
-              <Play size={14} fill="currentColor" className="text-white" />
-            </div>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">{t.title}</div>
-            <div className="truncate text-xs text-muted-foreground">{t.artist}</div>
-          </div>
-        </button>
+        <PreviewStripRow key={`${t.id}:${i}`} track={t} index={i} tracks={tracks} />
       ))}
     </div>
+  );
+}
+
+function PreviewStripRow({ track, index, tracks }: { track: Track; index: number; tracks: Track[] }) {
+  const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
+  const onClick = () => {
+    // Active row → toggle pause / resume in place. Inactive row →
+    // restart the wave starting at this preview, with the rest of
+    // the strip seeded as the queue tail.
+    if (isActive) {
+      playOrToggle(track);
+      return;
+    }
+    const reordered = [...tracks.slice(index), ...tracks.slice(0, index)];
+    playOrToggle(track, reordered);
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'group flex items-center gap-2.5 overflow-hidden rounded-[var(--radius-md)] border p-2 text-left transition-colors',
+        isActive
+          ? 'border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8'
+          : 'border-transparent hover:border-border hover:bg-[var(--color-hover-overlay)]',
+      )}
+    >
+      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-[var(--color-bg-muted)]">
+        {track.coverUrl ? (
+          <img src={track.coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <Disc3 className="m-auto h-5 w-5 text-muted-foreground/40" />
+        )}
+        <div
+          className={cn(
+            'absolute inset-0 flex items-center justify-center transition-opacity',
+            isActive
+              ? 'bg-black/55 opacity-100'
+              : 'bg-black/0 opacity-0 group-hover:bg-black/40 group-hover:opacity-100',
+          )}
+        >
+          {isActivePlaying ? (
+            <Pause size={14} fill="currentColor" className="text-white" />
+          ) : (
+            <Play size={14} fill="currentColor" className="text-white" />
+          )}
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className={cn('truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
+          {track.title}
+        </div>
+        <div className="truncate text-xs text-muted-foreground">{track.artist}</div>
+      </div>
+    </button>
   );
 }
 
@@ -417,8 +471,6 @@ const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; label: stri
 function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   const theme = VARIANT_THEME[playlist.variant];
   const VariantIcon = theme.icon;
-  const setTrack = usePlayerStore((s) => s.setTrack);
-  const setQueue = usePlayerStore((s) => s.setQueue);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [savedJustNow, setSavedJustNow] = useState(false);
@@ -427,11 +479,16 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   // "Сохранено" state.
   const isSaved = !!playlist.savedToPlaylistId || savedJustNow;
 
+  // Sync the card's play CTAs with the global player. When a track
+  // from this daily playlist is currently active the buttons swap
+  // to a Pause icon and clicking pauses/resumes in place instead of
+  // restarting the queue from the top.
+  const trackIds = useMemo(() => playlist.tracks.map((t) => t.id), [playlist.tracks]);
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+
   const play = () => {
     if (playlist.tracks.length === 0) return;
-    setQueue(playlist.tracks);
-    const head = playlist.tracks[0];
-    if (head) setTrack(head);
+    playCollection(playlist.tracks);
   };
 
   const save = async () => {
@@ -478,13 +535,20 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
 
         <button
           onClick={play}
-          aria-label="Запустить плейлист"
+          aria-label={isCollectionPlaying ? 'Пауза' : 'Запустить плейлист'}
           className={cn(
-            'absolute bottom-4 right-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-[var(--shadow-lg)]',
+            'absolute bottom-4 right-4 inline-flex h-12 w-12 items-center justify-center rounded-full shadow-[var(--shadow-lg)]',
             'transition-all hover:scale-110 active:scale-95',
+            isCollectionActive
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'bg-foreground text-background',
           )}
         >
-          <Play size={18} fill="currentColor" />
+          {isCollectionPlaying ? (
+            <Pause size={18} fill="currentColor" />
+          ) : (
+            <Play size={18} fill="currentColor" />
+          )}
         </button>
       </div>
 
@@ -500,8 +564,17 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
           <Button onClick={play} size="sm" className="gap-1.5" disabled={playlist.tracks.length === 0}>
-            <Play size={14} fill="currentColor" />
-            Слушать
+            {isCollectionPlaying ? (
+              <>
+                <Pause size={14} fill="currentColor" />
+                Пауза
+              </>
+            ) : (
+              <>
+                <Play size={14} fill="currentColor" />
+                {isCollectionActive ? 'Продолжить' : 'Слушать'}
+              </>
+            )}
           </Button>
           <Button
             onClick={save}

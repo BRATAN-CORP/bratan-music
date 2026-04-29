@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ListMusic, Loader2, Play, Plus } from 'lucide-react';
+import { ChevronLeft, ListMusic, Loader2, Pause, Play, Plus } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useExplorePlaylistTracks } from '@/hooks/useExplore';
 import { useSaveTidalPlaylist } from '@/hooks/useShare';
 import { usePlaylistsList } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { ExplorePage, ExplorePlaylist, Track } from '@/types';
 
 /**
@@ -51,7 +52,7 @@ export function TidalPlaylistPage() {
     return null;
   }, [qc, uuid]);
 
-  const tracks: Track[] = data?.items ?? [];
+  const tracks: Track[] = useMemo(() => data?.items ?? [], [data?.items]);
   // If the user already saved this playlist, the linked copy lives
   // in their library — surface "Открыть" instead of "Сохранить" to
   // avoid duplicate-saving the same Tidal id.
@@ -65,19 +66,12 @@ export function TidalPlaylistPage() {
     else navigate('/search');
   };
 
+  const trackIds = useMemo(() => tracks.map((t) => t.id), [tracks]);
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+
   const handlePlayAll = () => {
-    const first = tracks[0];
-    if (!first) return;
-    setQueue(tracks);
-    setTrack({
-      id: first.id,
-      title: first.title,
-      artist: first.artist,
-      artistId: first.artistId,
-      coverUrl: first.coverUrl,
-      coverVideoUrl: first.coverVideoUrl,
-      duration: first.duration,
-    });
+    if (tracks.length === 0) return;
+    playCollection(tracks);
   };
 
   const handlePlayTrack = (track: Track) => {
@@ -190,8 +184,17 @@ export function TidalPlaylistPage() {
                     disabled={tracks.length === 0}
                     className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--color-accent)] px-4 text-sm font-semibold text-[var(--color-text-on-accent)] shadow-sm transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <Play size={16} fill="currentColor" />
-                    Слушать
+                    {isCollectionPlaying ? (
+                      <>
+                        <Pause size={16} fill="currentColor" />
+                        Пауза
+                      </>
+                    ) : (
+                      <>
+                        <Play size={16} fill="currentColor" />
+                        {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                      </>
+                    )}
                   </button>
                   <button
                     type="button"
