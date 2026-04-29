@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Pause, Play, Heart, Radio } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -23,6 +24,11 @@ export function ArtistPage() {
   const artistLike = useToggleArtistLike();
   const liked = artist ? artistLike.isLiked(artist.id) : false;
   const reduce = useReducedMotion();
+  // Match `ArtistCard`: if Tidal's portrait URL is stale and 404s,
+  // swap to the initials tile instead of letting the browser draw
+  // the broken-image glyph in the hero.
+  const [heroImgFailed, setHeroImgFailed] = useState(false);
+  const heroPhoto = !!artist?.imageUrl && !heroImgFailed ? artist.imageUrl : undefined;
 
   // Hero "Play" button on the artist page targets the current top-track
   // queue — if anything in that list is the active player track, the
@@ -66,13 +72,13 @@ export function ArtistPage() {
                 image is keyed by the artist id so a navigation between
                 artists crossfades the ambience instead of snapping. */}
             <div className="relative isolate -mx-4 mb-10 overflow-hidden px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
-              {artist.imageUrl ? (
+              {heroPhoto ? (
                 <AnimatePresence initial={false} mode="sync">
                   <motion.div
                     key={artist.id + ':bg'}
                     aria-hidden
                     className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
-                    style={{ backgroundImage: `url(${artist.imageUrl})` }}
+                    style={{ backgroundImage: `url(${heroPhoto})` }}
                     initial={reduce ? { opacity: 0.55, scale: 1 } : { opacity: 0, scale: 1.08 }}
                     animate={{ opacity: 0.55, scale: 1 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
@@ -102,11 +108,12 @@ export function ArtistPage() {
               />
 
               <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-end">
-              {artist.imageUrl ? (
+              {heroPhoto ? (
                 <img
-                  src={artist.imageUrl}
+                  src={heroPhoto}
                   alt={artist.name}
                   className="h-40 w-40 rounded-full border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
+                  onError={() => setHeroImgFailed(true)}
                 />
               ) : (
                 <FallbackAvatar name={artist.name} />

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { SearchBar } from '@/components/features/SearchBar';
 import { SearchFilters } from '@/components/features/SearchFilters';
@@ -12,9 +13,48 @@ import type { SearchResult, Track } from '@/types';
 
 type SearchFilter = 'all' | 'tracks' | 'albums' | 'artists';
 
+const FILTERS: readonly SearchFilter[] = ['all', 'tracks', 'albums', 'artists'];
+
 export function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<SearchFilter>('all');
+  // Persist query + active filter in the URL so a reload (or a
+  // bookmark / shared link) restores both. Using `useSearchParams`
+  // keeps the source of truth on the URL and side-steps the extra
+  // localStorage layer the previous useState approach would have
+  // needed for persistence.
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q') ?? '';
+  const rawFilter = params.get('f');
+  const filter: SearchFilter = (FILTERS as readonly string[]).includes(rawFilter ?? '')
+    ? (rawFilter as SearchFilter)
+    : 'all';
+  const setQuery = useCallback(
+    (next: string) => {
+      setParams(
+        (prev) => {
+          const out = new URLSearchParams(prev);
+          if (next) out.set('q', next);
+          else out.delete('q');
+          return out;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
+  const setFilter = useCallback(
+    (next: SearchFilter) => {
+      setParams(
+        (prev) => {
+          const out = new URLSearchParams(prev);
+          if (next === 'all') out.delete('f');
+          else out.set('f', next);
+          return out;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
 
   // "all" filter uses the compact query — 25 items per bucket, no
   // pagination. The per-type filters use the infinite hook so the
