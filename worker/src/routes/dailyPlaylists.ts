@@ -55,6 +55,7 @@ dailyPlaylists.post('/save/:id', async (c) => {
   if (!row) return c.json({ error: 'Плейлист не найден' }, 404);
 
   const tracks: { id: string; source?: string; title?: string; artist?: string;
+                  artistId?: string; artists?: { id: string; name: string }[];
                   album?: string; coverUrl?: string; coverVideoUrl?: string;
                   duration?: number }[] = JSON.parse(row.tracks);
 
@@ -104,6 +105,8 @@ dailyPlaylists.post('/save/:id', async (c) => {
           JSON.stringify({
             title: t.title,
             artist: t.artist,
+            artistId: t.artistId,
+            artists: t.artists,
             album: t.album,
             coverUrl: t.coverUrl,
             coverVideoUrl: t.coverVideoUrl,

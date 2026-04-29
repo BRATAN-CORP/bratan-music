@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { Track, Playlist } from '@/types';
+import type { Track, Playlist, ArtistRef } from '@/types';
 
 interface LikedResponse {
   items: Track[];
@@ -17,6 +17,11 @@ export interface LikeableTrack {
   id: string;
   title: string;
   artist: string;
+  /** Primary artist id — used as a fallback when `artists` is empty. */
+  artistId?: string;
+  /** Full credit list. Persisted into the snapshot so saved tracks keep
+   *  per-contributor links across reloads (Drake & Future, etc.). */
+  artists?: ArtistRef[];
   album?: string;
   coverUrl?: string;
   /** Animated mp4 cover URL (Tidal). Persisted into the like-snapshot
@@ -25,12 +30,17 @@ export interface LikeableTrack {
   duration: number;
 }
 
-type TrackSnapshot = Pick<LikeableTrack, 'title' | 'artist' | 'album' | 'coverUrl' | 'coverVideoUrl' | 'duration'>;
+type TrackSnapshot = Pick<
+  LikeableTrack,
+  'title' | 'artist' | 'artistId' | 'artists' | 'album' | 'coverUrl' | 'coverVideoUrl' | 'duration'
+>;
 
 function snapshotOf(t: LikeableTrack): TrackSnapshot {
   return {
     title: t.title,
     artist: t.artist,
+    artistId: t.artistId,
+    artists: t.artists,
     album: t.album ?? '',
     coverUrl: t.coverUrl,
     coverVideoUrl: t.coverVideoUrl,
