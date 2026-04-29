@@ -164,17 +164,19 @@ export function Player() {
             </div>
           )}
 
-          {/* Timeline: thin rail flush with the top edge of the player.
-              The bar grows slightly on hover/active for affordance, and
-              a draggable thumb appears at the playhead while the user
-              hovers or drags so they can see exactly where the seek
-              will land. Thumb sits in a non-clipped wrapper layer above
-              the rail (the rail keeps `overflow-hidden` for the
-              gradient bars; the thumb container does NOT, so the dot
-              can extend past the rail height without getting cut off
-              top/bottom on the wider hover state). */}
+          {/* Timeline. The outer wrapper is 12 px tall — same as the
+              draggable thumb dot — so the thumb is fully contained
+              vertically and never gets clipped by the player's
+              `overflow-hidden` (the thin 1-1.5 px rail used to be
+              flush with the player's top edge, which cropped the
+              top half of the thumb). The visible rail is absolutely
+              positioned, vertically centred, and stays thin on
+              idle/grows on hover/active so the affordance reads the
+              same as before. The taller hit-area is also a
+              UX win — the user no longer has to pixel-target a
+              1 px line to start a seek. */}
           <div
-            className="group/progress relative h-1 w-full shrink-0 cursor-pointer touch-none select-none transition-[height] duration-150 hover:h-1.5 active:h-1.5"
+            className="group/progress relative h-3 w-full shrink-0 cursor-pointer touch-none select-none"
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
               const rect = e.currentTarget.getBoundingClientRect();
@@ -197,9 +199,10 @@ export function Player() {
               target.addEventListener('pointercancel', onUp);
             }}
           >
-            {/* Rail: clipped so the buffered + played bars draw cleanly
-                against the rail's rounded corners. */}
-            <div className="absolute inset-0 overflow-hidden bg-[var(--color-bg-muted)]">
+            {/* Rail: thin visible bar, vertically centred inside the
+                taller wrapper. Clipped so the buffered + played bars
+                draw cleanly against the rail's rounded corners. */}
+            <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/progress:h-[5px] group-active/progress:h-[5px]">
               {/* Buffered range — a faint bar that runs from the start of
                   the track to whatever the audio element reports as
                   buffered. Sits visually behind the played bar so once
@@ -215,11 +218,10 @@ export function Player() {
               />
             </div>
             {/* Draggable thumb — visible while the user hovers the rail
-                or while a drag is in flight. Lives above the clipped
-                rail so it can extend a few px above/below the bar
-                height. Position is driven directly by the rAF-tracked
-                progress motion-value (no width transition, no spring),
-                so it stays glued to the cursor while seeking. */}
+                or while a drag is in flight. Sits inside the 12 px
+                wrapper (NOT inside the clipped rail) and is centred
+                via top:50% + -translate-y-1/2 so its full height fits
+                within the wrapper without being cropped. */}
             <motion.div
               aria-hidden
               className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] opacity-0 transition-opacity duration-150 group-hover/progress:opacity-100 group-active/progress:opacity-100"

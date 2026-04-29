@@ -452,28 +452,39 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
   // Mouse drag-to-scroll on desktop. We deliberately scope the drag
   // initiator to the mouse button: touch users get the native flick
   // momentum scroll and we'd just fight it by hijacking pointer
-  // events here. On pointerdown we capture the pointer and listen
-  // for moves on the document so the drag survives the cursor
-  // crossing the scroller edge.
+  // events here. On pointerdown we capture the pointer so the drag
+  // survives the cursor crossing the scroller edge and call
+  // preventDefault so the browser doesn't kick off its native
+  // image-drag / link-drag / text-selection gesture (any of which
+  // would tear down our `pointermove` listening and the carousel
+  // would just refuse to scroll on PC — exactly the regression the
+  // user reported after the previous click-suppression fix).
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'mouse') return;
     const el = scrollerRef.current;
     if (!el) return;
+    // Suppress the browser's native drag pipeline (cover image
+    // becoming a drag-image, link being dragged, text selection
+    // starting). Click events are unaffected — preventDefault on
+    // pointerdown only cancels the default UA behaviours, not the
+    // synthetic click that follows pointerup with no movement.
+    e.preventDefault();
+    // Capture the pointer up-front so pointermove keeps firing on the
+    // scroller even when the cursor leaves its bounding box. The
+    // earlier "defer capture until threshold" approach broke
+    // long-drag-to-edge scrolling because pointermove stopped
+    // arriving once the cursor hit the page edge. Capture is safe
+    // for clicks: the threshold gate below (`moved`) is what
+    // actually suppresses the post-drag click on tile links, and
+    // taps below threshold leave `moved=false` so the click fires
+    // normally on the original tile.
+    try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     dragStateRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
       startScroll: el.scrollLeft,
       moved: false,
     };
-    // Pointer capture is deferred until the drag threshold is crossed
-    // (see `onPointerMove` below). Capturing on pointerdown re-targets
-    // every pointer event for that pointer to the scroller, which —
-    // on cards wrapped in <Link> — could prevent the click event from
-    // reaching the link in browsers that resolve the click target via
-    // the active capture target rather than via hit-testing at
-    // pointerup. Capturing only once we know the user is actually
-    // dragging keeps simple taps unaffected and still lets the drag
-    // survive the cursor crossing the scroller's edge.
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragStateRef.current;
@@ -481,20 +492,19 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     const el = scrollerRef.current;
     if (!el) return;
     const dx = e.clientX - drag.startX;
-    // Drag activation threshold: 8 px. Below that, treat the gesture
+    // Drag activation threshold: 6 px. Below that, treat the gesture
     // as a click and DO NOT touch `scrollLeft` — laptop trackpads can
     // shift the cursor 3-5 px between mousedown and mouseup on a
     // normal tap, and any synthetic scroll during that window would
     // (a) drag the row out from under the cursor so the click target
     // moves, and (b) trip the `moved` flag so the post-pointerup
     // click suppressor swallows the user's tap on an album / playlist
-    // tile. Once moved=true we keep scrolling as before.
+    // tile. Once moved=true we keep scrolling as before. 6 px is a
+    // sweet spot — high enough to ride out trackpad jitter on taps,
+    // low enough that a deliberate 1-2 cm drag commits immediately.
     if (!drag.moved) {
-      if (Math.abs(dx) <= 8) return;
+      if (Math.abs(dx) <= 6) return;
       drag.moved = true;
-      // Now that the user has committed to a drag, capture the pointer
-      // so the gesture survives the cursor crossing the scroller edge.
-      try { el.setPointerCapture(drag.pointerId); } catch { /* ignore */ }
     }
     el.scrollLeft = drag.startScroll - dx;
   };
