@@ -78,6 +78,15 @@ dailyPlaylists.post('/save/:id', async (c) => {
     .bind(playlistId, userId, finalName, row.cover_url, now, now)
     .run();
 
+  // Mark this daily-playlist row as "saved" so /today can render the
+  // home-page card in a persistent "Сохранено" state across reloads.
+  await c.env.DB
+    .prepare(
+      `UPDATE daily_playlists SET saved_to_playlist_id = ? WHERE id = ? AND user_id = ?`,
+    )
+    .bind(playlistId, dailyId, userId)
+    .run();
+
   if (tracks.length > 0) {
     const stmts = tracks.map((t, i) =>
       c.env.DB

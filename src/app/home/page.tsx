@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Heart,
   Disc3,
+  Check,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -20,12 +21,12 @@ import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TrackItem } from '@/components/features/TrackItem';
-import { GenrePicker } from '@/components/features/GenrePicker';
+import { ArtistPicker } from '@/components/features/ArtistPicker';
 
 import {
   fetchWave,
   fetchDailyPlaylists,
-  fetchGenreSeeds,
+  fetchSeedArtists,
   fetchRecentPlays,
   saveDailyPlaylist,
   type DailyPlaylist,
@@ -43,9 +44,9 @@ import type { Track } from '@/types';
  *
  *   1. **Hero "Моя волна"** — the headline element. One-tap personal
  *      stream. If the user has no taste signal yet (no history, no
- *      genre seeds) we render the GenrePicker inline instead so the
- *      first-time experience is "pick what you like → listen", not
- *      "see an empty page → figure out what to do".
+ *      seed artists) we render the ArtistPicker inline instead so the
+ *      first-time experience is "pick artists → listen", not "see an
+ *      empty page → figure out what to do".
  *
  *   2. **Плейлисты дня** — three variants (Знакомое / Открытия /
  *      Под настроение). Each one playable as a queue and savable to
@@ -64,12 +65,12 @@ export function HomePage() {
   const reduce = useReducedMotion();
 
   const seedsQ = useQuery({
-    queryKey: ['recommendations', 'genre-seeds'],
-    queryFn: fetchGenreSeeds,
+    queryKey: ['recommendations', 'seed-artists'],
+    queryFn: fetchSeedArtists,
     staleTime: 60_000,
   });
 
-  const needsOnboarding = !!seedsQ.data && !seedsQ.data.hasHistory && seedsQ.data.slugs.length === 0;
+  const needsOnboarding = !!seedsQ.data && !seedsQ.data.hasHistory && seedsQ.data.artistIds.length === 0;
   const [forceShowPicker, setForceShowPicker] = useState(false);
 
   return (
@@ -87,8 +88,10 @@ export function HomePage() {
           >
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
               <Sparkles size={12} className="text-[var(--color-accent)]" />
-              {greeting()}
-              {user?.name ? <span className="text-foreground">, {user.name}</span> : null}
+              <span>
+                {greeting()}{user?.name ? ',' : ''}
+                {user?.name ? <span className="ml-1 text-foreground">{user.name}</span> : null}
+              </span>
             </span>
 
             <h1 className="max-w-3xl text-[clamp(2rem,5vw,3.6rem)] font-semibold leading-[1.04] tracking-tight">
@@ -98,7 +101,7 @@ export function HomePage() {
           </motion.div>
 
           {needsOnboarding || forceShowPicker ? (
-            <GenrePicker
+            <ArtistPicker
               onComplete={() => {
                 setForceShowPicker(false);
                 seedsQ.refetch();
@@ -107,8 +110,8 @@ export function HomePage() {
             />
           ) : (
             <WaveHero
-              onChangeGenres={() => setForceShowPicker(true)}
-              hasGenreSeeds={!!seedsQ.data && seedsQ.data.slugs.length > 0}
+              onChangeArtists={() => setForceShowPicker(true)}
+              hasSeedArtists={!!seedsQ.data && seedsQ.data.artistIds.length > 0}
             />
           )}
         </div>
@@ -126,11 +129,11 @@ export function HomePage() {
 // ────────────────────────────────────────────────────────────────────
 
 function WaveHero({
-  onChangeGenres,
-  hasGenreSeeds,
+  onChangeArtists,
+  hasSeedArtists,
 }: {
-  onChangeGenres: () => void;
-  hasGenreSeeds: boolean;
+  onChangeArtists: () => void;
+  hasSeedArtists: boolean;
 }) {
   const reduce = useReducedMotion();
   const [starting, setStarting] = useState(false);
@@ -207,9 +210,9 @@ function WaveHero({
                   </Button>
                 </motion.div>
 
-                <Button variant="outline" size="lg" onClick={onChangeGenres} className="gap-2">
+                <Button variant="outline" size="lg" onClick={onChangeArtists} className="gap-2">
                   <Sparkles size={16} />
-                  {hasGenreSeeds ? 'Поменять жанры' : 'Подобрать жанры'}
+                  {hasSeedArtists ? 'Поменять артистов' : 'Подобрать артистов'}
                 </Button>
               </div>
 
@@ -418,7 +421,11 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   const setQueue = usePlayerStore((s) => s.setQueue);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [savedName, setSavedName] = useState<string | null>(null);
+  const [savedJustNow, setSavedJustNow] = useState(false);
+  // Persistent across reloads (server-side flag) OR set to true after a
+  // local save click — both should disable the button and show the
+  // "Сохранено" state.
+  const isSaved = !!playlist.savedToPlaylistId || savedJustNow;
 
   const play = () => {
     if (playlist.tracks.length === 0) return;
@@ -428,12 +435,16 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   };
 
   const save = async () => {
+    if (isSaved) return;
     setSaving(true);
     try {
-      const res = await saveDailyPlaylist(playlist.id);
-      setSavedName(res.name);
-      // Invalidate the library list so the sidebar / library page picks it up.
+      await saveDailyPlaylist(playlist.id);
+      setSavedJustNow(true);
+      // Invalidate both the library list (sidebar / library page) and
+      // the daily-playlists query so the persistent saved flag flows
+      // back into other consumers of this card too.
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-playlists'] });
     } finally {
       setSaving(false);
     }
@@ -497,10 +508,10 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
             size="sm"
             variant="outline"
             className="gap-1.5"
-            disabled={saving || !!savedName}
+            disabled={saving || isSaved}
           >
-            <Library size={14} />
-            {savedName ? 'Сохранено' : saving ? 'Сохраняем…' : 'В библиотеку'}
+            {isSaved ? <Check size={14} /> : <Library size={14} />}
+            {isSaved ? 'Сохранено' : saving ? 'Сохраняем…' : 'В библиотеку'}
           </Button>
         </div>
       </div>

@@ -29,7 +29,11 @@ const SEEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** How many seeds we fan out into Tidal per wave/continue request. More
  *  seeds = more diversity but also more upstream calls. 4 is empirically
  *  enough to fill 50 candidates after dedup + dislike filtering. */
-const SEED_FAN_OUT = 4;
+const SEED_FAN_OUT = 5;
+/** How many tracks we ask Tidal for per seed. Larger pool → better
+ *  re-rank quality, but more bytes through the proxy. 50 is the
+ *  sweet spot for our scale. */
+const RADIO_PAGE_SIZE = 50;
 
 /** Re-rank weights. Hand-tuned, not learned. Sum doesn't have to be 1 —
  *  the absolute scale only matters in comparison between candidates. */
@@ -69,7 +73,7 @@ export class RecommendationService {
    * → globally popular).
    */
   async wave(userId: string, limit = 25): Promise<Track[]> {
-    const { profile, genreSeeds } = await this.taste.getOrCompute(userId);
+    const { profile, genreSeeds, seedArtistIds } = await this.taste.getOrCompute(userId);
     const dislikes = await this.loadDislikes(userId);
     const seen = await this.loadSeen(userId);
 
@@ -80,14 +84,20 @@ export class RecommendationService {
       // hits "Моя волна".
       const seeds = sampleN(profile.completedTrackIds, SEED_FAN_OUT);
       candidates = await this.candidatesFromTrackSeeds(seeds);
+    } else if (seedArtistIds.length > 0) {
+      // Cold-start with hand-picked artists: most precise signal we can
+      // get without listening history. Pull tracks from each chosen
+      // artist's radio feed.
+      candidates = await this.candidatesFromArtistSeeds(seedArtistIds);
     } else if (genreSeeds.length > 0) {
       candidates = await this.candidatesFromGenres(genreSeeds);
     } else {
-      candidates = await this.candidatesFromTrackSeeds([]); // returns []
+      candidates = [];
     }
 
     if (candidates.length === 0) {
-      // Last-resort fallback for brand-new users with no genre picks yet.
+      // Last-resort fallback for brand-new users with neither artist
+      // picks nor genre picks. Generic global popular slice.
       candidates = await this.candidatesFromGenres(['genre_pop', 'genre_rap', 'genre_electronic']);
     }
 
@@ -142,6 +152,39 @@ export class RecommendationService {
     return dedupTracks(pools.flat());
   }
 
+  /**
+   * Cold-start helper: pull tracks from each picked artist's top-tracks
+   * AND from track-radio of one of those tops, so we get both the
+   * "obvious" hits and the wider stylistic neighbourhood. Cached in KV
+   * for 12h per artist.
+   */
+  private async candidatesFromArtistSeeds(artistIds: string[]): Promise<Track[]> {
+    if (artistIds.length === 0) return [];
+    const pools = await Promise.all(
+      artistIds.slice(0, 6).map(async (id) => {
+        try {
+          const cacheKey = `artist_seed_tracks:${id}`;
+          const cached = await this.env.SESSIONS.get(cacheKey, 'json');
+          if (cached && Array.isArray(cached)) return cached as Track[];
+
+          const tops = await this.tidal.getArtistTopTracks(id).catch(() => [] as Track[]);
+          const seedForRadio = tops[0]?.id;
+          const radio = seedForRadio
+            ? await this.cachedTrackRadio(seedForRadio).catch(() => [] as Track[])
+            : [];
+          const combined = dedupTracks([...tops, ...radio]);
+          await this.env.SESSIONS.put(cacheKey, JSON.stringify(combined), {
+            expirationTtl: 12 * 60 * 60,
+          });
+          return combined;
+        } catch {
+          return [] as Track[];
+        }
+      }),
+    );
+    return dedupTracks(pools.flat());
+  }
+
   private async candidatesFromGenres(slugs: string[]): Promise<Track[]> {
     if (slugs.length === 0) return [];
     const pools = await Promise.all(
@@ -179,10 +222,10 @@ export class RecommendationService {
    * 90% of the upstream calls to repeated requests for the same seeds.
    */
   private async cachedTrackRadio(trackId: string): Promise<Track[]> {
-    const key = `track_radio:${trackId}`;
+    const key = `track_radio:${trackId}:${RADIO_PAGE_SIZE}`;
     const cached = await this.env.SESSIONS.get(key, 'json');
     if (cached && Array.isArray(cached)) return cached as Track[];
-    const fresh = await this.tidal.getTrackRadio(trackId);
+    const fresh = await this.tidal.getTrackRadio(trackId, RADIO_PAGE_SIZE);
     await this.env.SESSIONS.put(key, JSON.stringify(fresh), { expirationTtl: RADIO_CACHE_TTL_S });
     return fresh;
   }
