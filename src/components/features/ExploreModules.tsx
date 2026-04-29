@@ -80,6 +80,23 @@ function ModuleRow({ module: m, hero }: { module: ExploreModule; hero: boolean }
       // grid; otherwise we fall back to the compact pill cloud so
       // an icon-only row doesn't get awkwardly large empty cards.
       {
+        // Decade rows (`m_1980s`, `m_1990s`, …) skip the photo
+        // background even when Tidal returns one — the stock
+        // decade artwork reads as visual clutter alongside genre /
+        // mood photos. Instead we render decades in a flat grid
+        // (no horizontal scroller) using the same icon + label
+        // fallback the GenreTile already renders when no image is
+        // available — matching the landing-page "Что внутри"
+        // card recipe (bg-card + border + accent-glow on hover).
+        const isDecadeRow =
+          m.items.length > 0 &&
+          m.items.every(
+            (it) =>
+              /\b(19|20)\d0s?\b/i.test(it.title) || it.slug.toLowerCase().includes('decade'),
+          );
+        if (isDecadeRow) {
+          return <PageLinksDecadeGrid title={m.title} items={m.items} />;
+        }
         const allHaveImage = m.items.length > 0 && m.items.every((it) => Boolean(it.imageId));
         if (hero && allHaveImage) {
           return <PageLinksHeroGrid title={m.title} items={m.items} />;
@@ -149,18 +166,46 @@ function PageLinksImageRow({ title, items }: { title: string; items: ExplorePage
   );
 }
 
+/**
+ * Decade ladder rendered as a flat grid (not a snap-scrolling row)
+ * so the whole 1950s → 2020s range is visible at once and aligns
+ * vertically with the rest of the explore content. Each tile uses
+ * the same icon + label fallback GenreTile renders when no image
+ * is available — i.e. the landing-page "Что внутри" card recipe.
+ */
+function PageLinksDecadeGrid({ title, items }: { title: string; items: ExplorePageLink[] }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <SectionHeader
+        title={title}
+        icon={<CalendarRange size={14} className="text-[var(--color-accent)]" />}
+      />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map((it, i) => (
+          <GenreTile key={it.slug} item={it} index={i} variant="row" forceFallback />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function GenreTile({
   item,
   index,
   variant,
+  forceFallback = false,
 }: {
   item: ExplorePageLink;
   index: number;
   variant: 'hero' | 'row';
+  /** Skip the photo background even if Tidal returned an imageId.
+   *  Used by the decade grid where stock decade artwork reads as
+   *  visual noise next to mood / genre photos. */
+  forceFallback?: boolean;
 }) {
   // Larger CDN size on hero tiles so they stay crisp on retina
   // screens; row tiles stay at 480 to keep payloads light.
-  const img = tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
+  const img = forceFallback ? null : tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
   // Decades and a handful of mood pages don't ship with cover images,
   // and the previous fallback was a thin diagonal gradient that read
   // as "broken card". When there's no image we render the same
