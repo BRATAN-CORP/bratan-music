@@ -896,32 +896,39 @@ export function useAudioPlayer() {
     };
   }, []);
 
+  // Mount-time only: aggressively revoke any seek handlers that
+  // earlier builds may have registered. iOS Safari caches the
+  // MediaSession action set across reloads and even PWA installs;
+  // a stale `seekbackward`/`seekforward` registration from before
+  // is what keeps the iOS Now-Playing widget rendering ⏪10s/⏩10s
+  // instead of ⏮/⏭. Setting them to `null` is the spec-compliant
+  // revoke. We do this ONCE in its own effect — separate from the
+  // track-scoped registration loop below — so iOS Safari's
+  // internal heuristic never sees interleaved set/null calls for
+  // seek actions during a track transition (which empirically
+  // re-arms the seek layout on iOS 17+).
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    for (const action of ['seekbackward', 'seekforward', 'seekto'] as const) {
+      try { ms.setActionHandler(action, null); } catch { /* ignore */ }
+    }
+  }, []);
+
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     const ms = navigator.mediaSession;
     const store = () => usePlayerStore.getState();
-    // The iOS Now-Playing widget (Control Centre + Lock Screen) only
-    // shows two media buttons next to play/pause and it picks them
-    // based on which action handlers are currently registered: if both
-    // `seekbackward`/`seekforward` AND `previoustrack`/`nexttrack` are
-    // registered, iOS prefers the seek pair and renders ⏪ / ⏩ (10 s
-    // skip). Most music apps want the prev/next track icons
-    // (⏮ / ⏭) instead. The way to force them is to leave the seek
-    // handlers unregistered — `seekto` still works for the scrubber
-    // because it's a separate slot from the two transport buttons.
-    // We keep `seekto` so the platform scrubber stays interactive,
-    // and let the user rely on it for fine-grained seeking.
-    // Strict-minimum handler set for iOS Now-Playing. Empirically
-    // iOS Safari falls back to the 10-second skip layout (⏪/⏩)
-    // whenever ANY of `seekbackward`, `seekforward`, OR `seekto` is
-    // registered while `setPositionState` reports a finite duration —
-    // the platform classifies the audio as "podcast-shaped" and
-    // overrides the prev/next buttons. The fix that works
-    // consistently across iOS 16/17/18 is to keep ONLY play, pause,
-    // previoustrack, nexttrack, stop registered, and to leave all
-    // three seek-style handlers unset. The platform scrubber still
-    // works (it derives from the underlying <audio> element's
-    // `seekable` / `currentTime` range, not from the seekto handler).
+    // Strict-minimum handler set for iOS Now-Playing. iOS picks the
+    // two transport buttons next to play/pause from the *current*
+    // action set: registering `seekbackward`/`seekforward` (or
+    // leaving them registered from a previous track) makes iOS
+    // prefer the 10-second skip layout (⏪/⏩) over previous/next
+    // (⏮/⏭). We re-register prev/next on every track change so
+    // even if iOS's per-session action map drifts, the next track
+    // boundary always rebuilds the correct set. Seek* handlers are
+    // intentionally never set here — only the dedicated mount-time
+    // null-revoke effect above touches them.
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', () => store().play()],
       ['pause', () => store().pause()],
@@ -932,21 +939,12 @@ export function useAudioPlayer() {
     for (const [action, handler] of handlers) {
       try { ms.setActionHandler(action, handler); } catch { /* not supported */ }
     }
-    // Aggressively null the three seek handlers. iOS caches the
-    // action set across navigations and even across PWA installs, so
-    // a stale registration from a previous build can keep the seek
-    // layout active for hours. Setting null is the documented way
-    // to revoke a handler; browsers that never had the action throw
-    // and we swallow.
-    for (const action of ['seekbackward', 'seekforward', 'seekto'] as const) {
-      try { ms.setActionHandler(action, null); } catch { /* ignore */ }
-    }
     return () => {
       for (const [action] of handlers) {
         try { ms.setActionHandler(action, null); } catch { /* ignore */ }
       }
     };
-  }, []);
+  }, [currentTrack?.id]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -956,10 +954,14 @@ export function useAudioPlayer() {
     const dur = audio.duration;
     if (!dur || !isFinite(dur)) return;
     try {
+      // Pin playbackRate to 1 — variable playbackRate combined with
+      // a finite duration is one of the signals iOS Safari uses to
+      // classify the stream as "podcast-shaped" and surface the
+      // 10-second skip transport buttons.
       navigator.mediaSession.setPositionState({
         duration: dur,
         position: Math.min(progress, dur),
-        playbackRate: audio.playbackRate || 1,
+        playbackRate: 1,
       });
     } catch { /* ignore */ }
   }, [progress, currentTrack?.id]);

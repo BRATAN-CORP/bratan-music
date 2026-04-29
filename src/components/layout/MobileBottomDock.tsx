@@ -159,7 +159,7 @@ export function MobileBottomDock() {
               <SwipeTrackStrip className="min-w-0 flex-1">
                 {(t, position) => (
                   <div
-                    className="flex min-w-0 items-center gap-3"
+                    className="flex w-full min-w-0 items-center gap-3"
                     style={{ opacity: position === 'current' ? 1 : 0.6 }}
                   >
                     <button
@@ -180,7 +180,15 @@ export function MobileBottomDock() {
                         </div>
                       )}
                     </button>
-                    <div className="min-w-0 flex-1 overflow-hidden">
+                    {/* Title/artist column. Hard-cap at `basis-0` so the
+                        column derives its width entirely from the flex
+                        machinery (free space after the fixed-width
+                        cover/like/play/next buttons), never from the
+                        intrinsic max-content of the title text. The
+                        `min-w-0` + `overflow-hidden` chain stops the
+                        Marquee child from contributing its own
+                        max-content to the parent flex calculation. */}
+                    <div className="min-w-0 flex-1 basis-0 overflow-hidden">
                       <button
                         type="button"
                         onClick={position === 'current' ? openFullscreen : undefined}
