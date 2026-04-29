@@ -15,6 +15,10 @@ import { uploads } from './routes/uploads';
 import { webhook } from './routes/webhook';
 import { admin } from './routes/admin';
 import { explore } from './routes/explore';
+import { recommendations } from './routes/recommendations';
+import { dailyPlaylists } from './routes/dailyPlaylists';
+import { history } from './routes/history';
+import { runScheduledJobs } from './cron';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -58,6 +62,9 @@ app.route('/uploads', uploads);
 app.route('/webhook', webhook);
 app.route('/admin', admin);
 app.route('/explore', explore);
+app.route('/recommendations', recommendations);
+app.route('/daily-playlists', dailyPlaylists);
+app.route('/history', history);
 
 app.notFound((c) => c.json({ error: 'Маршрут не найден' }, 404));
 
@@ -71,4 +78,14 @@ app.onError((err, c) => {
   return c.json({ error: 'Внутренняя ошибка сервера' }, 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  /**
+   * Cloudflare cron-trigger entrypoint. Runs the recommendation jobs:
+   * recompute taste profiles for active users, regenerate daily-
+   * playlists, GC stale entries. Schedule is wired in wrangler.toml.
+   */
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runScheduledJobs(env));
+  },
+};

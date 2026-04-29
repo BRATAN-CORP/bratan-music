@@ -10,6 +10,9 @@ import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { LandingPage } from '@/app/landing/page';
+import { HomePage } from '@/app/home/page';
+import { useAuthStore } from '@/store/auth';
+import { usePlayHistoryLogger } from '@/hooks/usePlayHistoryLogger';
 import { Navigate } from 'react-router-dom';
 import { SearchPage } from '@/app/search/page';
 import { ExploreSlugPage } from '@/app/explore/slug';
@@ -52,9 +55,29 @@ function useDocumentPlaybackTitle() {
   }, []);
 }
 
+/**
+ * Choose what `/` renders: signed-in users land on the personalised
+ * HomePage (Моя волна + Плейлисты дня + Недавнее); anonymous visitors
+ * still see the marketing LandingPage with the Telegram login CTA.
+ *
+ * Lives as a tiny indirection so the route table itself stays a flat
+ * map of paths to elements; auth-gating is contained here instead of
+ * sprinkled across pages.
+ */
+function HomeOrLanding() {
+  const isAuthed = useAuthStore((s) => Boolean(s.user));
+  return isAuthed ? <HomePage /> : <LandingPage />;
+}
+
 function AppLayout() {
   useAutoAuth();
   useDocumentPlaybackTitle();
+  // Listening-history logger + auto-extend the queue when it nears
+  // empty. Mounted at the layout level so it survives navigation
+  // between routes — losing the in-flight track on every route change
+  // would mean we under-log plays for users who navigate while a song
+  // is still playing.
+  usePlayHistoryLogger();
   // Single-scroller layout: html/body owns the only vertical scroll. The
   // previous nested `main { overflow-y-auto }` inside `h-dvh + overflow-hidden`
   // shell created a SECOND scrollbar inside `main`, which made `position: fixed`
@@ -94,7 +117,7 @@ const router = createBrowserRouter(
       path: '/',
       element: <AppLayout />,
       children: [
-        { index: true, element: <LandingPage /> },
+        { index: true, element: <HomeOrLanding /> },
         { path: 'search', element: <SearchPage /> },
         // The user explicitly retired the standalone /explore landing —
         // its content lives inside SearchEmptyState now. We keep

@@ -2,6 +2,13 @@ name = "bratan-music-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
+# Cron triggers — cf executes runScheduledJobs() on this schedule.
+# 04:30 UTC nightly: recompute taste vectors + regenerate daily playlists.
+# Spread one execution window per day so all users' "Плейлист дня"
+# rotates simultaneously and feels like a fresh batch in the morning.
+[triggers]
+crons = ["30 4 * * *"]
+
 [vars]
 ENVIRONMENT = "production"
 APP_URL = "https://bratan-corp.github.io/bratan-music/"
