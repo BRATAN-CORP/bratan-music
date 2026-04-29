@@ -574,6 +574,15 @@ function ExplorePlaylistCard({
       transition={{ duration: 0.18 }}
       className="group flex flex-col gap-2.5"
     >
+      {/* Whole card navigates to the Tidal playlist detail. The Play
+          button below stops propagation so the user can either open
+          the detail (tap the card) or just start playback in place
+          (tap the Play CTA), matching the Spotify / Tidal pattern. */}
+      <Link
+        to={`/explore/playlist/${playlist.id}`}
+        className="block focus:outline-none"
+        aria-label={`Открыть плейлист ${playlist.title}`}
+      >
       <div className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary shadow-sm transition-shadow duration-300 group-hover:shadow-xl">
         {playlist.coverUrl ? (
           <img
@@ -621,6 +630,7 @@ function ExplorePlaylistCard({
           </p>
         )}
       </div>
+      </Link>
     </motion.div>
   );
 }
