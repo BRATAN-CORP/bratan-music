@@ -33,6 +33,13 @@ interface ExploreModulesProps {
    * the standard horizontal scroller.
    */
   heroFirstPlaylists?: boolean;
+  /**
+   * The slug of the containing explore page (e.g. "genre_hip_hop"
+   * or "explore" for the landing). Required to build "Смотреть
+   * все" links that route to `/explore/:parentSlug/list/:index`.
+   * When omitted, the see-all affordance is hidden.
+   */
+  parentSlug?: string;
 }
 
 /**
@@ -46,6 +53,7 @@ export function ExploreModules({
   modules,
   heroFirstPageLinks = true,
   heroFirstPlaylists = true,
+  parentSlug,
 }: ExploreModulesProps) {
   // Track whether we've already used up the "first hero" slot for
   // each module type so we apply hero treatment once and once only,
@@ -65,13 +73,38 @@ export function ExploreModules({
           hero = true;
           usedHeroPlaylists = true;
         }
-        return <ModuleRow key={`${m.type}-${i}-${m.title}`} module={m} hero={hero} />;
+        // Build a "see all" link only when upstream exposed a
+        // `moreApiPath` on this module AND we know the parent slug
+        // (so we can route to /explore/:parentSlug/list/:index).
+        // PageLinks rows are excluded — they're navigation, not
+        // content, and rendering a see-all affordance next to them
+        // is meaningless.
+        const seeAllHref =
+          m.type !== 'pageLinks' && parentSlug && m.moreApiPath
+            ? `/explore/${parentSlug}/list/${i}`
+            : undefined;
+        return (
+          <ModuleRow
+            key={`${m.type}-${i}-${m.title}`}
+            module={m}
+            hero={hero}
+            seeAllHref={seeAllHref}
+          />
+        );
       })}
     </div>
   );
 }
 
-function ModuleRow({ module: m, hero }: { module: ExploreModule; hero: boolean }) {
+function ModuleRow({
+  module: m,
+  hero,
+  seeAllHref,
+}: {
+  module: ExploreModule;
+  hero: boolean;
+  seeAllHref: string | undefined;
+}) {
   switch (m.type) {
     case 'pageLinks':
       // Tidal returns a mix of icon-only links (e.g. "Mood &
@@ -103,23 +136,55 @@ function ModuleRow({ module: m, hero }: { module: ExploreModule; hero: boolean }
         return <PageLinksCloud title={m.title} items={m.items} />;
       }
     case 'tracks':
-      return <TrackListRow title={m.title} items={m.items} />;
+      return <TrackListRow title={m.title} items={m.items} seeAllHref={seeAllHref} />;
     case 'albums':
-      return <AlbumScroller title={m.title} items={m.items} />;
+      return <AlbumScroller title={m.title} items={m.items} seeAllHref={seeAllHref} />;
     case 'artists':
-      return <ArtistScroller title={m.title} items={m.items} />;
+      return <ArtistScroller title={m.title} items={m.items} seeAllHref={seeAllHref} />;
     case 'playlists':
-      return <PlaylistScroller title={m.title} items={m.items} hero={hero} />;
+      return (
+        <PlaylistScroller
+          title={m.title}
+          items={m.items}
+          hero={hero}
+          seeAllHref={seeAllHref}
+        />
+      );
   }
 }
 
-function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode }) {
-  if (!title) return null;
+function SectionHeader({
+  title,
+  icon,
+  seeAllHref,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  seeAllHref?: string;
+}) {
+  // Some hero rows deliberately suppress the title to reduce visual
+  // noise, but still want the "Смотреть все" affordance when
+  // upstream offers pagination. If both are empty, render nothing.
+  if (!title && !seeAllHref) return null;
   return (
-    <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
-      {icon}
-      {title}
-    </h2>
+    <div className="flex items-end justify-between gap-3">
+      {title ? (
+        <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+          {icon}
+          {title}
+        </h2>
+      ) : (
+        <span />
+      )}
+      {seeAllHref && (
+        <Link
+          to={seeAllHref}
+          className="shrink-0 text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Смотреть все
+        </Link>
+      )}
+    </div>
   );
 }
 
@@ -316,7 +381,15 @@ function PageLinksCloud({ title, items }: { title: string; items: ExplorePageLin
   );
 }
 
-function TrackListRow({ title, items }: { title: string; items: Track[] }) {
+function TrackListRow({
+  title,
+  items,
+  seeAllHref,
+}: {
+  title: string;
+  items: Track[];
+  seeAllHref?: string;
+}) {
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   // Reuse the standard TrackItem so play/pause sync, like and the
@@ -337,7 +410,7 @@ function TrackListRow({ title, items }: { title: string; items: Track[] }) {
   };
   return (
     <section className="flex flex-col gap-3">
-      <SectionHeader title={title} />
+      <SectionHeader title={title} seeAllHref={seeAllHref} />
       <div className="rounded-[var(--radius-md)] border border-border bg-background">
         {items.slice(0, 8).map((t, i) => (
           <TrackItem key={t.id} track={t} index={i} onPlay={handlePlay} />
@@ -377,7 +450,15 @@ function buildEdgeMask(canPrev: boolean, canNext: boolean): string {
   return `linear-gradient(to right, ${left}, ${right})`;
 }
 
-function SnapScroller({ title, children }: { title: string; children: React.ReactNode }) {
+function SnapScroller({
+  title,
+  seeAllHref,
+  children,
+}: {
+  title: string;
+  seeAllHref?: string;
+  children: React.ReactNode;
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -681,7 +762,7 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
 
   return (
     <section className="relative flex flex-col gap-3">
-      <SectionHeader title={title} />
+      <SectionHeader title={title} seeAllHref={seeAllHref} />
       <div className="relative">
         <div
           ref={scrollerRef}
@@ -762,9 +843,17 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
   );
 }
 
-function AlbumScroller({ title, items }: { title: string; items: import('@/types').Album[] }) {
+function AlbumScroller({
+  title,
+  items,
+  seeAllHref,
+}: {
+  title: string;
+  items: import('@/types').Album[];
+  seeAllHref?: string;
+}) {
   return (
-    <SnapScroller title={title}>
+    <SnapScroller title={title} seeAllHref={seeAllHref}>
       {items.map((a) => (
         <div key={a.id} className="w-[160px] shrink-0 snap-start sm:w-[180px]">
           <AlbumCard album={a} />
@@ -774,9 +863,17 @@ function AlbumScroller({ title, items }: { title: string; items: import('@/types
   );
 }
 
-function ArtistScroller({ title, items }: { title: string; items: import('@/types').Artist[] }) {
+function ArtistScroller({
+  title,
+  items,
+  seeAllHref,
+}: {
+  title: string;
+  items: import('@/types').Artist[];
+  seeAllHref?: string;
+}) {
   return (
-    <SnapScroller title={title}>
+    <SnapScroller title={title} seeAllHref={seeAllHref}>
       {items.map((a) => (
         <div key={a.id} className="w-[140px] shrink-0 snap-start sm:w-[160px]">
           <ArtistCard artist={a} />
@@ -786,14 +883,24 @@ function ArtistScroller({ title, items }: { title: string; items: import('@/type
   );
 }
 
-function PlaylistScroller({ title, items, hero }: { title: string; items: ExplorePlaylist[]; hero: boolean }) {
+function PlaylistScroller({
+  title,
+  items,
+  hero,
+  seeAllHref,
+}: {
+  title: string;
+  items: ExplorePlaylist[];
+  hero: boolean;
+  seeAllHref?: string;
+}) {
   // Hero playlist row gets larger tiles and a richer card layout
   // (description + curator badge). Subsequent playlist rows use the
   // standard compact card so we don't drown the page in 240-px
   // tiles when Tidal returns multiple playlist sections.
   const cardWidth = hero ? 'w-[220px] sm:w-[260px]' : 'w-[180px] sm:w-[200px]';
   return (
-    <SnapScroller title={title}>
+    <SnapScroller title={title} seeAllHref={seeAllHref}>
       {items.map((p) => (
         <div key={p.id} className={`shrink-0 snap-start ${cardWidth}`}>
           <ExplorePlaylistCard playlist={p} variant={hero ? 'hero' : 'compact'} />

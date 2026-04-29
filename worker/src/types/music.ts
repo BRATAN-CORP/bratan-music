@@ -37,6 +37,15 @@ export interface SearchResult {
   tracks: Track[];
   albums: Album[];
   artists: Artist[];
+  /**
+   * Total counts reported by the upstream search, used by the UI to
+   * decide whether to keep requesting more pages when infinite
+   * scroll runs out of items. Undefined when upstream didn't return
+   * the count (rare — Tidal always does, but defensive).
+   */
+  totalTracks?: number;
+  totalAlbums?: number;
+  totalArtists?: number;
 }
 
 /**
@@ -76,12 +85,28 @@ export interface ExplorePageLink {
  * collapses into one of these so the frontend doesn't have to know
  * about the upstream module-type taxonomy.
  */
+/**
+ * Pagination metadata for a module that supports "show all".
+ * `moreApiPath` is Tidal's `pagedList.dataApiPath` — an opaque
+ * URL fragment like `pages/data/<uuid>` we pass to
+ * `GET /explore/list` to load subsequent windows. Present only for
+ * modules where the upstream pagedList exposed it (typically
+ * tracks/albums/playlists/artists rows with totalNumberOfItems >
+ * items.length). `totalItems` is populated when the upstream server
+ * knows the full count so the client can stop fetching once we've
+ * seen them all.
+ */
+interface ExploreModuleMore {
+  moreApiPath?: string;
+  totalItems?: number;
+}
+
 export type ExploreModule =
-  | { type: 'pageLinks'; title: string; items: ExplorePageLink[] }
-  | { type: 'tracks'; title: string; items: Track[] }
-  | { type: 'albums'; title: string; items: Album[] }
-  | { type: 'artists'; title: string; items: Artist[] }
-  | { type: 'playlists'; title: string; items: ExplorePlaylist[] };
+  | ({ type: 'pageLinks'; title: string; items: ExplorePageLink[] } & ExploreModuleMore)
+  | ({ type: 'tracks'; title: string; items: Track[] } & ExploreModuleMore)
+  | ({ type: 'albums'; title: string; items: Album[] } & ExploreModuleMore)
+  | ({ type: 'artists'; title: string; items: Artist[] } & ExploreModuleMore)
+  | ({ type: 'playlists'; title: string; items: ExplorePlaylist[] } & ExploreModuleMore);
 
 export interface ExplorePage {
   title: string;
@@ -89,7 +114,11 @@ export interface ExplorePage {
 }
 
 export interface MusicService {
-  search(query: string, filter: 'all' | 'tracks' | 'albums' | 'artists'): Promise<SearchResult>;
+  search(
+    query: string,
+    filter: 'all' | 'tracks' | 'albums' | 'artists',
+    opts?: { limit?: number; offset?: number },
+  ): Promise<SearchResult>;
   getTrack(id: string): Promise<Track>;
   getAlbum(id: string): Promise<Album>;
   getArtist(id: string): Promise<Artist>;

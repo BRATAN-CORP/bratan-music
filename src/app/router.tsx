@@ -13,6 +13,7 @@ import { LandingPage } from '@/app/landing/page';
 import { Navigate } from 'react-router-dom';
 import { SearchPage } from '@/app/search/page';
 import { ExploreSlugPage } from '@/app/explore/slug';
+import { ExploreListPage } from '@/app/explore/list';
 import { TidalPlaylistPage } from '@/app/explore/playlist';
 import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
@@ -103,6 +104,7 @@ const router = createBrowserRouter(
         // surface now lives.
         { path: 'explore', element: <Navigate to="/search" replace /> },
         { path: 'explore/:slug', element: <ExploreSlugPage /> },
+        { path: 'explore/:slug/list/:moduleIndex', element: <ExploreListPage /> },
         { path: 'explore/playlist/:uuid', element: <TidalPlaylistPage /> },
         { path: 'library', element: <LibraryPage /> },
         { path: 'library/uploads', element: <UploadsPage /> },

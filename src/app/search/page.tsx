@@ -1,20 +1,53 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { SearchBar } from '@/components/features/SearchBar';
 import { SearchFilters } from '@/components/features/SearchFilters';
 import { SearchResults } from '@/components/features/SearchResults';
 import { SearchEmptyState } from '@/components/features/SearchEmptyState';
 import { AuthGuard } from '@/components/features/AuthGuard';
-import { useSearch } from '@/hooks/useSearch';
+import { useSearch, useSearchInfinite } from '@/hooks/useSearch';
 import { useRecentSearches } from '@/hooks/useRecentSearches';
 import { usePlayerStore } from '@/store/player';
-import type { Track } from '@/types';
+import type { SearchResult, Track } from '@/types';
 
 type SearchFilter = 'all' | 'tracks' | 'albums' | 'artists';
 
 export function SearchPage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<SearchFilter>('all');
-  const { data, isLoading, error } = useSearch(query, filter);
+
+  // "all" filter uses the compact query — 25 items per bucket, no
+  // pagination. The per-type filters use the infinite hook so the
+  // user can scroll through the full result set instead of the
+  // previous hard 25-cap.
+  const combined = useSearch(query, filter === 'all' ? 'all' : 'all');
+  const infinite = useSearchInfinite(
+    query,
+    filter === 'all' ? 'tracks' : filter, // disabled anyway when filter='all'
+  );
+
+  const isInfinite = filter !== 'all';
+  const isLoading = isInfinite ? infinite.isLoading : combined.isLoading;
+  const error = (isInfinite ? infinite.error : combined.error) as Error | null;
+
+  // Flatten infinite pages into a single SearchResult so the existing
+  // SearchResults component doesn't need to know about pagination.
+  const data: SearchResult | undefined = useMemo(() => {
+    if (!isInfinite) return combined.data;
+    if (!infinite.data) return undefined;
+    const out: SearchResult = { tracks: [], albums: [], artists: [] };
+    for (const page of infinite.data.pages) {
+      out.tracks.push(...(page.tracks ?? []));
+      out.albums.push(...(page.albums ?? []));
+      out.artists.push(...(page.artists ?? []));
+      // Keep the most recent totals so downstream counts stay fresh.
+      if (page.totalTracks !== undefined) out.totalTracks = page.totalTracks;
+      if (page.totalAlbums !== undefined) out.totalAlbums = page.totalAlbums;
+      if (page.totalArtists !== undefined) out.totalArtists = page.totalArtists;
+    }
+    return out;
+  }, [isInfinite, combined.data, infinite.data]);
+
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const recent = useRecentSearches();
@@ -54,6 +87,30 @@ export function SearchPage() {
 
   const showEmptyState = !query.trim();
 
+  // Infinite-scroll sentinel. Only active when a single-type filter
+  // is selected (otherwise the flattened `data` is a preview and
+  // pagination doesn't apply).
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isInfinite) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    if (!infinite.hasNextPage || infinite.isFetchingNextPage) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            infinite.fetchNextPage();
+            break;
+          }
+        }
+      },
+      { rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isInfinite, infinite.hasNextPage, infinite.isFetchingNextPage, infinite]);
+
   return (
     <AuthGuard>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
@@ -71,13 +128,25 @@ export function SearchPage() {
             onClear={recent.clear}
           />
         ) : (
-          <SearchResults
-            data={data}
-            isLoading={isLoading}
-            error={error}
-            filter={filter}
-            onPlayTrack={handlePlayTrack}
-          />
+          <>
+            <SearchResults
+              data={data}
+              isLoading={isLoading}
+              error={error}
+              filter={filter}
+              onPlayTrack={handlePlayTrack}
+            />
+            {isInfinite && infinite.hasNextPage && (
+              <div ref={sentinelRef} className="flex items-center justify-center py-6">
+                {infinite.isFetchingNextPage && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 size={14} className="animate-spin" />
+                    Загружаем ещё…
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </AuthGuard>
