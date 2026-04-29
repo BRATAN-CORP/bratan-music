@@ -26,7 +26,7 @@ import { SharedPlaylistPage } from '@/app/shared/page';
 import { TrackPage } from '@/app/track/page';
 import { AlbumPage } from '@/app/album/page';
 import { ArtistPage } from '@/app/artist/page';
-import { ArtistReleasesPage } from '@/app/artist/releases';
+import { ArtistAlbumsPage, ArtistSinglesPage } from '@/app/artist/releases';
 import { NotFoundPage } from '@/app/not-found/page';
 
 /** Default <title> baked into index.html. We snapshot it on first
@@ -136,7 +136,8 @@ const router = createBrowserRouter(
         { path: 'track/:id', element: <TrackPage /> },
         { path: 'album/:id', element: <AlbumPage /> },
         { path: 'artist/:id', element: <ArtistPage /> },
-        { path: 'artist/:id/releases', element: <ArtistReleasesPage /> },
+        { path: 'artist/:id/albums', element: <ArtistAlbumsPage /> },
+        { path: 'artist/:id/singles', element: <ArtistSinglesPage /> },
         { path: 'playlist/:id', element: <PlaylistPage /> },
         { path: 'p/:token', element: <SharedPlaylistPage /> },
         { path: '*', element: <NotFoundPage /> },

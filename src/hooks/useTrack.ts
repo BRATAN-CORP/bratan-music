@@ -9,6 +9,7 @@ interface AlbumDetail extends Album {
 interface ArtistDetail extends Artist {
   topTracks: Track[];
   albums: Album[];
+  singles: Album[];
   similarArtists: Artist[];
 }
 
@@ -45,15 +46,26 @@ export function useArtist(id: string) {
 }
 
 /**
- * Full deduped release list for an artist, used by the
- * `/artist/:id/releases` page. The worker returns every album / EP /
- * single / compilation in one shot; the page slices this list
- * client-side to stage infinite-scroll pagination.
+ * Full deduped album feed for an artist (albums + EPs + compilations,
+ * no singles), powering the `/artist/:id/albums` "see all" page.
  */
-export function useArtistReleases(id: string) {
+export function useArtistAlbums(id: string) {
   return useQuery({
-    queryKey: ['artist-releases', id],
-    queryFn: () => api.get<{ items: Album[]; totalItems: number }>(`/artists/${id}/releases`),
+    queryKey: ['artist-albums', id],
+    queryFn: () => api.get<{ items: Album[]; totalItems: number }>(`/artists/${id}/albums`),
+    enabled: !!id,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Singles-only feed for an artist, powering the `/artist/:id/singles`
+ * "see all" page.
+ */
+export function useArtistSingles(id: string) {
+  return useQuery({
+    queryKey: ['artist-singles', id],
+    queryFn: () => api.get<{ items: Album[]; totalItems: number }>(`/artists/${id}/singles`),
     enabled: !!id,
     staleTime: 1000 * 60 * 5,
   });

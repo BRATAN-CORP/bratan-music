@@ -304,6 +304,23 @@ export class TidalService implements MusicService {
    *      the long-standing "single also showing as an album" duplicate.
    *   4. Sort by release date desc so the newest stuff bubbles up.
    */
+  /**
+   * Split version of {@link getArtistReleases}: returns albums (ALBUM
+   * + EP + COMPILATION buckets) and singles (SINGLE) as separate
+   * lists. Mirrors how Tidal's own artist page is structured — singles
+   * sit in their own row distinct from the album discography.
+   */
+  async getArtistAlbumsAndSingles(id: string, limit: number = 50): Promise<{ albums: Album[]; singles: Album[] }> {
+    const releases = await this.getArtistReleases(id, limit);
+    const albums: Album[] = [];
+    const singles: Album[] = [];
+    for (const r of releases) {
+      if (r.releaseType === 'SINGLE') singles.push(r);
+      else albums.push(r);
+    }
+    return { albums, singles };
+  }
+
   async getArtistReleases(id: string, limit: number = 50): Promise<Album[]> {
     const [albums, epsSingles, compilations] = await Promise.all([
       this.api.getArtistAlbums(id, limit, 'ALBUMS').catch(() => ({ items: [] as TidalAlbumRaw[] })),

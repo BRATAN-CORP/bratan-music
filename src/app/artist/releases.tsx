@@ -3,27 +3,37 @@ import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
-import { useArtist, useArtistReleases } from '@/hooks/useTrack';
+import { useArtist, useArtistAlbums, useArtistSingles } from '@/hooks/useTrack';
 
-/** How many cards we reveal per "Показать ещё" click / auto-page. */
 const PAGE_SIZE = 50;
 
+interface ArtistReleasesPageProps {
+  /** Whether to show the "albums" feed (ALBUM + EP + COMPILATION) or
+   *  the "singles" feed. Each kind hits a different worker endpoint
+   *  but the rendering is identical, so we share one component. */
+  kind: 'albums' | 'singles';
+}
+
 /**
- * "Все релизы артиста" page. The worker hands us the full deduped
- * list in one shot (albums + EPs + singles + compilations); here we
- * paginate client-side so we can run the intersection-observer
- * pattern without extra network round-trips.
+ * "All albums" / "All singles" listing for an artist. Reuses the same
+ * IntersectionObserver pagination pattern as the explore list page.
+ * The worker returns the entire deduped feed in one shot; we slice
+ * client-side in 50-item batches so paging doesn't trigger extra
+ * round-trips.
  */
-export function ArtistReleasesPage() {
+export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
   const { id } = useParams<{ id: string }>();
   const { data: artist } = useArtist(id ?? '');
-  const { data, isLoading, error } = useArtistReleases(id ?? '');
-  const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const albumsQ = useArtistAlbums(kind === 'albums' ? (id ?? '') : '');
+  const singlesQ = useArtistSingles(kind === 'singles' ? (id ?? '') : '');
+  const active = kind === 'albums' ? albumsQ : singlesQ;
+  const items = useMemo(() => active.data?.items ?? [], [active.data?.items]);
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const heading = kind === 'albums' ? 'Все альбомы' : 'Все синглы';
 
   useEffect(() => {
     setVisible(PAGE_SIZE);
-  }, [id]);
+  }, [id, kind]);
 
   const hasMore = visible < items.length;
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -57,31 +67,31 @@ export function ArtistReleasesPage() {
             <ChevronLeft size={12} />
             {artist?.name ?? 'Назад'}
           </Link>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Все релизы</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{heading}</h1>
           {items.length > 0 && (
             <p className="text-xs text-muted-foreground">{items.length} элементов</p>
           )}
         </div>
 
-        {isLoading && (
+        {active.isLoading && (
           <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted-foreground">
             <Loader2 size={14} className="animate-spin" />
             Загружаем…
           </div>
         )}
 
-        {error && (
+        {active.error && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
             <AlertCircle size={24} className="text-[var(--color-danger)]" />
-            <div className="text-sm">Не удалось загрузить релизы</div>
+            <div className="text-sm">Не удалось загрузить</div>
             <div className="text-xs text-muted-foreground">
-              {error instanceof Error ? error.message : 'Неизвестная ошибка'}
+              {active.error instanceof Error ? active.error.message : 'Неизвестная ошибка'}
             </div>
           </div>
         )}
 
-        {!isLoading && !error && items.length === 0 && (
-          <p className="text-sm text-muted-foreground">У артиста пока нет релизов.</p>
+        {!active.isLoading && !active.error && items.length === 0 && (
+          <p className="text-sm text-muted-foreground">Пусто.</p>
         )}
 
         {items.length > 0 && (
@@ -106,4 +116,12 @@ export function ArtistReleasesPage() {
       </div>
     </AuthGuard>
   );
+}
+
+export function ArtistAlbumsPage() {
+  return <ArtistReleasesPage kind="albums" />;
+}
+
+export function ArtistSinglesPage() {
+  return <ArtistReleasesPage kind="singles" />;
 }
