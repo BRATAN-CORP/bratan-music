@@ -397,18 +397,29 @@ function SnapScroller({ title, children }: { title: string; children: React.Reac
     const el = scrollerRef.current;
     if (!el) return;
     const update = () => {
-      // 8 px tolerance instead of 1 px because Chromium's smooth-scroll
-      // easing and iOS's rubber-band overscroll routinely park
-      // `scrollLeft` at a fractional value within ±2-4 px of the true
-      // endpoint. 1 px was leaving the right chevron visible at the
-      // very end of long Tidal explore rows (and the left chevron at
-      // the start, after a momentum swipe back) even though the row
-      // could no longer scroll. 8 px is small enough that you can't
-      // feel the chevron disappearing prematurely but kills the jitter.
-      const TOL = 8;
-      setCanPrev(el.scrollLeft > TOL);
-      setCanNext(el.scrollLeft + el.clientWidth + TOL < el.scrollWidth);
+      // Asymmetric tolerance:
+      //   - canNext: 8 px because Chromium's smooth-scroll easing and
+      //     iOS rubber-band overscroll routinely park `scrollLeft`
+      //     within ±2-4 px of the true endpoint, leaving the right
+      //     chevron visible at the very end of long Tidal rows even
+      //     though the row could no longer scroll.
+      //   - canPrev: **1 px**. With `scroll-snap-type: x mandatory` +
+      //     `scrollPaddingLeft: 16` Chromium parks `scrollLeft` near
+      //     0 on mount but sometimes at a 4-7 px snap-correction value
+      //     before the user has interacted. The previous 8-px symmetric
+      //     tolerance happened to mask that on the right edge but on
+      //     the left it triggered the opposite bug: the left chevron
+      //     stayed visible at the very start of the row, hiding only
+      //     after the user manually scrolled. Tightening to 1 px lets
+      //     the initial-state check be honest.
+      setCanPrev(el.scrollLeft > 1);
+      setCanNext(el.scrollLeft + el.clientWidth + 8 < el.scrollWidth);
     };
+    // Force the scroller to its true start before the first measure
+    // so we don't latch onto a snap-correction offset from the initial
+    // layout. `behavior: 'instant'` keeps this off the user's smooth-
+    // scroll budget — no animation, just a synchronous reset.
+    el.scrollTo({ left: 0, behavior: 'instant' as ScrollBehavior });
     // Initial measure happens on the next frame so the row's children
     // have laid out their final width — without this the chevrons
     // briefly flash on first paint when the row genuinely doesn't
