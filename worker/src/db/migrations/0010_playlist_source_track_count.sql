@@ -1,0 +1,15 @@
+-- Cached track count for linked (source_kind != NULL) playlists.
+--
+-- Rationale: linked playlists own no rows in `playlist_tracks` for
+-- themselves; their tracks are resolved from a foreign source on
+-- read (the source user's playlist or the Tidal API). The library
+-- list endpoint can't afford to resolve those sources for every
+-- playlist on every load, so before this column it always reported
+-- 0 tracks for linked playlists.
+--
+-- This column caches the last known count from the source. It's
+-- populated:
+--   * on save (`POST /playlists/external/tidal`, `POST /playlists/shared/:token/save`)
+--   * lazily refreshed every time `GET /playlists/:id` resolves the source
+-- NULL means "unknown" — the list endpoint coalesces to 0 in that case.
+ALTER TABLE playlists ADD COLUMN source_track_count INTEGER;

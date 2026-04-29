@@ -99,12 +99,18 @@ export function TidalPlaylistPage() {
       navigate(`/playlist/${linkedCopy.id}`);
       return;
     }
+    // Seed the cached count from the explore tile (`meta.trackCount`)
+    // when available, falling back to the live result we already
+    // fetched. Lets the library list show the right number on the
+    // very first load after saving, instead of "0 треков".
+    const seedCount = meta?.trackCount ?? tracks.length;
     saveMutation.mutate(
       {
         tidalId: uuid,
         name: meta?.title ?? 'Плейлист Tidal',
         coverUrl: meta?.coverUrl ?? null,
         curator: meta?.curator ?? null,
+        trackCount: typeof seedCount === 'number' ? seedCount : null,
       },
       {
         onSuccess: (created) => navigate(`/playlist/${created.id}`),

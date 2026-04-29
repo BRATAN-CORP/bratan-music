@@ -48,6 +48,7 @@ interface PlaylistRow {
   source_kind?: 'user' | 'tidal' | null;
   source_playlist_id?: string | null;
   source_user_id?: string | null;
+  source_track_count?: number | null;
 }
 
 function rowToTrack(r: DbRow) {
@@ -198,11 +199,29 @@ library.get('/liked', async (c) => {
   });
 });
 
+// Mirrors the resolution in `playlists.ts` — see the comment there for
+// the full rationale. Owned playlists count their own rows; linked-user
+// playlists count the source while it's still public; linked-tidal
+// playlists fall back to the cached `source_track_count`.
+const LIST_TRACK_COUNT_SQL = `
+  CASE
+    WHEN p.source_kind IS NULL THEN
+      (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id)
+    WHEN p.source_kind = 'user' THEN
+      COALESCE((
+        SELECT COUNT(*) FROM playlist_tracks pt
+        JOIN playlists src ON src.id = pt.playlist_id
+        WHERE src.id = p.source_playlist_id AND src.is_public = 1
+      ), 0)
+    ELSE COALESCE(p.source_track_count, 0)
+  END
+`;
+
 library.get('/playlists', async (c) => {
   const userId = c.get('userId');
 
   const items = await c.env.DB.prepare(
-    'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC'
+    `SELECT p.*, ${LIST_TRACK_COUNT_SQL} as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC`
   ).bind(userId).all<PlaylistRow>();
 
   return c.json({ items: (items.results ?? []).map(rowToPlaylist) });
