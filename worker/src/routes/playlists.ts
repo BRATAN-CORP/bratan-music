@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
 import { TidalService } from '../services/tidal/TidalService';
+import type { ArtistRef } from '../types/music';
 
 const playlists = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -23,6 +24,12 @@ function generateShareToken(): string {
 interface TrackSnapshot {
   title?: string;
   artist?: string;
+  /** Primary contributor id — used when `artists` is missing. */
+  artistId?: string;
+  /** Full credit list (Tidal returns one row per `MAIN`/`FEATURED`
+   *  contributor). Persisted so liked / playlist tracks keep their
+   *  per-artist links across reloads. */
+  artists?: ArtistRef[];
   album?: string;
   coverUrl?: string;
   /** Animated mp4 cover URL (Tidal). Only some albums expose it; we
@@ -81,6 +88,8 @@ function rowToTrack(r: PtRow) {
     position: r.position,
     title: snap?.title ?? '',
     artist: snap?.artist ?? '',
+    artistId: snap?.artistId,
+    artists: snap?.artists,
     album: snap?.album ?? '',
     coverUrl: snap?.coverUrl ?? '',
     coverVideoUrl: snap?.coverVideoUrl ?? undefined,
