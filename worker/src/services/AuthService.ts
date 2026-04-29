@@ -74,6 +74,20 @@ export class AuthService {
     const hash = params.get('hash');
     if (!hash) return null;
 
+    // Reject stale or future-dated payloads. Telegram's spec mandates this
+    // window for treating WebApp init data as authoritative; without the
+    // check, captured initData replays indefinitely and mints fresh JWT
+    // pairs forever. 24h is the documented upper bound.
+    const authDateRaw = params.get('auth_date');
+    if (!authDateRaw) return null;
+    const authDate = Number(authDateRaw);
+    if (!Number.isFinite(authDate) || authDate <= 0) return null;
+    const ageSec = Math.floor(Date.now() / 1000) - authDate;
+    const MAX_AUTH_AGE = 24 * 60 * 60;
+    // Allow up to 5 minutes of clock skew on the "from the future" side
+    // (NTP drift + user-device clocks) — beyond that, treat as forged.
+    if (ageSec > MAX_AUTH_AGE || ageSec < -300) return null;
+
     params.delete('hash');
     const entries = Array.from(params.entries()).sort(([a], [b]) => a.localeCompare(b));
     const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join('\n');

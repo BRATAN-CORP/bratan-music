@@ -28,17 +28,20 @@ app.get('/health/tidal', async (c) => {
     const { TidalAuth } = await import('./services/tidal/TidalAuth');
     const auth = new TidalAuth(c.env);
     const token = await auth.getAccessToken();
+    // Don't echo any portion of the token — the JWT header is the same for
+    // every token but the payload starts in the next chars and gives
+    // attackers a foothold for offline brute-force.
     return c.json({
       status: 'ok',
       hasToken: Boolean(token),
-      tokenPrefix: token ? `${token.slice(0, 12)}...` : null,
       countryCode: await auth.getCountryCode(),
     });
   } catch (err) {
-    return c.json(
-      { status: 'error', message: err instanceof Error ? err.message : String(err) },
-      503
-    );
+    // Don't surface upstream error.message to anonymous callers — log it,
+    // return a generic status so attackers can't fingerprint the Tidal
+    // session state from the response body.
+    console.error('[health/tidal] error:', err instanceof Error ? err.message : err);
+    return c.json({ status: 'error' }, 503);
   }
 });
 
@@ -59,9 +62,13 @@ app.route('/explore', explore);
 app.notFound((c) => c.json({ error: 'Маршрут не найден' }, 404));
 
 app.onError((err, c) => {
+  // Log the full error+stack server-side so wrangler tail still sees it,
+  // but never echo `error.message` to the client. Internal SQLite/Tidal
+  // exceptions routinely contain query fragments, upstream URLs and
+  // schema details that map the worker's internals for an attacker.
   const message = err instanceof Error ? err.message : String(err);
   console.error('Unhandled error:', message, err instanceof Error ? err.stack : '');
-  return c.json({ error: message || 'Внутренняя ошибка сервера', detail: message }, 500);
+  return c.json({ error: 'Внутренняя ошибка сервера' }, 500);
 });
 
 export default app;

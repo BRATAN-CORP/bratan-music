@@ -1,4 +1,5 @@
 import type { Env } from '../../types/env';
+import { encryptSecret, decryptSecret } from './sessionCrypto';
 
 interface TidalTokens {
   accessToken: string;
@@ -400,15 +401,29 @@ export class TidalAuth {
       }>()
       .catch(() => null);
     if (row) {
-      return {
-        accessToken: row.access_token,
-        refreshToken: row.refresh_token,
-        expiresAt: row.expires_at,
-        userId: row.user_id,
-        countryCode: row.country_code,
-        clientId: row.client_id ?? undefined,
-        clientSecret: row.client_secret ?? undefined,
-      };
+      try {
+        const key = this.env.SESSION_ENCRYPTION_KEY;
+        return {
+          accessToken: await decryptSecret(row.access_token, key),
+          refreshToken: await decryptSecret(row.refresh_token, key),
+          expiresAt: row.expires_at,
+          userId: row.user_id,
+          countryCode: row.country_code,
+          clientId: row.client_id ?? undefined,
+          // client_secret stays plaintext-or-encrypted via the same path —
+          // it's not as sensitive as the access/refresh pair (you also
+          // need the matching client_id and a *valid* refresh to use it),
+          // but the data is in the same row so we treat it the same way.
+          clientSecret: row.client_secret
+            ? await decryptSecret(row.client_secret, key)
+            : undefined,
+        };
+      } catch (err) {
+        // If decryption fails the row is unusable. Log and fall through
+        // to KV so a stale-but-valid legacy session can still rescue us;
+        // the next refresh will overwrite the bad row.
+        console.error('[TidalAuth] decrypt failed:', err instanceof Error ? err.message : err);
+      }
     }
     const raw = await this.env.SESSIONS.get(KV_KEY).catch(() => null);
     if (!raw) return null;
@@ -421,6 +436,12 @@ export class TidalAuth {
 
   private async cacheSession(tokens: TidalTokens): Promise<void> {
     const updatedAt = Math.floor(Date.now() / 1000);
+    const key = this.env.SESSION_ENCRYPTION_KEY;
+    const [accessToken, refreshToken, clientSecret] = await Promise.all([
+      encryptSecret(tokens.accessToken, key),
+      encryptSecret(tokens.refreshToken, key),
+      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key) : Promise.resolve(null),
+    ]);
     await this.env.DB
       .prepare(
         `INSERT INTO tidal_session (id, access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret, updated_at)
@@ -436,13 +457,13 @@ export class TidalAuth {
            updated_at = excluded.updated_at`
       )
       .bind(
-        tokens.accessToken,
-        tokens.refreshToken,
+        accessToken,
+        refreshToken,
         tokens.expiresAt,
         tokens.userId,
         tokens.countryCode,
         tokens.clientId ?? null,
-        tokens.clientSecret ?? null,
+        clientSecret,
         updatedAt
       )
       .run();

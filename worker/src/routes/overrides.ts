@@ -8,10 +8,33 @@ const overrides = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 overrides.use('/*', jwtAuth);
 
+// Strict allowlist for override sources and track ids — these end up
+// concatenated into the R2 object key (`overrides/<userId>/<source>/<trackId>`),
+// so anything user-controlled here can fan out into key-namespace
+// pollution or, on a different storage backend, path traversal.
+const ALLOWED_SOURCES = new Set(['tidal', 'upload']);
+// Tidal track ids are decimal integers; upload ids are UUID4 hex+dash.
+// 64 chars is plenty for either while still rejecting `..`/`/`/spaces.
+const TRACK_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
+function validateSource(c: { req: { query: (k: string) => string | undefined } }): string | null {
+  const source = c.req.query('source') ?? 'tidal';
+  if (!ALLOWED_SOURCES.has(source)) return null;
+  return source;
+}
+
 overrides.put('/:id/override', async (c) => {
   const userId = c.get('userId');
   const trackId = c.req.param('id');
   const isAdmin = c.get('isAdmin');
+
+  if (!TRACK_ID_RE.test(trackId)) {
+    return c.json({ error: 'Неверный идентификатор трека' }, 400);
+  }
+  const source = validateSource(c);
+  if (!source) {
+    return c.json({ error: 'Неверный source (допустимо: tidal, upload)' }, 400);
+  }
 
   if (!isAdmin) {
     const subService = new SubscriptionService(c.env);
@@ -23,7 +46,6 @@ overrides.put('/:id/override', async (c) => {
 
   const contentType = c.req.header('Content-Type') ?? 'audio/mpeg';
   const contentLength = parseInt(c.req.header('Content-Length') ?? '0', 10);
-  const source = c.req.query('source') ?? 'tidal';
 
   if (!c.req.raw.body) {
     return c.json({ error: 'Тело запроса обязательно' }, 400);
@@ -51,7 +73,13 @@ overrides.put('/:id/override', async (c) => {
 overrides.delete('/:id/override', async (c) => {
   const userId = c.get('userId');
   const trackId = c.req.param('id');
-  const source = c.req.query('source') ?? 'tidal';
+  if (!TRACK_ID_RE.test(trackId)) {
+    return c.json({ error: 'Неверный идентификатор трека' }, 400);
+  }
+  const source = validateSource(c);
+  if (!source) {
+    return c.json({ error: 'Неверный source (допустимо: tidal, upload)' }, 400);
+  }
 
   const storageService = new StorageService(c.env);
   const deleted = await storageService.delete(userId, trackId, source);
@@ -66,7 +94,13 @@ overrides.delete('/:id/override', async (c) => {
 overrides.get('/:id/override', async (c) => {
   const userId = c.get('userId');
   const trackId = c.req.param('id');
-  const source = c.req.query('source') ?? 'tidal';
+  if (!TRACK_ID_RE.test(trackId)) {
+    return c.json({ error: 'Неверный идентификатор трека' }, 400);
+  }
+  const source = validateSource(c);
+  if (!source) {
+    return c.json({ error: 'Неверный source (допустимо: tidal, upload)' }, 400);
+  }
 
   const override = await c.env.DB.prepare(
     'SELECT * FROM track_overrides WHERE user_id = ? AND track_id = ? AND source = ?'
@@ -82,7 +116,13 @@ overrides.get('/:id/override', async (c) => {
 overrides.get('/:id/override/stream', async (c) => {
   const userId = c.get('userId');
   const trackId = c.req.param('id');
-  const source = c.req.query('source') ?? 'tidal';
+  if (!TRACK_ID_RE.test(trackId)) {
+    return c.json({ error: 'Неверный идентификатор трека' }, 400);
+  }
+  const source = validateSource(c);
+  if (!source) {
+    return c.json({ error: 'Неверный source (допустимо: tidal, upload)' }, 400);
+  }
 
   const override = await c.env.DB.prepare(
     'SELECT r2_key, mime_type FROM track_overrides WHERE user_id = ? AND track_id = ? AND source = ?'
