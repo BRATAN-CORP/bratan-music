@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { Pause, Play, User, Heart, Radio } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { AlbumCard } from '@/components/features/AlbumCard';
@@ -21,6 +22,7 @@ export function ArtistPage() {
   const setQueue = usePlayerStore((s) => s.setQueue);
   const artistLike = useToggleArtistLike();
   const liked = artist ? artistLike.isLiked(artist.id) : false;
+  const reduce = useReducedMotion();
 
   // Hero "Play" button on the artist page targets the current top-track
   // queue — if anything in that list is the active player track, the
@@ -56,15 +58,58 @@ export function ArtistPage() {
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         ) : artist ? (
           <>
-            <div className="mb-10 flex flex-col items-start gap-6 border-b border-border pb-10 sm:flex-row sm:items-end">
+            {/* Hero with blurred ambience layer derived from the artist
+                photo — mirrors the FullscreenPlayer's pattern (blurred
+                cover image + saturate boost + soft dark vignette) so the
+                page picks up the artist's dominant colour without losing
+                the rest of the layout's neutral chrome. The blurred
+                image is keyed by the artist id so a navigation between
+                artists crossfades the ambience instead of snapping. */}
+            <div className="relative isolate -mx-4 mb-10 overflow-hidden px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
+              {artist.imageUrl ? (
+                <AnimatePresence initial={false} mode="sync">
+                  <motion.div
+                    key={artist.id + ':bg'}
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
+                    style={{ backgroundImage: `url(${artist.imageUrl})` }}
+                    initial={reduce ? { opacity: 0.55, scale: 1 } : { opacity: 0, scale: 1.08 }}
+                    animate={{ opacity: 0.55, scale: 1 }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0 }}
+                    transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1] }}
+                  />
+                </AnimatePresence>
+              ) : (
+                /* No artist photo — fall back to a soft accent radial so
+                   the hero still feels different from a flat page bg. */
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(80%_120%_at_30%_0%,var(--color-accent-glow),transparent_70%)] opacity-40"
+                />
+              )}
+              {/* Two-layer overlay: a subtle dark wash for legibility on
+                  bright photos, plus a vertical fade into the page bg so
+                  the hero melts into the next section instead of ending
+                  on a hard border. The accent-tinted radial keeps a hint
+                  of brand colour when the photo is desaturated. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/10 via-[var(--color-bg)]/35 to-[var(--color-bg)]"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-25"
+              />
+
+              <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-end">
               {artist.imageUrl ? (
                 <img
                   src={artist.imageUrl}
                   alt={artist.name}
-                  className="h-40 w-40 rounded-full border border-border object-cover"
+                  className="h-40 w-40 rounded-full border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
                 />
               ) : (
-                <div className="flex h-40 w-40 items-center justify-center rounded-full border border-border bg-secondary">
+                <div className="flex h-40 w-40 items-center justify-center rounded-full border border-white/10 bg-secondary shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]">
                   <User size={36} className="text-muted-foreground" />
                 </div>
               )}
@@ -112,6 +157,7 @@ export function ArtistPage() {
                     ariaLabel="Поделиться артистом"
                   />
                 </div>
+              </div>
               </div>
             </div>
 
