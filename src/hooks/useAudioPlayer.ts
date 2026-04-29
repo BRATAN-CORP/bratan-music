@@ -652,6 +652,13 @@ export function useAudioPlayer() {
     // over cleanly.
     cancelRamp();
 
+    // Clear any leftover restore-seek intent from the previous track.
+    // Otherwise the onTimeUpdate restore-gate on the INCOMING slot
+    // would keep setProgress suppressed (thinking the previous track's
+    // unfinished seek is still pending) and the timeline would appear
+    // stuck at the old position while the new track plays.
+    pendingRestoreProgressRef.current = null;
+
     const incoming = inactiveSlot(b);
     const outgoing = b.active;
     const audio = b.audios[incoming];
@@ -758,11 +765,36 @@ export function useAudioPlayer() {
       b.active = incoming;
       fallbackInProgressRef.current = false;
 
+      // Belt-and-suspenders: audio.load() inside tryLoadSrc should have
+      // reset currentTime to 0, but some browsers preserve the last
+      // seek on a pre-used slot. Setting it again right before play()
+      // guarantees the new track starts from 0 regardless of what the
+      // slot was doing before.
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+
       await safePlay(incoming);
       if (!crossfadingRef.current) { teardown(false); return; }
 
+      // One more currentTime=0 after play() resolved — some engines
+      // (notably older Safari) reset currentTime on the first
+      // play-invocation to whatever was cached, even if we set it to 0
+      // moments earlier. This is the last line of defence before the
+      // ramp starts producing audible output from the incoming track.
+      if (audio.currentTime > 0.5) {
+        try { audio.currentTime = 0; } catch { /* ignore */ }
+      }
+
       const tgt = muted ? 0 : volume;
       const durMs = Math.max(500, crossfadeDuration * 1000);
+      // Explicitly re-assert starting gains right before the ramp. The
+      // volume-effect / prior auto-crossfade teardown / graph init may
+      // have left the outgoing slot at something other than `tgt` and
+      // the incoming at something other than 0 — without this, the
+      // first tick of rampGain would SNAP from that stale value to
+      // `fromValue`, producing the "flip without fade" symptom the user
+      // reports.
+      setSlotGain(outgoing, tgt);
+      setSlotGain(incoming, 0);
       await Promise.all([
         rampGain(outgoing, tgt, 0, durMs),
         rampGain(incoming, 0, tgt, durMs),
@@ -1012,6 +1044,15 @@ export function useAudioPlayer() {
 
       const target = muted ? 0 : volume;
       const durMs = Math.max(500, crossfadeDuration * 1000);
+      // Re-assert starting gains right before the ramp — see the same
+      // fix in `softSwitchTo`. Without this, if the volume slider was
+      // touched since the track started OR the graph init left the
+      // outgoing slot's gain at a value other than `target`, the first
+      // tick of rampGain would SNAP from stale to `target` and the
+      // fade would be inaudible (user perceives a hard cut at the
+      // trigger point instead of a smooth ramp).
+      setSlotGain(outgoing, target);
+      setSlotGain(incoming, 0);
       await Promise.all([
         rampGain(outgoing, target, 0, durMs),
         rampGain(incoming, 0, target, durMs),
