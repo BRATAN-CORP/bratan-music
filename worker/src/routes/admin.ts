@@ -139,4 +139,79 @@ admin.post('/tidal/logout', async (c) => {
   return c.json({ ok: true });
 });
 
+// ---------------------------------------------------------------------------
+// Dangerous: purge a user's data from the service.
+//
+// Deletes everything that user has ever produced: their uploads (R2 + DB
+// rows), their playlists, their library items, their listening history,
+// their auth sessions, and finally the user row itself. Most tables already
+// cascade on `users.id`, so we only have to clean up the few that don't
+// (`auth_nonces`, `recommendation_seen`) plus the R2 blobs that aren't
+// covered by the DB cascade.
+//
+// The endpoint refuses to delete the requesting admin themselves to avoid a
+// foot-gun where an admin accidentally locks themselves out.
+// ---------------------------------------------------------------------------
+
+interface UserTrackRow {
+  r2_key: string;
+}
+
+admin.delete('/users/:id/data', async (c) => {
+  const targetId = c.req.param('id');
+  const requesterId = c.get('userId');
+  if (!targetId) return c.json({ error: 'id обязателен' }, 400);
+  if (targetId === requesterId) {
+    return c.json({ error: 'Нельзя удалить собственные данные через эту ручку' }, 400);
+  }
+
+  const userService = new UserService(c.env);
+  const user = await userService.findById(targetId);
+  if (!user) return c.json({ error: 'Пользователь не найден' }, 404);
+
+  // 1. Collect every R2 key associated with the user (uploads + per-user
+  //    track overrides) so we can drop the blobs out-of-band.
+  const r2Keys = new Set<string>();
+  const collect = async (sql: string) => {
+    const rows = await c.env.DB.prepare(sql).bind(targetId).all<UserTrackRow>();
+    for (const row of rows.results ?? []) if (row.r2_key) r2Keys.add(row.r2_key);
+  };
+  await collect('SELECT r2_key FROM user_tracks WHERE user_id = ?');
+  await collect('SELECT r2_key FROM track_overrides WHERE user_id = ?');
+
+  // 2. Best-effort R2 deletion. We don't fail the whole purge if a single
+  //    object can't be removed — the DB cascade still wipes references and
+  //    the orphan blob is invisible to the app.
+  let r2Deleted = 0;
+  let r2Failed = 0;
+  for (const key of r2Keys) {
+    try {
+      await c.env.TRACKS.delete(key);
+      r2Deleted += 1;
+    } catch (err) {
+      console.error('[admin/purge] R2 delete failed', key, err);
+      r2Failed += 1;
+    }
+  }
+
+  // 3. Manual cleanup for tables that don't have a CASCADE FK on user_id.
+  await c.env.DB.prepare('DELETE FROM auth_nonces WHERE user_id = ?').bind(targetId).run();
+  await c.env.DB.prepare('DELETE FROM recommendation_seen WHERE user_id = ?').bind(targetId).run();
+
+  // 4. Finally drop the user row — cascades to playlists, library_items,
+  //    user_tracks, sessions, subscriptions, daily_*, play_history,
+  //    track_overrides, user_taste_profile, user_dislikes, etc.
+  const result = await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId).run();
+
+  return c.json({
+    ok: true,
+    user: { id: user.id, username: user.tg_username, name: user.tg_name },
+    deleted: {
+      userRow: result.meta?.changes ?? 0,
+      r2Objects: r2Deleted,
+      r2Failed,
+    },
+  });
+});
+
 export { admin };

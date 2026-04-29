@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
+import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 
 interface GrantResponse {
   ok: boolean;
@@ -311,6 +312,7 @@ export function ProfilePage() {
             <AdminTidalPanel />
           </div>
         )}
+        {profile?.isAdmin && <AdminUserPurgePanel />}
 
         </div>
 
