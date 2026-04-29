@@ -54,7 +54,29 @@ interface AudioBundle {
   active: Slot;
   /** When non-null, a crossfade ramp is in flight. */
   crossfadingInto: Slot | null;
+  /**
+   * Distinguishes auto-crossfade (natural end-of-track fade started by
+   * `startCrossfade`, during which `store.currentTrack` is still the
+   * outgoing one until the ramp completes) from manual crossfade
+   * (user pressed next / picked a different track; `store.currentTrack`
+   * has already updated and `b.active` is swapped to the incoming slot
+   * as soon as the incoming stream starts playing so the timeline /
+   * seek / media-session surfaces all address the NEW track).
+   *
+   * - `'auto'` → triggered from `onTimeUpdate` approaching `duration`.
+   * - `'manual'` → triggered from the track-change effect in reaction
+   *   to a user-driven `setTrack`.
+   */
+  crossfadeKind: 'auto' | 'manual' | null;
   playPromises: Record<Slot, Promise<void> | null>;
+  /**
+   * Last `audio.currentTime` we observed on the most recent
+   * `timeupdate` for each slot. Used to detect non-playback jumps
+   * (seeks, track reloads) so the end-of-track auto-crossfade trigger
+   * does not fire on a user scrub into the final `crossfadeDuration`
+   * seconds.
+   */
+  lastRealT: Record<Slot, number>;
 }
 
 let bundle: AudioBundle | null = null;
@@ -126,7 +148,9 @@ function getBundle(): AudioBundle {
       ctxFailed: false,
       active: 'a',
       crossfadingInto: null,
+      crossfadeKind: null,
       playPromises: { a: null, b: null },
+      lastRealT: { a: 0, b: 0 },
     };
   }
   return bundle;
@@ -141,13 +165,52 @@ function getBundle(): AudioBundle {
  * three components race the same singleton's listeners. */
 export function seekAudio(time: number): void {
   const b = getBundle();
-  const audio = b.audios[b.active];
+  // Cancel any in-flight END-OF-TRACK crossfade: the user is actively
+  // scrubbing the current track so the auto-advance-into-next-track
+  // behaviour would hijack the gesture into silent fade-to-new-song.
+  // Manual crossfades (user already chose a new track) are intentional
+  // transitions and are left running.
+  if (b.crossfadingInto !== null && b.crossfadeKind === 'auto') {
+    abortAutoCrossfade(b);
+  }
+  const currentId = usePlayerStore.getState().currentTrack?.id ?? null;
+  const slot = ownerSlotFor(b, currentId);
+  const audio = b.audios[slot];
   if (!audio) return;
   // Update the store BEFORE touching audio.currentTime so the
   // spurious-reset gate in onTimeUpdate doesn't mistake a seek-to-0
   // for an unwanted reset. See the gate in `wireSlot`'s onTimeUpdate.
   usePlayerStore.getState().setProgress(time);
+  // Mark the seek in lastRealT so the jump-detection in onTimeUpdate
+  // doesn't flag the resulting big delta as a natural progression and
+  // re-trigger auto-crossfade.
+  b.lastRealT[slot] = time;
   audio.currentTime = time;
+}
+
+/**
+ * Teardown helper for canceling an auto end-of-track crossfade (e.g.
+ * because the user started scrubbing). Restores the outgoing slot to
+ * full gain, silences + unloads the incoming preload, and clears all
+ * crossfade state so a later natural end can re-attempt.
+ */
+function abortAutoCrossfade(b: AudioBundle): void {
+  cancelRamp();
+  const incoming = b.crossfadingInto;
+  if (!incoming) {
+    b.crossfadeKind = null;
+    return;
+  }
+  const outgoing = b.active;
+  // Silence and unload the preload.
+  try { b.audios[incoming].pause(); } catch { /* ignore */ }
+  b.loaded[incoming] = null;
+  setSlotGain(incoming, 0);
+  // Restore outgoing gain to the user's chosen volume.
+  const ps = usePlayerStore.getState();
+  setSlotGain(outgoing, ps.muted ? 0 : ps.volume);
+  b.crossfadingInto = null;
+  b.crossfadeKind = null;
 }
 
 function reloadWithoutCors(slot: Slot) {
@@ -291,6 +354,25 @@ function ensureAudioGraph(): AudioBundle {
 
 function inactiveSlot(b: AudioBundle): Slot {
   return b.active === 'a' ? 'b' : 'a';
+}
+
+/**
+ * Which slot currently "owns" the display surfaces (timeline, duration,
+ * seek target) for the given track id. Normally this is `b.active`, but
+ * during a crossfade — especially a manual one where the store has
+ * already switched to the new track but the audio graph is still
+ * ramping — it's whichever slot holds the matching loaded track id.
+ *
+ * Falls back to `b.active` when nothing matches so callers never see a
+ * null. When two slots report the same id (transient state during
+ * slot promotion) prefer the already-active one.
+ */
+function ownerSlotFor(b: AudioBundle, trackId: string | null | undefined): Slot {
+  if (!trackId) return b.active;
+  if (b.loaded[b.active] === trackId) return b.active;
+  const other = inactiveSlot(b);
+  if (b.loaded[other] === trackId) return other;
+  return b.active;
 }
 
 /**
@@ -547,6 +629,153 @@ export function useAudioPlayer() {
     }
   }, [pause, setError]);
 
+  /**
+   * Manual crossfade — the user picked a different track (clicked next,
+   * previous, a queue entry, a search result, etc.) so `store.currentTrack`
+   * has already changed to the new target. Unlike `startCrossfade`
+   * (natural end-of-track), this flow updates `b.active` as soon as the
+   * incoming stream is playable so every display surface (timeline,
+   * seek, duration text, media-session position) immediately addresses
+   * the NEW track — the old track keeps playing in the background while
+   * its gain ramps to zero, but the user sees the new track's timeline
+   * starting at 0:00 from the moment they pressed next.
+   *
+   * Falls back to a hard `loadTrack` if the incoming stream fails to
+   * load through the full quality fallback chain.
+   */
+  const softSwitchTo = useCallback(async (target: { id: string; source?: string; title: string; artist: string; coverUrl?: string }) => {
+    const b = getBundle();
+
+    // If we're already crossfading (natural end-of-track fade kicked in
+    // and the user clicked next mid-ramp, or another manual switch is
+    // still running) cancel the prior ramp so the new target takes
+    // over cleanly.
+    cancelRamp();
+
+    const incoming = inactiveSlot(b);
+    const outgoing = b.active;
+    const audio = b.audios[incoming];
+
+    b.crossfadingInto = incoming;
+    b.crossfadeKind = 'manual';
+    crossfadingRef.current = true;
+    crossfadeAttemptedRef.current = target.id;
+    loadingRef.current = target.id;
+    fallbackInProgressRef.current = true;
+
+    const teardown = (success: boolean) => {
+      if (success) {
+        safePause(outgoing);
+        b.loaded[outgoing] = null;
+        setSlotGain(outgoing, 0);
+        // `b.active` was already swapped to `incoming` before the ramp.
+      } else {
+        // Failure: restore outgoing as the sole active slot.
+        safePause(incoming);
+        b.loaded[incoming] = null;
+        setSlotGain(incoming, 0);
+        b.active = outgoing;
+        setSlotGain(outgoing, muted ? 0 : volume);
+      }
+      b.crossfadingInto = null;
+      b.crossfadeKind = null;
+      crossfadingRef.current = false;
+      fallbackInProgressRef.current = false;
+    };
+
+    // Walk the quality fallback chain — same chain loadTrack uses — so a
+    // missing HI_RES_LOSSLESS on this particular track falls through to
+    // LOSSLESS → HIGH → LOW instead of aborting the crossfade.
+    let effectiveQuality: string = currentQualityRef.current;
+    let url: string | null = null;
+    let loaded = false;
+    const MAX_RETRIES = 2;
+    try {
+      while (true) {
+        if (loadingRef.current !== target.id) { teardown(false); return; }
+        try {
+          url = await fetchStreamUrl(target, effectiveQuality);
+        } catch (err) {
+          url = null;
+          if (err instanceof ApiError && err.status === 402) {
+            teardown(false);
+            useUiStore.getState().openSubscriptionPrompt(
+              'Дневной лимит бесплатных прослушиваний исчерпан.',
+            );
+            setError(null);
+            pause();
+            return;
+          }
+        }
+        if (loadingRef.current !== target.id) { teardown(false); return; }
+        if (url) {
+          if (b.playPromises[incoming]) {
+            try { await b.playPromises[incoming]; } catch { /* ignore */ }
+          }
+          audio.pause();
+          corsRetried[incoming] = false;
+          audio.crossOrigin = 'anonymous';
+          ensureAudioGraph();
+          setSlotGain(incoming, 0);
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (loadingRef.current !== target.id) { teardown(false); return; }
+            const ok = await tryLoadSrc(audio, url);
+            if (ok) { loaded = true; break; }
+            if (attempt < MAX_RETRIES) {
+              await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+            }
+          }
+          if (loaded) break;
+        }
+        const nextQ = getNextFallbackQuality(effectiveQuality);
+        if (!nextQ) break;
+        currentQualityRef.current = nextQ;
+        effectiveQuality = nextQ;
+      }
+      if (loadingRef.current !== target.id) { teardown(false); return; }
+      if (!loaded) {
+        // Couldn't preload in inactive slot — fall back to hard switch
+        // via the regular loadTrack path (which also drives a fresh
+        // fallback chain on the active slot).
+        teardown(false);
+        fallbackInProgressRef.current = false;
+        loadTrack(target);
+        return;
+      }
+
+      try { audio.currentTime = 0; } catch { /* ignore */ }
+      b.loaded[incoming] = target.id;
+      b.lastRealT[incoming] = 0;
+
+      if (b.ctx && b.ctx.state === 'suspended') {
+        await b.ctx.resume().catch(() => {});
+      }
+
+      // Swap ACTIVE before play — so timeupdate / durationchange /
+      // mediaSession-position reads on the incoming slot immediately
+      // drive the store. The outgoing slot is suppressed inside each
+      // listener via the owner-slot guard.
+      b.active = incoming;
+      fallbackInProgressRef.current = false;
+
+      await safePlay(incoming);
+      if (!crossfadingRef.current) { teardown(false); return; }
+
+      const tgt = muted ? 0 : volume;
+      const durMs = Math.max(500, crossfadeDuration * 1000);
+      await Promise.all([
+        rampGain(outgoing, tgt, 0, durMs),
+        rampGain(incoming, 0, tgt, durMs),
+      ]);
+      if (!crossfadingRef.current) return;
+      teardown(true);
+    } catch (err) {
+      console.warn('[soft-switch] failed, falling back to hard load', err);
+      teardown(false);
+      loadTrack(target);
+    }
+  }, [muted, volume, crossfadeDuration, pause, setError, loadTrack]);
+
   // Reload when track id changes (or stream version bumped).
   const lastStreamVersionRef = useRef(streamVersion);
   useEffect(() => {
@@ -590,14 +819,22 @@ export function useAudioPlayer() {
     if (trackChanged || versionBumped) {
       // Reset quality fallback to user's chosen quality for the new track.
       currentQualityRef.current = tidalQuality;
-      // Cancel any in-flight crossfade so we don't keep two audios alive.
-      cancelRamp();
-      crossfadingRef.current = false;
-      b.crossfadingInto = null;
-      safePause(inactiveSlot(b));
-      b.loaded[inactiveSlot(b)] = null;
-      if (versionBumped) b.loaded[b.active] = null;
-      loadTrack(currentTrack);
+
+      // Soft-switch path — user manually changed track (clicked next /
+      // previous / a queue item / search result) while crossfade is
+      // enabled AND we have something actively playing to fade out of.
+      // Never soft-switch on a stream-version bump: that's a forced
+      // refetch (override added/removed) and the user expects the same
+      // track to restart from the new stream, not to cross-mix with
+      // its old copy.
+      const outgoingLoaded = b.loaded[b.active];
+      const canSoftSwitch =
+        crossfade
+        && !versionBumped
+        && outgoingLoaded !== null
+        && outgoingLoaded !== currentTrack.id
+        && isPlaying
+        && !b.audios[b.active].paused;
 
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -608,8 +845,26 @@ export function useAudioPlayer() {
             : [],
         });
       }
+
+      if (canSoftSwitch) {
+        softSwitchTo(currentTrack);
+        return;
+      }
+
+      // Hard switch path: cancel any in-flight crossfade and reload on
+      // the active slot. Used on first play, on a paused → play track
+      // change, when crossfade is disabled, and when soft-switch's
+      // own preload failed and fell back here.
+      cancelRamp();
+      crossfadingRef.current = false;
+      b.crossfadingInto = null;
+      b.crossfadeKind = null;
+      safePause(inactiveSlot(b));
+      b.loaded[inactiveSlot(b)] = null;
+      if (versionBumped) b.loaded[b.active] = null;
+      loadTrack(currentTrack);
     }
-  }, [currentTrack, loadTrack, streamVersion]);
+  }, [currentTrack, loadTrack, streamVersion, crossfade, isPlaying, softSwitchTo, tidalQuality]);
 
   // Play / pause toggle on the active slot.
   useEffect(() => {
@@ -693,6 +948,7 @@ export function useAudioPlayer() {
     const incoming = inactiveSlot(b);
     const outgoing = b.active;
     b.crossfadingInto = incoming;
+    b.crossfadeKind = 'auto';
     const audio = b.audios[incoming];
 
     // Helper that fully tears the crossfade down. Called both on success
@@ -712,6 +968,7 @@ export function useAudioPlayer() {
         setSlotGain(outgoing, muted ? 0 : volume);
       }
       b.crossfadingInto = null;
+      b.crossfadeKind = null;
       crossfadingRef.current = false;
     };
 
@@ -775,8 +1032,30 @@ export function useAudioPlayer() {
     const b = getBundle();
     const wireSlot = (slot: Slot) => {
       const audio = b.audios[slot];
+      /**
+       * Whether this slot currently "owns" the UI surfaces (timeline,
+       * duration text, ended-handler, etc.) for the playing track.
+       *
+       * Normally that's whichever slot `b.active` points at, but during
+       * the brief window of a manual crossfade the store's currentTrack
+       * has already switched to the new track while the outgoing slot
+       * still holds the previous one — in that case the outgoing slot
+       * must NOT drive store.progress / store.duration, otherwise it
+       * would clobber the new track's timecode with its own.
+       *
+       * Rule: a slot owns the surfaces when its `loaded` track id
+       * matches `store.currentTrack.id`. We fall back to `slot === b.active`
+       * on any fuzzy state (no current track, no loaded id) so existing
+       * behaviour is preserved when nothing is crossfading.
+       */
+      const isOwnerSlot = (): boolean => {
+        const currentId = usePlayerStore.getState().currentTrack?.id ?? null;
+        const loadedId = b.loaded[slot];
+        if (currentId && loadedId) return loadedId === currentId;
+        return slot === b.active;
+      };
       const onTimeUpdate = () => {
-        if (slot !== b.active) return;
+        if (!isOwnerSlot()) return;
         const realT = audio.currentTime;
 
         // Spurious-reset defence: detect the case where the audio
@@ -838,11 +1117,24 @@ export function useAudioPlayer() {
           if (Math.abs(realT - restoreTarget) > 1.5) return;
           pendingRestoreProgressRef.current = null;
         }
+        // Jump detection: only trigger the end-of-track auto-crossfade
+        // when we've reached the final window via natural playback
+        // progression, not a user scrub into the last few seconds. We
+        // consider the step natural if it advanced by between 0 and
+        // 1.5 s — the typical `timeupdate` cadence is 200–300 ms but
+        // some browsers coalesce frames on slow tracks.
+        const prevRealT = b.lastRealT[slot];
+        const delta = realT - prevRealT;
+        const isNaturalProgression = delta >= 0 && delta < 1.5;
+        b.lastRealT[slot] = realT;
+
         setProgress(realT);
         const dur = audio.duration;
         if (
           crossfade
           && !crossfadingRef.current
+          && isNaturalProgression
+          && !audio.seeking
           && isFinite(dur)
           && dur > 0
           && dur - audio.currentTime <= crossfadeDuration
@@ -851,11 +1143,11 @@ export function useAudioPlayer() {
         }
       };
       const onDurationChange = () => {
-        if (slot !== b.active) return;
+        if (!isOwnerSlot()) return;
         setDuration(audio.duration || 0);
       };
       const onLoadedMetadata = () => {
-        if (slot !== b.active) return;
+        if (!isOwnerSlot()) return;
         const target = pendingRestoreProgressRef.current;
         if (target !== null && isFinite(audio.duration) && audio.duration > 0) {
           // Kick off the seek but DON'T clear the ref here — onTimeUpdate
@@ -867,7 +1159,7 @@ export function useAudioPlayer() {
         }
       };
       const onEnded = () => {
-        if (slot !== b.active) return;
+        if (!isOwnerSlot()) return;
         if (repeat === 'one') {
           // Update the store first so the onTimeUpdate gate doesn't
           // mistake the deliberate rewind-to-0 for a spurious reset.
@@ -881,7 +1173,7 @@ export function useAudioPlayer() {
         }
       };
       const onError = () => {
-        if (slot !== b.active) return;
+        if (!isOwnerSlot()) return;
         // During loadTrack's internal fallback loop, errors are handled
         // by tryLoadSrc — ignore them here to prevent visual stutter.
         if (fallbackInProgressRef.current) return;
@@ -921,12 +1213,26 @@ export function useAudioPlayer() {
 
   const seek = useCallback((time: number) => {
     const b = getBundle();
-    const audio = b.audios[b.active];
+    // If we're mid-AUTO crossfade (natural end-of-track fade), the user
+    // scrubbing on the timeline is a strong signal that they want to
+    // stay in the current track — abort the preload-into-next-track
+    // flow so the seek doesn't get hijacked. Manual crossfades are
+    // intentional track transitions and are left running.
+    if (b.crossfadingInto !== null && b.crossfadeKind === 'auto') {
+      abortAutoCrossfade(b);
+    }
+    const currentId = usePlayerStore.getState().currentTrack?.id ?? null;
+    const slot = ownerSlotFor(b, currentId);
+    const audio = b.audios[slot];
     // Update the store BEFORE touching audio.currentTime so the
     // spurious-reset gate in onTimeUpdate doesn't mistake the
     // resulting timeupdate for an unwanted reset (the gate compares
     // realT against `store.progress`).
     setProgress(time);
+    // Record the seek target in lastRealT so the jump-detection gate
+    // above doesn't count the big delta from the resulting timeupdate
+    // as natural progression.
+    b.lastRealT[slot] = time;
     audio.currentTime = time;
   }, [setProgress]);
 
@@ -1254,7 +1560,18 @@ export function usePlaybackVisuals(): {
 
     const tick = () => {
       const b = getBundle();
-      const audio = b.audios[b.active];
+      // Visuals should always track the slot loaded with the CURRENT
+      // store track, not whichever slot happens to be `b.active`.
+      // During a manual crossfade the store switches tracks as soon as
+      // the user clicks next, while the outgoing slot keeps playing in
+      // the background until its gain ramp completes; reading from
+      // `b.active` during that window would briefly show the OUTGOING
+      // track's position (e.g. "3:48" on a 3:55 track) right as the UI
+      // is displaying the NEW track's title. Using the owner slot keeps
+      // the bar visually aligned with the title/cover at all times.
+      const currentId = usePlayerStore.getState().currentTrack?.id ?? null;
+      const slot = ownerSlotFor(b, currentId);
+      const audio = b.audios[slot];
       const now = performance.now();
       const dt = (now - lastTickAt) / 1000;
       lastTickAt = now;
