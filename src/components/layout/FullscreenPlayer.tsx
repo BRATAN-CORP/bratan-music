@@ -220,15 +220,24 @@ export function FullscreenPlayer() {
   // dismiss reads as more than just a translation.
   const sheetOpacity = useTransform(sheetY, [0, 240, 480], [1, 0.85, 0.45]);
   const sheetScale = useTransform(sheetY, [0, 480], [1, 0.96]);
-  // We use programmatic drag controls so the gesture only initiates
-  // from explicit "drag-zone" wrappers (the empty header strip and
-  // the negative-space band around the cover). That way taps on the
-  // ChevronDown button, the more-menu, the title, the like heart,
-  // the transport row and the volume slider all behave as plain
-  // buttons / sliders rather than getting eaten by a pan-y drag.
+  // We use programmatic drag controls so we can route every pointer
+  // down on the sheet through one filter: anything that lands on a
+  // button, link, input, slider, scrollable panel or the cover (which
+  // owns its own horizontal swipe) is excluded; everything else —
+  // the header strip, the gaps above/below/around the cover, the
+  // empty space between the transport row and the volume slider —
+  // grabs the dismiss gesture. That way the user can swipe-down from
+  // any "empty" surface to collapse the player, while the controls
+  // themselves still behave as plain buttons / sliders.
   const sheetDragControls = useDragControls();
+  const SHEET_DRAG_EXCLUDE_SELECTOR =
+    'button, a, input, textarea, select, ' +
+    '[role="slider"], [role="menu"], [role="menuitem"], ' +
+    'video, canvas, [data-no-sheet-drag]';
   const startSheetDrag = (e: React.PointerEvent) => {
     if (reduce) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest(SHEET_DRAG_EXCLUDE_SELECTOR)) return;
     sheetDragControls.start(e);
   };
 
@@ -316,17 +325,15 @@ export function FullscreenPlayer() {
 
           {/* Inner wrapper — owns the drag-to-dismiss transform so the
               outer AnimatePresence entrance/exit spring keeps working
-              independently. `dragListener={false}` means the gesture
-              never starts from the wrapper itself; only the explicit
-              `onPointerDown={startSheetDrag}` callbacks below initiate
-              the drag, on the empty header strip and the negative
-              space around the cover. Threshold and spring are tuned
-              up: 200 px or 900 px·s velocity to commit (was 120/500),
-              with a softer `stiffness:280 damping:24` return so a
-              short pull pings back tactilely instead of snapping.
-
-              `pointerEvents` stays default — child UI (buttons,
-              sliders, scroll areas) keeps working normally. */}
+              independently. `dragListener={false}` keeps motion's own
+              pointer listener off; we route every pointer down through
+              `startSheetDrag` instead, which filters out interactive
+              targets (buttons, sliders, scroll areas, cover) and starts
+              the dismiss gesture for everything else. Threshold and
+              spring are tuned up: 200 px or 900 px·s velocity to commit
+              (was 120/500), with a softer `stiffness:280 damping:24`
+              return so a short pull pings back tactilely instead of
+              snapping. */}
           <motion.div
             className="relative flex h-full flex-col"
             drag={reduce ? false : 'y'}
@@ -335,6 +342,7 @@ export function FullscreenPlayer() {
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             dragMomentum={false}
+            onPointerDown={startSheetDrag}
             onDrag={(_e, info) => {
               if (info.offset.y > 0) sheetY.set(info.offset.y);
             }}
@@ -355,14 +363,11 @@ export function FullscreenPlayer() {
 
           <div
             className="relative z-[20] flex items-center justify-between px-5 py-4"
-            // The header bar's empty middle area (between the
-            // ChevronDown on the left and the icon cluster on the
-            // right) is the natural "drag handle" — it's empty space
-            // anyway. Pointer-down on this row starts the dismiss
-            // drag; clicks on the buttons themselves still work
-            // because they stop propagation via React's synthetic
-            // event system the moment they handle the click.
-            onPointerDown={startSheetDrag}
+            // Sheet-dismiss drag is now wired on the inner wrapper
+            // (one level up). The header still listens for pointer
+            // events normally so its buttons keep working; empty
+            // space inside the header bubbles up to the wrapper's
+            // `onPointerDown={startSheetDrag}` and starts the drag.
             style={{ touchAction: 'pan-y' }}
           >
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
@@ -542,22 +547,10 @@ export function FullscreenPlayer() {
               horizontal band right under the header on light-coloured
               covers. The outer fullscreen <motion.div> already has
               overflow-hidden so nothing escapes the viewport. */}
-          {/* Hidden swipe-down catcher above the cover. The empty band
-              between the header and the cover artwork is, on most
-              viewports, the most ergonomic place to pull the sheet
-              down from — but the cover column is `justify-center`
-              and the gap is dynamic, so we lay a transparent
-              full-width 56-px-tall strip over its top via absolute
-              positioning. `pointer-events-auto` only on this strip
-              (the rest of the column listens normally). */}
-          {!reduce && (
-            <div
-              aria-hidden
-              className="pointer-events-auto absolute inset-x-0 top-[56px] z-[15] h-14"
-              style={{ touchAction: 'pan-y' }}
-              onPointerDown={startSheetDrag}
-            />
-          )}
+          {/* (Previously a hidden swipe-down catcher lived here above
+              the cover. Now the inner wrapper's `onPointerDown` filter
+              picks up pointer-downs anywhere on the empty surface, so
+              this dedicated strip is no longer needed.) */}
           <div className="relative z-[3] flex flex-1 min-h-0">
           {/* Cover column. Uses the simple flex layout from commit
               49360f3 — the user explicitly asked for that. The lyrics
@@ -1114,6 +1107,7 @@ export function FullscreenPlayer() {
               above) to visually re-centre in the remaining space. */}
           {currentTrack && (
             <div
+              data-no-sheet-drag
               className={`absolute inset-y-0 right-0 hidden md:block md:w-[44%] lg:w-[42%] xl:w-[40%] ${
                 lyricsOpen ? 'pointer-events-auto' : 'pointer-events-none'
               }`}
@@ -1131,13 +1125,15 @@ export function FullscreenPlayer() {
 
           {/* Mobile overlay: covers the whole player surface. */}
           {currentTrack && (
-            <LyricsPanel
-              trackId={currentTrack.id}
-              open={lyricsOpen}
-              onClose={() => setLyricsOpen(false)}
-              mode="overlay"
-              onSeek={seek}
-            />
+            <div data-no-sheet-drag>
+              <LyricsPanel
+                trackId={currentTrack.id}
+                open={lyricsOpen}
+                onClose={() => setLyricsOpen(false)}
+                mode="overlay"
+                onSeek={seek}
+              />
+            </div>
           )}
 
           <AddToPlaylistDialog

@@ -412,9 +412,12 @@ export function useAudioPlayer() {
     // timeupdate(0) that fires during initial load and remember the target
     // for the loadedmetadata listener to pick up. Tracks restarted by
     // setTrack/bumpStream/etc. always have progress=0, so this only kicks
-    // in for the reload-restore path.
+    // in for the reload-restore path. The threshold is intentionally
+    // permissive (>0.05s) — even half a second into a track should
+    // restore so the user doesn't see "1:23 → 0:00" between rehydrate
+    // and the audio element coming online.
     const initialStoreProgress = usePlayerStore.getState().progress;
-    if (initialStoreProgress > 1) {
+    if (initialStoreProgress > 0.05) {
       pendingRestoreProgressRef.current = initialStoreProgress;
     }
 
@@ -1147,9 +1150,15 @@ export function usePlaybackVisuals(): {
   bufferedSeconds: MotionValue<number>;
   durationSeconds: MotionValue<number>;
 } {
-  const progressSeconds = useMotionValue(0);
+  // Seed motion values from the persisted store so the very first
+  // paint after a reload already shows the saved progress / duration
+  // instead of a 0 % bar that fills in once audio.currentTime catches
+  // up. Without this seed the bar visibly snaps from 0 → X% the moment
+  // the seek lands, which reads as "timeline reset to 0:00".
+  const initialStore = usePlayerStore.getState();
+  const progressSeconds = useMotionValue(initialStore.progress);
   const bufferedSeconds = useMotionValue(0);
-  const durationSeconds = useMotionValue(0);
+  const durationSeconds = useMotionValue(initialStore.duration);
 
   useEffect(() => {
     let raf = 0;
@@ -1158,7 +1167,7 @@ export function usePlaybackVisuals(): {
     let lastTickAt = performance.now();
     // Last value we wrote to progressSeconds. Initialised lazily on the
     // first frame where we actually see audio.currentTime.
-    let displayed = 0;
+    let displayed = progressSeconds.get();
     let initialised = false;
 
     const tick = () => {
@@ -1172,6 +1181,31 @@ export function usePlaybackVisuals(): {
         const realT = audio.currentTime;
         const dur = audio.duration;
         if (isFinite(dur) && dur > 0) durationSeconds.set(dur);
+
+        // Reload-restore guard: while audio.currentTime is still parked
+        // at 0 because the seek to the persisted progress hasn't landed
+        // yet, mirror store.progress instead so the bar (and the
+        // visuals derived from it) don't flash 0:00 between rehydrate
+        // and the actual seek arriving. Once playback advances or the
+        // seek completes, audio.currentTime takes over normally.
+        if (audio.paused && realT < 0.05) {
+          const storeProgress = usePlayerStore.getState().progress;
+          if (storeProgress > 0.05) {
+            displayed = storeProgress;
+            const dur2 = audio.duration;
+            if (isFinite(dur2) && dur2 > 0) {
+              displayed = Math.max(0, Math.min(displayed, dur2));
+            } else {
+              const storeDuration = usePlayerStore.getState().duration;
+              if (storeDuration > 0) durationSeconds.set(storeDuration);
+            }
+            progressSeconds.set(displayed);
+            // Skip the prediction/buffered branches this frame — they'd
+            // overwrite the restored value with realT (= 0).
+            raf = requestAnimationFrame(tick);
+            return;
+          }
+        }
 
         if (!initialised) {
           displayed = realT;

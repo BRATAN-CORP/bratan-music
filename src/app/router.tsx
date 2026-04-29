@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { useAutoAuth } from '@/hooks/useAuth';
+import { usePlayerStore } from '@/store/player';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileBottomDock } from '@/components/layout/MobileBottomDock';
 import { Player } from '@/components/layout/Player';
@@ -22,8 +24,36 @@ import { AlbumPage } from '@/app/album/page';
 import { ArtistPage } from '@/app/artist/page';
 import { NotFoundPage } from '@/app/not-found/page';
 
+/** Default <title> baked into index.html. We snapshot it on first
+ *  mount so we can restore it when nothing is playing — otherwise
+ *  this would be a hard-coded string that drifts out of sync with
+ *  the HTML if it's ever renamed. */
+const DEFAULT_DOCUMENT_TITLE = typeof document !== 'undefined' ? document.title : '';
+
+function useDocumentPlaybackTitle() {
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isPlaying && currentTrack) {
+      // "Artist — Track" while playing, default title otherwise.
+      // Em-dash matches the existing index.html title style.
+      const artist = currentTrack.artist?.trim();
+      const title = currentTrack.title?.trim();
+      document.title = artist ? `${artist} — ${title}` : (title || DEFAULT_DOCUMENT_TITLE);
+    } else {
+      document.title = DEFAULT_DOCUMENT_TITLE;
+    }
+  }, [isPlaying, currentTrack]);
+  // Reset on unmount so a remount doesn't leave a stale title.
+  useEffect(() => () => {
+    if (typeof document !== 'undefined') document.title = DEFAULT_DOCUMENT_TITLE;
+  }, []);
+}
+
 function AppLayout() {
   useAutoAuth();
+  useDocumentPlaybackTitle();
   // Single-scroller layout: html/body owns the only vertical scroll. The
   // previous nested `main { overflow-y-auto }` inside `h-dvh + overflow-hidden`
   // shell created a SECOND scrollbar inside `main`, which made `position: fixed`
