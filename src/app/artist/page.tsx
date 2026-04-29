@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Pause, Play, User, Heart, Radio } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
@@ -150,9 +150,19 @@ export function ArtistPage() {
 
             {artist.albums?.length > 0 && (
               <section className="mb-12">
-                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Релизы</h2>
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                  <h2 className="text-base font-semibold tracking-tight">Релизы</h2>
+                  {artist.albums.length > 10 && (
+                    <Link
+                      to={`/artist/${artist.id}/releases`}
+                      className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Показать все →
+                    </Link>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                  {artist.albums.map((album) => (
+                  {artist.albums.slice(0, 10).map((album) => (
                     <AlbumCard key={album.id} album={album} />
                   ))}
                 </div>

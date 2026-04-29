@@ -27,6 +27,23 @@ artists.get('/:id', async (c) => {
 });
 
 /**
+ * Full deduped release feed for the artist, suitable for the
+ * "/artist/:id/releases" page. Tidal caps each filter bucket at 50
+ * items per request, so we reach for the underlying buckets with a
+ * higher limit (default 200) and let the service merge them. The
+ * frontend paginates client-side over the resulting list — typical
+ * artists have well under 200 releases, and re-running the merge per
+ * page is wasteful.
+ */
+artists.get('/:id/releases', async (c) => {
+  const id = c.req.param('id');
+  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit')) || 200));
+  const tidal = new TidalService(c.env);
+  const items = await tidal.getArtistReleases(id, limit);
+  return c.json({ items, totalItems: items.length });
+});
+
+/**
  * Artist radio. Returned as a flat track list ready to drop straight
  * into the player queue. Errors are surfaced to the frontend as an
  * empty list — this endpoint is purely additive and shouldn't break
