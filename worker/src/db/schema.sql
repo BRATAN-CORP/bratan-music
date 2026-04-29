@@ -149,11 +149,12 @@ CREATE INDEX idx_play_history_user_played ON play_history(user_id, played_at DES
 CREATE INDEX idx_play_history_user_artist ON play_history(user_id, artist_id);
 
 CREATE TABLE user_taste_profile (
-    user_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    profile      TEXT NOT NULL,
-    genre_seeds  TEXT NOT NULL DEFAULT '[]',
-    computed_at  INTEGER NOT NULL,
-    updated_at   INTEGER NOT NULL
+    user_id          TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    profile          TEXT NOT NULL,
+    genre_seeds      TEXT NOT NULL DEFAULT '[]',
+    seed_artist_ids  TEXT NOT NULL DEFAULT '[]',
+    computed_at      INTEGER NOT NULL,
+    updated_at       INTEGER NOT NULL
 );
 
 CREATE TABLE user_dislikes (
@@ -167,15 +168,16 @@ CREATE TABLE user_dislikes (
 CREATE INDEX idx_user_dislikes_user ON user_dislikes(user_id, created_at DESC);
 
 CREATE TABLE daily_playlists (
-    id           TEXT PRIMARY KEY,
-    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    date         TEXT NOT NULL,
-    variant      TEXT NOT NULL CHECK(variant IN ('familiar','discover','mood')),
-    name         TEXT NOT NULL,
-    description  TEXT NOT NULL DEFAULT '',
-    cover_url    TEXT,
-    tracks       TEXT NOT NULL,
-    generated_at INTEGER NOT NULL
+    id                    TEXT PRIMARY KEY,
+    user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date                  TEXT NOT NULL,
+    variant               TEXT NOT NULL CHECK(variant IN ('familiar','discover','mood')),
+    name                  TEXT NOT NULL,
+    description           TEXT NOT NULL DEFAULT '',
+    cover_url             TEXT,
+    tracks                TEXT NOT NULL,
+    generated_at          INTEGER NOT NULL,
+    saved_to_playlist_id  TEXT
 );
 CREATE UNIQUE INDEX idx_daily_playlists_user_date_variant ON daily_playlists(user_id, date, variant);
 CREATE INDEX idx_daily_playlists_user_generated ON daily_playlists(user_id, generated_at DESC);

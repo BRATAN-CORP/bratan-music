@@ -9,6 +9,10 @@ export interface DailyPlaylist {
   coverUrl?: string;
   tracks: Track[];
   generatedAt: number;
+  /** Set when the user has already promoted this daily playlist into
+   *  their library; the home-page card uses this to render a persistent
+   *  "Сохранено" state across reloads. */
+  savedToPlaylistId?: string;
 }
 
 interface ItemsResponse<T> { items: T[]; }
@@ -44,6 +48,45 @@ export async function fetchGenreSeeds(): Promise<{ slugs: string[]; hasHistory: 
 /** Cold-start: write 3-8 picked genre slugs. */
 export async function setGenreSeeds(slugs: string[]): Promise<void> {
   await api.post(`/recommendations/genre-seeds`, { slugs });
+}
+
+export interface SeedArtistsState {
+  artistIds: string[];
+  hasHistory: boolean;
+}
+
+/** Cold-start (preferred): read currently-picked seed artist ids. */
+export async function fetchSeedArtists(): Promise<SeedArtistsState> {
+  return api.get(`/recommendations/seed-artists`);
+}
+
+/** Cold-start (preferred): write 1-12 picked artist ids. */
+export async function setSeedArtists(artistIds: string[]): Promise<void> {
+  await api.post(`/recommendations/seed-artists`, { artistIds });
+}
+
+export interface SeedArtistCandidate {
+  id: string;
+  name: string;
+  imageUrl?: string;
+}
+
+interface SeedArtistsResponse { items: SeedArtistCandidate[]; }
+
+/** Search Tidal artists for the cold-start picker. */
+export async function searchSeedArtists(query: string): Promise<SeedArtistCandidate[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const data = await api.get<SeedArtistsResponse>(
+    `/recommendations/artists/search?q=${encodeURIComponent(q)}`,
+  );
+  return data.items ?? [];
+}
+
+/** Suggested artists shown when the search input is empty. */
+export async function fetchSuggestedSeedArtists(): Promise<SeedArtistCandidate[]> {
+  const data = await api.get<SeedArtistsResponse>(`/recommendations/artists/suggested`);
+  return data.items ?? [];
 }
 
 export async function dislikeItem(

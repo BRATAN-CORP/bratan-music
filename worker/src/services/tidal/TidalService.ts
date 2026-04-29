@@ -241,8 +241,8 @@ export class TidalService implements MusicService {
     return res.items.map(mapArtist);
   }
 
-  async getTrackRadio(id: string): Promise<Track[]> {
-    const res = await this.api.getTrackRadio(id);
+  async getTrackRadio(id: string, limit: number = 25): Promise<Track[]> {
+    const res = await this.api.getTrackRadio(id, limit);
     return res.items.map(mapTrack);
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { usePlayerStore } from '@/store/player';
 import { useAuthStore } from '@/store/auth';
+import { useSettingsStore } from '@/store/settings';
 import { logPlay, fetchContinue } from '@/lib/recommendations';
 
 /**
@@ -83,6 +84,10 @@ export function usePlayHistoryLogger() {
       // 'one' is a deliberate single-track loop — neither wants random
       // wave tracks injected.
       if (repeat !== 'off') return;
+      // User-controlled toggle in Settings → "Воспроизведение".
+      // When off, the queue is intentionally finite and the player
+      // stops on the last track.
+      if (!useSettingsStore.getState().infinitePlayback) return;
       const idx = queue.findIndex((t) => t.id === currentTrack.id);
       const remaining = idx >= 0 ? queue.length - idx - 1 : queue.length;
       if (remaining > QUEUE_REFILL_THRESHOLD) return;

@@ -56,7 +56,7 @@ const SPECS: Record<Variant, ColdStartSpec> = {
   },
 };
 
-const PLAYLIST_LENGTH = 25;
+const PLAYLIST_LENGTH = 50;
 
 interface DailyPlaylistRow {
   id: string;
@@ -66,6 +66,7 @@ interface DailyPlaylistRow {
   cover_url: string | null;
   tracks: string;
   generated_at: number;
+  saved_to_playlist_id: string | null;
 }
 
 export interface DailyPlaylist {
@@ -76,6 +77,10 @@ export interface DailyPlaylist {
   coverUrl?: string;
   tracks: Track[];
   generatedAt: number;
+  /** When the user has promoted this daily-playlist into their library,
+   *  this points at the resulting playlists.id. The home page uses this
+   *  to render a persistent «Сохранено» badge across reloads. */
+  savedToPlaylistId?: string;
 }
 
 export class DailyPlaylistService {
@@ -130,7 +135,8 @@ export class DailyPlaylistService {
   private async fetchByDate(userId: string, date: string): Promise<DailyPlaylist[]> {
     const res = await this.env.DB
       .prepare(
-        `SELECT id, variant, name, description, cover_url, tracks, generated_at
+        `SELECT id, variant, name, description, cover_url, tracks,
+                generated_at, saved_to_playlist_id
            FROM daily_playlists
           WHERE user_id = ? AND date = ?`,
       )
@@ -144,6 +150,7 @@ export class DailyPlaylistService {
       coverUrl: r.cover_url ?? undefined,
       tracks: parseTracks(r.tracks),
       generatedAt: r.generated_at,
+      savedToPlaylistId: r.saved_to_playlist_id ?? undefined,
     })).sort(byVariantOrder);
   }
 

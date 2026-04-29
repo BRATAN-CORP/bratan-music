@@ -22,10 +22,17 @@ interface SettingsState {
   crossfadeDuration: number;
   /** Stream quality requested from the Tidal proxy account. */
   tidalQuality: TidalQuality;
+  /**
+   * Бесконечное воспроизведение: когда очередь почти пуста и `repeat='off'`,
+   * автоматически добавляем рекомендации в хвост. Если выключено — плеер
+   * останавливается на последнем треке.
+   */
+  infinitePlayback: boolean;
 
   setCrossfade: (on: boolean) => void;
   setCrossfadeDuration: (s: number) => void;
   setTidalQuality: (q: TidalQuality) => void;
+  setInfinitePlayback: (on: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -34,9 +41,14 @@ export const useSettingsStore = create<SettingsState>()(
       crossfade: false,
       crossfadeDuration: 6,
       tidalQuality: 'HIGH',
+      // На бы дефолт — это ожидаемое поведение «музыка не кончается»,
+      // и явный opt-out в настройках для тех, кому нужно чтобы очередь остановилась
+      // ровно там, где положил.
+      infinitePlayback: true,
       setCrossfade: (on) => set({ crossfade: on }),
       setCrossfadeDuration: (s) => set({ crossfadeDuration: Math.max(1, Math.min(12, s)) }),
       setTidalQuality: (q) => set({ tidalQuality: q }),
+      setInfinitePlayback: (on) => set({ infinitePlayback: on }),
     }),
     { name: 'bratan-settings' },
   ),
