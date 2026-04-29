@@ -63,6 +63,7 @@ interface PlaylistRow {
   source_kind?: 'user' | 'tidal' | null;
   source_playlist_id?: string | null;
   source_user_id?: string | null;
+  source_track_count?: number | null;
 }
 
 // Hard cap to keep D1 rows small. Frontend should resize+JPEG-compress
@@ -117,10 +118,31 @@ function isReadOnly(r: PlaylistRow, requesterId: string): boolean {
   return r.user_id !== requesterId;
 }
 
+// Track-count resolution for the library list. Three cases:
+//   * Owned playlists (source_kind IS NULL): count this playlist's own rows.
+//   * Linked-user (source_kind = 'user'): count the source playlist's rows,
+//     but only while it's still public — drops to 0 if the owner unpublishes.
+//   * Linked-tidal (source_kind = 'tidal'): no local rows exist, fall back to
+//     the cached `source_track_count` (populated on save / detail-view).
+// Coalesces to 0 so the column is always a number.
+const LIST_TRACK_COUNT_SQL = `
+  CASE
+    WHEN p.source_kind IS NULL THEN
+      (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id)
+    WHEN p.source_kind = 'user' THEN
+      COALESCE((
+        SELECT COUNT(*) FROM playlist_tracks pt
+        JOIN playlists src ON src.id = pt.playlist_id
+        WHERE src.id = p.source_playlist_id AND src.is_public = 1
+      ), 0)
+    ELSE COALESCE(p.source_track_count, 0)
+  END
+`;
+
 playlists.get('/', async (c) => {
   const userId = c.get('userId');
   const items = await c.env.DB.prepare(
-    'SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC'
+    `SELECT p.*, ${LIST_TRACK_COUNT_SQL} as track_count FROM playlists p WHERE p.user_id = ? ORDER BY p.is_liked DESC, p.updated_at DESC`
   ).bind(userId).all<PlaylistRow>();
 
   return c.json({ items: (items.results ?? []).map(rowToPlaylist) });
@@ -198,6 +220,14 @@ playlists.get('/:id', async (c) => {
     : (await c.env.DB.prepare(
         'SELECT * FROM playlist_tracks WHERE playlist_id = ? ORDER BY position ASC'
       ).bind(id).all<PtRow>()).results?.map(rowToTrack) ?? [];
+
+  // Refresh the cached count on every detail-view read so the library
+  // list stays accurate even when the source changes between sessions.
+  if (playlist.source_kind && tracks.length !== (playlist.source_track_count ?? -1)) {
+    await c.env.DB.prepare(
+      'UPDATE playlists SET source_track_count = ? WHERE id = ?'
+    ).bind(tracks.length, id).run();
+  }
 
   return c.json({
     ...rowToPlaylist(playlist),
@@ -511,6 +541,7 @@ playlists.post('/external/tidal', async (c) => {
     name: string;
     coverUrl?: string | null;
     curator?: string | null;
+    trackCount?: number | null;
   }>().catch(() => null);
   if (!body || !body.tidalId || !body.name?.trim()) {
     return c.json({ error: 'tidalId и name обязательны' }, 400);
@@ -526,11 +557,18 @@ playlists.post('/external/tidal', async (c) => {
     return c.json(rowToPlaylist(existing));
   }
 
+  // Seed the cached count from the caller (Explore feed already
+  // surfaces it on the editorial playlist tile). Falls back to NULL
+  // — the next detail-view read will populate it.
+  const seedCount = typeof body.trackCount === 'number' && body.trackCount >= 0
+    ? Math.floor(body.trackCount)
+    : null;
+
   const now = Math.floor(Date.now() / 1000);
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    "INSERT INTO playlists (id, user_id, name, is_liked, cover_url, created_at, updated_at, source_kind, source_playlist_id) VALUES (?, ?, ?, 0, ?, ?, ?, 'tidal', ?)"
-  ).bind(id, userId, body.name.trim(), body.coverUrl ?? null, now, now, body.tidalId).run();
+    "INSERT INTO playlists (id, user_id, name, is_liked, cover_url, created_at, updated_at, source_kind, source_playlist_id, source_track_count) VALUES (?, ?, ?, 0, ?, ?, ?, 'tidal', ?, ?)"
+  ).bind(id, userId, body.name.trim(), body.coverUrl ?? null, now, now, body.tidalId, seedCount).run();
 
   const row = await c.env.DB.prepare('SELECT * FROM playlists WHERE id = ?').bind(id).first<PlaylistRow>();
   return c.json(row ? rowToPlaylist(row) : { id }, 201);

@@ -78,7 +78,7 @@ export function useSavePlaylistFromShare() {
 export function useSaveTidalPlaylist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { tidalId: string; name: string; coverUrl?: string | null; curator?: string | null }) =>
+    mutationFn: (input: { tidalId: string; name: string; coverUrl?: string | null; curator?: string | null; trackCount?: number | null }) =>
       api.post<Playlist>('/playlists/external/tidal', input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['playlists'] });
