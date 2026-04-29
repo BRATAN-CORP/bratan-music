@@ -9,40 +9,27 @@ function getAppUrl(env: Env): string {
   return env.APP_URL ?? DEFAULT_APP_URL;
 }
 
-function createLoginUrl(appUrl: string, nonce: string): string {
-  const url = new URL(appUrl);
-  url.searchParams.set('auth_nonce', nonce);
-  return url.toString();
-}
-
-async function createLoginNonce(env: Env, userId: number): Promise<string | null> {
-  const nonce = crypto.randomUUID().replace(/-/g, '');
-  const expiresAt = Math.floor(Date.now() / 1000) + 300;
-  try {
-    await env.DB
-      .prepare('INSERT INTO auth_nonces (nonce, user_id, expires_at) VALUES (?, ?, ?)')
-      .bind(nonce, String(userId), expiresAt)
-      .run();
-    return nonce;
-  } catch (err) {
-    console.error('[bot] createLoginNonce failed:', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
-
-async function buildMainKeyboard(env: Env, userId: number): Promise<Record<string, unknown>> {
+/**
+ * Default keyboard for /start, /help and other generic replies. Crucially,
+ * this *does not* include a "Войти на сайте" deeplink button — that button
+ * carried a freshly-minted, single-use auth nonce, and forwarding the
+ * whole message to a third party effectively handed them the account.
+ *
+ * The login flow is now strictly website-initiated: the user opens the
+ * site → the site generates a nonce → opens `t.me/<bot>?start=auth_<nonce>`
+ * → the bot writes the (nonce, from.id) mapping. Forwarding *that* deep-
+ * link still requires the receiver's own Telegram client to interact
+ * with the bot, so the nonce ends up bound to the receiver, not the
+ * original user.
+ */
+function buildMainKeyboard(env: Env): Record<string, unknown> {
   const appUrl = getAppUrl(env);
-  const nonce = await createLoginNonce(env, userId);
-
-  const rows: Array<Array<Record<string, unknown>>> = [
-    [{ text: 'Открыть веб-приложение', web_app: { url: appUrl } }],
-  ];
-  if (nonce) {
-    rows.push([{ text: 'Войти на сайте', url: createLoginUrl(appUrl, nonce) }]);
-  }
-  rows.push([{ text: 'Оформить подписку', callback_data: 'subscribe' }]);
-
-  return { inline_keyboard: rows };
+  return {
+    inline_keyboard: [
+      [{ text: 'Открыть веб-приложение', web_app: { url: appUrl } }],
+      [{ text: 'Оформить подписку', callback_data: 'subscribe' }],
+    ],
+  };
 }
 
 async function ensureUser(env: Env, message: TelegramMessage): Promise<void> {
@@ -107,7 +94,7 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
     '/subscribe — Оформить подписку (99 Stars/мес.)\n' +
     '/status — Статус подписки\n' +
     '/help — Помощь',
-    { replyMarkup: await buildMainKeyboard(env, from.id) }
+    { replyMarkup: buildMainKeyboard(env) }
   );
 }
 
@@ -116,9 +103,15 @@ export async function handleLogin(env: Env, message: TelegramMessage): Promise<v
   await ensureUser(env, message);
   await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
 
+  // We deliberately do NOT auto-mint a login nonce in this reply. The
+  // login flow is now website-initiated (open the site → the site opens
+  // `t.me/<bot>?start=auth_<nonce>` for the user). Embedding a nonce
+  // here would mean any forwarded copy of the bot's reply hands the
+  // sender's account to the receiver in one click.
   await tg.sendMessage(message.chat.id,
     '<b>Вход в BRATAN MUSIC</b>\n\n' +
-    'Откройте веб-приложение внутри Telegram или нажмите «Войти на сайте» для входа в браузере.',
-    { replyMarkup: await buildMainKeyboard(env, message.from.id) }
+    'Откройте веб-приложение внутри Telegram — вход произойдёт автоматически. ' +
+    'Для входа в десктоп-браузере откройте сайт и нажмите там «Войти через Telegram».',
+    { replyMarkup: buildMainKeyboard(env) }
   );
 }

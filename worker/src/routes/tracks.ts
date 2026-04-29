@@ -5,16 +5,33 @@ import { TidalService } from '../services/tidal/TidalService';
 
 const tracks = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+// Allow-list of hosts the audio proxy is willing to fetch from. The
+// list is intentionally narrow: every entry corresponds to a known
+// Tidal-owned CDN. The previous version accepted `*.cloudfront.net`
+// and `*.akamaized.net` which together cover huge swaths of unrelated
+// public infrastructure — that turned the worker into a free
+// open-relay for whatever an attacker pointed it at (free bandwidth,
+// IP laundering, geo-bypass). If Tidal ever surfaces a stream URL on a
+// host outside this list we'll see a 400 in the logs and can audit
+// the new host before adding it.
+//
+// The proxy itself is intentionally left unauthenticated: the <audio>
+// element fetches it directly and can't carry an Authorization header,
+// and embedding access tokens in every stream URL puts a fresh JWT in
+// CF access logs / Referer / browser history per track — strictly
+// worse for confidentiality. With the narrow allowlist the only
+// remaining "abuse" is using the worker as a passthrough to Tidal's
+// own CDN, which is an order of magnitude smaller risk than the open
+// relay we used to be.
 const TIDAL_CDN_ALLOWED: RegExp[] = [
   /^(.+\.)?audio\.tidal\.com$/i,
-  /^(.+\.)?tidal\.com$/i,
-  /^(.+\.)?akamaized\.net$/i,
-  /^(.+\.)?cloudfront\.net$/i,
   /^(.+\.)?fa-v\d+\.tidal\.com$/i,
   /^sp-[a-z0-9-]+\.audio\.tidal\.com$/i,
   /^resources\.tidal\.com$/i,
 ];
 
+// `/audio` is reachable without auth (see comment above). Every other
+// route below this line goes through jwtAuth.
 tracks.get('/audio', async (c) => {
   const target = c.req.query('url');
   if (!target) return c.json({ error: 'missing url' }, 400);
@@ -44,7 +61,9 @@ tracks.get('/audio', async (c) => {
     const v = upstream.headers.get(k);
     if (v) out.set(k, v);
   }
-  out.set('access-control-allow-origin', '*');
+  // CORS is already set by the global corsMiddleware; we don't need
+  // wildcard ACAO here. Exposing the streaming-relevant headers is
+  // still useful for the <audio> element.
   out.set('access-control-expose-headers',
     'Content-Length, Content-Type, Content-Range, Accept-Ranges');
   return new Response(upstream.body, { status: upstream.status, headers: out });
@@ -94,23 +113,23 @@ tracks.get('/:id/stream', async (c) => {
 
     if (!sub) {
       const today = new Date().toISOString().split('T')[0];
-      const listen = await c.env.DB.prepare(
-        'SELECT count FROM daily_listens WHERE user_id = ? AND date = ?'
+      // Atomic increment + read-back. The previous SELECT-then-UPDATE
+      // pair was racy: ten concurrent stream calls could all observe
+      // count=2 and proceed past the gate, letting the user blow well
+      // past the 3/day limit. SQLite's UPSERT with RETURNING gives us
+      // the post-increment value in a single statement.
+      const upserted = await c.env.DB.prepare(
+        `INSERT INTO daily_listens (user_id, date, count)
+         VALUES (?, ?, 1)
+         ON CONFLICT(user_id, date) DO UPDATE SET count = count + 1
+         RETURNING count`
       ).bind(userId, today).first<{ count: number }>();
 
-      const used = listen?.count ?? 0;
-      if (used >= 3) {
+      const newCount = upserted?.count ?? 1;
+      if (newCount > 3) {
+        // Over the limit — still recorded the attempt (so spamming
+        // requests doesn't help), and refuse to hand out a stream URL.
         return c.json({ error: 'Лимит 3 трека в сутки исчерпан. Оформите подписку.' }, 403);
-      }
-
-      if (listen) {
-        await c.env.DB.prepare(
-          'UPDATE daily_listens SET count = count + 1 WHERE user_id = ? AND date = ?'
-        ).bind(userId, today).run();
-      } else {
-        await c.env.DB.prepare(
-          'INSERT INTO daily_listens (user_id, date, count) VALUES (?, ?, 1)'
-        ).bind(userId, today).run();
       }
     }
   }
