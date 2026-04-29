@@ -651,8 +651,35 @@ export function FullscreenPlayer() {
                 scale: 1 + pulse * 0.012 + flash * 0.022,
               }}
               transition={{ type: 'spring', stiffness: 220, damping: 22, mass: 0.5 }}
-              className="relative mx-auto aspect-square w-full max-w-md cursor-grab active:cursor-grabbing"
-              style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))', touchAction: 'pan-y' }}
+              className="relative mx-auto aspect-square w-full max-w-md cursor-grab select-none active:cursor-grabbing"
+              style={
+                {
+                  maxWidth: 'min(28rem, calc(100vh - 28rem))',
+                  touchAction: 'pan-y',
+                  // Suppress the desktop browser's native image-drag
+                  // and text-selection so a left-click + drag on the
+                  // cover triggers motion's `drag='x'` swipe instead
+                  // of starting a "drag image to file" gesture or
+                  // highlighting the artwork. Without these, on
+                  // desktop Chromium / WebKit the cover would just
+                  // get a translucent ghost dragged around with the
+                  // cursor and the swipe never fires.
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none',
+                  WebkitUserDrag: 'none',
+                } as React.CSSProperties
+              }
+              onDragStart={(e) => {
+                // motion will fire `onDragStart` for its own pointer
+                // drag too, but the *native* `dragstart` (image,
+                // text selection) bubbles up here as well. Cancel
+                // the native one so the cover can't be dragged off
+                // the page or selected. Motion's drag pipeline runs
+                // off pointer events so it is unaffected.
+                if ((e as unknown as DragEvent).dataTransfer) {
+                  (e as unknown as DragEvent).preventDefault();
+                }
+              }}
             >
               {(currentTrack.coverUrl || coverVideoUrl) && (
                 <motion.div
@@ -763,7 +790,14 @@ export function FullscreenPlayer() {
                       <img
                         src={currentTrack.coverUrl}
                         alt={currentTrack.title}
-                        className="absolute inset-0 h-full w-full object-cover"
+                        // `pointer-events-none` keeps clicks falling
+                        // through to the motion drag wrapper above;
+                        // `draggable={false}` + `select-none` block
+                        // the desktop browser's native image-drag /
+                        // text-select that would otherwise hijack a
+                        // mouse drag on the cover.
+                        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover"
+                        draggable={false}
                       />
                     )}
                     <video
@@ -793,7 +827,15 @@ export function FullscreenPlayer() {
                     />
                   </div>
                 ) : currentTrack.coverUrl ? (
-                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="absolute inset-0 h-full w-full object-cover" />
+                  <img
+                    src={currentTrack.coverUrl}
+                    alt={currentTrack.title}
+                    // See above: keep the cover unable to be dragged
+                    // or text-selected so the parent motion wrapper
+                    // wins the desktop pointer-drag swipe.
+                    className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover"
+                    draggable={false}
+                  />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-secondary text-muted-foreground">
                     Без обложки
