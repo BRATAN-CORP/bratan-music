@@ -3,6 +3,7 @@ import { Pause, Play, Disc3, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useAlbum } from '@/hooks/useTrack';
+import { ShareButton } from '@/components/features/ShareButton';
 import { useToggleAlbumLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
@@ -109,6 +110,12 @@ export function AlbumPage() {
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </button>
+                  <ShareButton
+                    path={`/album/${album.id}`}
+                    shareTitle={album.title}
+                    shareText={`${album.title} — ${album.artist}`}
+                    ariaLabel="Поделиться альбомом"
+                  />
                 </div>
               </div>
             </div>
