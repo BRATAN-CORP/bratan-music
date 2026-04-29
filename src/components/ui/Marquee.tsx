@@ -172,18 +172,19 @@ export function Marquee({
       className={'relative block w-full max-w-full min-w-0 whitespace-nowrap ' + className}
       aria-label={ariaLabel ?? text}
       style={{
-        // Belt-and-suspenders horizontal clipping. PR #120 tried
-        // clip-path alone with negative vertical insets to keep the
-        // text-shadow halation bleeding above/below; on iOS Safari
-        // and inside certain flex chains that wasn't enough — the
-        // long inline-block child's intrinsic max-content still
-        // contributed to the parent flex's sizing and pushed siblings
-        // off-screen. The robust fix is `overflow: hidden` on the
-        // wrapper so the box NEVER reports a content width larger
-        // than its container. We restore vertical bleed for the text-
-        // shadow via a `contain: paint` / negative margins on the
-        // inner span instead — see below.
-        overflow: 'hidden',
+        // Horizontal-only clipping. We need the box to never report a
+        // content width larger than its container (PR #120 — a long
+        // inline-block child's intrinsic max-content was leaking into
+        // the parent flex's sizing on iOS Safari, pushing siblings off
+        // screen). But plain `overflow: hidden` clips vertically too
+        // and was eating Cyrillic ascenders / descenders ('у', 'д',
+        // 'й') in the fullscreen player title — the user reported the
+        // top and bottom of letters were being chopped off. A polygon
+        // clip-path with extreme vertical insets clips only at the
+        // left/right edges and lets the line-box overflow vertically
+        // freely, so descenders and any text-shadow halation render
+        // in full.
+        clipPath: 'polygon(0% -200%, 100% -200%, 100% 300%, 0% 300%)',
         // `contain: size` would over-constrain (forces a fixed size);
         // `contain: layout paint` isolates the box so the inline-
         // block child's max-content can never leak into the parent

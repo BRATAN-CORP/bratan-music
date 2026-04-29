@@ -877,13 +877,18 @@ export function FullscreenPlayer() {
                   which is the bug the user reported on mobile fullscreen).
                   The redundant `max-w-[calc(100%-...)]` would over-
                   constrain on desktop where the row is `max-w-md` —
-                  flex-1 basis-0 is the right vehicle. Reducing font
-                  size from `text-2xl sm:text-3xl` to `text-xl sm:text-3xl`
-                  on mobile shaves ~6px of marquee width per character
-                  so more of the title is readable before the slide
-                  kicks in, addressing the user's "адаптивом сжимать
-                  зону, где видно текст" request. */}
-              <div className="flex flex-1 basis-0 min-w-0 flex-col items-stretch gap-1 overflow-hidden">
+                  flex-1 basis-0 is the right vehicle.
+                  Font size is `clamp()`-fluid rather than the previous
+                  `text-xl sm:text-3xl` jump at 640px — the user reported
+                  the abrupt step-up at exactly 640px was jarring and
+                  it also paired with vertical clipping on the
+                  smaller-then-larger transition. The clamp scales
+                  smoothly between mobile and desktop with no breakpoint.
+                  The column drops its old `overflow-hidden` so Cyrillic
+                  ascenders / descenders aren't chopped at top and bottom
+                  — horizontal clipping is already enforced by each
+                  Marquee child. */}
+              <div className="flex flex-1 basis-0 min-w-0 flex-col items-stretch gap-1">
                 <motion.div
                   key={currentTrack.id + '-title'}
                   initial={reduce ? false : { opacity: 0, y: 8 }}
@@ -891,7 +896,10 @@ export function FullscreenPlayer() {
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   className="block w-full min-w-0 text-center"
                 >
-                  <h1 className="block w-full min-w-0 text-xl font-semibold tracking-tight sm:text-3xl">
+                  <h1
+                    className="block w-full min-w-0 font-semibold tracking-tight leading-tight"
+                    style={{ fontSize: 'clamp(1.25rem, 1rem + 1.5vw, 1.875rem)' }}
+                  >
                     <Marquee text={currentTrack.title} />
                   </h1>
                 </motion.div>
@@ -905,12 +913,16 @@ export function FullscreenPlayer() {
                   <button
                     type="button"
                     onClick={goToArtist}
-                    className="block w-full text-center text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4 sm:text-base"
+                    className="block w-full text-center leading-snug text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4"
+                    style={{ fontSize: 'clamp(0.875rem, 0.8rem + 0.4vw, 1rem)' }}
                   >
                     <Marquee text={currentTrack.artist} />
                   </button>
                 ) : (
-                  <div className="block w-full text-center text-sm text-muted-foreground sm:text-base">
+                  <div
+                    className="block w-full text-center leading-snug text-muted-foreground"
+                    style={{ fontSize: 'clamp(0.875rem, 0.8rem + 0.4vw, 1rem)' }}
+                  >
                     <Marquee text={currentTrack.artist} />
                   </div>
                 )}
