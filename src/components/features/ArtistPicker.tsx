@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, useReducedMotion, AnimatePresence } from 'motion/react';
-import { Sparkles, Check, X, Search, Loader2 } from 'lucide-react';
+import { Sparkles, Check, X, Search, Loader2, User } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
   fetchSuggestedSeedArtists,
@@ -114,7 +114,13 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
       transition={{ duration: 0.7, ease: EASE }}
       className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 sm:p-8"
     >
-      <div className="pointer-events-none absolute inset-0 opacity-50" aria-hidden>
+      {/* Decorative aurora glow. The wrapper inherits the parent's
+          rounded radius so the blur halo is clipped consistently on
+          every corner — without `rounded-[inherit]` the top-left
+          corner can render with a visible square edge in some
+          browsers because of how compositing layers interact with
+          `overflow-hidden` + filter children. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] opacity-50" aria-hidden>
         <div
           className="absolute -left-20 -top-20 h-[320px] w-[320px] rounded-full opacity-50 blur-3xl"
           style={{ background: 'radial-gradient(circle, var(--color-accent) 0%, transparent 70%)' }}
@@ -205,18 +211,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                         on ? 'ring-2 ring-[var(--color-accent)] ring-offset-2 ring-offset-card' : '',
                       )}
                     >
-                      {artist.imageUrl ? (
-                        <img
-                          src={artist.imageUrl}
-                          alt={artist.name}
-                          loading="lazy"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-secondary text-2xl font-semibold text-muted-foreground">
-                          {artist.name[0]?.toUpperCase() ?? '?'}
-                        </div>
-                      )}
+                      <ArtistAvatar artist={artist} />
                       <AnimatePresence>
                         {on && (
                           <motion.div
@@ -266,5 +261,29 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/**
+ * Artist avatar with double-layered fallback: if `imageUrl` is missing
+ * we never render the <img> at all, and if it's present but fails to
+ * load (Tidal CDN miss / 404 / CORS), we swap to the same icon
+ * placeholder mid-render. Matches the look of the search results page.
+ */
+function ArtistAvatar({ artist }: { artist: SeedArtistCandidate }) {
+  const [errored, setErrored] = useState(false);
+  const showImage = !!artist.imageUrl && !errored;
+  return showImage ? (
+    <img
+      src={artist.imageUrl}
+      alt={artist.name}
+      loading="lazy"
+      onError={() => setErrored(true)}
+      className="h-full w-full object-cover"
+    />
+  ) : (
+    <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
+      <User size={28} />
+    </div>
   );
 }
