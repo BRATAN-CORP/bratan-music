@@ -35,6 +35,9 @@ export interface SearchResult {
   tracks: Track[];
   albums: Album[];
   artists: Artist[];
+  totalTracks?: number;
+  totalAlbums?: number;
+  totalArtists?: number;
 }
 
 export interface Playlist {
@@ -92,12 +95,26 @@ export interface ExplorePageLink {
   imageId?: string;
 }
 
+/**
+ * Pagination handles for a module that supports "Смотреть все".
+ * `moreApiPath` is an opaque Tidal path (`pages/data/<uuid>`) passed
+ * to `GET /explore/list` on the worker to fetch subsequent windows.
+ * `totalItems` is the total count upstream reported so the client
+ * can stop requesting pages when the list has been exhausted.
+ */
+interface ExploreModuleMore {
+  moreApiPath?: string;
+  totalItems?: number;
+}
+
 export type ExploreModule =
-  | { type: 'pageLinks'; title: string; items: ExplorePageLink[] }
-  | { type: 'tracks'; title: string; items: Track[] }
-  | { type: 'albums'; title: string; items: Album[] }
-  | { type: 'artists'; title: string; items: Artist[] }
-  | { type: 'playlists'; title: string; items: ExplorePlaylist[] };
+  | ({ type: 'pageLinks'; title: string; items: ExplorePageLink[] } & ExploreModuleMore)
+  | ({ type: 'tracks'; title: string; items: Track[] } & ExploreModuleMore)
+  | ({ type: 'albums'; title: string; items: Album[] } & ExploreModuleMore)
+  | ({ type: 'artists'; title: string; items: Artist[] } & ExploreModuleMore)
+  | ({ type: 'playlists'; title: string; items: ExplorePlaylist[] } & ExploreModuleMore);
+
+export type ExploreModuleType = ExploreModule['type'];
 
 export interface ExplorePage {
   title: string;

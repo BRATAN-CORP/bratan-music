@@ -90,7 +90,7 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
         </div>
       )}
 
-      {explore && <ExploreModules modules={explore.modules} />}
+      {explore && <ExploreModules modules={explore.modules} parentSlug="explore" />}
     </div>
   );
 }

@@ -192,8 +192,8 @@ export function Player() {
                 of the surface (see below) so it can extend above the
                 rail without being clipped. */}
             <div
-              className="relative w-full shrink-0 cursor-pointer touch-none select-none overflow-hidden bg-[var(--color-bg-muted)] transition-[height] duration-150"
-              style={{ height: thumbVisible ? '6px' : '4px' }}
+              className="relative w-full shrink-0 cursor-pointer touch-none select-none overflow-hidden bg-[var(--color-bg-muted)]"
+              style={{ height: '4px' }}
               onPointerEnter={() => setSeekHover(true)}
               onPointerLeave={() => setSeekHover(false)}
               onPointerDown={(e) => {
@@ -473,7 +473,7 @@ export function Player() {
                   target.addEventListener('pointercancel', onUp);
                 }}
               >
-                <div className="relative h-1 w-full overflow-hidden rounded-full bg-[var(--color-bg-muted)] transition-[height] duration-150 group-hover/volume:h-1.5 group-active/volume:h-1.5">
+                <div className="relative h-1 w-full overflow-hidden rounded-full bg-[var(--color-bg-muted)]">
                   {/* No CSS transition on width here — the fill MUST track
                       the cursor in the same frame as the pointermove event
                       that updates `volume`. The previous
@@ -499,14 +499,12 @@ export function Player() {
           {/* Draggable thumb — rendered as a sibling of the clipped surface
               so its top half can extend above the player's rounded top
               edge without being cropped by overflow-hidden. Visibility is
-              driven by the same seekHover / seekActive flags that control
-              the rail's hover-grow, so the thumb appears together with
-              the slightly thicker rail. Centred on the rail's vertical
-              centre via `top: 3px` (= half of the hover-state h-1.5 rail). */}
+              driven by the seekHover / seekActive flags. Centred on the
+              rail's vertical centre via `top: 2px` (= half of the 4px rail). */}
           <motion.div
             aria-hidden
             className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-bg)] transition-opacity duration-150"
-            style={{ left: progressWidth, top: '3px', opacity: thumbVisible ? 1 : 0 }}
+            style={{ left: progressWidth, top: '2px', opacity: thumbVisible ? 1 : 0 }}
           />
         </motion.div>
       )}

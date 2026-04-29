@@ -19,6 +19,7 @@ import type {
   TidalPageModuleRaw,
   TidalPlaylistRaw,
   TidalPageLinkRaw,
+  TidalPagedListRaw,
 } from './TidalApi';
 import { TidalWeb } from './TidalWeb';
 
@@ -124,6 +125,15 @@ function mapPageLink(raw: TidalPageLinkRaw): ExplorePageLink | null {
 function mapPageModule(raw: TidalPageModuleRaw): ExploreModule | null {
   const title = raw.title ?? '';
   const list = raw.pagedList?.items ?? [];
+  const total = raw.pagedList?.totalNumberOfItems;
+  const rawMorePath = raw.pagedList?.dataApiPath;
+  // Only advertise a "show more" path to the client when more items
+  // actually exist beyond what the initial page window already
+  // returned. Skips the pagination UI for full rows that came back
+  // in a single shot.
+  const hasMore = total !== undefined && total > list.length;
+  const moreApiPath = hasMore ? rawMorePath : undefined;
+  const totalItems = total;
 
   switch (raw.type) {
     case 'PAGE_LINKS':
@@ -132,22 +142,22 @@ function mapPageModule(raw: TidalPageModuleRaw): ExploreModule | null {
         .map(mapPageLink)
         .filter((l): l is ExplorePageLink => l !== null);
       if (items.length === 0) return null;
-      return { type: 'pageLinks', title, items };
+      return { type: 'pageLinks', title, items, moreApiPath, totalItems };
     }
     case 'TRACK_LIST': {
       const items = (list as TidalTrackRaw[]).map(mapTrack);
       if (items.length === 0) return null;
-      return { type: 'tracks', title, items };
+      return { type: 'tracks', title, items, moreApiPath, totalItems };
     }
     case 'ALBUM_LIST': {
       const items = (list as TidalAlbumRaw[]).map((a) => mapAlbum(a));
       if (items.length === 0) return null;
-      return { type: 'albums', title, items };
+      return { type: 'albums', title, items, moreApiPath, totalItems };
     }
     case 'ARTIST_LIST': {
       const items = (list as TidalArtistRaw[]).map(mapArtist);
       if (items.length === 0) return null;
-      return { type: 'artists', title, items };
+      return { type: 'artists', title, items, moreApiPath, totalItems };
     }
     case 'PLAYLIST_LIST':
     case 'MIX_LIST': {
@@ -155,7 +165,7 @@ function mapPageModule(raw: TidalPageModuleRaw): ExploreModule | null {
         .filter((p) => p && p.uuid)
         .map(mapExplorePlaylist);
       if (items.length === 0) return null;
-      return { type: 'playlists', title, items };
+      return { type: 'playlists', title, items, moreApiPath, totalItems };
     }
     default:
       // VIDEO_LIST, FEATURED, MIX_HEADER, etc. — nothing to do until
@@ -174,7 +184,11 @@ export class TidalService implements MusicService {
     this.web = new TidalWeb(auth);
   }
 
-  async search(query: string, filter: 'all' | 'tracks' | 'albums' | 'artists'): Promise<SearchResult> {
+  async search(
+    query: string,
+    filter: 'all' | 'tracks' | 'albums' | 'artists',
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<SearchResult> {
     const typeMap: Record<string, string> = {
       all: 'ARTISTS,ALBUMS,TRACKS',
       tracks: 'TRACKS',
@@ -182,12 +196,15 @@ export class TidalService implements MusicService {
       artists: 'ARTISTS',
     };
 
-    const data = await this.api.search(query, typeMap[filter]);
+    const data = await this.api.search(query, typeMap[filter], opts.limit, opts.offset);
 
     return {
       tracks: this.api.unwrapSearchItems(data.tracks).map(mapTrack),
       albums: this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)),
       artists: this.api.unwrapSearchItems(data.artists).map(mapArtist),
+      totalTracks: data.tracks?.totalNumberOfItems,
+      totalAlbums: data.albums?.totalNumberOfItems,
+      totalArtists: data.artists?.totalNumberOfItems,
     };
   }
 
@@ -252,6 +269,45 @@ export class TidalService implements MusicService {
       }
     }
     return { title: raw.title, modules };
+  }
+
+  /**
+   * Paginate a single module from a Tidal page — the "show all" flow.
+   * `moreApiPath` is the opaque `pagedList.dataApiPath` previously
+   * returned on an `ExploreModule`. The module type is supplied by
+   * the caller so we know how to map the opaque upstream items into
+   * our normalised domain shape.
+   */
+  async getExploreList(
+    moreApiPath: string,
+    type: ExploreModule['type'],
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<{ items: unknown[]; totalItems?: number }> {
+    const raw = await this.api.getPageData<TidalPagedListRaw<unknown>>(moreApiPath, opts);
+    const list = raw.items ?? [];
+    const totalItems = raw.totalNumberOfItems;
+    switch (type) {
+      case 'tracks':
+        return { items: (list as TidalTrackRaw[]).map(mapTrack), totalItems };
+      case 'albums':
+        return { items: (list as TidalAlbumRaw[]).map((a) => mapAlbum(a)), totalItems };
+      case 'artists':
+        return { items: (list as TidalArtistRaw[]).map(mapArtist), totalItems };
+      case 'playlists':
+        return {
+          items: (list as TidalPlaylistRaw[])
+            .filter((p) => p && p.uuid)
+            .map(mapExplorePlaylist),
+          totalItems,
+        };
+      case 'pageLinks':
+        return {
+          items: (list as TidalPageLinkRaw[])
+            .map(mapPageLink)
+            .filter((l): l is ExplorePageLink => l !== null),
+          totalItems,
+        };
+    }
   }
 
   /**

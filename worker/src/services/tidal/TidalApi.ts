@@ -224,15 +224,22 @@ export class TidalApi {
 
   /**
    * Some modules paginate via a `dataApiPath` like `pages/data/<uuid>`
-   * — useful when the user clicks "View as list".
+   * — useful when the user clicks "View as list". The `limit`/`offset`
+   * pair lets callers page through the full list; Tidal accepts up
+   * to 50 items per window on these endpoints.
    */
-  async getPageData<T = TidalPagedListRaw<unknown>>(dataApiPath: string): Promise<T> {
+  async getPageData<T = TidalPagedListRaw<unknown>>(
+    dataApiPath: string,
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<T> {
     const cc = await this.auth.getCountryCode();
     const params = new URLSearchParams({
       countryCode: cc,
       locale: this.auth.getLocale(),
       deviceType: 'BROWSER',
     });
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    if (opts.offset !== undefined) params.set('offset', String(opts.offset));
     const cleaned = dataApiPath.startsWith('/') ? dataApiPath : `/${dataApiPath}`;
     return this.get<T>(`/v1${cleaned}?${params}`);
   }

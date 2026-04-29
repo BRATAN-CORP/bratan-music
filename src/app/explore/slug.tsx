@@ -41,7 +41,7 @@ export function ExploreSlugPage() {
           </div>
         )}
 
-        {data && <ExploreModules modules={data.modules} />}
+        {data && <ExploreModules modules={data.modules} parentSlug={slug} />}
       </div>
     </AuthGuard>
   );
