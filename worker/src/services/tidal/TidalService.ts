@@ -576,6 +576,13 @@ export class TidalService implements MusicService {
     const ingest = (items: TidalAlbumRaw[], fallback: Album['releaseType']) => {
       for (const raw of items) {
         const mapped = mapAlbum(raw, [], fallback);
+        // Drop releases where the requested artist is not the
+        // primary credit. Tidal's /v1/artists/{id}/albums does
+        // sometimes spill compilations / collaborator-led joints
+        // here, especially under filter=COMPILATIONS, and we want
+        // this fallback to behave the same way as the editorial
+        // page bucket: only the artist's own catalogue.
+        if (!isOwnedByArtist(mapped, id)) continue;
         const existing = merged.get(mapped.id);
         if (!existing) {
           merged.set(mapped.id, mapped);
@@ -593,7 +600,9 @@ export class TidalService implements MusicService {
     ingest(epsSingles.items, 'EP');
     ingest(compilations.items, 'COMPILATION');
 
-    return Array.from(merged.values()).sort((a, b) => {
+    // Title-level dedupe so reissues / regional duplicates don't
+    // produce N copies of the same release.
+    return dedupeAlbums(Array.from(merged.values())).sort((a, b) => {
       const da = a.releaseDate ?? '';
       const db = b.releaseDate ?? '';
       if (da === db) return a.title.localeCompare(b.title);
