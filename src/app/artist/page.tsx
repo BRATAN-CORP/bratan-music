@@ -4,6 +4,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
+import { ShareButton } from '@/components/features/ShareButton';
 import { useArtist, useArtistRadio } from '@/hooks/useTrack';
 import { useToggleArtistLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
@@ -114,6 +115,12 @@ export function ArtistPage() {
                       <Radio size={14} /> Радио
                     </button>
                   ) : null}
+                  <ShareButton
+                    path={`/artist/${artist.id}`}
+                    shareTitle={artist.name}
+                    shareText={`Артист: ${artist.name}`}
+                    ariaLabel="Поделиться артистом"
+                  />
                 </div>
               </div>
             </div>
