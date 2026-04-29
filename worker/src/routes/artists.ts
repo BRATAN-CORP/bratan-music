@@ -23,35 +23,61 @@ artists.get('/:id', async (c) => {
     topTracks,
     albums: releases.albums,
     singles: releases.singles,
+    albumsMore: releases.albumsMore,
+    albumsMoreTotal: releases.albumsMoreTotal,
+    singlesMore: releases.singlesMore,
+    singlesMoreTotal: releases.singlesMoreTotal,
     similarArtists: similar,
   });
 });
 
 /**
- * Paginated "all albums" feed for the artist (ALBUM + EP +
- * COMPILATION buckets, deduped). Tidal caps each filter bucket at 50
- * items per request so we ask the service for up to 200 in one shot
- * and let the frontend paginate client-side.
+ * Paginated "all albums" feed for the artist. First call returns the
+ * editorial ARTIST_ALBUMS + ARTIST_COMPILATIONS modules from
+ * `/v1/pages/artist`; subsequent pages use the opaque `dataApiPath`
+ * the artist page handed back, paginating with limit/offset.
  */
 artists.get('/:id/albums', async (c) => {
   const id = c.req.param('id');
-  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit')) || 200));
+  const limit = Math.min(50, Math.max(1, Number(c.req.query('limit')) || 50));
+  const offset = Math.max(0, Number(c.req.query('offset')) || 0);
+  const morePath = c.req.query('morePath');
   const tidal = new TidalService(c.env);
-  const { albums } = await tidal.getArtistAlbumsAndSingles(id, limit);
-  return c.json({ items: albums, totalItems: albums.length });
+  if (morePath) {
+    const page = await tidal.getArtistReleasesPage(morePath, { limit, offset });
+    return c.json(page);
+  }
+  const { albums, albumsMore, albumsMoreTotal } = await tidal.getArtistAlbumsAndSingles(id);
+  const slice = albums.slice(offset, offset + limit);
+  return c.json({
+    items: slice,
+    totalItems: albumsMoreTotal ?? albums.length,
+    morePath: albumsMore,
+  });
 });
 
 /**
- * Paginated "all singles" feed for the artist. Same shape as the
- * /albums route above — kept on a separate URL so the frontend can
- * route the two "Показать все" links to dedicated pages.
+ * Paginated "all singles" feed for the artist. Mirrors /albums above
+ * — first hop is the ARTIST_TOP_SINGLES module, then the opaque
+ * dataApiPath for further pages.
  */
 artists.get('/:id/singles', async (c) => {
   const id = c.req.param('id');
-  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit')) || 200));
+  const limit = Math.min(50, Math.max(1, Number(c.req.query('limit')) || 50));
+  const offset = Math.max(0, Number(c.req.query('offset')) || 0);
+  const morePath = c.req.query('morePath');
   const tidal = new TidalService(c.env);
-  const { singles } = await tidal.getArtistAlbumsAndSingles(id, limit);
-  return c.json({ items: singles, totalItems: singles.length });
+  if (morePath) {
+    const page = await tidal.getArtistReleasesPage(morePath, { limit, offset });
+    return c.json(page);
+  }
+  const { singles, singlesMore, singlesMoreTotal } = await tidal.getArtistAlbumsAndSingles(id);
+  const slice = singles.slice(offset, offset + limit);
+  return c.json({
+    items: slice,
+    totalItems: singlesMoreTotal ?? singles.length,
+    morePath: singlesMore,
+  });
 });
 
 /**
