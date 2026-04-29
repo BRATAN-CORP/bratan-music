@@ -86,7 +86,32 @@ function mapTrack(raw: TidalTrackRaw): Track {
   };
 }
 
-function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = []): Album {
+/**
+ * Coerce Tidal's freeform `type` string into our four-bucket enum.
+ * Tidal mostly returns `ALBUM` / `EP` / `SINGLE` / `COMPILATION`, but
+ * we defensively normalise unknown values to `ALBUM`.
+ */
+function normaliseReleaseType(raw: string | undefined): Album['releaseType'] {
+  switch ((raw ?? '').toUpperCase()) {
+    case 'EP':
+    case 'EPS':
+    case 'EPSANDSINGLES':
+      return 'EP';
+    case 'SINGLE':
+    case 'SINGLES':
+      return 'SINGLE';
+    case 'COMPILATION':
+    case 'COMPILATIONS':
+      return 'COMPILATION';
+    case 'ALBUM':
+    case 'ALBUMS':
+      return 'ALBUM';
+    default:
+      return undefined;
+  }
+}
+
+function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = [], releaseTypeOverride?: Album['releaseType']): Album {
   const artists = dedupeArtistRefs(raw.artists);
   const mainArtist = raw.artist ?? raw.artists?.[0];
   return {
@@ -99,6 +124,7 @@ function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = []): Album {
     coverUrl: coverUrl(raw.cover),
     coverVideoUrl: videoCoverUrl(raw.videoCover),
     releaseDate: raw.releaseDate,
+    releaseType: normaliseReleaseType(raw.type) ?? releaseTypeOverride,
     tracks,
   };
 }
@@ -256,7 +282,68 @@ export class TidalService implements MusicService {
 
   async getArtistAlbums(id: string): Promise<Album[]> {
     const res = await this.api.getArtistAlbums(id);
-    return res.items.map(a => mapAlbum(a));
+    return res.items.map(a => mapAlbum(a, [], 'ALBUM'));
+  }
+
+  /**
+   * Combined "Releases" feed for the artist page — Tidal exposes
+   * Albums, EPs+Singles and Compilations through three different
+   * `filter=` values on the same endpoint, and earlier we were only
+   * pulling `ALBUMS`. That meant EPs and compilations were missing,
+   * and singles that Tidal also tagged as albums showed up twice.
+   *
+   * Strategy:
+   *   1. Fetch all three filter buckets in parallel; any failing
+   *      request just contributes an empty list (route remains live
+   *      even if one bucket times out).
+   *   2. Tag each release with the bucket we requested it from so the
+   *      UI can label / order them. Tidal's own `type` field wins
+   *      when present.
+   *   3. Dedupe by id, preferring entries from the more "important"
+   *      bucket (ALBUM > EP > SINGLE > COMPILATION) — this collapses
+   *      the long-standing "single also showing as an album" duplicate.
+   *   4. Sort by release date desc so the newest stuff bubbles up.
+   */
+  async getArtistReleases(id: string, limit: number = 50): Promise<Album[]> {
+    const [albums, epsSingles, compilations] = await Promise.all([
+      this.api.getArtistAlbums(id, limit, 'ALBUMS').catch(() => ({ items: [] as TidalAlbumRaw[] })),
+      this.api.getArtistAlbums(id, limit, 'EPSANDSINGLES').catch(() => ({ items: [] as TidalAlbumRaw[] })),
+      this.api.getArtistAlbums(id, limit, 'COMPILATIONS').catch(() => ({ items: [] as TidalAlbumRaw[] })),
+    ]);
+
+    const merged = new Map<string, Album>();
+    const priority: Record<NonNullable<Album['releaseType']>, number> = {
+      ALBUM: 4,
+      EP: 3,
+      SINGLE: 2,
+      COMPILATION: 1,
+    };
+    const ingest = (items: TidalAlbumRaw[], fallback: Album['releaseType']) => {
+      for (const raw of items) {
+        const mapped = mapAlbum(raw, [], fallback);
+        const existing = merged.get(mapped.id);
+        if (!existing) {
+          merged.set(mapped.id, mapped);
+          continue;
+        }
+        const eRank = existing.releaseType ? priority[existing.releaseType] : 0;
+        const nRank = mapped.releaseType ? priority[mapped.releaseType] : 0;
+        if (nRank > eRank) merged.set(mapped.id, mapped);
+      }
+    };
+    ingest(albums.items, 'ALBUM');
+    // EPs+singles is a single Tidal bucket; rely on raw.type to tell
+    // EP and SINGLE apart, with EP as the conservative fallback when
+    // upstream omits the field (matches Tidal's web UI behaviour).
+    ingest(epsSingles.items, 'EP');
+    ingest(compilations.items, 'COMPILATION');
+
+    return Array.from(merged.values()).sort((a, b) => {
+      const da = a.releaseDate ?? '';
+      const db = b.releaseDate ?? '';
+      if (da === db) return a.title.localeCompare(b.title);
+      return db.localeCompare(da);
+    });
   }
 
   async getSimilarArtists(id: string): Promise<Artist[]> {

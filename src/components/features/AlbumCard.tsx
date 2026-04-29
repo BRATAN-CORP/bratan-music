@@ -35,7 +35,14 @@ export function AlbumCard({ album }: AlbumCardProps) {
       </TiltCard>
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{album.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{album.artist}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {album.releaseType && album.releaseType !== 'ALBUM' ? (
+            <span className="mr-1.5 rounded border border-border px-1 py-px text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/90">
+              {album.releaseType === 'COMPILATION' ? 'Сборник' : album.releaseType}
+            </span>
+          ) : null}
+          {album.artist}
+        </p>
       </div>
     </Link>
   );

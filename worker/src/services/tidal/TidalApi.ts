@@ -38,6 +38,12 @@ export interface TidalAlbumRaw {
   artist?: { id: number; name: string };
   artists?: { id: number; name: string; type?: string }[];
   audioQuality?: string;
+  /**
+   * Release classification — Tidal returns one of `ALBUM`, `EP`,
+   * `SINGLE`, `COMPILATION`. Optional because some endpoints elide it
+   * (e.g. embedded album refs inside tracks).
+   */
+  type?: string;
 }
 
 export interface TidalArtistRaw {

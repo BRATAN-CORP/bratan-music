@@ -26,6 +26,13 @@ export interface Track {
   quality?: string;
 }
 
+/**
+ * What kind of release this is. Used by the artist page to group
+ * albums / EPs / singles / compilations into a single section while
+ * still letting the UI label and order them.
+ */
+export type AlbumReleaseType = 'ALBUM' | 'EP' | 'SINGLE' | 'COMPILATION';
+
 export interface Album {
   id: string;
   source: string;
@@ -37,6 +44,12 @@ export interface Album {
   coverUrl?: string;
   coverVideoUrl?: string;
   releaseDate?: string;
+  /**
+   * Tidal-classified release type. Optional because non-Tidal sources
+   * and legacy snapshots don't supply it; the UI falls back to
+   * "ALBUM" labelling when missing.
+   */
+  releaseType?: AlbumReleaseType;
   tracks: Track[];
 }
 
