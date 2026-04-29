@@ -10,24 +10,69 @@ artists.use('/*', jwtAuth);
 artists.get('/:id', async (c) => {
   const id = c.req.param('id');
   const tidal = new TidalService(c.env);
-  const artist = await tidal.getArtist(id);
 
-  const [topTracks, releases, similar] = await Promise.all([
+  // Each Tidal sub-call is independent, but Tidal occasionally
+  // returns 451 / 5xx on individual artist records (regional blocks,
+  // intermittent partial outages) while still serving the artist's
+  // albums and singles. The previous handler awaited `getArtist`
+  // first and then `Promise.all`'d everything else — a single
+  // failure took down the whole page, so users got "artist not
+  // found" even though the catalogue was reachable.
+  // Run everything together with `Promise.allSettled`, fall back
+  // gracefully per-bucket, and synthesise an artist record from
+  // the albums credit list when the dedicated `/v1/artists/{id}`
+  // endpoint refuses to play.
+  const [artistRes, topTracksRes, releasesRes, similarRes] = await Promise.allSettled([
+    tidal.getArtist(id),
     tidal.getArtistTopTracks(id),
     tidal.getArtistAlbumsAndSingles(id),
     tidal.getSimilarArtists(id),
   ]);
 
+  const releases = releasesRes.status === 'fulfilled'
+    ? releasesRes.value
+    : { albums: [], singles: [], albumsMore: undefined, albumsMoreTotal: undefined, singlesMore: undefined, singlesMoreTotal: undefined };
+
+  let artist = artistRes.status === 'fulfilled' ? artistRes.value : undefined;
+  if (!artist) {
+    if (artistRes.status === 'rejected') {
+      console.error('[artist:get] /v1/artists/' + id + ' failed:', artistRes.reason);
+    }
+    // Synthesise from any release that credits this artist — the
+    // contributors list is reliable even when the artist record is
+    // unavailable. Image is unfortunately lost, but name+id is
+    // enough for the page header to render.
+    const allReleases = [...releases.albums, ...releases.singles];
+    for (const r of allReleases) {
+      const match = r.artists?.find((a) => a.id === id);
+      if (match) {
+        artist = { id, source: 'tidal', name: match.name };
+        break;
+      }
+    }
+  }
+
+  if (!artist) {
+    return c.json({ error: 'Artist not found' }, 404);
+  }
+
+  if (topTracksRes.status === 'rejected') {
+    console.error('[artist:get] topTracks failed for ' + id + ':', topTracksRes.reason);
+  }
+  if (similarRes.status === 'rejected') {
+    console.error('[artist:get] similar failed for ' + id + ':', similarRes.reason);
+  }
+
   return c.json({
     ...artist,
-    topTracks,
+    topTracks: topTracksRes.status === 'fulfilled' ? topTracksRes.value : [],
     albums: releases.albums,
     singles: releases.singles,
     albumsMore: releases.albumsMore,
     albumsMoreTotal: releases.albumsMoreTotal,
     singlesMore: releases.singlesMore,
     singlesMoreTotal: releases.singlesMoreTotal,
-    similarArtists: similar,
+    similarArtists: similarRes.status === 'fulfilled' ? similarRes.value : [],
   });
 });
 
