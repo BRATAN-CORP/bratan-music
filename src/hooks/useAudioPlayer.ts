@@ -143,8 +143,11 @@ export function seekAudio(time: number): void {
   const b = getBundle();
   const audio = b.audios[b.active];
   if (!audio) return;
-  audio.currentTime = time;
+  // Update the store BEFORE touching audio.currentTime so the
+  // spurious-reset gate in onTimeUpdate doesn't mistake a seek-to-0
+  // for an unwanted reset. See the gate in `wireSlot`'s onTimeUpdate.
   usePlayerStore.getState().setProgress(time);
+  audio.currentTime = time;
 }
 
 function reloadWithoutCors(slot: Slot) {
@@ -152,11 +155,32 @@ function reloadWithoutCors(slot: Slot) {
   const audio = b.audios[slot];
   if (corsRetried[slot] || !audio.src) return;
   corsRetried[slot] = true;
+  // Capture the user's current playback position BEFORE the reload —
+  // `audio.load()` rewinds currentTime to 0 unconditionally, so we
+  // need to seek back here. Without this, a CORS-retry triggered
+  // mid-playback (or on the first user-gesture play after page
+  // reload, when the original CORS-anonymous fetch fails) would lose
+  // the user's place even though `store.progress` correctly survives
+  // (the spurious-reset gate in onTimeUpdate keeps it).
+  const savedTime = audio.currentTime;
+  const savedStoreProgress = usePlayerStore.getState().progress;
+  const restoreTarget = Math.max(savedTime, savedStoreProgress);
   const src = audio.src;
   audio.crossOrigin = null;
   audio.src = '';
   audio.src = src;
   audio.load();
+  if (restoreTarget > 0.5) {
+    const onCanPlay = () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        try {
+          audio.currentTime = Math.min(restoreTarget, audio.duration);
+        } catch { /* ignore */ }
+      }
+    };
+    audio.addEventListener('canplay', onCanPlay, { once: true });
+  }
   safePlay(slot).catch(() => {});
 }
 
@@ -753,6 +777,55 @@ export function useAudioPlayer() {
       const audio = b.audios[slot];
       const onTimeUpdate = () => {
         if (slot !== b.active) return;
+        const realT = audio.currentTime;
+
+        // Spurious-reset defence: detect the case where the audio
+        // element has been reset to 0 by something OTHER than a user
+        // seek — most commonly a CORS / fallback retry that calls
+        // `audio.load()`, which always rewinds `currentTime` to 0 and
+        // immediately fires a `timeupdate(0)` event. Without this gate
+        // that 0 propagates straight into `store.progress`, the
+        // persisted timecode is wiped, and the user sees the timeline
+        // jump from "1:23" to "0:00" the moment they hit play after
+        // page reload.
+        //
+        // We only consider it spurious when (a) we DON'T already have
+        // a pending restore-seek armed (the loadTrack path handles its
+        // own initial reload), (b) the persisted progress is
+        // significantly non-zero (so we know we're losing real state,
+        // not just observing a fresh-track 0 → 0 update) and (c) the
+        // current playback position is suspiciously close to 0. In
+        // that situation we re-arm the restore-seek and ask the audio
+        // element to seek back to the persisted position. The very
+        // next setProgress is suppressed by the regular restore-seek
+        // gate below, so `store.progress` stays at the persisted
+        // target throughout.
+        //
+        // User-initiated seeks to 0 (`seek(0)`, `_seekToZero` handler,
+        // `onEnded` with repeat='one') update `store.progress` BEFORE
+        // touching `audio.currentTime`, so by the time their own
+        // timeupdate fires `storeProgress` is already 0 and this gate
+        // doesn't trigger.
+        const restoreTarget = pendingRestoreProgressRef.current;
+        const storeProgressNow = usePlayerStore.getState().progress;
+        if (
+          restoreTarget === null
+          && realT < 0.5
+          && storeProgressNow > 2
+        ) {
+          if (isFinite(audio.duration) && audio.duration > 0) {
+            pendingRestoreProgressRef.current = storeProgressNow;
+            try {
+              audio.currentTime = Math.min(storeProgressNow, audio.duration);
+            } catch { /* element not in seekable state yet */ }
+          } else {
+            // Duration not known yet → defer the seek to the
+            // loadedmetadata listener, which already reads the ref.
+            pendingRestoreProgressRef.current = storeProgressNow;
+          }
+          return;
+        }
+
         // Restore-seek gating: keep suppressing timeupdates until the
         // audio element actually lands at the persisted target. Some
         // browsers fire timeupdate(0) AFTER we set currentTime=target if
@@ -760,13 +833,12 @@ export function useAudioPlayer() {
         // the ref unconditionally inside loadedmetadata used to let
         // those zero-updates clobber persisted progress, which is what
         // the user saw as "timeline shows 1:23 then snaps back to 0:00".
-        const target = pendingRestoreProgressRef.current;
-        if (target !== null) {
+        if (restoreTarget !== null) {
           // Within 1.5s of the requested target → seek has landed.
-          if (Math.abs(audio.currentTime - target) > 1.5) return;
+          if (Math.abs(realT - restoreTarget) > 1.5) return;
           pendingRestoreProgressRef.current = null;
         }
-        setProgress(audio.currentTime);
+        setProgress(realT);
         const dur = audio.duration;
         if (
           crossfade
@@ -797,6 +869,9 @@ export function useAudioPlayer() {
       const onEnded = () => {
         if (slot !== b.active) return;
         if (repeat === 'one') {
+          // Update the store first so the onTimeUpdate gate doesn't
+          // mistake the deliberate rewind-to-0 for a spurious reset.
+          setProgress(0);
           audio.currentTime = 0;
           safePlay(slot).catch(() => {});
         } else {
@@ -847,8 +922,12 @@ export function useAudioPlayer() {
   const seek = useCallback((time: number) => {
     const b = getBundle();
     const audio = b.audios[b.active];
-    audio.currentTime = time;
+    // Update the store BEFORE touching audio.currentTime so the
+    // spurious-reset gate in onTimeUpdate doesn't mistake the
+    // resulting timeupdate for an unwanted reset (the gate compares
+    // realT against `store.progress`).
     setProgress(time);
+    audio.currentTime = time;
   }, [setProgress]);
 
   // Respond to store's _seekToZero (triggered by the "previous" action
@@ -859,8 +938,11 @@ export function useAudioPlayer() {
       seekToZeroRef.current = _seekToZero;
       const b = getBundle();
       const audio = b.audios[b.active];
-      audio.currentTime = 0;
+      // Same ordering as `seek()` — update the store first so the
+      // onTimeUpdate spurious-reset gate sees storeProgress=0 by the
+      // time the resulting timeupdate(0) fires.
       setProgress(0);
+      audio.currentTime = 0;
     }
   }, [_seekToZero, setProgress]);
 
