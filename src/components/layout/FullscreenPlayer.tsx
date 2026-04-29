@@ -759,6 +759,18 @@ export function FullscreenPlayer() {
                 hoverScale={1.06}
                 glareStrength={0.7}
                 glare
+                // The TiltCard owns a `transform-style: preserve-3d` +
+                // perspective context for its rotateX/rotateY tilt. In
+                // that context Chromium and WebKit both have edge cases
+                // where a sibling that pops in mid-frame (like the new
+                // crossfade layer below) can paint a single frame BEFORE
+                // the ancestor's `overflow: hidden` clip mask is applied,
+                // briefly showing the cover with square corners on track
+                // change. Belt-and-suspenders: keep `overflow-hidden` for
+                // the static case AND `clip-path: inset(0 round R)` so
+                // the rounded clip is enforced even on the first paint
+                // frame of any newly inserted compositor layer.
+                style={{ clipPath: 'inset(0 round var(--radius-xl))' }}
                 className="aspect-square overflow-hidden rounded-[var(--radius-xl)] border border-border shadow-2xl transition-shadow duration-300 hover:shadow-[0_25px_80px_-15px_rgba(0,0,0,0.55)]"
               >
                 {/* Inner cover layer crossfades between tracks (П11).
@@ -770,7 +782,14 @@ export function FullscreenPlayer() {
                 <AnimatePresence initial={false} mode="sync">
                   <motion.div
                     key={currentTrack.id + (coverVideoUrl ? '-v' : '-i')}
-                    className="absolute inset-0"
+                    // Round the crossfade layer itself, not just the
+                    // ancestor TiltCard. Both the entering and the
+                    // exiting layer keep their own clip mask, so neither
+                    // can ever be visible with square corners — the
+                    // "скрепления отключаются на долю секунды" issue
+                    // the user reported on track change.
+                    className="absolute inset-0 overflow-hidden rounded-[inherit]"
+                    style={{ clipPath: 'inset(0 round var(--radius-xl))' }}
                     initial={reduce ? false : { opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}

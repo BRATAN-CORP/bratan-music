@@ -1,5 +1,5 @@
 import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from 'motion/react';
-import { type PointerEvent, type ReactNode, useRef } from 'react';
+import { type CSSProperties, type PointerEvent, type ReactNode, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface TiltCardProps {
@@ -13,6 +13,11 @@ interface TiltCardProps {
   hoverScale?: number;
   /** Glare strength (0..1). Higher = more visible highlight. */
   glareStrength?: number;
+  /** Extra inline style merged onto the outer wrapper. The component
+   *  owns `rotateX`, `rotateY`, `scale`, `z`, `transformStyle`, and
+   *  `perspective` itself — those win on conflict. Useful to add a
+   *  `clip-path` for ancestor 3D-transform clipping edge cases. */
+  style?: CSSProperties;
 }
 
 export function TiltCard({
@@ -22,6 +27,7 @@ export function TiltCard({
   glare = true,
   hoverScale = 1.03,
   glareStrength = 0.55,
+  style: extraStyle,
 }: TiltCardProps) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
@@ -66,7 +72,7 @@ export function TiltCard({
 
   if (reduce) {
     return (
-      <div ref={ref} className={cn('relative', className)}>
+      <div ref={ref} className={cn('relative', className)} style={extraStyle}>
         {children}
       </div>
     );
@@ -78,7 +84,7 @@ export function TiltCard({
       onPointerMove={onMove}
       onPointerEnter={onEnter}
       onPointerLeave={onLeave}
-      style={{ rotateX, rotateY, scale, z, transformStyle: 'preserve-3d', perspective: 1100 }}
+      style={{ ...extraStyle, rotateX, rotateY, scale, z, transformStyle: 'preserve-3d', perspective: 1100 }}
       className={cn('relative will-change-transform', className)}
     >
       {/* Fill the outer transform wrapper so children laid out with
