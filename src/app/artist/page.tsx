@@ -1,10 +1,10 @@
 import { useParams } from 'react-router-dom';
-import { Pause, Play, User, Heart } from 'lucide-react';
+import { Pause, Play, User, Heart, Radio } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
-import { useArtist } from '@/hooks/useTrack';
+import { useArtist, useArtistRadio } from '@/hooks/useTrack';
 import { useToggleArtistLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
@@ -15,6 +15,7 @@ import { toPlayerTrack } from '@/lib/playerTrack';
 export function ArtistPage() {
   const { id } = useParams<{ id: string }>();
   const { data: artist, isLoading } = useArtist(id ?? '');
+  const { data: radio } = useArtistRadio(id ?? '');
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const artistLike = useToggleArtistLike();
@@ -37,6 +38,24 @@ export function ArtistPage() {
     if (artist?.topTracks?.length) {
       playCollection(artist.topTracks);
     }
+  };
+
+  const handlePlayRadio = () => {
+    const items = radio?.items;
+    const first = items?.[0];
+    if (!items?.length || !first) return;
+    setTrack(toPlayerTrack(first));
+    setQueue(items.map(toPlayerTrack));
+  };
+
+  const handlePlayRadioTrack = (t: Track) => {
+    if (!radio?.items) {
+      setTrack(toPlayerTrack(t));
+      return;
+    }
+    const idx = radio.items.findIndex((x) => x.id === t.id);
+    setTrack(toPlayerTrack(t));
+    setQueue(radio.items.slice(idx >= 0 ? idx : 0).map(toPlayerTrack));
   };
 
   return (
@@ -85,6 +104,16 @@ export function ArtistPage() {
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </button>
+                  {radio?.items?.length ? (
+                    <button
+                      type="button"
+                      onClick={handlePlayRadio}
+                      className="inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+                      aria-label="Запустить радио артиста"
+                    >
+                      <Radio size={14} /> Радио
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -99,6 +128,25 @@ export function ArtistPage() {
                 </div>
               </section>
             )}
+
+            {radio?.items?.length ? (
+              <section className="mb-12">
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                  <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+                    <Radio size={16} className="text-[var(--color-accent)]" />
+                    Радио {artist.name}
+                  </h2>
+                  <Button variant="outline" size="sm" onClick={handlePlayRadio}>
+                    <Play size={12} fill="currentColor" /> Слушать
+                  </Button>
+                </div>
+                <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
+                  {radio.items.slice(0, 25).map((track, i) => (
+                    <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayRadioTrack} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {artist.albums?.length > 0 && (
               <section className="mb-12">
