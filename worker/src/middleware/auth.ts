@@ -26,6 +26,17 @@ export const jwtAuth = createMiddleware<{ Bindings: Env; Variables: Variables }>
 
   c.set('userId', payload.sub);
   c.set('isAdmin', payload.admin);
+
+  // Reject banned users on every request — the access token doesn't
+  // know about bans (it's signed once and lives for an hour) so we
+  // confirm against the row each call. Cheap PK lookup.
+  const banned = await c.env.DB
+    .prepare('SELECT is_banned FROM users WHERE id = ? LIMIT 1')
+    .bind(payload.sub)
+    .first<{ is_banned: number }>();
+  if (banned && banned.is_banned === 1) {
+    return c.json({ error: 'Аккаунт заблокирован', banned: true }, 403);
+  }
   await next();
 });
 
