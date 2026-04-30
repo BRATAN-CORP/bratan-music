@@ -16,18 +16,27 @@ import { logPlay, fetchContinue } from '@/lib/recommendations';
  *      under 30s never reach the API (intentional — we don't want
  *      taste signal polluted by what the user actively rejected).
  *
- *   2. Auto-extend the queue when it nears empty. Fires once per
- *      track-change when there are ≤ 2 tracks left after the current
- *      one and repeat is "off" — adds 20 wave-style tracks based on
- *      the current seed. This is what powers "endless playback" in
- *      the absence of repeat.
+ *   2. Auto-extend the queue when the user reaches the LAST track in
+ *      the current queue. Fires once when the current track becomes
+ *      the final item AND repeat is "off" — adds 20 wave-style tracks
+ *      based on the current seed. This is what powers "endless
+ *      playback" in the absence of repeat.
+ *
+ *      Why only on the last track (not pre-emptively a few tracks
+ *      earlier): when the user starts an album or playlist they
+ *      expect the queue to contain ONLY that album/playlist. Adding
+ *      wave continuations a few tracks before the end made the queue
+ *      UI show foreign tracks alongside the album, and on a manual
+ *      skip-to-end the player would slide into a non-album track
+ *      instead of stopping cleanly. Triggering on the final track
+ *      keeps the queue pure for the whole album, and by the time the
+ *      last track ends the wave has been fetched in the background.
  *
  * Mounted once at the AppLayout level. Activates only for
  * authenticated users.
  */
 const SIGNIFICANT_SECONDS = 30;
 const COMPLETED_PCT = 0.8;
-const QUEUE_REFILL_THRESHOLD = 2;
 
 interface InFlightTrack {
   trackId: string;
@@ -89,8 +98,15 @@ export function usePlayHistoryLogger() {
       // stops on the last track.
       if (!useSettingsStore.getState().infinitePlayback) return;
       const idx = queue.findIndex((t) => t.id === currentTrack.id);
+      // Only extend when the user is on the very last track of the
+      // current queue (remaining === 0). Earlier builds extended
+      // when remaining ≤ 2, but that polluted album/playlist queues
+      // with wave continuations before the user had finished the
+      // explicit selection. The fetch below is async, so kicking it
+      // off at the start of the last track gives it ~minutes to
+      // resolve before the track actually ends.
       const remaining = idx >= 0 ? queue.length - idx - 1 : queue.length;
-      if (remaining > QUEUE_REFILL_THRESHOLD) return;
+      if (remaining > 0) return;
 
       lastExtendForTrackId.current = currentTrack.id;
       void (async () => {
