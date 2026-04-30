@@ -74,13 +74,20 @@ export function ArtistPage() {
             <div className="relative isolate -mx-4 mb-10 overflow-hidden px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
               {heroPhoto ? (
                 <AnimatePresence initial={false} mode="sync">
+                  {/* Bleed the blurred backdrop ~15 % past every edge so
+                      the soft blur radius is fully behind the parent's
+                      overflow-hidden mask — kills the "ragged feathered
+                      edge" the user reported on the desktop hero. The
+                      blur drops from 3xl→2xl since the over-bleed gives
+                      us more usable surface to spread softness across,
+                      and the opacity ramps up slightly to compensate. */}
                   <motion.div
                     key={artist.id + ':bg'}
                     aria-hidden
-                    className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
+                    className="pointer-events-none absolute -inset-[15%] -z-10 bg-cover bg-center blur-2xl saturate-150"
                     style={{ backgroundImage: `url(${heroPhoto})` }}
-                    initial={reduce ? { opacity: 0.55, scale: 1 } : { opacity: 0, scale: 1.08 }}
-                    animate={{ opacity: 0.55, scale: 1 }}
+                    initial={reduce ? { opacity: 0.6, scale: 1 } : { opacity: 0, scale: 1.08 }}
+                    animate={{ opacity: 0.6, scale: 1 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
                     transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1] }}
                   />
