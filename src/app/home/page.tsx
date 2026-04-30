@@ -118,10 +118,74 @@ export function HomePage() {
         </div>
       </section>
 
+      <AiPlaylistPromo />
+
       <DailyPlaylistsSection />
 
       <RecentSection />
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// AI playlist promo
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Compact entry-point card sitting between the wave hero and the
+ * daily playlists. Lives only on the authenticated home — gives the
+ * AI-playlist feature a permanent, on-route visual anchor instead
+ * of relying entirely on the sidebar nav item. The card mirrors
+ * the wave hero's hover treatment (border-glow + accent halo) so
+ * the two read as a related family at the top of the page.
+ */
+function AiPlaylistPromo() {
+  return (
+    <Reveal>
+      <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10">
+        <Link
+          to="/ai"
+          className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-5 transition-colors hover:border-[var(--color-border-strong)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
+        >
+          <div
+            className="pointer-events-none absolute inset-0 opacity-80"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+            }}
+          />
+          <div
+            className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+            }}
+          />
+          <div className="relative flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)]">
+              <Sparkles size={20} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                AI плейлист
+              </div>
+              <div className="mt-1 text-base font-semibold tracking-tight sm:text-lg">
+                Опиши настроение — соберу плейлист
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Жанры, артисты и эпохи на русском и английском за один шаг.
+              </div>
+            </div>
+          </div>
+          <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
+            Попробовать
+            <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+      </section>
+    </Reveal>
   );
 }
 
