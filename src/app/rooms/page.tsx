@@ -6,6 +6,7 @@ import {
   Radio, AlertTriangle, Search, Trash2, Loader2,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
+import { RoomChat } from '@/components/features/RoomChat';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CoverFallback } from '@/components/ui/CoverFallback';
@@ -282,6 +283,10 @@ function RoomPageInner() {
         </div>
         <RoomTrackPicker onPick={(track) => player.setTrack(track)} />
       </section>
+
+      <div className="mt-8">
+        <RoomChat roomId={id} />
+      </div>
 
       <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 p-4 text-xs leading-relaxed text-muted-foreground">
         <p className="mb-2 font-medium text-foreground">Как это работает</p>
