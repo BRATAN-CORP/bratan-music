@@ -145,7 +145,12 @@ export function MobileBottomDock() {
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const rect = e.currentTarget.getBoundingClientRect();
                 const seekFromX = (clientX: number) => {
-                  const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                  // Pointer-to-position mapping matches the bar+thumb
+                  // inset coordinate system so the cursor is always
+                  // exactly under the thumb when dragging — see
+                  // Player.tsx for the full rationale.
+                  const usable = Math.max(1, rect.width - RAIL_INSET_PX * 2);
+                  const pct = Math.min(1, Math.max(0, (clientX - rect.left - RAIL_INSET_PX) / usable));
                   seekAudio(pct * duration);
                 };
                 seekFromX(e.clientX);

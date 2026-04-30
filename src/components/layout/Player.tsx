@@ -228,7 +228,20 @@ export function Player() {
                 e.currentTarget.setPointerCapture(e.pointerId);
                 const rect = e.currentTarget.getBoundingClientRect();
                 const seekFromX = (clientX: number) => {
-                  const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                  // Match the bar/thumb coordinate system: both are
+                  // inset by RAIL_INSET_PX on each side, so the
+                  // pointer's mapping to playback position has to be
+                  // computed against the inset range, not the full
+                  // rail width. Without this the thumb visually lags
+                  // the cursor by INSET pixels at the very right end
+                  // of the rail (and a corresponding amount when
+                  // dragged near the left), which is what the user
+                  // saw as "когда тянешь ползунок рассинхрон случается
+                  // тем больше чем ближе к концу ведешь ... в начале
+                  // его нет, но когда ведешь в конец то появляется
+                  // рассинхрон между курсором и thumb".
+                  const usable = Math.max(1, rect.width - RAIL_INSET_PX * 2);
+                  const pct = Math.min(1, Math.max(0, (clientX - rect.left - RAIL_INSET_PX) / usable));
                   seek(pct * duration);
                 };
                 seekFromX(e.clientX);
