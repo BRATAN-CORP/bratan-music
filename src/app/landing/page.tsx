@@ -1,5 +1,5 @@
 import {
-  ArrowUpRight, Headphones, Library, Search, Send, Shield, ShieldOff,
+  ArrowUpRight, Headphones, Library, Search, Shield, ShieldOff,
   Sliders, Share2, Replace, Waves, Bolt,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -144,10 +144,6 @@ export function LandingPage() {
             ) : (
               <TelegramLoginButton />
             )}
-            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Send size={12} />
-              Вход одним тапом из Telegram
-            </span>
           </motion.div>
 
           <Stagger className="grid w-full max-w-3xl grid-cols-3 gap-4 pt-12 sm:gap-8" delay={0.35}>
@@ -173,7 +169,7 @@ export function LandingPage() {
             <h2 className="text-2xl font-semibold tracking-tight sm:text-4xl">Что внутри.</h2>
           </div>
           <p className="hidden max-w-md text-sm text-muted-foreground sm:block">
-            Девять инструментов, которые превращают «ещё один стриминг» в персональную стрим-студию, в которой решаешь ты.
+            9 фич, из-за которых сюда хочется вернуться.
           </p>
         </Reveal>
 
@@ -210,9 +206,19 @@ export function LandingPage() {
       </section>
 
       <section className="relative mx-auto max-w-6xl px-4 pb-24 sm:px-6 lg:px-10">
-        <Reveal className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-8 sm:p-12">
-          <Aurora variant="subtle" />
-          <div className="relative flex flex-col items-start gap-6">
+        <Reveal>
+          <TiltCard intensity={6} hoverScale={1} glareStrength={0.4} className="rounded-[var(--radius-xl)]">
+          <div className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-8 transition-colors hover:border-[var(--color-border-strong)] sm:p-12">
+            <Aurora variant="subtle" />
+            <div
+              className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+              aria-hidden
+              style={{
+                background:
+                  'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+              }}
+            />
+            <div className="relative flex flex-col items-start gap-6">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Готов?
             </span>
@@ -233,7 +239,9 @@ export function LandingPage() {
                 <TelegramLoginButton />
               )}
             </div>
+            </div>
           </div>
+          </TiltCard>
         </Reveal>
       </section>
     </div>
