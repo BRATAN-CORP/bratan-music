@@ -30,6 +30,8 @@ import { AlbumPage } from '@/app/album/page';
 import { ArtistPage } from '@/app/artist/page';
 import { ArtistAlbumsPage, ArtistSinglesPage } from '@/app/artist/releases';
 import { NotFoundPage } from '@/app/not-found/page';
+import { RoomsListPage } from '@/app/rooms/list';
+import { RoomPage } from '@/app/rooms/page';
 
 /** Default <title> baked into index.html. We snapshot it on first
  *  mount so we can restore it when nothing is playing — otherwise
@@ -147,6 +149,8 @@ const router = createBrowserRouter(
         { path: 'artist/:id/singles', element: <ArtistSinglesPage /> },
         { path: 'playlist/:id', element: <PlaylistPage /> },
         { path: 'p/:token', element: <SharedPlaylistPage /> },
+        { path: 'rooms', element: <RoomsListPage /> },
+        { path: 'rooms/:id', element: <RoomPage /> },
         { path: '*', element: <NotFoundPage /> },
       ],
     },
