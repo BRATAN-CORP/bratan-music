@@ -60,3 +60,43 @@ export async function downloadTrack(track: DownloadableTrack): Promise<void> {
   // Defer revocation so the browser can finalize the download.
   window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
+
+/**
+ * Build a public share URL for a track. Strips any in-app sub-route that
+ * happens to be open at the time (so sharing while you're inside
+ * `/playlist/:id` doesn't leak the playlist) and points at
+ * `/track/:id?autoplay=1` instead.
+ */
+export function buildTrackShareUrl(trackId: string): string {
+  const url = new URL(window.location.href);
+  const base = `${url.origin}${url.pathname.replace(
+    /\/?(track|search|playlist|album|artist|profile|admin|library|shared|explore)\/.*$/,
+    '',
+  )}`.replace(/\/$/, '');
+  return `${base}/track/${trackId}?autoplay=1`;
+}
+
+/** Copy any URL to the user's clipboard with a textarea fallback for
+ *  insecure-context / locked-down browsers. Returns true on success. */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      const ok = document.execCommand('copy');
+      return ok;
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+}
