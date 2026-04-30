@@ -56,20 +56,25 @@ export function Player() {
 
   const { progress, seek } = useAudioPlayer();
   const { progressSeconds, bufferedSeconds, durationSeconds } = usePlaybackVisuals();
-  // rAF-driven width for the played and buffered bars. Driving these via
-  // MotionValues lets the bar slide at full frame rate without re-rendering
-  // the player on every animation frame.
-  const progressWidth = useTransform([progressSeconds, durationSeconds] as unknown as never, ([t, d]: [number, number]) =>
-    d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%');
-  const bufferedWidth = useTransform([bufferedSeconds, durationSeconds] as unknown as never, ([b, d]: [number, number]) =>
-    d > 0 ? `${Math.min(100, (b / d) * 100)}%` : '0%');
-  // Thumb travels along the rail, which is inset by RAIL_INSET_PX from
-  // each edge of the player surface so the thumb can never sit on top
-  // of the rounded bezel corners (where it visually "levitates"
-  // because the surface has been clipped away). The progress fill
-  // itself is unchanged — it lives inside the inset rail and stays
-  // visually identical to before, since the corner rounding was already
-  // clipping that strip anyway.
+  // rAF-driven geometry for the played, buffered bars and the thumb.
+  // All three derive from the SAME inset coordinate system so the bar's
+  // visual right-edge always coincides with the thumb's centre — the
+  // user reported "ползунок таймлайна, особенно на длинных треках
+  // визуально обгоняет thumb", which was the bar (no inset) racing
+  // ahead of the thumb (inset by RAIL_INSET_PX on both sides) at the
+  // far end of long tracks. By computing both the bar's left+width and
+  // the thumb's left from the same `INSET + (100% - 2*INSET) * r`
+  // formula they now stay perfectly aligned.
+  const progressWidth = useTransform([progressSeconds, durationSeconds] as unknown as never, ([t, d]: [number, number]) => {
+    const r = d > 0 ? Math.min(1, Math.max(0, t / d)) : 0;
+    return `calc((100% - ${RAIL_INSET_PX * 2}px) * ${r})`;
+  });
+  const bufferedWidth = useTransform([bufferedSeconds, durationSeconds] as unknown as never, ([buf, d]: [number, number]) => {
+    const r = d > 0 ? Math.min(1, Math.max(0, buf / d)) : 0;
+    return `calc((100% - ${RAIL_INSET_PX * 2}px) * ${r})`;
+  });
+  // Thumb sits at the right edge of the played fill: same coordinate
+  // system, same value of `r`.
   const thumbLeft = useTransform([progressSeconds, durationSeconds] as unknown as never, ([t, d]: [number, number]) => {
     const r = d > 0 ? Math.min(1, Math.max(0, t / d)) : 0;
     return `calc(${RAIL_INSET_PX}px + (100% - ${RAIL_INSET_PX * 2}px) * ${r})`;
@@ -248,13 +253,13 @@ export function Player() {
                   buffered. Sits visually behind the played bar so once
                   playback catches up the gradient covers it. */}
               <motion.div
-                className="absolute inset-y-0 left-0 bg-white/15"
-                style={{ width: bufferedWidth }}
+                className="absolute inset-y-0 bg-white/15"
+                style={{ left: `${RAIL_INSET_PX}px`, width: bufferedWidth }}
                 aria-hidden
               />
               <motion.div
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
-                style={{ width: progressWidth }}
+                className="absolute inset-y-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                style={{ left: `${RAIL_INSET_PX}px`, width: progressWidth }}
               />
             </div>
 

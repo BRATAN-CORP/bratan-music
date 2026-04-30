@@ -451,15 +451,21 @@ function setSlotGain(slot: Slot, value: number) {
  *  the second call clobbered the first id and `cancelRamp` could only stop
  *  ONE of the two ramps. The leftover ramp would keep writing gain values
  *  into a slot we'd already loaded a fresh track into — that's exactly the
- *  "track plays but no sound" / "audio fades out unexpectedly" symptom. */
-const activeRamps: Record<Slot, { raf: number; resolve: () => void } | null> = { a: null, b: null };
+ *  "track plays but no sound" / "audio fades out unexpectedly" symptom.
+ *
+ *  We now keep BOTH the timer fallback (used when the Web Audio graph is
+ *  unavailable, i.e. iOS) and the Web Audio `linearRampToValueAtTime`
+ *  schedule. The Web Audio path has to be cancelled differently
+ *  (`cancelScheduledValues` + a forced setValueAtTime) so we hold a
+ *  per-slot teardown thunk. */
+const activeRamps: Record<Slot, { teardown: () => void; resolve: () => void } | null> = { a: null, b: null };
 
 function cancelRamp(slot?: Slot) {
   const slots: Slot[] = slot ? [slot] : ['a', 'b'];
   for (const s of slots) {
     const ramp = activeRamps[s];
     if (ramp) {
-      cancelAnimationFrame(ramp.raf);
+      ramp.teardown();
       ramp.resolve();
       activeRamps[s] = null;
     }
@@ -470,26 +476,92 @@ function cancelRamp(slot?: Slot) {
  * Animate gain from `fromValue` to `toValue` over `durationMs` for the given
  * slot. Returns a promise that resolves when the ramp finishes (or is
  * cancelled). Safe to run two ramps in parallel — each slot tracks its own
- * RAF id.
+ * schedule.
+ *
+ * Implementation note (background-tab fix): the previous implementation
+ * stepped the gain in a `requestAnimationFrame` loop. RAF is throttled to
+ * ~1 Hz when the tab is hidden in every modern browser, and on iOS Safari
+ * it's paused entirely; the user reported the symptom as "track 2 plays
+ * at full 100% volume in the background, snaps back to user volume when
+ * I switch tabs back". The cause was the ramp's first tick never running
+ * — the audio element kept playing while `audio.volume` and
+ * `gain.gain.value` were stuck at whatever the previous slot left them
+ * at, which on the very first crossfade is `1.0` (the HTMLMediaElement
+ * default before the bundle's lazy graph init had a chance to write
+ * anything). Now we drive the ramp through the AudioContext's clock via
+ * `linearRampToValueAtTime`. That clock keeps ticking regardless of
+ * document visibility, so the gain reaches its target on time and at the
+ * correct intermediate values whether the tab is visible or not. The
+ * resolve is scheduled on a wall-clock timer so the await chain in
+ * `startCrossfade` still completes (timers are also throttled in hidden
+ * tabs but they DO fire — this is unlike RAF which can be paused). When
+ * no graph exists (iOS / `ctxFailed`) we fall back to a
+ * `setSlotGain(toValue)` snap so playback never gets stuck at the
+ * `fromValue` of 0.
  */
 function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: number): Promise<void> {
   cancelRamp(slot);
+  const b = getBundle();
+  const ctx = b.ctx;
+  const gainNode = b.gains[slot];
+  const audio = b.audios[slot];
+
+  // No Web Audio graph (iOS, or graph init failed): we can't ramp the
+  // gain via audio time. RAF would be throttled in hidden tabs, so we
+  // just snap to the target. The user trades a fade for guaranteed
+  // correct volume in the background — much better than the
+  // alternation-between-100%-and-user-volume bug it replaces.
+  if (!ctx || !gainNode) {
+    setSlotGain(slot, toValue);
+    return Promise.resolve();
+  }
+
   return new Promise((resolve) => {
-    const start = performance.now();
-    setSlotGain(slot, fromValue);
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / durationMs);
-      const v = fromValue + (toValue - fromValue) * t;
-      setSlotGain(slot, v);
-      if (t >= 1) {
-        activeRamps[slot] = null;
-        resolve();
-        return;
-      }
-      const ramp = activeRamps[slot];
-      if (ramp) ramp.raf = requestAnimationFrame(tick);
+    const now = ctx.currentTime;
+    const endAt = now + Math.max(0.001, durationMs / 1000);
+    try {
+      gainNode.gain.cancelScheduledValues(now);
+      gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, fromValue)), now);
+      gainNode.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, toValue)), endAt);
+    } catch { /* ignore — fall through to the timer snap below */ }
+    // Mirror to audio.volume so a bundle that has lost its ctx (rare,
+    // but possible after device sleep) still reaches the right level.
+    // We do it at both endpoints rather than per-frame because RAF is
+    // unreliable in background tabs and the ctx ramp already smooths
+    // the actual audio output.
+    audio.volume = Math.max(0, Math.min(1, toValue));
+
+    // setTimeout DOES fire in background tabs (clamped to 1 s minimum
+    // in some browsers but never paused entirely the way RAF is), so
+    // the await chain in startCrossfade always completes.
+    const timer = window.setTimeout(() => {
+      try {
+        // Land exactly on the target so any subsequent reads observe
+        // the final value, not whatever interpolation point we were
+        // at when the ramp ran.
+        gainNode.gain.cancelScheduledValues(ctx.currentTime);
+        gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, toValue)), ctx.currentTime);
+      } catch { /* ignore */ }
+      activeRamps[slot] = null;
+      resolve();
+    }, durationMs);
+
+    activeRamps[slot] = {
+      teardown: () => {
+        window.clearTimeout(timer);
+        try {
+          const t = ctx.currentTime;
+          // Freeze gain at its current scheduled value so a cancelled
+          // ramp doesn't snap back to fromValue when the schedule is
+          // wiped. We approximate "current value" via the AudioParam's
+          // `.value` read (which reflects the live output).
+          const v = gainNode.gain.value;
+          gainNode.gain.cancelScheduledValues(t);
+          gainNode.gain.setValueAtTime(v, t);
+        } catch { /* ignore */ }
+      },
+      resolve,
     };
-    activeRamps[slot] = { raf: requestAnimationFrame(tick), resolve };
   });
 }
 
@@ -872,16 +944,31 @@ export function useAudioPlayer() {
     const durMs = Math.max(500, crossfadeDuration * 1000);
 
     const teardown = (promote: boolean) => {
+      // Always read the user's CURRENT volume from the store rather
+      // than the closure-captured `volume` / `muted` — if the user
+      // adjusted the slider mid-crossfade we want the new value, not
+      // whatever was current when startCrossfade was first called.
+      const ps = usePlayerStore.getState();
+      const userTarget = ps.muted ? 0 : ps.volume;
       if (promote) {
         safePause(outgoing);
         b.loaded[outgoing] = null;
         setSlotGain(outgoing, 0);
         b.active = incoming;
+        // Defensive: the gain ramp's `linearRampToValueAtTime` is
+        // supposed to land on `target` exactly, but if the ctx had
+        // any glitches (suspend/resume during background tab, device
+        // sleep, etc.) the scheduled value may not have applied. Force
+        // the new active slot to the user's current volume here so
+        // the next track NEVER plays at the wrong level. This is the
+        // core fix for the "track 2 plays at 100 % in background, then
+        // snaps to 20 % when I switch back" bug.
+        setSlotGain(incoming, userTarget);
       } else {
         safePause(incoming);
         b.loaded[incoming] = null;
         setSlotGain(incoming, 0);
-        setSlotGain(outgoing, muted ? 0 : volume);
+        setSlotGain(outgoing, userTarget);
       }
       b.crossfadingInto = null;
       b.crossfadeKind = null;
@@ -1622,6 +1709,45 @@ export function usePlaybackVisuals(): {
     let displayed = progressSeconds.get();
     let initialised = false;
 
+    // When the document is hidden RAF is throttled to ~1 Hz (Chromium)
+    // or paused entirely (Safari / iOS). The prediction loop stops
+    // integrating dt → `displayed` falls behind reality by however
+    // long the tab was hidden. When the user comes back the bar AND
+    // thumb both render at the stale position; clicking the rail then
+    // seeks to that stale position because it's literally the value
+    // the seek handler reads (`pct * duration` from the rail width
+    // shows the right pct, but the user clicks where the bar/thumb
+    // *visually* is, and that visual is stale). The user reported
+    // exactly this as "ползунок ... показывается на n секунд раньше,
+    // даже при первом касании ползунок автоматом сдвгиается".
+    //
+    // On visibility recovery, hard-resync to the audio element's real
+    // currentTime + duration BEFORE the next RAF tick has a chance to
+    // run and slow-drift the displayed value into place. Also force
+    // the next tick to skip the prediction smoothing branch by
+    // dropping `lastTickAt` so dt = 0 and `displayed` lands exactly on
+    // realT.
+    const resync = () => {
+      const b = getBundle();
+      const currentId = usePlayerStore.getState().currentTrack?.id ?? null;
+      const slot = ownerSlotFor(b, currentId);
+      const audio = b.audios[slot];
+      if (!audio) return;
+      const realT = audio.currentTime;
+      const dur = audio.duration;
+      if (isFinite(dur) && dur > 0) durationSeconds.set(dur);
+      displayed = realT;
+      progressSeconds.set(realT);
+      lastTickAt = performance.now();
+      initialised = true;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') resync();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', resync);
+    window.addEventListener('pageshow', resync);
+
     const tick = () => {
       const b = getBundle();
       // Visuals should always track the slot loaded with the CURRENT
@@ -1739,7 +1865,12 @@ export function usePlaybackVisuals(): {
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', resync);
+      window.removeEventListener('pageshow', resync);
+    };
   }, [progressSeconds, bufferedSeconds, durationSeconds]);
 
   return { progressSeconds, bufferedSeconds, durationSeconds };
