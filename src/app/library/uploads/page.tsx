@@ -63,7 +63,7 @@ export function UploadsPage() {
 
   return (
     <AuthGuard>
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <button
           onClick={() => navigate(-1)}
           className="flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"

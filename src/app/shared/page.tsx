@@ -63,7 +63,7 @@ export function SharedPlaylistPage() {
 
   return (
     <AuthGuard>
-      <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-10">
+      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         <button
           type="button"
           onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
