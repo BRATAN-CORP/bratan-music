@@ -71,6 +71,8 @@ interface PlaylistRow {
   source_playlist_id?: string | null;
   source_user_id?: string | null;
   source_track_count?: number | null;
+  // 0019_playlist_description.
+  description?: string | null;
 }
 
 // Hard cap to keep D1 rows small. Frontend should resize+JPEG-compress
@@ -101,6 +103,7 @@ function rowToPlaylist(r: PlaylistRow) {
   return {
     id: r.id,
     name: r.name,
+    description: r.description ?? null,
     isLiked: Boolean(r.is_liked),
     coverUrl: r.cover_url ?? null,
     pinnedAt: r.pinned_at ?? null,

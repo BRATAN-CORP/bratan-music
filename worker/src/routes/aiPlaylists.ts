@@ -75,10 +75,17 @@ aiPlaylists.post('/save', async (c) => {
   ];
 
   // Cap snapshot to a known shape so we don't accidentally persist
-  // server-side fields the UI doesn't render.
-  for (let i = 0; i < tracks.length; i++) {
-    const t = tracks[i];
+  // server-side fields the UI doesn't render. Also dedupe by track_id
+  // — the dedupe inside AiPlaylistService is by `${source}:${id}`,
+  // but the playlist_tracks PK is `(playlist_id, track_id)` alone.
+  // Two tracks with the same Tidal id but different sources would
+  // otherwise blow up the whole batch with a UNIQUE violation.
+  const seen = new Set<string>();
+  let position = 0;
+  for (const t of tracks) {
     if (!t || !t.id) continue;
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
     const snapshot = JSON.stringify({
       id: t.id,
       source: t.source ?? 'tidal',
@@ -98,10 +105,21 @@ aiPlaylists.post('/save', async (c) => {
         `INSERT INTO playlist_tracks (playlist_id, track_id, source, position,
                                       added_at, snapshot)
          VALUES (?, ?, ?, ?, ?, ?)`,
-      ).bind(playlistId, t.id, t.source ?? 'tidal', i, now, snapshot),
+      ).bind(playlistId, t.id, t.source ?? 'tidal', position, now, snapshot),
     );
+    position += 1;
   }
 
-  await c.env.DB.batch(stmts);
-  return c.json({ id: playlistId, name, description, trackCount: tracks.length }, 201);
+  // Catch-and-log so the next time something like a missing column
+  // shows up we get the underlying SQLite message in `wrangler tail`
+  // instead of just the global "Внутренняя ошибка сервера" mask the
+  // app.onError handler returns.
+  try {
+    await c.env.DB.batch(stmts);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[ai/save] DB batch failed:', msg);
+    return c.json({ error: 'Не удалось сохранить плейлист' }, 500);
+  }
+  return c.json({ id: playlistId, name, description, trackCount: position }, 201);
 });

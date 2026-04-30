@@ -1,0 +1,12 @@
+-- Add `description` column to `playlists`.
+--
+-- The column was declared in `schema.sql` from day one but a matching
+-- migration was never written, so production never picked it up. The
+-- AI playlist save endpoint (`POST /ai/playlists/save`) inserts into
+-- `description` directly, which fails with a `no such column`
+-- SQLite error — surfaced to the user as the generic 500 "Внутренняя
+-- ошибка сервера".
+--
+-- Adding the column nullable is safe: every existing row gets `NULL`
+-- and every consumer either ignores the field or handles `null`.
+ALTER TABLE playlists ADD COLUMN description TEXT;
