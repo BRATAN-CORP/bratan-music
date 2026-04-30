@@ -477,85 +477,188 @@ function cancelRamp(slot?: Slot) {
 }
 
 /**
- * Animate gain from `fromValue` to `toValue` over `durationMs` for the given
- * slot. Returns a promise that resolves when the ramp finishes (or is
- * cancelled). Safe to run two ramps in parallel — each slot tracks its own
- * schedule.
+ * Crossfade curve shape passed to `rampGain`.
+ *  - `linear`         — straight interpolation (used for non-crossfade UI tweaks).
+ *  - `equalPowerOut`  — outgoing leg of an equal-power crossfade (cos quarter-wave).
+ *  - `equalPowerIn`   — incoming leg of an equal-power crossfade (sin quarter-wave).
  *
- * Implementation note (background-tab fix): the previous implementation
- * stepped the gain in a `requestAnimationFrame` loop. RAF is throttled to
- * ~1 Hz when the tab is hidden in every modern browser, and on iOS Safari
- * it's paused entirely; the user reported the symptom as "track 2 plays
- * at full 100% volume in the background, snaps back to user volume when
- * I switch tabs back". The cause was the ramp's first tick never running
- * — the audio element kept playing while `audio.volume` and
- * `gain.gain.value` were stuck at whatever the previous slot left them
- * at, which on the very first crossfade is `1.0` (the HTMLMediaElement
- * default before the bundle's lazy graph init had a chance to write
- * anything). Now we drive the ramp through the AudioContext's clock via
- * `linearRampToValueAtTime`. That clock keeps ticking regardless of
- * document visibility, so the gain reaches its target on time and at the
- * correct intermediate values whether the tab is visible or not. The
- * resolve is scheduled on a wall-clock timer so the await chain in
- * `startCrossfade` still completes (timers are also throttled in hidden
- * tabs but they DO fire — this is unlike RAF which can be paused). When
- * no graph exists (iOS / `ctxFailed`) we fall back to a
- * `setSlotGain(toValue)` snap so playback never gets stuck at the
- * `fromValue` of 0.
+ * Equal-power keeps the perceived loudness flat through the crossfade
+ * (sum-of-squares of incoming and outgoing gains stays at 1) which is
+ * what real streaming services use. A linear crossfade audibly dips at
+ * the midpoint because total energy drops to ~0.5.
  */
-function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: number): Promise<void> {
+type RampCurve = 'linear' | 'equalPowerOut' | 'equalPowerIn';
+
+function clamp01(v: number): number {
+  if (!isFinite(v)) return 0;
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function curveValueAt(fromV: number, toV: number, t: number, curve: RampCurve): number {
+  // `t` is in [0, 1]. For equalPowerOut: the leg is shaped like cos(πt/2),
+  // which goes 1 → 0 as t goes 0 → 1. We rescale that into [from, to].
+  // For equalPowerIn: shaped like sin(πt/2), going 0 → 1.
+  if (curve === 'equalPowerOut') {
+    const w = Math.cos((t * Math.PI) / 2);
+    return clamp01(toV + (fromV - toV) * w);
+  }
+  if (curve === 'equalPowerIn') {
+    const w = Math.sin((t * Math.PI) / 2);
+    return clamp01(fromV + (toV - fromV) * w);
+  }
+  return clamp01(fromV + (toV - fromV) * t);
+}
+
+/**
+ * Animate the slot's gain from `fromValue` to `toValue` over `durationMs`.
+ * Returns a promise that resolves when the ramp finishes (or is cancelled).
+ * Safe to run two ramps in parallel — each slot tracks its own schedule.
+ *
+ * Implementation notes:
+ *
+ *  - **Why we do NOT call `setSlotGain(toValue)` up front.** A previous
+ *    revision snapped both `gain.gain.value` and `audio.volume` to the
+ *    ramp target immediately as a hidden-tab safety net. That fixed the
+ *    "track 2 plays at 100% in the background" bug but introduced a
+ *    much worse one: Chromium and Safari both apply
+ *    `HTMLMediaElement.volume` as a multiplicative scale on the bus
+ *    going INTO `MediaElementAudioSourceNode` (see Chromium's
+ *    `media_element_audio_source_node.cc::ProcessLock` → `bus->Scale()`).
+ *    Snapping `audio.volume = 0` on the outgoing slot at the *start*
+ *    of a 12 s fade silenced the source feed for the entire fade
+ *    window — the user heard the last 12 s of the track disappear
+ *    instantly with no fade at all and the next track punch in hard.
+ *    We now hold `audio.volume = 1` for the duration of the ramp so
+ *    the gain node is the sole attenuator; the wall-clock timer
+ *    below explicitly lands `audio.volume` on the right post-ramp
+ *    value once the ramp completes.
+ *
+ *  - **Why the ramp uses Web Audio's clock.** RAF is throttled to ~1 Hz
+ *    on hidden tabs and paused entirely on iOS Safari. The Web Audio
+ *    context clock keeps ticking regardless, so a scheduled
+ *    `setValueCurveAtTime` / `linearRampToValueAtTime` lands the right
+ *    intermediate values without us pumping it from JS.
+ *
+ *  - **Why we still arm a wall-clock setTimeout.** Chromium can suspend
+ *    audio *rendering* on hidden tabs while the ctx clock keeps
+ *    advancing — the schedule appears to run but no samples are
+ *    produced. The timeout below force-lands the gain on `toValue` so
+ *    the next ramp / `setSlotGain` always sees a sane starting point,
+ *    and so the await chain in `startCrossfade` makes progress even
+ *    when the audio engine has stalled.
+ *
+ *  - **Equal-power crossfade.** Pass `equalPowerOut` for the outgoing
+ *    leg and `equalPowerIn` for the incoming leg of a crossfade. The
+ *    two legs sum to constant perceived energy, which is what real
+ *    streaming platforms do for transitions.
+ */
+function rampGain(
+  slot: Slot,
+  fromValue: number,
+  toValue: number,
+  durationMs: number,
+  curve: RampCurve = 'linear',
+): Promise<void> {
   cancelRamp(slot);
   const b = getBundle();
   const ctx = b.ctx;
   const gainNode = b.gains[slot];
+  const audio = b.audios[slot];
+  const fromV = clamp01(fromValue);
+  const toV = clamp01(toValue);
+  const ms = Math.max(1, durationMs);
 
-  // SAFETY-FIRST: snap the gain to the target value immediately. If
-  // anything below this point fails — ctx suspended in a hidden tab,
-  // graph not initialised on iOS, browser bug — the slot still ends
-  // up at the right level. The fade animation that follows is purely
-  // cosmetic. This is the actual fix for the user-reported "трек
-  // звучит на 100% громкости в фоновой вкладке" bug: PR #196's
-  // attempt to drive the ramp through `linearRampToValueAtTime` did
-  // not survive Chromium silently suspending audio rendering on
-  // hidden tabs (the ctx clock advances but the schedule doesn't
-  // always commit when the page isn't visible), so we no longer
-  // depend on the ramp completing — we depend on `setSlotGain(to)`
-  // having already fired before any of the scheduling primitives
-  // ever get a chance to disagree.
-  setSlotGain(slot, toValue);
+  // GRAPH-LESS PATH (iOS / `ctxFailed`): no Web Audio. Animate
+  // `audio.volume` directly via RAF. Hidden tabs stall RAF, so snap
+  // the final value and resolve immediately — the visible-tab fade
+  // path will recover next time.
+  if (!ctx || !gainNode) {
+    audio.volume = fromV;
+    if (typeof document !== 'undefined' && document.hidden) {
+      audio.volume = toV;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const start = performance.now();
+      let rafId = 0;
+      let cancelled = false;
+      const finish = () => {
+        if (cancelled) return;
+        cancelled = true;
+        audio.volume = toV;
+        if (activeRamps[slot]?.resolve === resolve) activeRamps[slot] = null;
+        resolve();
+      };
+      const tick = () => {
+        if (cancelled) return;
+        const t = (performance.now() - start) / ms;
+        if (t >= 1) { finish(); return; }
+        audio.volume = curveValueAt(fromV, toV, t, curve);
+        rafId = window.requestAnimationFrame(tick);
+      };
+      rafId = window.requestAnimationFrame(tick);
+      activeRamps[slot] = {
+        teardown: () => { cancelled = true; window.cancelAnimationFrame(rafId); },
+        resolve,
+      };
+    });
+  }
 
-  // No Web Audio graph (iOS / `ctxFailed`) → we already wrote
-  // `audio.volume = to` via `setSlotGain` above. Nothing to animate.
-  if (!ctx || !gainNode) return Promise.resolve();
+  // GRAPH PATH: drive the ramp through Web Audio's scheduler. Force
+  // `audio.volume` to 1 so the element-level volume doesn't multiply
+  // INTO the gain ramp (Chromium + Safari both scale the source bus
+  // by `audio.volume` even when wired into a `MediaElementAudioSource`).
+  audio.volume = 1;
 
-  // Hidden tab → don't even try to animate. RAF is paused, the ctx
-  // clock can be throttled, and the only thing we care about is the
-  // gain landing on `to` (already done by the snap above).
+  // Hidden tab: the audio render thread can be suspended even though
+  // the ctx clock advances, so a scheduled ramp may not commit any
+  // samples. Snap the gain to the target so the *next* visible-tab
+  // tick starts from a sane value, and resolve immediately.
   if (typeof document !== 'undefined' && document.hidden) {
+    try {
+      gainNode.gain.cancelScheduledValues(ctx.currentTime);
+      gainNode.gain.setValueAtTime(toV, ctx.currentTime);
+    } catch { /* ignore */ }
     return Promise.resolve();
   }
 
   return new Promise((resolve) => {
     const now = ctx.currentTime;
-    const endAt = now + Math.max(0.001, durationMs / 1000);
+    const dur = Math.max(0.001, ms / 1000);
+    const endAt = now + dur;
+
     try {
-      // Reset to `from` and ramp back to `to` for the visible
-      // crossfade swell. This rewinds the snap above for the
-      // duration of the ramp, but the schedule is cancelled cleanly
-      // on completion / cancel so the final value is `to` either way.
       gainNode.gain.cancelScheduledValues(now);
-      gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, fromValue)), now);
-      gainNode.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, toValue)), endAt);
-    } catch { /* ignore — snap above already wrote the target */ }
+      if (curve === 'equalPowerOut' || curve === 'equalPowerIn') {
+        // Render an equal-power curve into a 65-sample Float32Array
+        // (one extra sample so endpoints land EXACTLY on `fromV` and
+        // `toV`). `setValueCurveAtTime` interpolates between samples
+        // for us. We deliberately do NOT precede it with a
+        // `setValueAtTime(fromV)` event because per spec the curve
+        // forces the value to its first sample at `now`, and adding
+        // a competing event at the same time can cause an
+        // implementation-defined glitch on some browsers.
+        const N = 65;
+        const samples = new Float32Array(N);
+        for (let i = 0; i < N; i++) {
+          const t = i / (N - 1);
+          samples[i] = curveValueAt(fromV, toV, t, curve);
+        }
+        gainNode.gain.setValueCurveAtTime(samples, now, dur);
+      } else {
+        gainNode.gain.setValueAtTime(fromV, now);
+        gainNode.gain.linearRampToValueAtTime(toV, endAt);
+      }
+    } catch { /* ignore — wall-clock fallback below will land the value */ }
 
     const timer = window.setTimeout(() => {
       try {
         gainNode.gain.cancelScheduledValues(ctx.currentTime);
-        gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, toValue)), ctx.currentTime);
+        gainNode.gain.setValueAtTime(toV, ctx.currentTime);
       } catch { /* ignore */ }
-      activeRamps[slot] = null;
+      if (activeRamps[slot]?.resolve === resolve) activeRamps[slot] = null;
       resolve();
-    }, durationMs);
+    }, ms);
 
     activeRamps[slot] = {
       teardown: () => {
@@ -563,7 +666,7 @@ function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: nu
         try {
           const t = ctx.currentTime;
           // Freeze at the current scheduled value so a cancelled
-          // ramp doesn't snap back to `fromValue`.
+          // ramp doesn't pop back to `fromV`.
           const v = gainNode.gain.value;
           gainNode.gain.cancelScheduledValues(t);
           gainNode.gain.setValueAtTime(v, t);
@@ -1085,8 +1188,13 @@ export function useAudioPlayer() {
         const left = Math.max(0, dur - outgoingAudio.currentTime) * 1000;
         return Math.max(300, Math.min(durMs, left));
       })();
-      const incomingRamp = rampGain(incoming, 0, target, outgoingRemainingMs);
-      const outgoingRamp = rampGain(outgoing, target, 0, outgoingRemainingMs);
+      // Equal-power crossfade: the two legs sum to constant perceived
+      // loudness across the fade window (cos² + sin² = 1). A linear
+      // crossfade noticeably dips at the midpoint, which streaming
+      // platforms avoid; this matches the curve Spotify, Apple Music
+      // and Tidal use for transitions.
+      const incomingRamp = rampGain(incoming, 0, target, outgoingRemainingMs, 'equalPowerIn');
+      const outgoingRamp = rampGain(outgoing, target, 0, outgoingRemainingMs, 'equalPowerOut');
 
       await Promise.all([outgoingRamp, incomingRamp]);
       if (!crossfadingRef.current) return; // cancelled
