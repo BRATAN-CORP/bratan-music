@@ -160,7 +160,9 @@ export function SearchPage() {
           <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Поиск</span>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Найдите треки, альбомы и артистов</h1>
         </div>
-        <SearchBar value={query} onChange={setQuery} />
+        <div data-tour-id="tour-search">
+          <SearchBar value={query} onChange={setQuery} />
+        </div>
         {!showEmptyState && <SearchFilters active={filter} onChange={setFilter} />}
         {showEmptyState ? (
           <SearchEmptyState

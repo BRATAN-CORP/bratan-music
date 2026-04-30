@@ -5,6 +5,12 @@ export interface User {
   tg_username: string | null;
   tg_name: string | null;
   is_admin: number;
+  /**
+   * Unix seconds when the spotlight onboarding tour was completed (or
+   * skipped). `null` for users who haven't run it yet — frontend mounts
+   * `<OnboardingTour />` on next login while this is null.
+   */
+  tour_completed_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -45,5 +51,27 @@ export class UserService {
   async isAdmin(userId: string): Promise<boolean> {
     const user = await this.findById(userId);
     return user?.is_admin === 1;
+  }
+
+  /** Mark the spotlight onboarding tour as finished for the user.
+   *  Idempotent — calling it twice keeps the original timestamp. */
+  async markTourCompleted(userId: string): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    await this.env.DB.prepare(
+      'UPDATE users SET tour_completed_at = COALESCE(tour_completed_at, ?), updated_at = ? WHERE id = ?',
+    )
+      .bind(now, now, userId)
+      .run();
+  }
+
+  /** Replay the tour on next login by clearing the completion timestamp.
+   *  Used by the profile screen's "Пройти тур заново" affordance. */
+  async resetTour(userId: string): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    await this.env.DB.prepare(
+      'UPDATE users SET tour_completed_at = NULL, updated_at = ? WHERE id = ?',
+    )
+      .bind(now, userId)
+      .run();
   }
 }

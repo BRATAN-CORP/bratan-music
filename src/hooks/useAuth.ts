@@ -2,28 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
 
+interface AuthUser {
+  id: string;
+  username: string | null;
+  name: string | null;
+  isAdmin: boolean;
+  tourCompletedAt: number | null;
+}
+
 interface AuthResponse {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-  user: {
-    id: string;
-    username: string | null;
-    name: string | null;
-    isAdmin: boolean;
-  };
+  user: AuthUser;
 }
 
 interface NonceResponse {
   status: 'pending' | 'confirmed';
   accessToken?: string;
   refreshToken?: string;
-  user?: {
-    id: string;
-    username: string | null;
-    name: string | null;
-    isAdmin: boolean;
-  };
+  user?: AuthUser;
 }
 
 interface TelegramWebApp {

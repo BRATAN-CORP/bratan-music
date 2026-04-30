@@ -25,6 +25,13 @@ user.get('/me', async (c) => {
     username: userData.tg_username,
     name: userData.tg_name,
     isAdmin: userData.is_admin === 1,
+    /**
+     * Unix seconds when the user finished/skipped the spotlight
+     * onboarding tour, or `null` if they haven't seen it yet. The
+     * frontend uses this to decide whether to mount
+     * `<OnboardingTour />` after login.
+     */
+    tourCompletedAt: userData.tour_completed_at ?? null,
     subscription: subscription
       ? {
           status: 'active' as const,
@@ -32,6 +39,31 @@ user.get('/me', async (c) => {
         }
       : null,
   });
+});
+
+/**
+ * Mark the onboarding tour as finished. Called by the frontend when
+ * the user finishes the last spotlight step or hits "Пропустить".
+ * Idempotent — a second POST keeps the original timestamp.
+ */
+user.post('/me/tour/complete', async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env);
+  await userService.markTourCompleted(userId);
+  return c.json({ ok: true });
+});
+
+/**
+ * Re-arm the tour for the next login. Used by the profile screen's
+ * "Пройти тур заново" affordance — clears the
+ * `tour_completed_at` timestamp so `<OnboardingTour />` mounts again
+ * on the next dashboard load.
+ */
+user.post('/me/tour/reset', async (c) => {
+  const userId = c.get('userId');
+  const userService = new UserService(c.env);
+  await userService.resetTour(userId);
+  return c.json({ ok: true });
 });
 
 user.get('/limits', async (c) => {

@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
+import { TiltCard } from '@/components/ui/TiltCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TrackItem } from '@/components/features/TrackItem';
 import { ArtistPicker } from '@/components/features/ArtistPicker';
@@ -173,18 +174,31 @@ function WaveHero({
     }
   };
 
-  // The hero used to be wrapped in a TiltCard for the 3D-on-hover
-  // effect, but that put every interactive control (the two CTAs and
-  // the PreviewStrip below) inside a `transform-style: preserve-3d`
-  // layer that updates rotateX/Y on every pointermove. The constant
-  // micro-rotation under the cursor caused mousedown/mouseup to land
-  // on different positions, eating clicks on the secondary "Поменять
-  // артистов" button. We keep the rich gradient + cover-stack look
-  // without the tilt so taps register reliably across the whole card.
+  // Tilt + glare hover, matching the landing feature cards. We keep
+  // intensity low (6) and hoverScale at 1 so the two CTAs inside the
+  // hero don't drift between mousedown and mouseup — that drift was
+  // what ate clicks on the secondary "Поменять артистов" button
+  // when this card last carried full tilt. With these settings the 3D
+  // rotation reads as a soft parallax rather than a kinetic toy, and
+  // the buttons sit on a stable pixel grid for click latching.
   return (
     <Reveal>
-      <div className="rounded-[var(--radius-2xl)]">
-        <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card">
+      <TiltCard
+        intensity={6}
+        hoverScale={1}
+        glareStrength={0.4}
+        className="rounded-[var(--radius-2xl)]"
+      >
+      <div className="group rounded-[var(--radius-2xl)]" data-tour-id="tour-wave">
+        <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card transition-colors hover:border-[var(--color-border-strong)]">
+          <div
+            className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+            }}
+          />
           {/* Decorative animated gradient layer behind the content. The
               actual cover preview sits on the right and uses the user's
               wave seeds — so the visual is alive without being a
@@ -273,6 +287,7 @@ function WaveHero({
           </div>
         </div>
       </div>
+      </TiltCard>
     </Reveal>
   );
 }
