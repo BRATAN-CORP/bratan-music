@@ -3,10 +3,15 @@ CREATE TABLE users (
     tg_username       TEXT,
     tg_name           TEXT,
     is_admin          INTEGER NOT NULL DEFAULT 0,
+    is_banned         INTEGER NOT NULL DEFAULT 0,
+    banned_at         INTEGER,
+    banned_by         TEXT,
+    banned_reason     TEXT,
     tour_completed_at INTEGER,
     created_at        INTEGER NOT NULL,
     updated_at        INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_users_is_banned ON users(is_banned);
 
 CREATE TABLE subscriptions (
     id              TEXT PRIMARY KEY,

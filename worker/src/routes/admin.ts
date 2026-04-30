@@ -104,6 +104,144 @@ admin.get('/users/search', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Admin user grid (PR #215). Paginated list of users with subscription
+// status, ban status, role and play-history aggregates for the table.
+// Filters: ?q=, ?role=admin|user, ?banned=1|0, ?sub=active|none.
+// Sorts:   ?sort=created_at|last_played_at|tg_username (DESC default).
+// ---------------------------------------------------------------------------
+
+interface AdminUserRow {
+  id: string;
+  tg_username: string | null;
+  tg_name: string | null;
+  is_admin: number;
+  is_banned: number;
+  banned_at: number | null;
+  banned_reason: string | null;
+  created_at: number;
+  sub_expires_at: number | null;
+  sub_status: string | null;
+  last_played_at: number | null;
+  play_count: number;
+}
+
+admin.get('/users', async (c) => {
+  const q = (c.req.query('q') ?? '').trim();
+  const role = c.req.query('role');
+  const banned = c.req.query('banned');
+  const sub = c.req.query('sub');
+  const sort = c.req.query('sort') ?? 'created_at';
+  const limit = Math.min(100, Math.max(1, Number(c.req.query('limit') ?? 50) | 0));
+  const offset = Math.max(0, Number(c.req.query('offset') ?? 0) | 0);
+
+  // Whitelist sort columns to avoid SQL injection via the query string.
+  // The JOIN against subscriptions+play_history is materialised via a
+  // subquery so the sort is applied to the FINAL row (with the latest
+  // sub + last play_history join) instead of joining first.
+  const ALLOWED_SORTS: Record<string, string> = {
+    created_at: 'u.created_at',
+    last_played_at: 'last_played_at',
+    tg_username: 'u.tg_username',
+  };
+  const orderCol = ALLOWED_SORTS[sort] ?? 'u.created_at';
+
+  const where: string[] = [];
+  const binds: Array<string | number> = [];
+  if (q) {
+    where.push('(LOWER(u.tg_username) LIKE ? OR LOWER(u.tg_name) LIKE ? OR u.id = ?)');
+    const like = `%${q.toLowerCase()}%`;
+    binds.push(like, like, q);
+  }
+  if (role === 'admin') where.push('u.is_admin = 1');
+  if (role === 'user') where.push('u.is_admin = 0');
+  if (banned === '1') where.push('u.is_banned = 1');
+  if (banned === '0') where.push('u.is_banned = 0');
+  if (sub === 'active') {
+    where.push("EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.status = 'active' AND s.expires_at > ?)");
+    binds.push(Math.floor(Date.now() / 1000));
+  }
+  if (sub === 'none') {
+    where.push("NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id AND s.status = 'active' AND s.expires_at > ?)");
+    binds.push(Math.floor(Date.now() / 1000));
+  }
+
+  const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const sql = `
+    SELECT
+      u.id, u.tg_username, u.tg_name, u.is_admin, u.is_banned,
+      u.banned_at, u.banned_reason, u.created_at,
+      (SELECT s.expires_at FROM subscriptions s
+        WHERE s.user_id = u.id AND s.status = 'active'
+        ORDER BY s.expires_at DESC LIMIT 1) AS sub_expires_at,
+      (SELECT s.status FROM subscriptions s
+        WHERE s.user_id = u.id
+        ORDER BY s.expires_at DESC LIMIT 1) AS sub_status,
+      (SELECT MAX(p.played_at) FROM play_history p WHERE p.user_id = u.id) AS last_played_at,
+      (SELECT COUNT(1) FROM play_history p WHERE p.user_id = u.id) AS play_count
+    FROM users u
+    ${whereClause}
+    ORDER BY ${orderCol} DESC
+    LIMIT ? OFFSET ?
+  `;
+  const countSql = `SELECT COUNT(1) AS c FROM users u ${whereClause}`;
+
+  const [usersRes, countRes] = await Promise.all([
+    c.env.DB.prepare(sql).bind(...binds, limit, offset).all<AdminUserRow>(),
+    c.env.DB.prepare(countSql).bind(...binds).first<{ c: number }>(),
+  ]);
+
+  const items = (usersRes.results ?? []).map((r) => ({
+    id: r.id,
+    username: r.tg_username,
+    name: r.tg_name,
+    isAdmin: r.is_admin === 1,
+    isBanned: r.is_banned === 1,
+    bannedAt: r.banned_at,
+    bannedReason: r.banned_reason,
+    subscription: r.sub_expires_at && r.sub_status === 'active' && r.sub_expires_at > Math.floor(Date.now() / 1000)
+      ? { status: 'active' as const, expiresAt: r.sub_expires_at }
+      : null,
+    lastPlayedAt: r.last_played_at,
+    playCount: r.play_count,
+    createdAt: r.created_at,
+  }));
+
+  return c.json({ items, total: countRes?.c ?? 0, limit, offset });
+});
+
+interface BanBody { reason?: string }
+admin.post('/users/:id/ban', async (c) => {
+  const targetId = c.req.param('id');
+  const requesterId = c.get('userId');
+  if (targetId === requesterId) {
+    return c.json({ error: 'Нельзя забанить самого себя' }, 400);
+  }
+  const body = await c.req.json<BanBody>().catch(() => ({} as BanBody));
+  const reason = (body.reason ?? '').trim().slice(0, 280) || null;
+  const now = Math.floor(Date.now() / 1000);
+  const res = await c.env.DB.prepare(
+    `UPDATE users SET is_banned = 1, banned_at = ?, banned_by = ?,
+                       banned_reason = ?, updated_at = ?
+     WHERE id = ?`
+  ).bind(now, requesterId, reason, now, targetId).run();
+  if (!res.meta?.changes) return c.json({ error: 'Пользователь не найден' }, 404);
+  return c.json({ ok: true });
+});
+
+admin.post('/users/:id/unban', async (c) => {
+  const targetId = c.req.param('id');
+  const now = Math.floor(Date.now() / 1000);
+  const res = await c.env.DB.prepare(
+    `UPDATE users SET is_banned = 0, banned_at = NULL, banned_by = NULL,
+                       banned_reason = NULL, updated_at = ?
+     WHERE id = ?`
+  ).bind(now, targetId).run();
+  if (!res.meta?.changes) return c.json({ error: 'Пользователь не найден' }, 404);
+  return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
 // Tidal account management
 //
 // The Tidal proxy account is stored as a single KV-backed session shared by
