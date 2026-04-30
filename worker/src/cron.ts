@@ -73,12 +73,14 @@ export async function runScheduledJobs(env: Env): Promise<void> {
   }
 
   try {
+    // GC closes rooms whose host has been silent for too long. Result
+    // is intentionally not logged — it's operational, not an error.
     const { RoomService } = await import('./services/RoomService');
-    const closed = await new RoomService(env).gc();
-    if (closed.closed > 0) console.log('[cron] gc rooms closed=', closed.closed);
+    await new RoomService(env).gc();
   } catch (err) {
     console.error('[cron] gc rooms', err instanceof Error ? err.message : err);
   }
 
-  console.log('[cron] done in', Date.now() - start, 'ms,', userIds.length, 'users');
+  // cron summary intentionally not logged — operational signal.
+  void start; void userIds;
 }

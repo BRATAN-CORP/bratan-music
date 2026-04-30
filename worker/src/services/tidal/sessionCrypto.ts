@@ -54,7 +54,7 @@ export async function encryptSecret(plaintext: string, rawKey: string | undefine
   if (!plaintext) return plaintext;
   if (!rawKey) {
     if (!warnedMissingKey) {
-      console.warn('[sessionCrypto] SESSION_ENCRYPTION_KEY not set — Tidal tokens stored in plaintext');
+      console.error('[sessionCrypto] SESSION_ENCRYPTION_KEY not set — Tidal tokens stored in plaintext');
       warnedMissingKey = true;
     }
     return plaintext;

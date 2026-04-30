@@ -272,7 +272,6 @@ function reloadWithoutCors(slot: Slot) {
   const b = getBundle();
   const audio = b.audios[slot];
   if (corsRetried[slot] || !audio.src) return;
-  console.warn('[audio-debug] reloadWithoutCors firing', { slot, currentTime: audio.currentTime, src: audio.src.slice(0, 80), readyState: audio.readyState, error: audio.error?.code });
   corsRetried[slot] = true;
   // Capture the user's current playback position BEFORE the reload —
   // `audio.load()` rewinds currentTime to 0 unconditionally, so we
@@ -294,14 +293,11 @@ function reloadWithoutCors(slot: Slot) {
       audio.removeEventListener('canplay', onCanPlay);
       if (isFinite(audio.duration) && audio.duration > 0) {
         try {
-          console.warn('[audio-debug] reloadWithoutCors restoring currentTime', { slot, target: restoreTarget });
           audio.currentTime = Math.min(restoreTarget, audio.duration);
         } catch { /* ignore */ }
       }
     };
     audio.addEventListener('canplay', onCanPlay, { once: true });
-  } else {
-    console.warn('[audio-debug] reloadWithoutCors NOT restoring (restoreTarget <= 0.5) — track will play from 0', { slot, restoreTarget });
   }
   safePlay(slot).catch(() => {});
 }
@@ -765,7 +761,6 @@ export function useAudioPlayer() {
       const onErr = () => { cleanup(); resolve(false); };
       audio.addEventListener('canplay', onCanPlay, { once: true });
       audio.addEventListener('error', onErr, { once: true });
-      console.warn('[audio-debug] tryLoadSrc setting src + audio.load()', { src: url.slice(0, 80) });
       audio.src = url;
       audio.load();
     });
@@ -777,7 +772,6 @@ export function useAudioPlayer() {
   const loadTrack = useCallback(async (track: { id: string; source?: string; streamUrl?: string }, quality?: string) => {
     const trackId = track.id;
     const b = getBundle();
-    console.warn('[audio-debug] loadTrack ENTRY', { trackId, slot: b.active, loadedActive: b.loaded[b.active], loadedInactive: b.loaded[inactiveSlot(b)], pendingRestore: pendingRestoreProgressRef.current, preloaded: preloadedIncomingRef.current });
     loadingRef.current = trackId;
     let effectiveQuality = quality ?? currentQualityRef.current;
     setError(null);
@@ -837,7 +831,6 @@ export function useAudioPlayer() {
           const ok = await tryLoadSrc(audio, url);
           if (ok) { loaded = true; break; }
           if (attempt < MAX_RETRIES) {
-            console.warn(`[stream] attempt ${attempt + 1} failed for ${effectiveQuality}, retrying...`);
             await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
           }
         }
@@ -851,7 +844,6 @@ export function useAudioPlayer() {
       // Try next quality in fallback chain.
       const next = getNextFallbackQuality(effectiveQuality);
       if (!next) break;
-      console.warn(`[stream] quality ${effectiveQuality} failed, falling back to ${next}`);
       currentQualityRef.current = next;
       effectiveQuality = next;
     }
@@ -989,7 +981,6 @@ export function useAudioPlayer() {
     }
 
     const trackChanged = currentTrack.id !== b.loaded[b.active] && currentTrack.id !== loadingRef.current;
-    console.warn('[audio-debug] track-change effect', { newId: currentTrack.id, loadedActive: b.loaded[b.active], loadedInactive: b.loaded[inactiveSlot(b)], active: b.active, loadingRef: loadingRef.current, trackChanged, versionBumped });
     if (trackChanged || versionBumped) {
       // Reset quality fallback to user's chosen quality for the new track.
       currentQualityRef.current = tidalQuality;
@@ -1298,7 +1289,7 @@ export function useAudioPlayer() {
         setProgress(newProgress);
       }
     } catch (err) {
-      console.warn('[crossfade] failed, falling back to hard switch', err);
+      console.error('[crossfade] failed, falling back to hard switch', err);
       teardown(false);
     }
   }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, setDuration, setProgress, tidalQuality]);
@@ -1423,7 +1414,6 @@ export function useAudioPlayer() {
           && realT < 0.5
           && storeProgressNow > 2
         ) {
-          console.warn('[audio-debug] spurious-reset gate triggered — seeking back to storeProgress', { slot, realT, storeProgressNow, duration: audio.duration });
           if (isFinite(audio.duration) && audio.duration > 0) {
             pendingRestoreProgressRef.current = storeProgressNow;
             try {
@@ -1502,7 +1492,6 @@ export function useAudioPlayer() {
         if (!isOwnerSlot()) return;
         const target = pendingRestoreProgressRef.current;
         if (target !== null && isFinite(audio.duration) && audio.duration > 0) {
-          console.warn('[audio-debug] onLoadedMetadata seeking to restore target', { slot, target, duration: audio.duration });
           // Kick off the seek but DON'T clear the ref here — onTimeUpdate
           // clears it only once audio.currentTime actually reaches the
           // target. Browsers can fire timeupdate(0) after the seek call
@@ -1527,7 +1516,7 @@ export function useAudioPlayer() {
       };
       const onError = () => {
         if (!isOwnerSlot()) return;
-        console.warn('[audio-debug] onError fired', { slot, code: audio.error?.code, message: audio.error?.message, currentTime: audio.currentTime, fallbackInProgress: fallbackInProgressRef.current, crossOrigin: audio.crossOrigin, corsRetried: corsRetried[slot] });
+        console.error('[audio] onError', { slot, code: audio.error?.code, message: audio.error?.message });
         // During loadTrack's internal fallback loop, errors are handled
         // by tryLoadSrc — ignore them here to prevent visual stutter.
         if (fallbackInProgressRef.current) return;
