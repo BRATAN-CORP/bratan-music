@@ -156,9 +156,19 @@ tracks.get('/:id/stream', async (c) => {
   const allowedQuality = ['LOW', 'HIGH', 'LOSSLESS', 'HI_RES_LOSSLESS', 'HI_RES'];
   const requested = c.req.query('quality');
   const quality = requested && allowedQuality.includes(requested) ? requested : undefined;
-  const direct = await tidal.getStreamUrl(id, quality);
-  const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(direct)}`;
-  return c.json({ url: proxied, direct, source: 'tidal', quality: quality ?? 'HIGH' });
+  // Use resolveStream so we can echo back the actually-resolved quality
+  // (it can be lower than `requested` when the track only has clear
+  // audio for HIGH/LOW). The resolver memoises the working quality in
+  // KV so repeat calls for the same track skip the upper rungs.
+  const resolved = await tidal.resolveStream(id, quality);
+  const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(resolved.url)}`;
+  return c.json({
+    url: proxied,
+    direct: resolved.url,
+    source: 'tidal',
+    quality: resolved.quality,
+    requestedQuality: quality ?? 'HIGH',
+  });
 });
 
 tracks.get('/:id/download', async (c) => {
