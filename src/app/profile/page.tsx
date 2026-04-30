@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import {
   LogOut, Crown, Shield, Moon, Sun, Sliders, Music2,
-  Sparkles, Check, Lock, Wand2,
+  Sparkles, Check, Lock, Wand2, Headphones, ArrowRight,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TiltCard } from '@/components/ui/TiltCard';
@@ -97,6 +98,8 @@ export function ProfilePage() {
           limits={limits}
           onSubscribe={() => openSubscriptionPrompt()}
         />
+
+        <RoomsShortcut />
 
         <div className="grid gap-4 md:grid-cols-2">
           <SettingsCard title="Воспроизведение" icon={Sliders}>
@@ -199,6 +202,65 @@ export function ProfilePage() {
         )}
       </div>
     </AuthGuard>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Rooms shortcut
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Single-line link card pointing into the Rooms section. The sidebar
+ * already exposes /rooms on desktop, but on mobile the sidebar
+ * collapses behind a hamburger and the user has to dig for it — so
+ * the profile page (which is the de-facto "menu" surface on mobile)
+ * surfaces a direct shortcut. Visual treatment matches the AI promo
+ * card on home: same hover formula (border-strong + soft shadow lift
+ * + accent halo fade-in) so the two cards read as a related family
+ * across the app.
+ */
+function RoomsShortcut() {
+  return (
+    <Link
+      to="/rooms"
+      className="group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-4 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-5"
+    >
+      <div
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+        aria-hidden
+        style={{
+          background: 'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+        }}
+      />
+      <div className="relative flex items-center gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)]">
+          <Headphones size={18} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            Комнаты
+          </div>
+          <div className="mt-0.5 text-sm font-semibold tracking-tight sm:text-base">
+            Слушать вместе с друзьями
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            Создай свою комнату или подключись по приглашению.
+          </div>
+        </div>
+      </div>
+      <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
+        Открыть
+        <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
   );
 }
 
