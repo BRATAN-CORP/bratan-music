@@ -691,208 +691,6 @@ export function useAudioPlayer() {
     }
   }, [pause, setError]);
 
-  /**
-   * Manual crossfade — the user picked a different track (clicked next,
-   * previous, a queue entry, a search result, etc.) so `store.currentTrack`
-   * has already changed to the new target. Unlike `startCrossfade`
-   * (natural end-of-track), this flow updates `b.active` as soon as the
-   * incoming stream is playable so every display surface (timeline,
-   * seek, duration text, media-session position) immediately addresses
-   * the NEW track — the old track keeps playing in the background while
-   * its gain ramps to zero, but the user sees the new track's timeline
-   * starting at 0:00 from the moment they pressed next.
-   *
-   * Falls back to a hard `loadTrack` if the incoming stream fails to
-   * load through the full quality fallback chain.
-   */
-  const softSwitchTo = useCallback(async (target: { id: string; source?: string; title: string; artist: string; coverUrl?: string }) => {
-    const b = getBundle();
-
-    // If we're already crossfading (natural end-of-track fade kicked in
-    // and the user clicked next mid-ramp, or another manual switch is
-    // still running) cancel the prior ramp so the new target takes
-    // over cleanly.
-    cancelRamp();
-
-    // Clear any leftover restore-seek intent from the previous track.
-    // Otherwise the onTimeUpdate restore-gate on the INCOMING slot
-    // would keep setProgress suppressed (thinking the previous track's
-    // unfinished seek is still pending) and the timeline would appear
-    // stuck at the old position while the new track plays.
-    pendingRestoreProgressRef.current = null;
-
-    const incoming = inactiveSlot(b);
-    const outgoing = b.active;
-    const audio = b.audios[incoming];
-
-    b.crossfadingInto = incoming;
-    b.crossfadeKind = 'manual';
-    crossfadingRef.current = true;
-    b.crossfadeAttemptedTrackId = target.id;
-    loadingRef.current = target.id;
-    fallbackInProgressRef.current = true;
-
-    const tgt = muted ? 0 : volume;
-    const durMs = Math.max(500, crossfadeDuration * 1000);
-    const rampStart = performance.now();
-
-    // Kick off the OUTGOING fade-out RIGHT NOW, before we touch the
-    // network. The whole point of "smooth switching" is that the
-    // moment the user picks a new track, the audible transition
-    // begins — not "begins after we've fetched a stream URL, decoded
-    // the first frame and resolved play()". The previous behaviour
-    // kept the outgoing slot at full volume during URL fetch + load
-    // (often 1–3s on cellular), then flipped through a ramp; the
-    // user heard a hard cut in the worst cases. Starting here makes
-    // the outgoing fade independent of the incoming load latency.
-    setSlotGain(outgoing, tgt);
-    const outgoingRamp = rampGain(outgoing, tgt, 0, durMs);
-
-    const teardown = (success: boolean) => {
-      if (success) {
-        safePause(outgoing);
-        b.loaded[outgoing] = null;
-        setSlotGain(outgoing, 0);
-        // `b.active` was already swapped to `incoming` before the ramp.
-      } else {
-        // Failure: cancel any in-flight ramps, silence + unload the
-        // failed incoming preload, restore outgoing as the sole active
-        // slot at full volume so the caller's fallback (hard loadTrack)
-        // doesn't briefly play into a half-faded outgoing.
-        cancelRamp();
-        safePause(incoming);
-        b.loaded[incoming] = null;
-        setSlotGain(incoming, 0);
-        b.active = outgoing;
-        setSlotGain(outgoing, muted ? 0 : volume);
-      }
-      b.crossfadingInto = null;
-      b.crossfadeKind = null;
-      crossfadingRef.current = false;
-      fallbackInProgressRef.current = false;
-    };
-
-    // Walk the quality fallback chain — same chain loadTrack uses — so a
-    // missing HI_RES_LOSSLESS on this particular track falls through to
-    // LOSSLESS → HIGH → LOW instead of aborting the crossfade.
-    let effectiveQuality: string = currentQualityRef.current;
-    let url: string | null = null;
-    let loaded = false;
-    const MAX_RETRIES = 2;
-    try {
-      while (true) {
-        if (loadingRef.current !== target.id) { teardown(false); return; }
-        try {
-          url = await fetchStreamUrl(target, effectiveQuality);
-        } catch (err) {
-          url = null;
-          if (err instanceof ApiError && err.status === 402) {
-            teardown(false);
-            useUiStore.getState().openSubscriptionPrompt(
-              'Дневной лимит бесплатных прослушиваний исчерпан.',
-            );
-            setError(null);
-            pause();
-            return;
-          }
-        }
-        if (loadingRef.current !== target.id) { teardown(false); return; }
-        if (url) {
-          if (b.playPromises[incoming]) {
-            try { await b.playPromises[incoming]; } catch { /* ignore */ }
-          }
-          audio.pause();
-          corsRetried[incoming] = false;
-          audio.crossOrigin = 'anonymous';
-          ensureAudioGraph();
-          setSlotGain(incoming, 0);
-          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            if (loadingRef.current !== target.id) { teardown(false); return; }
-            const ok = await tryLoadSrc(audio, url);
-            if (ok) { loaded = true; break; }
-            if (attempt < MAX_RETRIES) {
-              await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-            }
-          }
-          if (loaded) break;
-        }
-        const nextQ = getNextFallbackQuality(effectiveQuality);
-        if (!nextQ) break;
-        currentQualityRef.current = nextQ;
-        effectiveQuality = nextQ;
-      }
-      if (loadingRef.current !== target.id) { teardown(false); return; }
-      if (!loaded) {
-        // Couldn't preload in inactive slot — fall back to hard switch
-        // via the regular loadTrack path (which also drives a fresh
-        // fallback chain on the active slot).
-        teardown(false);
-        fallbackInProgressRef.current = false;
-        loadTrack(target);
-        return;
-      }
-
-      try { audio.currentTime = 0; } catch { /* ignore */ }
-      b.loaded[incoming] = target.id;
-      b.lastRealT[incoming] = 0;
-      // The incoming slot has never been seeked — make sure the auto-
-      // crossfade trigger isn't artificially gated on it once it
-      // becomes the active slot below.
-      b.lastSeekAt[incoming] = 0;
-
-      if (b.ctx && b.ctx.state === 'suspended') {
-        await b.ctx.resume().catch(() => {});
-      }
-
-      // Swap ACTIVE before play — so timeupdate / durationchange /
-      // mediaSession-position reads on the incoming slot immediately
-      // drive the store. The outgoing slot is suppressed inside each
-      // listener via the owner-slot guard.
-      b.active = incoming;
-      fallbackInProgressRef.current = false;
-
-      // Belt-and-suspenders: audio.load() inside tryLoadSrc should have
-      // reset currentTime to 0, but some browsers preserve the last
-      // seek on a pre-used slot. Setting it again right before play()
-      // guarantees the new track starts from 0 regardless of what the
-      // slot was doing before.
-      try { audio.currentTime = 0; } catch { /* ignore */ }
-
-      await safePlay(incoming);
-      if (!crossfadingRef.current) { teardown(false); return; }
-
-      // One more currentTime=0 after play() resolved — some engines
-      // (notably older Safari) reset currentTime on the first
-      // play-invocation to whatever was cached, even if we set it to 0
-      // moments earlier. This is the last line of defence before the
-      // ramp starts producing audible output from the incoming track.
-      if (audio.currentTime > 0.5) {
-        try { audio.currentTime = 0; } catch { /* ignore */ }
-      }
-
-      // Ramp the incoming slot in over whatever portion of the
-      // crossfade window is left. On a fast network or a preloaded
-      // queue this is the full `durMs`; on slow networks it might be
-      // significantly shorter — that's intentional, the user already
-      // heard the outgoing fade out and now wants the new track to be
-      // audible quickly. We never go below 300ms so even on terrible
-      // networks the new track still has a perceivable swell instead
-      // of a pop.
-      const elapsed = performance.now() - rampStart;
-      const remaining = Math.max(300, durMs - elapsed);
-      setSlotGain(incoming, 0);
-      const incomingRamp = rampGain(incoming, 0, tgt, remaining);
-
-      await Promise.all([outgoingRamp, incomingRamp]);
-      if (!crossfadingRef.current) return;
-      teardown(true);
-    } catch (err) {
-      console.warn('[soft-switch] failed, falling back to hard load', err);
-      teardown(false);
-      loadTrack(target);
-    }
-  }, [muted, volume, crossfadeDuration, pause, setError, loadTrack]);
-
   // Reload when track id changes (or stream version bumped).
   const lastStreamVersionRef = useRef(streamVersion);
   useEffect(() => {
@@ -937,22 +735,6 @@ export function useAudioPlayer() {
       // Reset quality fallback to user's chosen quality for the new track.
       currentQualityRef.current = tidalQuality;
 
-      // Soft-switch path — user manually changed track (clicked next /
-      // previous / a queue item / search result) while crossfade is
-      // enabled AND we have something actively playing to fade out of.
-      // Never soft-switch on a stream-version bump: that's a forced
-      // refetch (override added/removed) and the user expects the same
-      // track to restart from the new stream, not to cross-mix with
-      // its old copy.
-      const outgoingLoaded = b.loaded[b.active];
-      const canSoftSwitch =
-        crossfade
-        && !versionBumped
-        && outgoingLoaded !== null
-        && outgoingLoaded !== currentTrack.id
-        && isPlaying
-        && !b.audios[b.active].paused;
-
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.title,
@@ -963,15 +745,16 @@ export function useAudioPlayer() {
         });
       }
 
-      if (canSoftSwitch) {
-        softSwitchTo(currentTrack);
-        return;
-      }
-
-      // Hard switch path: cancel any in-flight crossfade and reload on
-      // the active slot. Used on first play, on a paused → play track
-      // change, when crossfade is disabled, and when soft-switch's
-      // own preload failed and fell back here.
+      // The crossfade setting only governs the AUTO end-of-track fade
+      // (`startCrossfade` below). Manual changes — clicking next /
+      // previous, picking a queue item, opening a search result —
+      // should always be a clean hard switch with no overlap. Mixing
+      // two tracks for an intentional jump felt unpredictable: the
+      // user heard the previous track keep playing for several
+      // seconds and the new track come in pre-faded, even though they
+      // had explicitly asked for a different song. The auto fade
+      // remains in place for the natural-end transition where the
+      // overlap is the whole point.
       cancelRamp();
       crossfadingRef.current = false;
       b.crossfadingInto = null;
@@ -981,7 +764,7 @@ export function useAudioPlayer() {
       if (versionBumped) b.loaded[b.active] = null;
       loadTrack(currentTrack);
     }
-  }, [currentTrack, loadTrack, streamVersion, crossfade, isPlaying, softSwitchTo, tidalQuality]);
+  }, [currentTrack, loadTrack, streamVersion, tidalQuality]);
 
   // Play / pause toggle on the active slot.
   useEffect(() => {
@@ -1075,7 +858,6 @@ export function useAudioPlayer() {
     const audio = b.audios[incoming];
     const target = muted ? 0 : volume;
     const durMs = Math.max(500, crossfadeDuration * 1000);
-    const rampStart = performance.now();
 
     const teardown = (promote: boolean) => {
       if (promote) {
@@ -1094,11 +876,10 @@ export function useAudioPlayer() {
       crossfadingRef.current = false;
     };
 
-    // Kick off the OUTGOING fade-out immediately. This is the critical
-    // fix for "last 12s don't play" — we no longer wait for fetchStreamUrl
-    // or canplay before starting the audible fade.
+    // Make sure the outgoing slot is at the user's target volume before
+    // we start the ramp — defends against a previous incomplete
+    // crossfade leaving it at a non-target gain.
     setSlotGain(outgoing, target);
-    const outgoingRamp = rampGain(outgoing, target, 0, durMs);
 
     // Preloaded fast path: if the pre-load effect has already buffered
     // nextTrack into the inactive slot, we can start playing + ramping
@@ -1111,68 +892,86 @@ export function useAudioPlayer() {
       && audio.src !== ''
       && audio.readyState >= 2;
 
-    const incomingRamp = (async () => {
-      try {
-        if (!preloaded) {
-          const url = await fetchStreamUrl(nextTrack, tidalQuality);
-          if (!crossfadingRef.current) return;
-          if (b.playPromises[incoming]) {
-            try { await b.playPromises[incoming]; } catch { /* ignore */ }
-          }
-          audio.pause();
-          ensureAudioGraph();
-          setSlotGain(incoming, 0);
-          const ok = await tryLoadSrc(audio, url);
-          if (!crossfadingRef.current || !ok) return;
-          try { audio.currentTime = 0; } catch { /* ignore */ }
-          b.loaded[incoming] = nextTrack.id;
-          b.lastRealT[incoming] = 0;
-          b.lastSeekAt[incoming] = 0;
-        } else {
-          ensureAudioGraph();
-          setSlotGain(incoming, 0);
-          try { audio.currentTime = 0; } catch { /* ignore */ }
-          // Promote the preload into a real load now that we're
-          // committing to play it. Clear the preload ref so the
-          // next track-change doesn't think this slot is still a
-          // pending preload.
-          b.loaded[incoming] = nextTrack.id;
-          b.lastRealT[incoming] = 0;
-          b.lastSeekAt[incoming] = 0;
-          if (preloadedIncomingRef.current?.slot === incoming) {
-            preloadedIncomingRef.current = null;
-          }
-        }
-
-        if (b.ctx && b.ctx.state === 'suspended') {
-          await b.ctx.resume().catch(() => {});
-        }
-        if (!crossfadingRef.current) return;
-        await safePlay(incoming);
-        if (!crossfadingRef.current) return;
-
-        // Ramp in for however much of the crossfade window is left.
-        // On slow networks this may be short; on the preloaded fast
-        // path it's the full window.
-        const elapsed = performance.now() - rampStart;
-        const remaining = Math.max(300, durMs - elapsed);
-        setSlotGain(incoming, 0);
-        await rampGain(incoming, 0, target, remaining);
-      } catch (err) {
-        console.warn('[crossfade] incoming failed', err);
-      }
-    })();
-
+    // Step 1: prepare the incoming slot so it is decoded and ready to
+    // play. Crucially, we DO NOT start the outgoing fade-out yet —
+    // earlier versions kicked the outgoing ramp off immediately, so
+    // when the incoming load took longer than the crossfade window
+    // (slow networks, no preload) the outgoing track would fade to
+    // silence well before the incoming track came in audibly. The
+    // user heard "fade-out, silence, then a hard cut into the next
+    // track at full volume" — which is exactly the bug this rework
+    // addresses.
     try {
+      if (!preloaded) {
+        const url = await fetchStreamUrl(nextTrack, tidalQuality);
+        if (!crossfadingRef.current) return;
+        if (b.playPromises[incoming]) {
+          try { await b.playPromises[incoming]; } catch { /* ignore */ }
+        }
+        audio.pause();
+        ensureAudioGraph();
+        setSlotGain(incoming, 0);
+        const ok = await tryLoadSrc(audio, url);
+        if (!crossfadingRef.current || !ok) {
+          if (!ok) {
+            // Couldn't decode the incoming stream — fall back to a hard
+            // switch on natural end so the user isn't left in silence.
+            teardown(false);
+            setTrack(nextTrack);
+          }
+          return;
+        }
+        try { audio.currentTime = 0; } catch { /* ignore */ }
+        b.loaded[incoming] = nextTrack.id;
+        b.lastRealT[incoming] = 0;
+        b.lastSeekAt[incoming] = 0;
+      } else {
+        ensureAudioGraph();
+        setSlotGain(incoming, 0);
+        try { audio.currentTime = 0; } catch { /* ignore */ }
+        // Promote the preload into a real load now that we're
+        // committing to play it. Clear the preload ref so the
+        // next track-change doesn't think this slot is still a
+        // pending preload.
+        b.loaded[incoming] = nextTrack.id;
+        b.lastRealT[incoming] = 0;
+        b.lastSeekAt[incoming] = 0;
+        if (preloadedIncomingRef.current?.slot === incoming) {
+          preloadedIncomingRef.current = null;
+        }
+      }
+
+      if (b.ctx && b.ctx.state === 'suspended') {
+        await b.ctx.resume().catch(() => {});
+      }
+      if (!crossfadingRef.current) return;
+
+      // Step 2: now that the incoming slot is genuinely playable,
+      // start playback AND start both ramps concurrently. The two
+      // tracks audibly overlap for the entire fade window, which is
+      // the whole point of "smooth transitions".
+      setSlotGain(incoming, 0);
+      await safePlay(incoming);
+      if (!crossfadingRef.current) return;
+
+      // Cap the ramp to whatever audible time the OUTGOING track has
+      // left — running a 6 s fade on an outgoing track that only has
+      // 2 s of audio remaining would silence the second half of the
+      // crossfade window. We still respect a 300 ms minimum so even
+      // a near-end trigger gets a perceptible swell rather than a
+      // pop.
+      const outgoingAudio = b.audios[outgoing];
+      const outgoingRemainingMs = (() => {
+        const dur = outgoingAudio.duration;
+        if (!isFinite(dur) || dur <= 0) return durMs;
+        const left = Math.max(0, dur - outgoingAudio.currentTime) * 1000;
+        return Math.max(300, Math.min(durMs, left));
+      })();
+      const incomingRamp = rampGain(incoming, 0, target, outgoingRemainingMs);
+      const outgoingRamp = rampGain(outgoing, target, 0, outgoingRemainingMs);
+
       await Promise.all([outgoingRamp, incomingRamp]);
       if (!crossfadingRef.current) return; // cancelled
-      // If the incoming failed to load at all we fall back to a hard
-      // switch so we don't leave the user in silence.
-      if (b.loaded[incoming] !== nextTrack.id) {
-        teardown(false);
-        setTrack(nextTrack);
-        return;
-      }
       teardown(true);
       setTrack(nextTrack);
     } catch (err) {
