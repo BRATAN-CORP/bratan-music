@@ -116,7 +116,7 @@ export function ProfilePage() {
 
   return (
     <AuthGuard>
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <div className="flex flex-col gap-1 border-b border-border pb-4">
           <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Аккаунт</span>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Профиль</h1>
