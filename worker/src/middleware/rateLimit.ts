@@ -59,6 +59,21 @@ export const rateLimit = createMiddleware<{ Bindings: Env; Variables: Variables 
     return;
   }
 
+  // Room media proxies (`/rooms/:id/stream/upload/...`,
+  // `/rooms/:id/stream/override/...`, `/rooms/:id/stream/tidal/...`)
+  // exist purely to fan an audio source out to all participants. The
+  // browser's <audio> element issues several Range requests per
+  // track (initial probe + sequential body + every user-driven seek)
+  // and three to four listeners in the same room would otherwise
+  // burn through the default 100/min bucket inside a single song.
+  // These endpoints are already authenticated AND gated by room
+  // membership + active-track checks, so they don't need the IP
+  // bucket on top.
+  if (/^\/rooms\/[^/]+\/stream(\/|$)/.test(path)) {
+    await next();
+    return;
+  }
+
   const config = getConfig(method, path);
   const now = Date.now();
   const key = `${ip}:${method}:${path.split('/').slice(0, 3).join('/')}`;
