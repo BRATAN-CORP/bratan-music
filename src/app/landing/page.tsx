@@ -1,4 +1,7 @@
-import { ArrowUpRight, Headphones, Library, Music, Search, Send, Shield, Star } from 'lucide-react';
+import {
+  ArrowUpRight, Headphones, Library, Search, Send, Shield, Sparkles,
+  Sliders, Share2, Replace, Waves, Bolt,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { useAutoAuth } from '@/hooks/useAuth';
@@ -11,38 +14,67 @@ import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 
+/**
+ * Landing copy is intentionally not framed as "Tidal через Telegram":
+ *
+ *   1. We want the product to stand on its own listening experience —
+ *      lossless catalog + cold-start in seconds + a real personal wave —
+ *      not on being a thin re-skin of someone else's app.
+ *   2. The "Tidal" name is a backend implementation detail; pinning it
+ *      to the marketing surface couples our positioning to a vendor.
+ *
+ * Hero hook is "Lossless без приложений": studio-grade stream, login
+ * in one tap, no app store, no card forms.
+ */
+
 const features = [
   {
-    icon: Search,
-    title: 'Поиск без границ',
-    desc: 'Каталог Tidal целиком — миллионы треков, альбомов и артистов в одном поле ввода.',
+    icon: Waves,
+    title: 'Моя волна за 60 секунд',
+    desc: 'Назови 1–6 артистов — и поднимется бесконечный поток под твой вкус, который учится с каждой реакцией.',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: Headphones,
+    title: '24-bit lossless',
+    desc: 'HiFi и Master, когда есть в каталоге. Никаких пережатых mp3 и фейковых «high quality».',
+  },
+  {
+    icon: Bolt,
+    title: 'Crossfade и gapless',
+    desc: 'Треки сшиваются без щелчка и тишины. Как в студии, не как в плеере.',
+  },
+  {
+    icon: Sliders,
+    title: '10-band параметрический EQ',
+    desc: 'Свои пресеты, на любую акустику и наушники. Сохраняем за тобой между устройствами.',
     span: 'lg:col-span-2',
   },
   {
     icon: Library,
     title: 'Своя библиотека',
-    desc: 'Плейлисты, лайки, история. Хранится за тобой, не в чужих рекомендациях.',
+    desc: 'Плейлисты, лайки, история — твои. Не алгоритм решает, что ты услышишь завтра.',
   },
   {
-    icon: Headphones,
-    title: 'HiFi и Master',
-    desc: 'Lossless-качество, когда оно доступно. Без потерь и без лишних кодеков.',
-  },
-  {
-    icon: Music,
+    icon: Replace,
     title: 'Перезалив',
-    desc: 'Свои версии треков поверх каталога. Видишь только ты.',
+    desc: 'Своя версия трека поверх каталога — с лучшим мастером или редкой редакцией. Видишь только ты.',
+  },
+  {
+    icon: Share2,
+    title: 'Плейлисты по ссылке',
+    desc: 'Делишься плейлистом одним URL, без логина — и собеседник слышит то же, что и ты.',
+  },
+  {
+    icon: Search,
+    title: 'Поиск без границ',
+    desc: '100M+ треков, альбомов и артистов в одном поле. Без жанровых стен и платных регионов.',
     span: 'lg:col-span-2',
   },
   {
-    icon: Star,
-    title: 'Stars-подписка',
-    desc: '99 Telegram Stars в месяц. Без карт, без хождения по сайтам.',
-  },
-  {
     icon: Shield,
-    title: 'Без паролей',
-    desc: 'Вход через Telegram. Никаких токенов на устройстве и никаких e-mail.',
+    title: 'Без паролей и рекламы',
+    desc: 'Вход через Telegram, оплата Stars. Никаких карт, e-mail, токенов или баннеров на фоне музыки.',
   },
 ];
 
@@ -70,8 +102,8 @@ export function LandingPage() {
             transition={{ duration: 0.7, ease: EASE }}
             className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur"
           >
-            <Send size={12} className="text-[var(--color-accent)]" />
-            BRATAN MUSIC · Tidal × Telegram
+            <Sparkles size={12} className="text-[var(--color-accent)]" />
+            Lossless · без приложений
           </motion.div>
 
           <motion.h1
@@ -80,9 +112,9 @@ export function LandingPage() {
             transition={{ duration: 0.9, delay: 0.05, ease: EASE }}
             className="max-w-4xl text-[clamp(2.4rem,6.5vw,5.6rem)] font-semibold leading-[0.98] tracking-tight"
           >
-            Музыка <span className="font-serif italic text-muted-foreground">без</span> компромиссов.
+            Слушай <span className="font-serif italic text-muted-foreground">студийно</span>.
             <br />
-            <span className="shine-text">Tidal прямо из Telegram.</span>
+            <span className="shine-text">Без приложений и логинов.</span>
           </motion.h1>
 
           <motion.p
@@ -91,7 +123,7 @@ export function LandingPage() {
             transition={{ duration: 0.8, delay: 0.15, ease: EASE }}
             className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
           >
-            Поиск, плейлисты, лайки и lossless-стриминг через каталог Tidal. Вход — Telegram-логин, оплата — Stars. Никаких отдельных аккаунтов.
+            24-bit стрим, бесконечная личная волна, плейлисты по ссылке и crossfade без щелчков. Открывается в браузере, оплачивается Telegram&nbsp;Stars — без карт, e-mail и App Store.
           </motion.p>
 
           <motion.div
@@ -111,6 +143,10 @@ export function LandingPage() {
             ) : (
               <TelegramLoginButton />
             )}
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Send size={12} />
+              Вход одним тапом из Telegram
+            </span>
           </motion.div>
 
           <Stagger className="grid w-full max-w-3xl grid-cols-3 gap-4 pt-12 sm:gap-8" delay={0.35}>
@@ -136,7 +172,7 @@ export function LandingPage() {
             <h2 className="text-2xl font-semibold tracking-tight sm:text-4xl">Что внутри.</h2>
           </div>
           <p className="hidden max-w-md text-sm text-muted-foreground sm:block">
-            Один интерфейс над лучшим каталогом. Без рекламы, без подсунутых рекомендаций.
+            Девять инструментов, которые превращают «ещё один плеер» в персональную студию прослушивания.
           </p>
         </Reveal>
 
