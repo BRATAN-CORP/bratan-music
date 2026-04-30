@@ -964,6 +964,18 @@ export function useAudioPlayer() {
       // "track plays for ~1 s then jumps" bug the user reported on
       // every manual switch.
       pendingRestoreProgressRef.current = null;
+      // Reset per-slot timing trackers so the new track starts with a
+      // clean slate — stale `lastRealT` from the OUTGOING slot would
+      // otherwise feed `isNaturalProgression` a huge negative delta on
+      // the new track's first timeupdate, and a stale `lastSeekAt`
+      // could keep the auto-crossfade trigger gated past the point
+      // where it should re-arm. Both reset to 0 means "no previous
+      // observation" and the new track is judged purely on its own
+      // timeupdate sequence.
+      b.lastRealT.a = 0;
+      b.lastRealT.b = 0;
+      b.lastSeekAt.a = 0;
+      b.lastSeekAt.b = 0;
       // Belt-and-braces: also stomp any in-flight preload reference
       // for the slot we're about to load into. The preload effect
       // tracks completion via this ref (NOT b.loaded), so a stale
@@ -1935,6 +1947,26 @@ export function usePlaybackVisuals(): {
           initialised = true;
           // Skip the prediction/buffered branches this frame — they'd
           // overwrite the restored value with realT (= 0).
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+
+        // Track-switch leak guard: if the resolved slot does NOT have
+        // `currentId` loaded, the audio engine is mid-switch (we just
+        // called `setTrack(newTrack)`, but `loadTrack`'s `audio.src =
+        // newUrl` + `canplay` chain hasn't completed yet). Reading
+        // `audio.currentTime` in this window leaks the OUTGOING track's
+        // playhead (the audio element still has the old src) — which
+        // the user sees as "the new track shows 1:23 from the previous
+        // song for a moment, then snaps to 0:00 when the load lands".
+        // Mirror store.progress (= 0 right after setTrack) so the bar
+        // starts cleanly at 0:00 and the first real timeupdate from
+        // the new track is what advances it.
+        const slotHasCurrent = currentId !== null && b.loaded[slot] === currentId;
+        if (currentId !== null && !slotHasCurrent) {
+          displayed = Math.max(0, storeProgress);
+          progressSeconds.set(displayed);
+          initialised = true;
           raf = requestAnimationFrame(tick);
           return;
         }
