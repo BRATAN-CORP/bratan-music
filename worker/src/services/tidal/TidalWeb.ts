@@ -78,6 +78,12 @@ interface DiscoveredQualities {
 const QUALITY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const QUALITY_CACHE_PREFIX = 'tidal-track-quality:';
 const DISCOVERY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
+// Empty discovery results (DRM-locked tracks, openapi.tidal.com auth
+// failures, malformed responses) are cached for an hour rather than
+// 30 days. That keeps the silent-fallback path cheap on cold tracks
+// without permanently poisoning the cache for tracks where Tidal
+// transiently returned an error.
+const DISCOVERY_NEGATIVE_CACHE_TTL_S = 60 * 60; // 1 hour
 const DISCOVERY_CACHE_PREFIX = 'tidal-track-formats:';
 
 export class TidalWeb {
@@ -250,6 +256,21 @@ export class TidalWeb {
       },
     });
 
+    // Helper that always caches the result before returning, so a
+    // failed discovery doesn't replay the wasted RTT on every cold
+    // listen. Empty results are cached short (1h) so the cache
+    // self-heals once openapi.tidal.com starts cooperating again;
+    // populated results are cached long (30d) like the spec asked.
+    const finalize = async (qualities: string[]): Promise<DiscoveredQualities> => {
+      const value: DiscoveredQualities = { qualities };
+      await this.writeDiscoveryCache(
+        trackId,
+        value,
+        qualities.length > 0 ? DISCOVERY_CACHE_TTL_S : DISCOVERY_NEGATIVE_CACHE_TTL_S,
+      );
+      return value;
+    };
+
     let res: Response;
     try {
       let token = await this.auth.getAccessToken();
@@ -258,17 +279,34 @@ export class TidalWeb {
         token = await this.auth.getAccessToken({ force: true });
         res = await doFetch(token);
       }
-    } catch {
-      return { qualities: [] };
+    } catch (err) {
+      console.warn(
+        `[TidalWeb] discoverQualities ${trackId} fetch failed:`,
+        err instanceof Error ? err.message : err,
+      );
+      return finalize([]);
     }
 
-    if (!res.ok) return { qualities: [] };
+    if (!res.ok) {
+      // Read body for diagnostics. Capped to keep noisy 4xx pages
+      // out of the worker tail.
+      let detail = '';
+      try { detail = (await res.text()).slice(0, 200); } catch { /* ignore */ }
+      console.warn(
+        `[TidalWeb] discoverQualities ${trackId} non-OK status=${res.status} body=${detail}`,
+      );
+      return finalize([]);
+    }
 
     let body: TrackManifestResponse;
     try {
       body = await res.json<TrackManifestResponse>();
-    } catch {
-      return { qualities: [] };
+    } catch (err) {
+      console.warn(
+        `[TidalWeb] discoverQualities ${trackId} json decode failed:`,
+        err instanceof Error ? err.message : err,
+      );
+      return finalize([]);
     }
 
     const formats = body.data?.attributes?.formats ?? [];
@@ -286,9 +324,7 @@ export class TidalWeb {
     const unique = Array.from(new Set(mapped));
     unique.sort((a, b) => QUALITY_LADDER.indexOf(a) - QUALITY_LADDER.indexOf(b));
 
-    const out: DiscoveredQualities = { qualities: unique };
-    await this.writeDiscoveryCache(trackId, out);
-    return out;
+    return finalize(unique);
   }
 
   private async readDiscoveryCache(trackId: string): Promise<DiscoveredQualities | null> {
@@ -306,13 +342,17 @@ export class TidalWeb {
     }
   }
 
-  private async writeDiscoveryCache(trackId: string, value: DiscoveredQualities): Promise<void> {
+  private async writeDiscoveryCache(
+    trackId: string,
+    value: DiscoveredQualities,
+    ttlSeconds: number = DISCOVERY_CACHE_TTL_S,
+  ): Promise<void> {
     if (!this.kv) return;
     try {
       await this.kv.put(
         `${DISCOVERY_CACHE_PREFIX}${trackId}`,
         JSON.stringify(value),
-        { expirationTtl: DISCOVERY_CACHE_TTL_S },
+        { expirationTtl: ttlSeconds },
       );
     } catch {
       /* ignore — cache is best-effort */
