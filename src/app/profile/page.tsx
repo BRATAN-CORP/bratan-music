@@ -6,6 +6,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 import { useSettingsStore, TIDAL_QUALITY_LABELS, type TidalQuality } from '@/store/settings';
@@ -82,6 +83,7 @@ export function ProfilePage() {
     <AuthGuard>
       <div className="mx-auto flex max-w-6xl flex-col gap-8 p-4 sm:p-6 lg:p-10">
         <IdentityHero
+          id={user?.id ?? null}
           name={user?.name ?? null}
           username={user?.username ?? null}
           isAdmin={isAdmin}
@@ -205,19 +207,20 @@ export function ProfilePage() {
 // ────────────────────────────────────────────────────────────────────
 
 function IdentityHero({
+  id,
   name,
   username,
   isAdmin,
   theme,
   onToggleTheme,
 }: {
+  id: string | null;
   name: string | null;
   username: string | null;
   isAdmin: boolean;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }) {
-  const initial = (name ?? username ?? '?')[0]?.toUpperCase() ?? '?';
   // Same low-intensity tilt + glare wrapper used by the WaveHero on /home
   // and the landing feature grid — gives the identity card the
   // "alive on hover" feel without rotating the theme-toggle button so
@@ -246,9 +249,13 @@ function IdentityHero({
       />
       <div className="relative flex flex-wrap items-center justify-between gap-6">
         <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-border bg-background text-2xl font-semibold shadow-[var(--shadow-sm)]">
-            {initial}
-          </div>
+          <UserAvatar
+            name={name}
+            username={username}
+            id={id}
+            className="h-16 w-16 rounded-full border border-border shadow-[var(--shadow-sm)]"
+            initialsClassName="text-2xl"
+          />
           <div className="min-w-0">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
               Профиль
