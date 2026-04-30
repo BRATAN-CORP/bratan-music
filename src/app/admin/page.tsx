@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { CoverFallback } from '@/components/ui/CoverFallback';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import { api } from '@/lib/api';
 import {
   useAdminUsers, useBanUser, useUnbanUser, useToggleAdmin, useGrantSub,
@@ -42,7 +42,13 @@ function AdminGate() {
   return <AdminDashboard meId={profile.id} />;
 }
 
-function AdminDashboard({ meId }: { meId: string }) {
+/**
+ * The dashboard is exported as a standalone component so the admin
+ * profile page can mount it inline (under "Только для администраторов").
+ * The dedicated /admin route was removed — there's now just one entry
+ * point to admin tools, gated behind the user's own profile screen.
+ */
+export function AdminDashboard({ meId }: { meId: string }) {
   const reduce = useReducedMotion();
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -214,7 +220,9 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
   const [banDraft, setBanDraft] = useState<{ open: boolean; reason: string }>({ open: false, reason: '' });
 
   const isMe = user.id === meId;
-  const label = (user.username && '@' + user.username) || user.name || user.id;
+  // Display label leans on `name` first per UX spec — username is
+  // shown only as a secondary line below.
+  const label = user.name?.trim() || (user.username && '@' + user.username) || user.id;
   const subActive = !!user.subscription;
   const subDays = user.subscription
     ? Math.max(0, Math.ceil((user.subscription.expiresAt - Date.now() / 1000) / 86400))
@@ -224,8 +232,14 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
     <div className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[1fr_120px_120px_120px_120px_140px] lg:items-center">
       {/* Identity */}
       <div className="flex items-center gap-3">
-        <div className="relative h-10 w-10 overflow-hidden rounded-full">
-          <CoverFallback src={null} name={label} className="rounded-full" initialsClassName="text-xs" />
+        <div className="relative">
+          <UserAvatar
+            name={user.name}
+            username={user.username}
+            id={user.id}
+            className="h-10 w-10 rounded-full"
+            initialsClassName="text-xs"
+          />
           {user.isBanned && (
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-destructive/85">
               <Ban size={14} className="text-destructive-foreground" />
@@ -237,7 +251,7 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
             <span className="truncate text-sm font-medium">{label}{isMe && ' · ты'}</span>
           </div>
           <div className="truncate text-xs text-muted-foreground">
-            {user.name || '—'} · ID {user.id}
+            {user.username ? '@' + user.username : 'ID ' + user.id}
           </div>
           {user.isBanned && user.bannedReason && (
             <div className="mt-1 truncate text-xs text-destructive">
