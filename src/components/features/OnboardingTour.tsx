@@ -131,41 +131,85 @@ interface TourCardProps {
 
 function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
   const isLast = index === total - 1;
-  const cardWidth = 320;
-  const cardHeight = 200;
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // Real card height after layout. We keep a sensible initial guess
+  // (200) so the first frame doesn't jump from 0 → measured height.
+  const [cardHeight, setCardHeight] = useState(200);
+  // Re-measure on viewport changes so rotating phones / resizing
+  // browser windows still places the card correctly.
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024));
+  const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 768));
 
-  // Pick the side of the spotlight that has the most room. The explicit
-  // `step.placement` is preferred; we only override it when there's no
-  // viewport room there.
-  const desired = step.placement ?? 'bottom';
-  let placement = desired;
-  if (desired === 'bottom' && rect.top + rect.height + cardHeight + 16 > window.innerHeight) {
-    placement = 'top';
-  } else if (desired === 'top' && rect.top - cardHeight - 16 < 0) {
-    placement = 'bottom';
-  }
+  useLayoutEffect(() => {
+    if (!cardRef.current) return;
+    setCardHeight(cardRef.current.offsetHeight);
+  }, [step.targetId, vw, vh]);
+
+  useEffect(() => {
+    const onResize = () => {
+      setVw(window.innerWidth);
+      setVh(window.innerHeight);
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
+
+  // On narrow viewports we ditch the floating-tooltip pattern entirely
+  // and pin the card to the bottom of the screen as a sheet. The
+  // floating tooltip on a 360px-wide phone never has good placement —
+  // it either overlaps the spotlight or runs off the edge.
+  const isMobile = vw < 640;
+  const cardWidth = isMobile ? Math.min(vw - 24, 480) : 360;
 
   let top = 0;
   let left = 0;
-  if (placement === 'bottom') {
-    top = rect.top + rect.height + 12;
-    left = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, rect.left + rect.width / 2 - cardWidth / 2));
-  } else if (placement === 'top') {
-    top = Math.max(16, rect.top - cardHeight - 12);
-    left = Math.max(16, Math.min(window.innerWidth - cardWidth - 16, rect.left + rect.width / 2 - cardWidth / 2));
-  } else if (placement === 'left') {
-    top = Math.max(16, rect.top + rect.height / 2 - cardHeight / 2);
-    left = Math.max(16, rect.left - cardWidth - 12);
-  } else if (placement === 'right') {
-    top = Math.max(16, rect.top + rect.height / 2 - cardHeight / 2);
-    left = Math.min(window.innerWidth - cardWidth - 16, rect.left + rect.width + 12);
+
+  if (isMobile) {
+    // Bottom-sheet style: hugs the bottom of the screen, full width
+    // minus 12px gutter on each side. Above the player bar (~80px)
+    // when present — we add a 16px breathing-room margin below.
+    left = (vw - cardWidth) / 2;
+    top = vh - cardHeight - 16;
   } else {
-    top = window.innerHeight / 2 - cardHeight / 2;
-    left = window.innerWidth / 2 - cardWidth / 2;
+    // Desktop: float adjacent to the spotlight with smart placement.
+    const desired = step.placement ?? 'bottom';
+    let placement = desired;
+    if (desired === 'bottom' && rect.top + rect.height + cardHeight + 16 > vh) {
+      placement = 'top';
+    } else if (desired === 'top' && rect.top - cardHeight - 16 < 0) {
+      placement = 'bottom';
+    }
+
+    if (placement === 'bottom') {
+      top = rect.top + rect.height + 12;
+      left = rect.left + rect.width / 2 - cardWidth / 2;
+    } else if (placement === 'top') {
+      top = rect.top - cardHeight - 12;
+      left = rect.left + rect.width / 2 - cardWidth / 2;
+    } else if (placement === 'left') {
+      top = rect.top + rect.height / 2 - cardHeight / 2;
+      left = rect.left - cardWidth - 12;
+    } else if (placement === 'right') {
+      top = rect.top + rect.height / 2 - cardHeight / 2;
+      left = rect.left + rect.width + 12;
+    } else {
+      top = vh / 2 - cardHeight / 2;
+      left = vw / 2 - cardWidth / 2;
+    }
+
+    // Clamp inside viewport with a 16px gutter so the card never runs
+    // off-screen, even for very tall steps.
+    left = Math.max(16, Math.min(vw - cardWidth - 16, left));
+    top = Math.max(16, Math.min(vh - cardHeight - 16, top));
   }
 
   return (
     <motion.div
+      ref={cardRef}
       key={step.targetId}
       initial={{ opacity: 0, y: 8, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
