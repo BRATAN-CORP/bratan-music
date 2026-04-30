@@ -52,8 +52,19 @@ export function TiltCard({
       `radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,${glareStrength}) 0%, rgba(255,255,255,${glareStrength * 0.4}) 25%, transparent 60%)`,
   );
 
+  // When the user presses inside the card we freeze tilt updates
+  // until pointerup. CSS 3D transforms move children by a few pixels
+  // between mousedown and mouseup at any non-zero intensity, and the
+  // browser hit-tests pointerup against whatever element the cursor
+  // is over at release time. With the spring still animating, the
+  // button can drift out from under the cursor and the click is lost.
+  // Freezing during press keeps the visual identical (no visible
+  // jump — we don't snap to neutral, we just stop chasing the cursor)
+  // and guarantees mousedown/mouseup land on the same element.
+  const pressed = useRef(false);
+
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (reduce || !ref.current) return;
+    if (reduce || !ref.current || pressed.current) return;
     const rect = ref.current.getBoundingClientRect();
     x.set((e.clientX - rect.left) / rect.width - 0.5);
     y.set((e.clientY - rect.top) / rect.height - 0.5);
@@ -68,7 +79,11 @@ export function TiltCard({
     x.set(0);
     y.set(0);
     hover.set(0);
+    pressed.current = false;
   };
+
+  const onDown = () => { pressed.current = true; };
+  const onUp = () => { pressed.current = false; };
 
   if (reduce) {
     return (
@@ -84,6 +99,9 @@ export function TiltCard({
       onPointerMove={onMove}
       onPointerEnter={onEnter}
       onPointerLeave={onLeave}
+      onPointerDown={onDown}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
       style={{ ...extraStyle, rotateX, rotateY, scale, z, transformStyle: 'preserve-3d', perspective: 1100 }}
       className={cn('relative will-change-transform', className)}
     >
