@@ -1,5 +1,5 @@
 import {
-  ArrowUpRight, Headphones, Library, Search, Send, Shield, Sparkles,
+  ArrowUpRight, Headphones, Library, Search, Send, Shield, ShieldOff,
   Sliders, Share2, Replace, Waves, Bolt,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -15,24 +15,27 @@ import { TiltCard } from '@/components/ui/TiltCard';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 
 /**
- * Landing copy is intentionally not framed as "Tidal через Telegram":
- *
- *   1. We want the product to stand on its own listening experience —
- *      lossless catalog + cold-start in seconds + a real personal wave —
- *      not on being a thin re-skin of someone else's app.
- *   2. The "Tidal" name is a backend implementation detail; pinning it
- *      to the marketing surface couples our positioning to a vendor.
- *
- * Hero hook is "Lossless без приложений": studio-grade stream, login
- * in one tap, no app store, no card forms.
+ * Landing hook leads with the anti-censorship angle: the "перезалив"
+ * feature lets a user drop their own version of any track on top of the
+ * catalog entry, which means tracks that have been edited / muted /
+ * cropped on other streaming platforms can be played here as the
+ * artist released them. That's a positioning angle no other streaming
+ * surface owns, and it stops the marketing being a vendor pitch
+ * ("Tidal через Telegram") and starts being a product pitch
+ * ("стриминг, в котором решаешь ты").
  */
 
 const features = [
   {
+    icon: Replace,
+    title: 'Подмена зацензуренных треков',
+    desc: 'Вырезанный или приглушённый релиз ложится твоей версией поверх каталога. Бесшовно, lossless, видно только тебе.',
+    span: 'lg:col-span-2',
+  },
+  {
     icon: Waves,
     title: 'Моя волна за 60 секунд',
     desc: 'Назови 1–6 артистов — и поднимется бесконечный поток под твой вкус, который учится с каждой реакцией.',
-    span: 'lg:col-span-2',
   },
   {
     icon: Headphones,
@@ -56,9 +59,9 @@ const features = [
     desc: 'Плейлисты, лайки, история — твои. Не алгоритм решает, что ты услышишь завтра.',
   },
   {
-    icon: Replace,
-    title: 'Перезалив',
-    desc: 'Своя версия трека поверх каталога — с лучшим мастером или редкой редакцией. Видишь только ты.',
+    icon: Shield,
+    title: 'Без алгоритма-надсмотрщика',
+    desc: 'Алгоритм не решает за тебя, что слушать. Без рекламы, без подсунутых рекомендаций, без платных регионов.',
   },
   {
     icon: Share2,
@@ -72,9 +75,9 @@ const features = [
     span: 'lg:col-span-2',
   },
   {
-    icon: Shield,
-    title: 'Без паролей и рекламы',
-    desc: 'Вход через Telegram, оплата Stars. Никаких карт, e-mail, токенов или баннеров на фоне музыки.',
+    icon: Send,
+    title: 'Вход через Telegram',
+    desc: 'Один тап — и в браузере откроется твоя библиотека. Никаких карт, e-mail и App Store. Оплата только Stars — 99⋆/мес.',
   },
 ];
 
@@ -102,8 +105,8 @@ export function LandingPage() {
             transition={{ duration: 0.7, ease: EASE }}
             className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur"
           >
-            <Sparkles size={12} className="text-[var(--color-accent)]" />
-            Lossless · без приложений
+            <ShieldOff size={12} className="text-[var(--color-accent)]" />
+            Расцензуренный стриминг
           </motion.div>
 
           <motion.h1
@@ -112,9 +115,9 @@ export function LandingPage() {
             transition={{ duration: 0.9, delay: 0.05, ease: EASE }}
             className="max-w-4xl text-[clamp(2.4rem,6.5vw,5.6rem)] font-semibold leading-[0.98] tracking-tight"
           >
-            Слушай <span className="font-serif italic text-muted-foreground">студийно</span>.
+            Цензура <span className="font-serif italic text-muted-foreground">заканчивается</span>
             <br />
-            <span className="shine-text">Без приложений и логинов.</span>
+            <span className="shine-text">на твоём плеере.</span>
           </motion.h1>
 
           <motion.p
@@ -123,7 +126,7 @@ export function LandingPage() {
             transition={{ duration: 0.8, delay: 0.15, ease: EASE }}
             className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
           >
-            24-bit стрим, бесконечная личная волна, плейлисты по ссылке и crossfade без щелчков. Открывается в браузере, оплачивается Telegram&nbsp;Stars — без карт, e-mail и App Store.
+            Любой трек, вырезанный или приглушённый на других площадках, подменяется твоей версией. Слушаешь как задумано — без затёртых слов и сокращений. Лосслесс 24-bit, crossfade, плейлисты по ссылке — в одной вкладке.
           </motion.p>
 
           <motion.div
@@ -172,7 +175,7 @@ export function LandingPage() {
             <h2 className="text-2xl font-semibold tracking-tight sm:text-4xl">Что внутри.</h2>
           </div>
           <p className="hidden max-w-md text-sm text-muted-foreground sm:block">
-            Девять инструментов, которые превращают «ещё один плеер» в персональную студию прослушивания.
+            Девять инструментов, которые превращают «ещё один стриминг» в персональную стрим-студию, в которой решаешь ты.
           </p>
         </Reveal>
 
