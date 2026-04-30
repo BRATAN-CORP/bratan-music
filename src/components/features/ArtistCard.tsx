@@ -1,73 +1,60 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import type { Artist } from '@/types';
+import { CoverFallback } from '@/components/ui/CoverFallback';
+import { fallbackGradient } from '@/lib/coverFallback';
 
 interface ArtistCardProps {
   artist: Artist;
 }
 
 /**
- * Build initials from an artist name. Splits on whitespace, takes
- * the first character of up to two leading words, uppercases. We
- * keep this lightweight rather than reach for a library — names are
- * already cleaned upstream.
+ * Artist tile, redesigned to match the album card's layered aesthetic:
+ * the photo is laid down twice — once blurred and saturated to fill
+ * the bleed area, then again crisp and inset on top. The blur is
+ * fully contained inside the round clip mask so the result no longer
+ * shows the ragged feathered edge the flat circular tile produced at
+ * desktop widths.
+ *
+ * If the artist has no usable photo we still get a colourful tile
+ * (hashed-hue gradient + initials, via CoverFallback) — same shared
+ * placeholder as the rest of the app.
  */
-function artistInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const [first, second] = words;
-  if (!first) return '?';
-  if (!second) return first.slice(0, 2).toUpperCase();
-  return ((first[0] ?? '') + (second[0] ?? '')).toUpperCase();
-}
-
-/**
- * Stable per-name hue. Lets the fallback tile feel like a unique
- * avatar instead of a generic gray placeholder, while staying within
- * the theme's accent range.
- */
-function fallbackHue(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return Math.abs(hash) % 360;
-}
-
 export function ArtistCard({ artist }: ArtistCardProps) {
-  // Some Tidal artists carry a stale `imageUrl` whose CDN object has
-  // since been deleted — the URL is truthy but the response is 404.
-  // Without an `onError` swap the browser would render its native
-  // broken-image glyph (the small square with a "?"), which the
-  // user explicitly reported as "не вижу фолбека". Track load
-  // failure and fall through to the initials tile below.
-  const [imgFailed, setImgFailed] = useState(false);
-  const showImage = !!artist.imageUrl && !imgFailed;
-  const initials = artistInitials(artist.name);
-  const hue = fallbackHue(artist.name);
+  const reduce = useReducedMotion();
+  const hasPhoto = !!artist.imageUrl;
   return (
     <Link to={`/artist/${artist.id}`} className="group flex flex-col items-center gap-2.5 text-center">
       <motion.div
-        whileHover={{ scale: 1.04 }}
+        whileHover={reduce ? undefined : { scale: 1.04 }}
         transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-        className="relative h-24 w-24 overflow-hidden rounded-full border border-border bg-secondary"
+        className="relative h-24 w-24 overflow-hidden rounded-full border border-border/60"
+        style={!hasPhoto ? { background: fallbackGradient(artist.name) } : undefined}
       >
-        {showImage ? (
-          <img
-            src={artist.imageUrl}
-            alt={artist.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            onError={() => setImgFailed(true)}
-          />
+        {hasPhoto ? (
+          <>
+            {/* Blurred halo. The 12% bleed guarantees the blur fills
+                past the round clip at every corner so the ragged edge
+                that previously showed up at desktop sizes is gone. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-[-12%] scale-110 bg-cover bg-center blur-xl saturate-150 opacity-95"
+              style={{ backgroundImage: `url(${artist.imageUrl})` }}
+            />
+            {/* Subtle inner darkening so the crisp photo on top
+                pops slightly against the blurred backing. */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-black/25" />
+            {/* Crisp photo, inset, with a soft shadow so it feels
+                like a chip floating over its own blur. */}
+            <img
+              src={artist.imageUrl}
+              alt={artist.name}
+              loading="lazy"
+              className="absolute left-[10%] top-[10%] h-[80%] w-[80%] rounded-full object-cover shadow-[0_8px_22px_-10px_rgba(0,0,0,0.55)]"
+            />
+          </>
         ) : (
-          <div
-            className="flex h-full w-full items-center justify-center text-xl font-semibold tracking-wide text-white"
-            style={{
-              background: `radial-gradient(120% 120% at 30% 25%, hsl(${hue} 65% 45% / 0.95), hsl(${(hue + 40) % 360} 55% 22%))`,
-            }}
-            aria-label={artist.name}
-          >
-            {initials}
-          </div>
+          <CoverFallback src={null} name={artist.name} initialsClassName="text-xl" />
         )}
         <div className="pointer-events-none absolute inset-0 rounded-full ring-0 ring-[var(--color-accent-glow)] transition-all duration-300 group-hover:ring-8" />
       </motion.div>
