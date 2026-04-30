@@ -762,6 +762,22 @@ export function useAudioPlayer() {
       safePause(inactiveSlot(b));
       b.loaded[inactiveSlot(b)] = null;
       if (versionBumped) b.loaded[b.active] = null;
+      // Drop any pending restore-seek left over from an earlier track
+      // (page-reload restore that was still mid-flight, or a previous
+      // CORS retry). If we don't, `onLoadedMetadata` for the freshly
+      // loaded src will read the stale ref and seek the new track to
+      // the previous track's persisted position — exactly the
+      // "track plays for ~1 s then jumps" bug the user reported on
+      // every manual switch.
+      pendingRestoreProgressRef.current = null;
+      // Belt-and-braces: also stomp any in-flight preload reference
+      // for the slot we're about to load into. The preload effect
+      // tracks completion via this ref (NOT b.loaded), so a stale
+      // entry from a previous queue position would otherwise convince
+      // startCrossfade that the upcoming track is already buffered
+      // and skip the fetch — leading to "next-natural-end fades into
+      // silence" on rare edge cases.
+      preloadedIncomingRef.current = null;
       loadTrack(currentTrack);
     }
   }, [currentTrack, loadTrack, streamVersion, tidalQuality]);
@@ -774,22 +790,18 @@ export function useAudioPlayer() {
     if (!audio.src || b.loaded[slot] !== currentTrack?.id) return;
     if (isPlaying) {
       if (fallbackInProgressRef.current) return;
-      // If restored from localStorage, seek to the saved progress before playing.
-      const storeProgress = usePlayerStore.getState().progress;
-      if (audio.currentTime < 1 && storeProgress > 1) {
-        const dur = audio.duration;
-        if (isFinite(dur) && dur > 0) {
-          audio.currentTime = Math.min(storeProgress, dur);
-        } else {
-          const onMeta = () => {
-            audio.removeEventListener('loadedmetadata', onMeta);
-            if (isFinite(audio.duration) && audio.duration > 0) {
-              audio.currentTime = Math.min(storeProgress, audio.duration);
-            }
-          };
-          audio.addEventListener('loadedmetadata', onMeta, { once: true });
-        }
-      }
+      // Page-reload progress restore is owned by `loadTrack` via
+      // `pendingRestoreProgressRef` + the `loadedmetadata` handler. We
+      // intentionally DO NOT replay the persisted progress here: this
+      // effect re-runs whenever `currentTrack?.id` changes, and after
+      // the loadTrack flow has already marked b.loaded[slot] (so the
+      // line above no longer short-circuits) the persisted `progress`
+      // could still be an old value from the previous track that
+      // hasn't been overwritten by the new track's first timeupdate
+      // yet. Seeking on it would teleport the freshly-loaded track to
+      // the previous track's position — exactly the "plays for half a
+      // second then resets" symptom the user reported on every manual
+      // skip / queue-jump.
       const ctxBundle = ensureAudioGraph();
       if (ctxBundle.ctx && ctxBundle.ctx.state === 'suspended') {
         ctxBundle.ctx.resume().catch(() => {});
