@@ -22,6 +22,18 @@ interface Track {
   /** Animated cover (mp4). Used in the fullscreen player as a tasteful loop. */
   coverVideoUrl?: string;
   duration: number;
+  /** Provider tag — "tidal" | "upload" | "override". Optional because
+   *  legacy tracks default to "tidal" downstream. */
+  source?: string;
+  /**
+   * Pre-resolved audio stream URL that bypasses the global
+   * `/tracks/:id/stream` quality-fallback ladder. Used by the room
+   * bridge to route a track through `/rooms/:id/stream/...` so guests
+   * are listening to the host's selection (uploads, overrides, or
+   * tidal) without each gaining direct catalog access. The audio
+   * engine plays this URL as-is when set.
+   */
+  streamUrl?: string;
 }
 
 type RepeatMode = 'off' | 'one' | 'all';
@@ -46,6 +58,14 @@ interface PlayerState {
   _seekToZero: number;
   bumpStream: () => void;
   setTrack: (track: Track) => void;
+  /**
+   * Atomic "switch to a different track at this exact position" used by
+   * the room bridge so a guest joining a session in progress doesn't
+   * snap to 0:00 on the audio element. Unlike `setTrack`, this does NOT
+   * reset `progress` to 0 — `useAudioPlayer.loadTrack` reads the current
+   * `progress` and seeks the new src to that target on `loadedmetadata`.
+   */
+  setTrackAt: (track: Track, progressSec: number, isPlaying: boolean) => void;
   setQueue: (tracks: Track[]) => void;
   addToQueue: (track: Track) => void;
   /** Insert a track immediately after the currently-playing one. */
@@ -100,6 +120,12 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   bumpStream: () => set((s) => ({ streamVersion: s.streamVersion + 1, progress: 0 })),
 
   setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0, error: null }),
+  setTrackAt: (track, progressSec, isPlaying) => set({
+    currentTrack: track,
+    isPlaying,
+    progress: Math.max(0, progressSec),
+    error: null,
+  }),
   setQueue: (tracks) => set({ queue: tracks }),
   addToQueue: (track) => set((s) => ({ queue: [...s.queue, track] })),
   playNext: (track) => set((s) => {
