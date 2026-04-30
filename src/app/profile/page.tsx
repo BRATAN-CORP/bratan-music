@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { LogOut, Crown, Shield, Moon, Sun, KeyRound, Sliders, Music2 } from 'lucide-react';
+import {
+  LogOut, Crown, Shield, Moon, Sun, Sliders, Music2,
+  Sparkles, Check, Lock, Wand2,
+} from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { useAuthStore } from '@/store/auth';
@@ -9,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { Switch } from '@/components/ui/Switch';
 import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
@@ -19,6 +23,422 @@ interface GrantResponse {
   user?: { id: string; username: string | null; name: string | null };
   subscription?: { id: string; expiresAt: number; days: number };
 }
+
+interface UserProfile {
+  id: string;
+  username: string | null;
+  name: string | null;
+  isAdmin: boolean;
+  subscription: { status: string; expiresAt: number } | null;
+}
+
+/**
+ * Profile page is structured as four stacked blocks:
+ *
+ *   1. **Identity hero** — avatar + name + admin chip + theme toggle.
+ *      Sets the "this is YOU" tone.
+ *   2. **Subscription / paywall** — when not subscribed, this is the
+ *      headline card with the daily-limit progress bar, benefits list
+ *      and a primary 99⭐ CTA. When subscribed, it shrinks to a status
+ *      strip showing the renewal date.
+ *   3. **Settings** — three cards (Воспроизведение / Качество /
+ *      Внешний вид) sharing the same `<Switch />` and segmented-button
+ *      contract so toggles read identically across the page.
+ *   4. **Admin** — gated behind a visible "Только для администраторов"
+ *      divider so the user-facing profile doesn't bleed into ops UI.
+ */
+
+const SUBSCRIPTION_BENEFITS: { icon: typeof Check; text: string }[] = [
+  { icon: Sparkles, text: 'Безлимитные прослушивания' },
+  { icon: Music2, text: 'HiFi и lossless без ограничений по очереди' },
+  { icon: Shield, text: 'Без рекламы и троттлинга' },
+];
+
+export function ProfilePage() {
+  const { user, logout } = useAuthStore();
+  const { theme, toggleTheme, openSubscriptionPrompt } = useUiStore();
+  const {
+    crossfade, crossfadeDuration, tidalQuality, infinitePlayback,
+    setCrossfade, setCrossfadeDuration, setTidalQuality, setInfinitePlayback,
+  } = useSettingsStore();
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => api.get<UserProfile>('/user/me'),
+    enabled: !!user,
+  });
+  const { data: limits } = useQuery({
+    queryKey: ['limits'],
+    queryFn: () => api.get<UserLimits>('/user/limits'),
+    enabled: !!user,
+  });
+
+  const isSubscribed = !!profile?.subscription && profile.subscription.status === 'active';
+  const isAdmin = !!profile?.isAdmin;
+
+  return (
+    <AuthGuard>
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 p-4 sm:p-6 lg:p-10">
+        <IdentityHero
+          name={user?.name ?? null}
+          username={user?.username ?? null}
+          isAdmin={isAdmin}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
+
+        <SubscriptionCard
+          isSubscribed={isSubscribed}
+          expiresAt={profile?.subscription?.expiresAt ?? null}
+          limits={limits}
+          onSubscribe={() => openSubscriptionPrompt()}
+        />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <SettingsCard title="Воспроизведение" icon={Sliders}>
+            <SwitchRow
+              title="Плавное переключение"
+              hint="Микширует следующий трек поверх текущего"
+              checked={crossfade}
+              onCheckedChange={setCrossfade}
+            />
+            {crossfade && (
+              <div className="mt-3">
+                <label className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Длительность</span>
+                  <span className="tabular-nums text-foreground">{crossfadeDuration} с</span>
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={crossfadeDuration}
+                  onChange={(e) => setCrossfadeDuration(Number(e.target.value))}
+                  className="mt-2 w-full accent-[var(--color-accent)]"
+                />
+              </div>
+            )}
+            <SettingsDivider />
+            <SwitchRow
+              title="Бесконечная музыка"
+              hint="Когда очередь почти пуста, добавляем рекомендации на основе того, что играет."
+              checked={infinitePlayback}
+              onCheckedChange={setInfinitePlayback}
+            />
+          </SettingsCard>
+
+          <SettingsCard title="Качество (Tidal)" icon={Music2} hint="Зависит от прокси-аккаунта Tidal — недоступные качества будут урезаны до доступного уровня.">
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {(Object.keys(TIDAL_QUALITY_LABELS) as TidalQuality[]).map((q) => {
+                const active = tidalQuality === q;
+                return (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => setTidalQuality(q)}
+                    className={`flex h-10 items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 text-left text-sm transition-colors ${
+                      active
+                        ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-foreground'
+                        : 'border-border hover:bg-secondary'
+                    }`}
+                  >
+                    <span className="truncate">{TIDAL_QUALITY_LABELS[q]}</span>
+                    {active && <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" />}
+                  </button>
+                );
+              })}
+            </div>
+          </SettingsCard>
+        </div>
+
+        <ResetRecommendationsPanel />
+
+        <Button
+          onClick={logout}
+          variant="outline"
+          className="w-full md:max-w-xs md:self-start"
+        >
+          <LogOut size={14} />
+          Выйти
+        </Button>
+
+        {isAdmin && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 pt-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground backdrop-blur">
+                <Lock size={11} className="text-[var(--color-accent)]" />
+                Только для администраторов
+              </span>
+              <span className="h-px flex-1 bg-border" aria-hidden />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <AdminGrantPanel />
+              <AdminAdminFlagPanel />
+              <div className="md:col-span-2">
+                <AdminTidalPanel />
+              </div>
+              <AdminUserPurgePanel />
+            </div>
+          </div>
+        )}
+      </div>
+    </AuthGuard>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Hero
+// ────────────────────────────────────────────────────────────────────
+
+function IdentityHero({
+  name,
+  username,
+  isAdmin,
+  theme,
+  onToggleTheme,
+}: {
+  name: string | null;
+  username: string | null;
+  isAdmin: boolean;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
+}) {
+  const initial = (name ?? username ?? '?')[0]?.toUpperCase() ?? '?';
+  return (
+    <section className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 sm:p-8">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-80"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+        }}
+      />
+      <div className="relative flex flex-wrap items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-border bg-background text-2xl font-semibold shadow-[var(--shadow-sm)]">
+            {initial}
+          </div>
+          <div className="min-w-0">
+            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
+              Профиль
+            </span>
+            <h1 className="mt-0.5 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+              {name ?? username ?? 'Пользователь'}
+            </h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {username && <span className="truncate">@{username}</span>}
+              {isAdmin && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2 py-0.5 font-medium text-foreground backdrop-blur">
+                  <Shield size={11} />
+                  Admin
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          aria-label="Переключить тему"
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={theme}
+              initial={{ rotate: -45, opacity: 0 }}
+              animate={{ rotate: 0, opacity: 1 }}
+              exit={{ rotate: 45, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="inline-flex"
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </motion.span>
+          </AnimatePresence>
+          <span className="tabular-nums">{theme === 'dark' ? 'Тёмная' : 'Светлая'}</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Subscription
+// ────────────────────────────────────────────────────────────────────
+
+function SubscriptionCard({
+  isSubscribed,
+  expiresAt,
+  limits,
+  onSubscribe,
+}: {
+  isSubscribed: boolean;
+  expiresAt: number | null;
+  limits: UserLimits | undefined;
+  onSubscribe: () => void;
+}) {
+  if (isSubscribed && expiresAt) {
+    return (
+      <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+              <Crown size={18} />
+            </span>
+            <div>
+              <p className="text-base font-semibold tracking-tight">Подписка активна</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Продлится до {new Date(expiresAt * 1000).toLocaleDateString('ru-RU')}
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/40 bg-background/60 px-3 py-1 text-xs font-medium text-foreground backdrop-blur">
+            <Sparkles size={11} className="text-[var(--color-accent)]" />
+            Без лимитов
+          </span>
+        </div>
+      </section>
+    );
+  }
+
+  const used = limits?.daily.used ?? 0;
+  const limit = limits?.daily.limit ?? 3;
+  const ratio = limit > 0 ? Math.min(1, used / limit) : 0;
+
+  return (
+    <section className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 sm:p-10">
+      <div
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+        }}
+      />
+      <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="flex flex-col gap-4">
+          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+            <Crown size={12} className="text-[var(--color-accent)]" />
+            Premium
+          </span>
+          <h2 className="max-w-xl text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">
+            Сними потолок{' '}
+            <span className="font-serif italic text-muted-foreground">3-х треков</span>{' '}
+            в день.
+          </h2>
+          <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
+            Безлимитный lossless-стриминг и full HiFi за 99 ⭐ в месяц. Оплата прямо в Telegram, без карт и сайтов.
+          </p>
+
+          <ul className="flex flex-col gap-2 pt-1 text-sm">
+            {SUBSCRIPTION_BENEFITS.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex items-center gap-2.5">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/12 text-[var(--color-accent)]">
+                  <Icon size={12} />
+                </span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
+
+          {limits && !limits.daily.unlimited && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Сегодня прослушано</span>
+                <span className="tabular-nums text-foreground">{used} / {limit}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-bg-muted)]">
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: ratio }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                  style={{ originX: 0 }}
+                  className="h-full bg-[var(--color-accent)]"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col items-start gap-3 lg:items-end">
+          <div className="flex items-baseline gap-2">
+            <span className="text-4xl font-semibold tracking-tight">99</span>
+            <span className="text-base text-muted-foreground">⭐ / мес</span>
+          </div>
+          <Button
+            type="button"
+            size="lg"
+            onClick={onSubscribe}
+            className="w-full gap-2 px-7 sm:w-auto"
+          >
+            <Crown size={16} />
+            Оформить подписку
+          </Button>
+          <p className="text-[11px] text-muted-foreground">
+            Можно отменить в любой момент в Telegram.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Settings building blocks
+// ────────────────────────────────────────────────────────────────────
+
+function SettingsCard({
+  title,
+  icon: Icon,
+  hint,
+  children,
+}: {
+  title: string;
+  icon: typeof Sliders;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Icon size={14} className="text-muted-foreground" />
+        {title}
+      </div>
+      {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
+      <div className={hint ? 'mt-4' : 'mt-3'}>{children}</div>
+    </section>
+  );
+}
+
+function SwitchRow({
+  title,
+  hint,
+  checked,
+  onCheckedChange,
+}: {
+  title: string;
+  hint?: string;
+  checked: boolean;
+  onCheckedChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm">
+      <span className="flex flex-col">
+        <span>{title}</span>
+        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+      </span>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} ariaLabel={title} />
+    </label>
+  );
+}
+
+function SettingsDivider() {
+  return <div className="my-4 h-px w-full bg-border" aria-hidden />;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Admin: grant subscription
+// ────────────────────────────────────────────────────────────────────
 
 function AdminGrantPanel() {
   const [target, setTarget] = useState('');
@@ -52,13 +472,13 @@ function AdminGrantPanel() {
   };
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
+    <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5">
       <h2 className="flex items-center gap-2 text-sm font-medium">
-        <KeyRound size={14} className="text-muted-foreground" />
-        Выдача доступа (admin)
+        <Wand2 size={14} className="text-muted-foreground" />
+        Выдача подписки
       </h2>
       <p className="mt-2 text-xs text-muted-foreground">
-        Введи ID или @username и количество дней.
+        ID или @username и количество дней.
       </p>
       <div className="mt-3 flex flex-col gap-2">
         <input
@@ -85,247 +505,5 @@ function AdminGrantPanel() {
         )}
       </div>
     </section>
-  );
-}
-
-interface UserProfile {
-  id: string;
-  username: string | null;
-  name: string | null;
-  isAdmin: boolean;
-  subscription: { status: string; expiresAt: number } | null;
-}
-
-export function ProfilePage() {
-  const { user, logout } = useAuthStore();
-  const { theme, toggleTheme, openSubscriptionPrompt } = useUiStore();
-  const {
-    crossfade, crossfadeDuration, tidalQuality, infinitePlayback,
-    setCrossfade, setCrossfadeDuration, setTidalQuality, setInfinitePlayback,
-  } = useSettingsStore();
-  const { data: profile } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => api.get<UserProfile>('/user/me'),
-    enabled: !!user,
-  });
-  const { data: limits } = useQuery({
-    queryKey: ['limits'],
-    queryFn: () => api.get<UserLimits>('/user/limits'),
-    enabled: !!user,
-  });
-
-  return (
-    <AuthGuard>
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
-        <div className="flex flex-col gap-1 border-b border-border pb-4">
-          <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Аккаунт</span>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Профиль</h1>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background text-base font-semibold">
-              {(user?.name ?? user?.username ?? '?')[0]?.toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{user?.name ?? user?.username ?? 'Пользователь'}</p>
-              {user?.username && <p className="truncate text-xs text-muted-foreground">@{user.username}</p>}
-            </div>
-          </div>
-          {profile?.isAdmin && (
-            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-xs font-medium text-foreground">
-              <Shield size={14} /> Администратор
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            <Crown size={14} className="text-muted-foreground" />
-            Подписка
-          </h2>
-          {profile?.subscription ? (
-            <>
-              <p className="mt-3 text-sm font-medium">Активна</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                До {new Date(profile.subscription.expiresAt * 1000).toLocaleDateString('ru-RU')}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Не активна. 3 трека в день бесплатно.
-              </p>
-              <Button
-                type="button"
-                onClick={() => openSubscriptionPrompt()}
-                size="sm"
-                className="mt-4"
-              >
-                <Crown size={14} />
-                Оформить за 99 ⭐
-              </Button>
-            </>
-          )}
-        </section>
-
-        {limits && (
-          <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-            <h2 className="text-sm font-medium">Лимиты</h2>
-            {limits.daily.unlimited ? (
-              <p className="mt-3 text-sm font-medium">Безлимитный доступ</p>
-            ) : (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Использовано: {limits.daily.used} / {limits.daily.limit}
-              </p>
-            )}
-          </section>
-        )}
-
-        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            <Sliders size={14} className="text-muted-foreground" />
-            Воспроизведение
-          </h2>
-          <label className="mt-4 flex items-center justify-between gap-3 text-sm">
-            <span className="flex flex-col">
-              <span>Плавное переключение</span>
-              <span className="text-xs text-muted-foreground">
-                Микширует следующий трек поверх текущего
-              </span>
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={crossfade}
-              onClick={() => setCrossfade(!crossfade)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                crossfade ? 'bg-[var(--color-accent)]' : 'bg-secondary'
-              }`}
-            >
-              <motion.span
-                animate={{ x: crossfade ? 24 : 4 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                className="inline-block h-4 w-4 rounded-full bg-white shadow"
-              />
-            </button>
-          </label>
-          {crossfade && (
-            <div className="mt-3">
-              <label className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Длительность</span>
-                <span className="tabular-nums">{crossfadeDuration} с</span>
-              </label>
-              <input
-                type="range"
-                min={1}
-                max={12}
-                step={1}
-                value={crossfadeDuration}
-                onChange={(e) => setCrossfadeDuration(Number(e.target.value))}
-                className="mt-1 w-full accent-[var(--color-accent)]"
-              />
-            </div>
-          )}
-
-          <label className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-4 text-sm">
-            <span className="flex flex-col">
-              <span>Бесконечная музыка</span>
-              <span className="text-xs text-muted-foreground">
-                Когда очередь почти пуста, добавляем рекомендации на основе того, что играет. Если выключено — плеер остановится на последнем треке.
-              </span>
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={infinitePlayback}
-              onClick={() => setInfinitePlayback(!infinitePlayback)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                infinitePlayback ? 'bg-[var(--color-accent)]' : 'bg-secondary'
-              }`}
-            >
-              <motion.span
-                animate={{ x: infinitePlayback ? 24 : 4 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                className="inline-block h-4 w-4 rounded-full bg-white shadow"
-              />
-            </button>
-          </label>
-        </section>
-
-        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            <Music2 size={14} className="text-muted-foreground" />
-            Качество (Tidal)
-          </h2>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Зависит от прокси-аккаунта Tidal — недоступные качества будут урезаны до доступного уровня.
-          </p>
-          <div className="mt-3 flex flex-col gap-1.5">
-            {(Object.keys(TIDAL_QUALITY_LABELS) as TidalQuality[]).map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => setTidalQuality(q)}
-                className={`flex items-center justify-between gap-2 rounded-[var(--radius-sm)] border px-3 py-2 text-left text-sm transition-colors ${
-                  tidalQuality === q
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-foreground'
-                    : 'border-border hover:bg-secondary'
-                }`}
-              >
-                <span>{TIDAL_QUALITY_LABELS[q]}</span>
-                {tidalQuality === q && (
-                  <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-                )}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-          <h2 className="text-sm font-medium">Внешний вид</h2>
-          <button
-            onClick={toggleTheme}
-            className="mt-3 flex w-full items-center justify-between rounded-[var(--radius-sm)] px-2 py-2 text-sm transition-colors hover:bg-secondary"
-          >
-            <span>Тема</span>
-            <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={theme}
-                  initial={{ rotate: -45, opacity: 0 }}
-                  animate={{ rotate: 0, opacity: 1 }}
-                  exit={{ rotate: 45, opacity: 0 }}
-                  transition={{ duration: 0.25 }}
-                  className="inline-flex"
-                >
-                  {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                </motion.span>
-              </AnimatePresence>
-              {theme === 'dark' ? 'Тёмная' : 'Светлая'}
-            </span>
-          </button>
-        </section>
-
-        <ResetRecommendationsPanel />
-
-        {profile?.isAdmin && <AdminGrantPanel />}
-        {profile?.isAdmin && <AdminAdminFlagPanel />}
-        {profile?.isAdmin && (
-          <div className="md:col-span-2">
-            <AdminTidalPanel />
-          </div>
-        )}
-        {profile?.isAdmin && <AdminUserPurgePanel />}
-
-        </div>
-
-        <Button onClick={logout} variant="danger" className="w-full md:max-w-xs md:self-end">
-          <LogOut size={14} />
-          Выйти
-        </Button>
-      </div>
-    </AuthGuard>
   );
 }
