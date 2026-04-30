@@ -94,15 +94,38 @@ interface SpotlightRect {
   left: number;
   width: number;
   height: number;
+  /** Mirror the target's own corner radius so the cutout doesn't have
+   *  square corners on a card that's pill-shaped or 24px-rounded. */
+  borderRadius: number;
 }
 
 function readRect(target: Element): SpotlightRect {
   const r = target.getBoundingClientRect();
+  // Read the target's computed border-radius so the cutout matches.
+  // We pick the largest of the four corners since asymmetric radii
+  // would be hard to mirror in a single CSS value, and the fattest
+  // round still reads as "the same shape".
+  let radius = 12;
+  try {
+    const cs = getComputedStyle(target);
+    const px = (v: string) => parseFloat(v) || 0;
+    radius = Math.max(
+      px(cs.borderTopLeftRadius),
+      px(cs.borderTopRightRadius),
+      px(cs.borderBottomLeftRadius),
+      px(cs.borderBottomRightRadius),
+      12,
+    );
+  } catch {
+    // ignore — fall back to default radius
+  }
   return {
     top: r.top - PADDING,
     left: r.left - PADDING,
     width: r.width + PADDING * 2,
     height: r.height + PADDING * 2,
+    // Inflate the radius slightly so the visual gap matches PADDING.
+    borderRadius: radius + PADDING / 2,
   };
 }
 
@@ -117,6 +140,7 @@ function fallbackRect(): SpotlightRect {
     left: window.innerWidth / 2 - w / 2,
     width: w,
     height: h,
+    borderRadius: 16,
   };
 }
 
@@ -224,6 +248,12 @@ function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
         left,
         width: cardWidth,
         zIndex: 10001,
+        // The portal wrapper carries `pointer-events-none` so the dim
+        // backdrop from the spotlight box-shadow doesn't swallow clicks
+        // on app chrome. The card itself has to opt back in, otherwise
+        // its buttons (Пропустить / Дальше / X) inherit the disabled
+        // state and never fire onClick.
+        pointerEvents: 'auto',
       }}
       className="liquid-glass overflow-hidden rounded-[var(--radius-lg)] border border-border bg-[var(--color-surface-elevated)] p-5 shadow-2xl"
     >
@@ -388,18 +418,20 @@ export function OnboardingTour() {
           <motion.div
             // Spotlight: a transparent rectangle whose 9999px box-shadow
             // paints the rest of the viewport black. Animating top/left
-            // /width/height drives the cutout between steps.
+            // /width/height/borderRadius drives the cutout between steps
+            // — borderRadius mirrors the target element's own radius so
+            // the cutout matches a 24px-rounded card cleanly.
             initial={false}
             animate={{
               top: rect.top,
               left: rect.left,
               width: rect.width,
               height: rect.height,
+              borderRadius: rect.borderRadius,
             }}
             transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 28 }}
             style={{
               position: 'fixed',
-              borderRadius: 12,
               boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.72)',
               pointerEvents: 'auto',
             }}
