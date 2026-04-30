@@ -125,25 +125,19 @@ function Inner() {
           </motion.div>
 
           {/* Hover treatment matched to the daily-playlist cards on
-              home: border-strong + soft shadow lift + the same accent
-              halo we use on the wave hero. Idle state stays clean so
-              the prompt input is the visual focus, not the chrome. */}
+              home: clean idle, on hover border-strong + shadow-md lift
+              + a soft corner glow fades in. The textarea, suggestion
+              chips and the segmented "20 / 30 / 40" buttons sit on a
+              relative content layer above the `pointer-events-none`
+              decoration, so they stay fully interactive throughout. */}
           <motion.div
             initial={reduce ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: EASE_SPRING, delay: 0.05 }}
-            className="group relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-6"
+            className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-6"
           >
             <div
-              className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
-              aria-hidden
-              style={{
-                background:
-                  'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
-              }}
-            />
-            <div
-              className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+              className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-90"
               aria-hidden
               style={{
                 background: 'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
