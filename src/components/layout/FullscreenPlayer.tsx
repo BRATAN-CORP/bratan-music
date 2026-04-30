@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
-import { useAudioPlayer, useBassPulse, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
+import { seekAudio, useBassPulse, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu, MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
@@ -37,9 +37,25 @@ export function FullscreenPlayer() {
     currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
     shuffle, toggleShuffle, repeat, cycleRepeat,
-    duration, fullscreen, closeFullscreen, error,
+    duration, progress, fullscreen, closeFullscreen, error,
   } = usePlayerStore();
-  const { progress, seek } = useAudioPlayer();
+  // IMPORTANT: do NOT call `useAudioPlayer()` here. The hook owns the
+  // singleton audio engine — every effect (track-change, play/pause,
+  // volume, crossfade trigger, mediaSession, slot listeners …) gets
+  // duplicated when more than one component mounts the hook. The mini
+  // `Player` already mounts it at the router level, so calling it
+  // again here used to spin up a second copy of every effect AS LONG
+  // AS the fullscreen player was mounted (it's part of the layout
+  // tree, not gated by `fullscreen`). The two copies fought over the
+  // same audio element: `setSlotGain` ran twice, the volume effect
+  // overwrote `audio.volume` mid-fade (volume jump), `corsRetried`
+  // bookkeeping raced (1 s reset only in fullscreen), and the
+  // duplicate listeners' `isOwnerSlot()` window let the OUTGOING
+  // slot's timeupdate keep clobbering `store.progress` after a manual
+  // skip (timer "относится к первой песни"). Match
+  // `MobileBottomDock`: read `progress` from the store and call the
+  // standalone `seekAudio` for scrub gestures.
+  const seek = seekAudio;
   const { progressSeconds, bufferedSeconds, durationSeconds } = usePlaybackVisuals();
   // rAF-driven progress + buffered widths so the bar slides smoothly
   // between timeupdate events. See `usePlaybackVisuals` for details.
