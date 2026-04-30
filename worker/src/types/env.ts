@@ -23,6 +23,11 @@ export interface Env {
   SESSION_ENCRYPTION_KEY: string;
 
   ENVIRONMENT: string;
+
+  // Yandex AI Studio (gpt-oss-120b) — used for AI playlist generation.
+  YANDEX_API_TOKEN?: string;
+  YANDEX_FOLDER_ID?: string;
+  YANDEX_MODEL_URI?: string;
 }
 
 export interface Variables {
