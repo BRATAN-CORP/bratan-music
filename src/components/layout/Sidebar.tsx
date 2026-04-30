@@ -1,9 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Search, Library, User, Home, Heart, ListMusic, Pin, Headphones, Sparkles, Crown } from 'lucide-react';
+import { Search, Library, User, Home, Heart, ListMusic, Pin, Headphones, Sparkles } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
 import { usePlaylistsList } from '@/hooks/useLibrary';
-import { api } from '@/lib/api';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
@@ -17,11 +15,6 @@ const navItems = [
 export function Sidebar() {
   const { sidebarOpen } = useUiStore();
   const { data: playlists } = usePlaylistsList();
-  const { data: me } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => api.get<{ isAdmin?: boolean }>('/user/me'),
-    staleTime: 60_000,
-  });
 
   if (!sidebarOpen) return null;
 
@@ -66,21 +59,6 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
-        {me?.isAdmin && (
-          <NavLink
-            to="/admin"
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-secondary text-foreground'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-              }`
-            }
-          >
-            <Crown size={16} className="text-[var(--color-accent)]" />
-            Админка
-          </NavLink>
-        )}
       </nav>
 
       {pinned.length > 0 && (

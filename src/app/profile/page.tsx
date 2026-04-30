@@ -19,6 +19,7 @@ import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
 import { ResetTourPanel } from '@/components/features/ResetTourPanel';
+import { AdminDashboard } from '@/app/admin/page';
 
 interface GrantResponse {
   ok: boolean;
@@ -184,6 +185,14 @@ export function ProfilePage() {
               </div>
               <AdminUserPurgePanel />
             </div>
+            {/* Full user grid lives under the same divider — used to be
+                a dedicated /admin route, now consolidated here so admins
+                only have one place to look for moderation tools. */}
+            {profile?.id && (
+              <div className="-mx-4 sm:-mx-6 lg:-mx-10">
+                <AdminDashboard meId={profile.id} />
+              </div>
+            )}
           </div>
         )}
       </div>
