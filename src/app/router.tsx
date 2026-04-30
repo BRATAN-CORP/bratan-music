@@ -10,6 +10,7 @@ import { FullscreenPlayer } from '@/components/layout/FullscreenPlayer';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { OnboardingTour } from '@/components/features/OnboardingTour';
+import { RoomConnectedBadge } from '@/components/features/RoomConnectedBadge';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { LandingPage } from '@/app/landing/page';
 import { HomePage } from '@/app/home/page';
@@ -117,6 +118,7 @@ function AppLayout() {
       <MobileBottomDock />
       <SubscriptionDialog />
       <OnboardingTour />
+      <RoomConnectedBadge />
       <GlassFilter />
     </div>
   );

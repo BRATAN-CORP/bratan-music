@@ -42,3 +42,13 @@ export function useLeaveRoom() {
     },
   });
 }
+
+export function useDeleteRoom() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => api.delete<{ ok: boolean }>(`/rooms/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rooms', 'list'] });
+    },
+  });
+}
