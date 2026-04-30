@@ -6,6 +6,7 @@ import { usePlayerStore } from '@/store/player';
 import { seekAudio, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { Marquee } from '@/components/ui/Marquee';
+import { CoverFallback } from '@/components/ui/CoverFallback';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 
@@ -203,11 +204,12 @@ export function MobileBottomDock() {
                       tabIndex={position === 'current' ? 0 : -1}
                       className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
                     >
-                      {t.coverUrl ? (
-                        <img src={t.coverUrl} alt={t.title} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full bg-white/5" />
-                      )}
+                      <CoverFallback
+                        src={t.coverUrl}
+                        name={t.title || t.artist || 'Track'}
+                        alt={t.title}
+                        initialsClassName="text-[10px]"
+                      />
                       {position === 'current' && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                           <Maximize2 size={14} className="text-white" />

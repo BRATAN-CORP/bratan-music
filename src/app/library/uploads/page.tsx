@@ -3,6 +3,7 @@ import { ChevronLeft, Loader2, Music, Upload as UploadIcon, Pencil, Trash2, Paus
 import { useNavigate } from 'react-router-dom';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
+import { CoverFallback } from '@/components/ui/CoverFallback';
 import {
   useCreateUpload,
   useDeleteUpload,
@@ -177,11 +178,11 @@ function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowPro
         className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground"
         aria-label={isActivePlaying ? 'Пауза' : 'Воспроизвести'}
       >
-        {upload.coverUrl ? (
-          <img src={upload.coverUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <Music size={16} />
-        )}
+        <CoverFallback
+          src={upload.coverUrl}
+          name={upload.title || upload.artist || 'Track'}
+          initialsClassName="text-[10px]"
+        />
         <span
           className={
             'absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ' +
