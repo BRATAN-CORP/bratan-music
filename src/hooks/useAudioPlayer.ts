@@ -626,18 +626,20 @@ function rampGain(
   const userTarget = ps.muted ? 0 : ps.volume;
   audio.volume = userTarget > 0 ? userTarget : 1;
 
-  // Hidden tab: the audio render thread can be suspended even though
-  // the ctx clock advances, so a scheduled ramp may not commit any
-  // samples. Snap the gain to the target so the *next* visible-tab
-  // tick starts from a sane value, and resolve immediately.
-  if (typeof document !== 'undefined' && document.hidden) {
-    try {
-      gainNode.gain.cancelScheduledValues(ctx.currentTime);
-      gainNode.gain.setValueAtTime(toV, ctx.currentTime);
-    } catch { /* ignore */ }
-    return Promise.resolve();
-  }
-
+  // NOTE: an earlier revision short-circuited the scheduled ramp when
+  // `document.hidden` was true, on the assumption that the audio
+  // render thread might be suspended in background tabs. In practice
+  // Chromium and Safari keep the AudioContext clock running while a
+  // tab is hidden — that's the entire point of using Web Audio's
+  // scheduler instead of rAF here, and `MediaElementAudioSource`
+  // playback continues unthrottled too. Snapping the gain to `toV`
+  // immediately turned every background-tab crossfade into a hard
+  // cut: the ramp completed in 0 ms, the outgoing track went silent
+  // and the incoming track jumped to full volume "ровно за n секунд
+  // до конца первого" — exactly the symptom the user reported. We now
+  // let the scheduled ramp run in hidden tabs unconditionally; the
+  // graph-less rAF path below is the only place where document
+  // visibility actually matters.
   return new Promise((resolve) => {
     const now = ctx.currentTime;
     const dur = Math.max(0.001, ms / 1000);
@@ -861,6 +863,27 @@ export function useAudioPlayer() {
     }
 
     b.loaded[slot] = trackId;
+    // Re-publish audio.duration into the store now that this slot is
+    // the canonical owner of the current track. The `durationchange`
+    // event for the new src fires DURING `tryLoadSrc` (between
+    // `audio.load()` and `canplay`), and at THAT moment
+    // `b.loaded[slot]` is still the OUTGOING track id — so
+    // `onDurationChange`'s `isOwnerSlot()` guard returns false and the
+    // event is suppressed to keep the outgoing slot's duration on
+    // screen during a soft-switch. Now that we've flipped ownership,
+    // no more `durationchange` will fire (the element's duration is
+    // already the new value), which is what made the digital
+    // counter's denominator stay frozen at the previous track's
+    // length on every manual switch ("таймер так и не обновляется").
+    // Same logic as the explicit publish at the end of
+    // `startCrossfade`'s auto-fade path, just covering the manual /
+    // hard-switch path that loadTrack owns.
+    {
+      const dur = audio.duration;
+      if (isFinite(dur) && dur > 0) {
+        setDuration(dur);
+      }
+    }
     // Burn the slot's CORS-retry budget: tryLoadSrc just succeeded for
     // this track, so any LATER error event we see on this slot is mid-
     // stream (range-request 4xx, network glitch, server stopped sending
@@ -905,7 +928,7 @@ export function useAudioPlayer() {
       setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
       pause();
     }
-  }, [pause, setError]);
+  }, [pause, setError, setDuration]);
 
   // Reload when track id changes (or stream version bumped).
   const lastStreamVersionRef = useRef(streamVersion);
