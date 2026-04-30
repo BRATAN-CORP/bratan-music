@@ -324,11 +324,20 @@ rooms.get('/:id/stream/:source/:rawId', async (c) => {
     // selection, not freely browsing the catalog. We still require an
     // active room state so this can't be abused as an unmetered Tidal
     // proxy outside of rooms.
+    //
+    // The resolved CDN URL is wrapped in the same `/tracks/audio?url=…`
+    // proxy used by the regular stream endpoint so guests get a
+    // stable same-origin URL with predictable CORS / Range support.
+    // Handing out a raw Tidal CloudFront URL caused intermittent
+    // "не удалось загрузить трек" failures on the second listener
+    // because Tidal's CDN occasionally trips browser CORS preflight.
     const tidal = new TidalService(c.env);
     const quality = (c.req.query('quality') ?? 'LOSSLESS').toUpperCase();
     try {
-      const url = await tidal.getStreamUrl(rawId, quality);
-      return c.json({ url });
+      const resolved = await tidal.resolveStream(rawId, quality);
+      const origin = new URL(c.req.url).origin;
+      const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(resolved.url)}`;
+      return c.json({ url: proxied, quality: resolved.quality });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Ошибка стрима';
       return c.json({ error: message }, 502);
