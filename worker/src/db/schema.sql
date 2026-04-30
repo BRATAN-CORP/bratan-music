@@ -1,10 +1,11 @@
 CREATE TABLE users (
-    id          TEXT PRIMARY KEY,
-    tg_username TEXT,
-    tg_name     TEXT,
-    is_admin    INTEGER NOT NULL DEFAULT 0,
-    created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL
+    id                TEXT PRIMARY KEY,
+    tg_username       TEXT,
+    tg_name           TEXT,
+    is_admin          INTEGER NOT NULL DEFAULT 0,
+    tour_completed_at INTEGER,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
 );
 
 CREATE TABLE subscriptions (

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
+import { TiltCard } from '@/components/ui/TiltCard';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 import { useSettingsStore, TIDAL_QUALITY_LABELS, type TidalQuality } from '@/store/settings';
@@ -204,14 +205,30 @@ function IdentityHero({
   onToggleTheme: () => void;
 }) {
   const initial = (name ?? username ?? '?')[0]?.toUpperCase() ?? '?';
+  // Same low-intensity tilt + glare wrapper used by the WaveHero on /home
+  // and the landing feature grid — gives the identity card the
+  // "alive on hover" feel without rotating the theme-toggle button so
+  // far that it loses pointer capture between mousedown and mouseup.
   return (
-    <section className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 sm:p-8">
+    <TiltCard intensity={6} hoverScale={1} glareStrength={0.4} className="rounded-[var(--radius-2xl)]">
+    <section
+      className="group relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)] sm:p-8"
+      data-tour-id="tour-profile"
+    >
       <div
         className="pointer-events-none absolute inset-0 opacity-80"
         aria-hidden
         style={{
           background:
             'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
         }}
       />
       <div className="relative flex flex-wrap items-center justify-between gap-6">
@@ -259,6 +276,7 @@ function IdentityHero({
         </button>
       </div>
     </section>
+    </TiltCard>
   );
 }
 
@@ -305,14 +323,25 @@ function SubscriptionCard({
   const limit = limits?.daily.limit ?? 3;
   const ratio = limit > 0 ? Math.min(1, used / limit) : 0;
 
+  // Same tilt + glow signature as IdentityHero / WaveHero. The CTA
+  // button lives inside; intensity 6 keeps its hit-box stable.
   return (
-    <section className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 sm:p-10">
+    <TiltCard intensity={6} hoverScale={1} glareStrength={0.45} className="rounded-[var(--radius-2xl)]">
+    <section className="group relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)] sm:p-10">
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden
         style={{
           background:
             'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+        }}
+      />
+      <div
+        className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
         }}
       />
       <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -380,6 +409,7 @@ function SubscriptionCard({
         </div>
       </div>
     </section>
+    </TiltCard>
   );
 }
 

@@ -49,6 +49,7 @@ auth.post('/telegram', async (c) => {
       username: user.tg_username,
       name: user.tg_name,
       isAdmin: user.is_admin === 1,
+      tourCompletedAt: user.tour_completed_at ?? null,
     },
   });
 });
@@ -90,6 +91,7 @@ auth.get('/nonce/:nonce', async (c) => {
       username: user.tg_username,
       name: user.tg_name,
       isAdmin: user.is_admin === 1,
+      tourCompletedAt: user.tour_completed_at ?? null,
     },
   });
 });

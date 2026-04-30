@@ -9,6 +9,7 @@ import { Player } from '@/components/layout/Player';
 import { FullscreenPlayer } from '@/components/layout/FullscreenPlayer';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
+import { OnboardingTour } from '@/components/features/OnboardingTour';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { LandingPage } from '@/app/landing/page';
 import { HomePage } from '@/app/home/page';
@@ -112,6 +113,7 @@ function AppLayout() {
       <FullscreenPlayer />
       <MobileBottomDock />
       <SubscriptionDialog />
+      <OnboardingTour />
       <GlassFilter />
     </div>
   );
