@@ -56,11 +56,17 @@ export function MobileBottomDock() {
   const navigate = useNavigate();
   const { isLiked, toggle } = useToggleLike();
 
+  // Bar coordinate system matches the thumb: both inset by RAIL_INSET_PX
+  // on each side so the bar's right edge lands exactly under the thumb's
+  // centre. Without this the bar fills the full rail (0 → 100 %) but the
+  // thumb only reaches `100 % − INSET` — visible as the timeline progress
+  // outpacing the thumb on long tracks.
   const progressWidth = useTransform(
     [progressSeconds as MotionValue<number>, durationSeconds as MotionValue<number>],
     (values) => {
       const [t, d] = values as [number, number];
-      return d > 0 ? `${Math.min(100, (t / d) * 100)}%` : '0%';
+      const r = d > 0 ? Math.min(1, Math.max(0, t / d)) : 0;
+      return `calc((100% - ${RAIL_INSET_PX * 2}px) * ${r})`;
     },
   );
   // Thumb travels along the rail, but is rendered as a sibling of the
@@ -160,8 +166,8 @@ export function MobileBottomDock() {
               }}
             >
               <motion.div
-                className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
-                style={{ width: progressWidth }}
+                className="absolute inset-y-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                style={{ left: `${RAIL_INSET_PX}px`, width: progressWidth }}
               />
             </div>
 
