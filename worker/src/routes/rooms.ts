@@ -170,6 +170,24 @@ rooms.post('/:id/leave', async (c) => {
 });
 
 /**
+ * Host-only hard delete. Anyone else gets 403. We don't soft-close here
+ * — the spec is explicit that "удалить — прям вообще". FK cascades
+ * wipe state + members in the same write.
+ */
+rooms.delete('/:id', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const svc = new RoomService(c.env);
+  const room = await svc.findById(id);
+  if (!room) return c.json({ error: 'Комната не найдена' }, 404);
+  if (room.host_id !== userId) {
+    return c.json({ error: 'Удалять комнату может только хост' }, 403);
+  }
+  await svc.deleteRoom(id);
+  return c.json({ ok: true });
+});
+
+/**
  * Anti-abuse stream proxy for host-supplied audio (uploads + override
  * files in R2). See RoomService.ts header for the full design — the
  * gist is: the requested track must match the room's *current* state,

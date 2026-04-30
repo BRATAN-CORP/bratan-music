@@ -300,6 +300,19 @@ export class RoomService {
     ).bind(nowSec(), roomId).run();
   }
 
+  /**
+   * Hard-delete a room and everything attached to it. Driven by the host
+   * pressing "удалить руму" — once they confirm, the row plus its
+   * `listening_room_state` and `listening_room_members` cascade away
+   * (FK ON DELETE CASCADE), so anyone polling state lands on 404 and the
+   * frontend kicks them back to /rooms.
+   */
+  async deleteRoom(roomId: string): Promise<void> {
+    await this.env.DB.prepare(
+      `DELETE FROM listening_rooms WHERE id = ?`
+    ).bind(roomId).run();
+  }
+
   private async touchRoom(roomId: string): Promise<void> {
     await this.env.DB.prepare(
       `UPDATE listening_rooms SET last_activity_at = ?, updated_at = ? WHERE id = ?`

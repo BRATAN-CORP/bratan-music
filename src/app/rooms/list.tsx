@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Headphones, Plus, ArrowRight, Sparkles, Users, KeyRound, Loader2 } from 'lucide-react';
+import { Headphones, Plus, ArrowRight, Sparkles, Users, KeyRound, Loader2, Trash2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useCreateRoom, useJoinRoom, useRoomsList } from '@/hooks/useRooms';
+import { useCreateRoom, useDeleteRoom, useJoinRoom, useRoomsList } from '@/hooks/useRooms';
+import { ApiError } from '@/lib/api';
 import { EASE_SPRING } from '@/lib/motion';
 
 export function RoomsListPage() {
@@ -22,23 +23,74 @@ function RoomsListInner() {
   const { data: rooms, isLoading } = useRoomsList();
   const createMut = useCreateRoom();
   const joinMut = useJoinRoom();
+  const deleteMut = useDeleteRoom();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [tab, setTab] = useState<'create' | 'join'>('create');
+  const [error, setError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Track auto-join attempt in a ref so we don't loop on a code that
+  // failed once (e.g. invalid / expired). The `?join=CODE` query stays
+  // in the URL only long enough for us to consume it.
+  const autoJoinedFor = useRef<string | null>(null);
 
   const onCreate = async () => {
-    const res = await createMut.mutateAsync(name.trim() || undefined);
-    navigate(`/rooms/${res.id}`);
+    setError(null);
+    try {
+      const res = await createMut.mutateAsync(name.trim() || undefined);
+      navigate(`/rooms/${res.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось создать');
+    }
   };
-  const onJoin = async () => {
-    const cleaned = code.trim().toUpperCase();
+  const onJoin = async (codeOverride?: string) => {
+    setError(null);
+    const cleaned = (codeOverride ?? code).trim().toUpperCase();
     if (!cleaned) return;
-    const res = await joinMut.mutateAsync(cleaned);
-    navigate(`/rooms/${res.id}`);
+    try {
+      const res = await joinMut.mutateAsync(cleaned);
+      navigate(`/rooms/${res.id}`);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message :
+        err instanceof Error ? err.message : 'Не удалось войти',
+      );
+    }
   };
 
+  const onDelete = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm('Удалить комнату? Это действие нельзя отменить — все участники потеряют доступ.')) return;
+    setError(null);
+    try {
+      await deleteMut.mutateAsync(id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось удалить');
+    }
+  };
+
+  // One-click invite: when the user lands on `/rooms?join=CODE`, prefill
+  // the join input, switch to the "По коду" tab and auto-join. This is
+  // what the share button on a room produces.
+  useEffect(() => {
+    const incoming = (searchParams.get('join') ?? '').trim().toUpperCase();
+    if (!incoming) return;
+    if (autoJoinedFor.current === incoming) return;
+    autoJoinedFor.current = incoming;
+    setCode(incoming);
+    setTab('join');
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('join');
+      return next;
+    }, { replace: true });
+    void onJoin(incoming);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-10">
       {/* Hero with subtle gradient + animated waveform */}
       <motion.section
         initial={reduce ? false : { opacity: 0, y: 20 }}
@@ -119,9 +171,9 @@ function RoomsListInner() {
                 </motion.div>
               )}
             </AnimatePresence>
-            {(createMut.error || joinMut.error) && (
+            {(error || createMut.error || joinMut.error) && (
               <p className="text-xs text-destructive">
-                {String((createMut.error ?? joinMut.error) as Error)?.toString().replace('Error: ', '')}
+                {error ?? String((createMut.error ?? joinMut.error) as Error)?.toString().replace('Error: ', '')}
               </p>
             )}
           </div>
@@ -153,16 +205,17 @@ function RoomsListInner() {
                   hidden: { opacity: 0, y: 12 },
                   show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE_SPRING } },
                 }}
+                className="relative"
               >
                 <Link
                   to={`/rooms/${r.id}`}
                   className="group flex h-full flex-col justify-between rounded-[var(--radius-md)] border border-border bg-card p-4 transition-colors hover:border-[var(--color-border-strong)]"
                 >
                   <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{r.name}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium">{r.name}</span>
                       {r.isHost && (
-                        <span className="rounded-full bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
+                        <span className="shrink-0 rounded-full bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
                           Хост
                         </span>
                       )}
@@ -175,6 +228,22 @@ function RoomsListInner() {
                     Открыть <ArrowRight size={12} className="ml-1" />
                   </div>
                 </Link>
+                {r.isHost && (
+                  <button
+                    type="button"
+                    onClick={(e) => void onDelete(e, r.id)}
+                    aria-label="Удалить комнату"
+                    title="Удалить комнату"
+                    disabled={deleteMut.isPending}
+                    className="absolute bottom-3 left-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground opacity-0 transition-all hover:border-destructive hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+                  >
+                    {deleteMut.isPending && deleteMut.variables === r.id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={12} />
+                    )}
+                  </button>
+                )}
               </motion.li>
             ))}
           </motion.ul>

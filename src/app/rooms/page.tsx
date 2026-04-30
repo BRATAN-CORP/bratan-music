@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
   Pause, Play, Volume2, VolumeX, Users, LogOut, Copy, Share2, RefreshCw,
-  Radio, AlertTriangle, Search,
+  Radio, AlertTriangle, Search, Trash2, Loader2,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
@@ -13,8 +13,9 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
+import { useRoomConnectionStore } from '@/store/roomConnection';
 import { useRoomPlayer } from '@/hooks/useRoomPlayer';
-import { useLeaveRoom } from '@/hooks/useRooms';
+import { useDeleteRoom, useLeaveRoom } from '@/hooks/useRooms';
 import { useSearch } from '@/hooks/useSearch';
 import type { RoomDetail, RoomMember, RoomTrackSnapshot } from '@/types/rooms';
 import type { Track } from '@/types';
@@ -44,6 +45,14 @@ function RoomPageInner() {
     pauseGlobal();
   }, [pauseGlobal]);
 
+  // Keep the layout-level "ты в комнате" indicator in sync with the
+  // room the user is currently viewing. We set this whenever the room
+  // detail loads, and clear it on unmount so navigating away to /home
+  // doesn't leave a stale badge if leave/delete were already issued.
+  const setActiveRoom = useRoomConnectionStore((s) => s.setActive);
+  const clearActiveRoom = useRoomConnectionStore((s) => s.clear);
+  useEffect(() => () => clearActiveRoom(), [clearActiveRoom]);
+
   const initialQuery = useQuery({
     queryKey: ['rooms', 'detail', id],
     queryFn: async () => {
@@ -67,10 +76,26 @@ function RoomPageInner() {
   const initial = initialQuery.data;
   const player = useRoomPlayer({ roomId: id, initial, audioRef });
   const leaveMut = useLeaveRoom();
+  const deleteMut = useDeleteRoom();
+  const isHost = !!initial && me?.id === initial.hostId;
+
+  // Update the global connection badge once we know the room name/code.
+  useEffect(() => {
+    if (!initial) return;
+    setActiveRoom({ roomId: initial.id, roomCode: initial.code, roomName: initial.name });
+  }, [initial, setActiveRoom]);
 
   const onLeave = async () => {
     if (!id) return;
     await leaveMut.mutateAsync(id);
+    clearActiveRoom();
+    navigate('/rooms');
+  };
+  const onDelete = async () => {
+    if (!id) return;
+    if (!window.confirm('Удалить комнату? Это действие нельзя отменить — все участники потеряют доступ.')) return;
+    await deleteMut.mutateAsync(id);
+    clearActiveRoom();
     navigate('/rooms');
   };
 
@@ -91,13 +116,13 @@ function RoomPageInner() {
     : null;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
       {/* Hidden audio element driven by useRoomPlayer */}
       <audio ref={audioRef} preload="auto" crossOrigin="anonymous" playsInline />
 
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="min-w-0">
           <Link
             to="/rooms"
             className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground hover:text-foreground"
@@ -106,13 +131,26 @@ function RoomPageInner() {
           </Link>
           <h1 className="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
             <Radio size={20} className="text-[var(--color-accent)]" />
-            {initial.name}
+            <span className="truncate">{initial.name}</span>
           </h1>
           <RoomCode code={initial.code} />
         </div>
-        <Button variant="outline" onClick={() => void onLeave()} disabled={leaveMut.isPending}>
-          <LogOut size={14} /> Выйти
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => void onLeave()} disabled={leaveMut.isPending}>
+            <LogOut size={14} /> Выйти
+          </Button>
+          {isHost && (
+            <Button
+              variant="outline"
+              onClick={() => void onDelete()}
+              disabled={deleteMut.isPending}
+              className="border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive/10"
+            >
+              {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              Удалить
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Now playing */}
@@ -311,12 +349,24 @@ function MemberChip({ member, isMe }: { member: RoomMember; isMe: boolean }) {
   );
 }
 
+/**
+ * Build a one-click invite URL of the form
+ * `https://<origin><base>rooms?join=CODE`. Visiting it on /rooms
+ * auto-fills the join input, switches to the "По коду" tab and
+ * dispatches the join request. We respect Vite's `BASE_URL` so the
+ * link works both on GH Pages (`/bratan-music/`) and on local dev.
+ */
+function buildInviteUrl(code: string): string {
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+  return `${window.location.origin}${base}/rooms?join=${encodeURIComponent(code)}`;
+}
+
 function RoomCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
+  const inviteUrl = buildInviteUrl(code);
   const onCopy = async () => {
     try {
-      const url = `${window.location.origin}${window.location.pathname.replace(/\/+$/, '')}`;
-      await navigator.clipboard.writeText(`${url}\nКод: ${code}`);
+      await navigator.clipboard.writeText(inviteUrl);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch { /* noop */ }
@@ -328,15 +378,16 @@ function RoomCode({ code }: { code: string }) {
       </span>
       <button
         onClick={onCopy}
+        title={inviteUrl}
         className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         {copied ? 'Скопировано!' : (<><Copy size={12} /> Скопировать ссылку</>)}
       </button>
       <button
         onClick={() => {
-          const text = `Слушаем вместе! Код: ${code}\n${window.location.href}`;
+          const text = `Слушаем вместе! Открой ссылку — войдёшь автоматически:\n${inviteUrl}`;
           if (navigator.share) {
-            void navigator.share({ title: 'Bratan Music — комната', text }).catch(() => undefined);
+            void navigator.share({ title: 'Bratan Music — комната', text, url: inviteUrl }).catch(() => undefined);
           } else {
             void navigator.clipboard.writeText(text).catch(() => undefined);
           }
