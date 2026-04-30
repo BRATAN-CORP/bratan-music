@@ -140,27 +140,22 @@ export function HomePage() {
  * the two read as a related family at the top of the page.
  */
 function AiPlaylistPromo() {
+  // Hover treatment matched to the daily-playlist cards directly
+  // below this on /home: clean idle (no decorative layer visible),
+  // and on hover the card lifts via border-strong + shadow-md while
+  // the Sparkles badge scales 1.05 over 700ms — same physics as the
+  // album cover scaling inside daily cards. Decorative glow lives
+  // on `pointer-events-none` layers so the "Попробовать" pill stays
+  // fully interactive throughout the hover.
   return (
     <Reveal>
       <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10">
         <Link
           to="/ai"
-          className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
+          className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
         >
-          {/* Idle state: clean card. On hover, fade in the same accent
-              gradient + halo we use on the wave hero so the two cards
-              read as a related family without screaming for attention
-              when you're scrolling past. */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
-            aria-hidden
-            style={{
-              background:
-                'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
-            }}
-          />
-          <div
-            className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+            className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-90"
             aria-hidden
             style={{
               background:
@@ -168,7 +163,7 @@ function AiPlaylistPromo() {
             }}
           />
           <div className="relative flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)]">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
               <Sparkles size={20} />
             </div>
             <div className="min-w-0">
@@ -243,13 +238,17 @@ function WaveHero({
   // Hero card without TiltCard wrapping: the 3D rotation kept eating
   // clicks on the secondary CTA even at minimal intensity, because
   // any non-zero parent transform shifts the buttons' bounding boxes
-  // between mousedown and mouseup. We keep the visual hover (border
-  // glow + accent halo + decorative gradient) which lives on plain
-  // CSS classes; the buttons land on a stable pixel grid every time.
+  // between mousedown and mouseup. The hover treatment is now matched
+  // to the daily-playlist cards below this hero — clean idle, gentle
+  // border-strong + shadow-md lift on hover, and the CoverStack on
+  // the right scales 1.05 over 700ms (the daily cards' album image
+  // does the same). All decorative layers stay on
+  // `pointer-events-none` so the "Включить волну" / "Поменять
+  // артистов" buttons sit on a stable, fully clickable pixel grid.
   return (
     <Reveal>
-      <div className="group rounded-[var(--radius-2xl)]" data-tour-id="tour-wave">
-        <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
+      <div className="group rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
+        <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
           <div
             className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
             aria-hidden
@@ -258,19 +257,6 @@ function WaveHero({
                 'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
             }}
           />
-          {/* Decorative gradient layer that fades in on hover — keeps
-              the idle card calm so the page doesn't read as 'every
-              card is shouting' on scroll, then comes alive when the
-              user actually engages with this hero. */}
-          <div className="pointer-events-none absolute inset-0" aria-hidden>
-            <div
-              className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
-              style={{
-                background:
-                  'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
-              }}
-            />
-          </div>
 
           <div className="relative grid gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_auto] lg:gap-10">
             <div className="flex flex-col justify-between gap-6">
@@ -329,7 +315,7 @@ function WaveHero({
               ) : null}
             </div>
 
-            <div className="hidden lg:block">
+            <div className="hidden lg:block transition-transform duration-700 group-hover:scale-105">
               <CoverStack tracks={previewQ.data ?? []} loading={previewQ.isLoading} />
             </div>
           </div>

@@ -91,15 +91,22 @@ function RoomsListInner() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-10">
-      {/* Hero with subtle gradient + animated waveform */}
+      {/* Hero matched to the daily-playlist hover formula on /home —
+          clean idle (no decorative layer at full opacity), on hover
+          the card lifts via border-strong + shadow-md while the
+          accent halo + pill-icon scale 1.05 over 700ms. The Create /
+          Join input + segmented tabs all sit on the relative content
+          layer above the `pointer-events-none` decoration, so they
+          stay fully interactive — same pattern as the wave hero. */}
       <motion.section
         initial={reduce ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: EASE_SPRING }}
-        className="relative overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-8 sm:p-10"
+        className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-8 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-10"
       >
         <div
-          className="pointer-events-none absolute inset-0 opacity-60"
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-90"
+          aria-hidden
           style={{
             background:
               'radial-gradient(80% 60% at 80% 0%, var(--color-accent-glow), transparent 70%), radial-gradient(60% 40% at 0% 100%, color-mix(in oklch, var(--color-accent) 22%, transparent), transparent 70%)',
@@ -107,7 +114,9 @@ function RoomsListInner() {
         />
         <div className="relative">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <Headphones size={14} className="text-[var(--color-accent)]" />
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
+              <Headphones size={14} />
+            </span>
             Совместное прослушивание
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
