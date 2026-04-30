@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, useReducedMotion, AnimatePresence } from 'motion/react';
-import { Sparkles, Check, X, Search, Loader2, User, Music4 } from 'lucide-react';
+import { Sparkles, Check, X, Search, Loader2, Music4 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Reveal } from '@/components/ui/Reveal';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { CoverFallback } from '@/components/ui/CoverFallback';
 import {
   fetchSuggestedSeedArtists,
   searchSeedArtists,
@@ -285,25 +286,18 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
 }
 
 /**
- * Artist avatar with double-layered fallback: if `imageUrl` is missing
- * we never render the <img> at all, and if it's present but fails to
- * load (Tidal CDN miss / 404 / CORS), we swap to the same icon
- * placeholder mid-render. Matches the look of the search results page.
+ * Artist avatar with double-layered fallback: missing or broken Tidal
+ * CDN URLs flip to the shared coloured-initials tile (same look as
+ * ArtistCard, search results, library — so the onboarding picker
+ * doesn't drop a generic User icon while the rest of the app shows
+ * branded fallbacks).
  */
 function ArtistAvatar({ artist }: { artist: SeedArtistCandidate }) {
-  const [errored, setErrored] = useState(false);
-  const showImage = !!artist.imageUrl && !errored;
-  return showImage ? (
-    <img
+  return (
+    <CoverFallback
       src={artist.imageUrl}
-      alt={artist.name}
-      loading="lazy"
-      onError={() => setErrored(true)}
-      className="h-full w-full object-cover"
+      name={artist.name}
+      initialsClassName="text-lg"
     />
-  ) : (
-    <div className="flex h-full w-full items-center justify-center bg-secondary text-muted-foreground">
-      <User size={28} />
-    </div>
   );
 }

@@ -12,6 +12,7 @@ import { useAudioPlayer, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu, MenuItem } from '@/components/ui/PopoverMenu';
 import { Marquee } from '@/components/ui/Marquee';
+import { CoverFallback } from '@/components/ui/CoverFallback';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
@@ -283,22 +284,25 @@ export function Player() {
                 a separate inline link to the artist page so users can jump
                 straight to the artist without going through the 3-dot menu. */}
             <div className="group flex min-w-0 flex-1 items-center gap-3">
-              {currentTrack.coverUrl && (
-                <motion.button
-                  type="button"
-                  onClick={openFullscreen}
-                  aria-label="Открыть плеер"
-                  className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border"
-                  initial={reduce ? false : { scale: 0.8, opacity: 0 }}
-                  animate={reduce ? undefined : { scale: 1, opacity: 1 }}
-                  key={currentTrack.id}
-                >
-                  <img src={currentTrack.coverUrl} alt={currentTrack.title} className="h-full w-full object-cover" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Maximize2 size={14} className="text-white" />
-                  </div>
-                </motion.button>
-              )}
+              <motion.button
+                type="button"
+                onClick={openFullscreen}
+                aria-label="Открыть плеер"
+                className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border"
+                initial={reduce ? false : { scale: 0.8, opacity: 0 }}
+                animate={reduce ? undefined : { scale: 1, opacity: 1 }}
+                key={currentTrack.id}
+              >
+                <CoverFallback
+                  src={currentTrack.coverUrl}
+                  name={currentTrack.title || currentTrack.artist || 'Track'}
+                  alt={currentTrack.title}
+                  initialsClassName="text-[10px]"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Maximize2 size={14} className="text-white" />
+                </div>
+              </motion.button>
               <div className="min-w-0 flex-1">
                 <button
                   type="button"
