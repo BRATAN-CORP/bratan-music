@@ -19,7 +19,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
-import { TiltCard } from '@/components/ui/TiltCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TrackItem } from '@/components/features/TrackItem';
 import { ArtistPicker } from '@/components/features/ArtistPicker';
@@ -174,9 +173,17 @@ function WaveHero({
     }
   };
 
+  // The hero used to be wrapped in a TiltCard for the 3D-on-hover
+  // effect, but that put every interactive control (the two CTAs and
+  // the PreviewStrip below) inside a `transform-style: preserve-3d`
+  // layer that updates rotateX/Y on every pointermove. The constant
+  // micro-rotation under the cursor caused mousedown/mouseup to land
+  // on different positions, eating clicks on the secondary "Поменять
+  // артистов" button. We keep the rich gradient + cover-stack look
+  // without the tilt so taps register reliably across the whole card.
   return (
     <Reveal>
-      <TiltCard intensity={6} hoverScale={1.01} glareStrength={0.35} className="rounded-[var(--radius-2xl)]">
+      <div className="rounded-[var(--radius-2xl)]">
         <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card">
           {/* Decorative animated gradient layer behind the content. The
               actual cover preview sits on the right and uses the user's
@@ -265,7 +272,7 @@ function WaveHero({
             <PreviewStrip tracks={previewQ.data ?? []} loading={previewQ.isLoading} />
           </div>
         </div>
-      </TiltCard>
+      </div>
     </Reveal>
   );
 }

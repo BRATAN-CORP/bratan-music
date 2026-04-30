@@ -4,7 +4,6 @@ import { motion, useReducedMotion, AnimatePresence } from 'motion/react';
 import { Sparkles, Check, X, Search, Loader2, Music4 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Reveal } from '@/components/ui/Reveal';
-import { TiltCard } from '@/components/ui/TiltCard';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import {
   fetchSuggestedSeedArtists,
@@ -110,9 +109,15 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
   const isSearchActive = debounced.length >= 2;
   const showEmpty = isSearchActive && !searching && grid.length === picked.size;
 
+  // We deliberately do NOT wrap this card in TiltCard. The 3D rotation
+  // combined with each artist tile's own hover micro-translation made
+  // hit-testing flaky in Chromium — the upper portion of every tile
+  // would swallow pointer events into the parent transform layer and
+  // only the lower edge of the tile reliably registered taps. A flat
+  // card keeps the buttons receiving every click cleanly.
   return (
     <Reveal>
-      <TiltCard intensity={4} hoverScale={1.005} glareStrength={0.25} className="rounded-[var(--radius-2xl)]">
+      <div className="rounded-[var(--radius-2xl)]">
         <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card">
           {/* Decorative gradient backdrop. Same shape as WaveHero so the
               two cards feel like a pair: a soft accent glow biased to
@@ -196,7 +201,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                         layout
                         initial={reduce ? false : { opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8, scale: 0.94 }}
+                        exit={{ opacity: 0, scale: 0.94 }}
                         transition={{
                           type: 'spring',
                           stiffness: 280,
@@ -205,7 +210,14 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                           // re-orders animate instantly instead of cascading.
                           delay: reduce ? 0 : Math.min(idx * 0.025, 0.3),
                         }}
-                        whileHover={reduce ? undefined : { y: -2, scale: 1.02 }}
+                        // Hover used to translate the whole tile up by 2px,
+                        // which combined with `layout` re-flow shifted the
+                        // hit-box out from under the cursor mid-gesture and
+                        // ate clicks landing near the top edge. We keep the
+                        // visual lift via a soft scale-only nudge that
+                        // preserves the centroid so taps register anywhere
+                        // on the tile.
+                        whileHover={reduce ? undefined : { scale: 1.03 }}
                         whileTap={{ scale: 0.96 }}
                         className={cn(
                           'group relative flex flex-col items-center gap-2.5 rounded-[var(--radius-lg)] border bg-[var(--color-surface-elevated)] p-3 text-center backdrop-blur transition-colors',
@@ -280,7 +292,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
             </div>
           </div>
         </div>
-      </TiltCard>
+      </div>
     </Reveal>
   );
 }
