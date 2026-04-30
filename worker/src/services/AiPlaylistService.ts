@@ -199,7 +199,7 @@ export class AiPlaylistService {
           const r = await tidal.search(q.query, 'tracks', { limit: q.limit });
           return r.tracks ?? [];
         } catch (err) {
-          console.warn('[ai/plan] search failed', q.query, err);
+          console.error('[ai/plan] search failed', q.query, err);
           return [];
         }
       }),
