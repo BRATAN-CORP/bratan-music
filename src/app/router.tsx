@@ -23,6 +23,7 @@ import { TidalPlaylistPage } from '@/app/explore/playlist';
 import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
 import { ProfilePage } from '@/app/profile/page';
+import { AiPlaylistPage } from '@/app/ai/page';
 import { PlaylistPage } from '@/app/playlist/page';
 import { SharedPlaylistPage } from '@/app/shared/page';
 import { TrackPage } from '@/app/track/page';
@@ -142,6 +143,7 @@ const router = createBrowserRouter(
         { path: 'library', element: <LibraryPage /> },
         { path: 'library/uploads', element: <UploadsPage /> },
         { path: 'profile', element: <ProfilePage /> },
+        { path: 'ai', element: <AiPlaylistPage /> },
         { path: 'track/:id', element: <TrackPage /> },
         { path: 'album/:id', element: <AlbumPage /> },
         { path: 'artist/:id', element: <ArtistPage /> },
