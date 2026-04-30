@@ -22,8 +22,15 @@ function getNextFallbackQuality(current: string): TidalQuality | null {
  * Build the stream URL for any track. Upload tracks (id="upload:<uuid>") are
  * served from the worker's R2-backed /uploads/:id/stream endpoint with a
  * ?token= query fallback (the audio element can't send Authorization).
+ *
+ * If the track carries a pre-resolved `streamUrl` (set by the room bridge
+ * to route audio through `/rooms/:id/stream/...`), we use it as-is and
+ * skip the global quality-fallback ladder entirely. The room owns its
+ * own quality decision so guests are listening to the same selection
+ * the host streamed, not whatever the guest's personal preference was.
  */
-async function fetchStreamUrl(track: { id: string; source?: string }, quality: string): Promise<string> {
+async function fetchStreamUrl(track: { id: string; source?: string; streamUrl?: string }, quality: string): Promise<string> {
+  if (track.streamUrl) return track.streamUrl;
   if (track.id.startsWith('upload:') || track.source === 'upload') {
     const rawId = track.id.startsWith('upload:') ? track.id.slice('upload:'.length) : track.id;
     const token = useAuthStore.getState().accessToken ?? '';
@@ -767,7 +774,7 @@ export function useAudioPlayer() {
   /** Load the given track into the active slot and start playback from 0.
    *  Automatically tries the full quality fallback chain before giving up.
    *  If `quality` is provided it overrides the user setting (used for fallback). */
-  const loadTrack = useCallback(async (track: { id: string; source?: string }, quality?: string) => {
+  const loadTrack = useCallback(async (track: { id: string; source?: string; streamUrl?: string }, quality?: string) => {
     const trackId = track.id;
     const b = getBundle();
     console.warn('[audio-debug] loadTrack ENTRY', { trackId, slot: b.active, loadedActive: b.loaded[b.active], loadedInactive: b.loaded[inactiveSlot(b)], pendingRestore: pendingRestoreProgressRef.current, preloaded: preloadedIncomingRef.current });
@@ -836,6 +843,11 @@ export function useAudioPlayer() {
         }
         if (loaded) break;
       }
+      // Pre-resolved (room-bridge) tracks ignore the quality query
+      // string entirely — every iteration of the fallback ladder
+      // would just re-load the same URL. Stop after the first failed
+      // attempt-set so we don't spin on a broken upstream.
+      if (track.streamUrl) break;
       // Try next quality in fallback chain.
       const next = getNextFallbackQuality(effectiveQuality);
       if (!next) break;

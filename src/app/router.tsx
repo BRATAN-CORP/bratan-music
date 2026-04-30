@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { useAutoAuth } from '@/hooks/useAuth';
 import { useSettingsSync } from '@/hooks/useSettingsSync';
+import { useRoomBridge } from '@/hooks/useRoomBridge';
 import { usePlayerStore } from '@/store/player';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileBottomDock } from '@/components/layout/MobileBottomDock';
@@ -89,6 +90,13 @@ function AppLayout() {
   // would mean we under-log plays for users who navigate while a song
   // is still playing.
   usePlayHistoryLogger();
+  // Listening-room bridge: while the user is connected to a room
+  // (any non-null `roomConnection.roomId`), this synchronises the
+  // global `<audio>` engine with the host's authoritative state —
+  // pulling track / position / play-pause from the room and pushing
+  // local control actions back. Mounted at the layout so the bridge
+  // keeps working when the user navigates away from /rooms/:id.
+  useRoomBridge();
   // Single-scroller layout: html/body owns the only vertical scroll. The
   // previous nested `main { overflow-y-auto }` inside `h-dvh + overflow-hidden`
   // shell created a SECOND scrollbar inside `main`, which made `position: fixed`

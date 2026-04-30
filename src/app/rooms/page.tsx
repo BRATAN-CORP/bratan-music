@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
-  Pause, Play, Volume2, VolumeX, Users, LogOut, Copy, Share2, RefreshCw,
-  Radio, AlertTriangle, Search, Trash2, Loader2,
+  Users, LogOut, Copy, Share2,
+  Radio, Search, Trash2, Loader2, Play,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { RoomChat } from '@/components/features/RoomChat';
@@ -15,9 +15,7 @@ import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { useRoomConnectionStore } from '@/store/roomConnection';
-import { useRoomPlayer } from '@/hooks/useRoomPlayer';
 import { useDeleteRoom, useLeaveRoom, useUpdateRoomSettings } from '@/hooks/useRooms';
-import { useSettingsStore } from '@/store/settings';
 import { useSearch } from '@/hooks/useSearch';
 import type { RoomDetail, RoomMember, RoomTrackSnapshot } from '@/types/rooms';
 import type { Track } from '@/types';
@@ -36,24 +34,28 @@ function RoomPageInner() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const me = useAuthStore((s) => s.user);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const reduce = useReducedMotion();
 
-  // Pause the global player while in a room — otherwise we'd be playing
-  // two streams at once and the user wouldn't know which one to obey.
-  // The room has its own <audio> element below.
-  const pauseGlobal = usePlayerStore((s) => s.pause);
-  useEffect(() => {
-    pauseGlobal();
-  }, [pauseGlobal]);
-
-  // Keep the layout-level "ты в комнате" indicator in sync with the
-  // room the user is currently viewing. We set this whenever the room
-  // detail loads, and clear it on unmount so navigating away to /home
-  // doesn't leave a stale badge if leave/delete were already issued.
+  // The bridge owns audio + polling. The page just sets the active
+  // connection so the bridge spins up, and reads the mirrored room
+  // state out of the connection store for member/controller display.
   const setActiveRoom = useRoomConnectionStore((s) => s.setActive);
+  const setHostOnlyControl = useRoomConnectionStore((s) => s.setHostOnlyControl);
   const clearActiveRoom = useRoomConnectionStore((s) => s.clear);
-  useEffect(() => () => clearActiveRoom(), [clearActiveRoom]);
+  const remoteState = useRoomConnectionStore((s) => s.state);
+  const remoteMembers = useRoomConnectionStore((s) => s.members);
+  const hostOnlyControl = useRoomConnectionStore((s) => s.hostOnlyControl);
+  const isLive = useRoomConnectionStore((s) => s.isLive);
+
+  // Global player state — what the bridge has written into /
+  // what the user is currently hearing across the whole app. We
+  // render a read-only "now playing" tile from this; the actual
+  // play / pause / seek controls live in the global Player at the
+  // bottom of the screen.
+  const playerTrack = usePlayerStore((s) => s.currentTrack);
+  const playerProgress = usePlayerStore((s) => s.progress);
+  const playerIsPlaying = usePlayerStore((s) => s.isPlaying);
+  const setTrackLocal = usePlayerStore((s) => s.setTrack);
 
   const initialQuery = useQuery({
     queryKey: ['rooms', 'detail', id],
@@ -76,44 +78,36 @@ function RoomPageInner() {
   });
 
   const initial = initialQuery.data;
-  const player = useRoomPlayer({ roomId: id, initial, audioRef });
   const leaveMut = useLeaveRoom();
   const deleteMut = useDeleteRoom();
   const settingsMut = useUpdateRoomSettings(id);
   const isHost = !!initial && me?.id === initial.hostId;
-  const hostOnlyControl = settingsMut.data?.hostOnlyControl ?? initial?.hostOnlyControl ?? false;
   const canSetTrack = isHost || !hostOnlyControl;
 
-  // Update the global connection badge once we know the room name/code.
+  // Promote the room into the global connection store as soon as we
+  // know its identity. The bridge will pick this up on the next
+  // render and start polling. Note we DO NOT clear on unmount —
+  // the user is still "in" the room when they navigate to /search,
+  // and clearing here would tear down the bridge prematurely. The
+  // explicit Leave / Delete buttons below take care of clearing.
   useEffect(() => {
     if (!initial) return;
-    setActiveRoom({ roomId: initial.id, roomCode: initial.code, roomName: initial.name });
+    setActiveRoom({
+      roomId: initial.id,
+      roomCode: initial.code,
+      roomName: initial.name,
+      hostId: initial.hostId,
+      hostOnlyControl: initial.hostOnlyControl,
+    });
   }, [initial, setActiveRoom]);
 
-  // Force shuffle=false + crossfade=false while inside a room.
-  // The user's personal prefs are saved and restored when they leave.
-  const savedCrossfade = useRef<{ on: boolean; dur: number } | null>(null);
-  const savedShuffle = useRef<boolean | null>(null);
+  // Settings mutation returns the updated detail — mirror its
+  // hostOnlyControl into the connection store so the bridge's
+  // permission gate updates without waiting for the next /state poll.
   useEffect(() => {
-    if (!id) return;
-    const { crossfade, crossfadeDuration, setCrossfade, setCrossfadeDuration } = useSettingsStore.getState();
-    const { shuffle, toggleShuffle } = usePlayerStore.getState();
-    savedCrossfade.current = { on: crossfade, dur: crossfadeDuration };
-    savedShuffle.current = shuffle;
-    if (crossfade) setCrossfade(false);
-    if (crossfadeDuration !== 0) setCrossfadeDuration(0);
-    if (shuffle) toggleShuffle();
-    return () => {
-      if (savedCrossfade.current) {
-        useSettingsStore.getState().setCrossfade(savedCrossfade.current.on);
-        useSettingsStore.getState().setCrossfadeDuration(savedCrossfade.current.dur);
-      }
-      if (savedShuffle.current) {
-        const { shuffle: now } = usePlayerStore.getState();
-        if (!now) usePlayerStore.getState().toggleShuffle();
-      }
-    };
-  }, [id]);
+    if (!settingsMut.data) return;
+    setHostOnlyControl(settingsMut.data.hostOnlyControl);
+  }, [settingsMut.data, setHostOnlyControl]);
 
   const onLeave = async () => {
     if (!id) return;
@@ -129,6 +123,26 @@ function RoomPageInner() {
     navigate('/rooms');
   };
 
+  // The "set track" picker pushes via the GLOBAL player store. The
+  // bridge sees the change and propagates it to the room — same as
+  // hitting play on a track from /search would. This is the
+  // "seamless player" guarantee: any way the user can start audio
+  // anywhere in the app, while in a room it auto-syncs to the room.
+  const onPickTrack = (snap: RoomTrackSnapshot) => {
+    setTrackLocal({
+      id: snap.id,
+      title: snap.title,
+      artist: snap.artist,
+      artistId: snap.artistId ?? undefined,
+      artists: snap.artists,
+      albumId: snap.albumId ?? undefined,
+      coverUrl: snap.coverUrl ?? undefined,
+      coverVideoUrl: snap.coverVideoUrl ?? undefined,
+      duration: snap.duration ?? 0,
+      source: snap.source ?? 'tidal',
+    });
+  };
+
   if (!id || initialQuery.isLoading || !initial) {
     return (
       <div className="flex min-h-[60dvh] items-center justify-center text-sm text-muted-foreground">
@@ -137,19 +151,18 @@ function RoomPageInner() {
     );
   }
 
-  const track = player.state?.track ?? null;
+  const track = remoteState?.track ?? null;
   const duration = track?.duration ?? 0;
-  const positionSec = Math.floor(player.positionMs / 1000);
-  const liveMembers = player.members.filter((m) => m.isLive);
-  const controller = player.state?.controllerId
-    ? player.members.find((m) => m.userId === player.state?.controllerId)
+  const positionSec = playerTrack && track && playerTrack.id === track.id
+    ? playerProgress
+    : (remoteState?.positionMs ?? 0) / 1000;
+  const liveMembers = remoteMembers.filter((m) => m.isLive);
+  const controller = remoteState?.controllerId
+    ? remoteMembers.find((m) => m.userId === remoteState?.controllerId)
     : null;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
-      {/* Hidden audio element driven by useRoomPlayer */}
-      <audio ref={audioRef} preload="auto" crossOrigin="anonymous" playsInline />
-
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
@@ -183,7 +196,10 @@ function RoomPageInner() {
         </div>
       </div>
 
-      {/* Now playing */}
+      {/* Now playing — read-only mirror of the global player. The
+          actual play / pause / volume / seek controls live in the
+          mini-player at the bottom of the screen, so users have
+          one consistent control surface across the whole app. */}
       <motion.section
         initial={reduce ? false : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -202,7 +218,7 @@ function RoomPageInner() {
         <div className="relative grid gap-5 sm:grid-cols-[160px_1fr] sm:gap-6">
           <motion.div
             animate={
-              !player.state?.isPaused && !reduce
+              !remoteState?.isPaused && playerIsPlaying && !reduce
                 ? { scale: [1, 1.015, 1] }
                 : { scale: 1 }
             }
@@ -219,8 +235,16 @@ function RoomPageInner() {
           </motion.div>
 
           <div className="min-w-0">
-            <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
               Сейчас играет
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 normal-case tracking-normal ${
+                isLive
+                  ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                  : 'border border-border bg-secondary text-muted-foreground'
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                {isLive ? 'в эфире' : 'переподключение…'}
+              </span>
             </div>
             <div className="mt-2 truncate text-xl font-semibold tracking-tight sm:text-2xl">
               {track?.title || 'Поставь любой трек, чтобы он заиграл у всех в комнате'}
@@ -229,56 +253,19 @@ function RoomPageInner() {
               {track?.artist || '—'}
             </div>
 
-            <ProgressBar
-              positionMs={player.positionMs}
-              durationSec={duration}
-              onSeek={(target) => player.seek(target)}
-            />
+            <ProgressBar positionSec={positionSec} durationSec={duration} />
 
-            <div className="mt-3 flex items-center gap-3">
-              <Button
-                size="lg"
-                onClick={() => player.togglePlay()}
-                disabled={!track}
-                className="!rounded-full !w-12 !h-12 !p-0"
-                aria-label={player.state?.isPaused ? 'Play' : 'Pause'}
-              >
-                {player.state?.isPaused ? <Play size={18} /> : <Pause size={18} />}
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={player.toggleMute} aria-label="Mute">
-                  {player.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                </Button>
-                <input
-                  type="range"
-                  min={0} max={1} step={0.01}
-                  value={player.muted ? 0 : player.volume}
-                  onChange={(e) => player.setVolume(parseFloat(e.target.value))}
-                  className="h-1 w-24 cursor-pointer accent-[var(--color-accent)]"
-                  aria-label="Volume"
-                />
-              </div>
-              <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                {player.outOfSync && (
-                  <span className="flex items-center gap-1 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-2 py-1 text-yellow-600">
-                    <AlertTriangle size={12} /> синхронизация…
-                  </span>
-                )}
-                <span>{formatTime(positionSec)} / {formatTime(duration)}</span>
-                <Button variant="ghost" size="icon" onClick={player.refresh} aria-label="Refresh">
-                  <RefreshCw size={14} />
-                </Button>
-              </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{formatTime(positionSec)} / {formatTime(duration)}</span>
+              {controller && (
+                <span className="ml-auto">
+                  Последнее действие — <span className="text-foreground">{memberLabel(controller, me?.id)}</span>
+                </span>
+              )}
             </div>
-
-            {controller && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Последнее действие — <span className="text-foreground">{memberLabel(controller, me?.id)}</span>
-              </p>
-            )}
-            {player.error && (
-              <p className="mt-2 text-xs text-destructive">{player.error}</p>
-            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              Управление воспроизведением — в мини-плеере внизу экрана. Что слушаешь ты — то слышат все.
+            </p>
           </div>
         </div>
       </motion.section>
@@ -286,11 +273,11 @@ function RoomPageInner() {
       {/* Members */}
       <section className="mt-8">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          <Users size={14} /> Слушатели · {liveMembers.length} из {player.members.length}
+          <Users size={14} /> Слушатели · {liveMembers.length} из {remoteMembers.length}
         </div>
         <ul className="flex flex-wrap gap-3">
           <AnimatePresence>
-            {player.members.map((m) => (
+            {remoteMembers.map((m) => (
               <motion.li
                 key={m.userId}
                 layout
@@ -341,7 +328,7 @@ function RoomPageInner() {
           <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             <Search size={14} /> Поставить трек
           </div>
-          <RoomTrackPicker onPick={(track) => player.setTrack(track)} />
+          <RoomTrackPicker onPick={onPickTrack} />
         </section>
       ) : (
         <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 px-4 py-6 text-center text-xs text-muted-foreground">
@@ -356,32 +343,21 @@ function RoomPageInner() {
       <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 p-4 text-xs leading-relaxed text-muted-foreground">
         <p className="mb-2 font-medium text-foreground">Как это работает</p>
         <ul className="list-disc space-y-1 pl-4">
-          <li>Любой участник может управлять воспроизведением{hostOnlyControl ? '' : ' и ставить треки'}. Остальные слышат то же самое в один такт.</li>
-          <li>Громкость и mute — у каждого свои. Кроссфейд и шафл здесь отключены, чтобы не было рассинхрона.</li>
-          <li>Загруженные треки и перезаливы воспроизводятся через комнату только пока они активны: после смены трека старая ссылка перестаёт работать.</li>
+          <li>Любой участник может управлять воспроизведением{hostOnlyControl ? '' : ' и ставить треки'} — что у тебя играет, то слышат все.</li>
+          <li>Громкость и mute — у каждого свои в мини-плеере. Кроссфейд и шафл здесь отключены, чтобы не было рассинхрона.</li>
+          <li>Если связь моргнёт — догонит само. Стартовый момент трека хранится у хоста и подтягивается раз в пару секунд.</li>
         </ul>
       </section>
     </div>
   );
 }
 
-function ProgressBar({ positionMs, durationSec, onSeek }: { positionMs: number; durationSec: number; onSeek: (ms: number) => void }) {
-  const ratio = durationSec > 0 ? Math.min(1, positionMs / 1000 / durationSec) : 0;
+function ProgressBar({ positionSec, durationSec }: { positionSec: number; durationSec: number }) {
+  const ratio = durationSec > 0 ? Math.min(1, Math.max(0, positionSec / durationSec)) : 0;
   return (
-    <div
-      className="mt-4 h-1.5 cursor-pointer rounded-full bg-secondary"
-      role="slider"
-      aria-valuemin={0}
-      aria-valuemax={durationSec}
-      aria-valuenow={Math.floor(positionMs / 1000)}
-      onClick={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const pct = (e.clientX - rect.left) / rect.width;
-        onSeek(Math.max(0, Math.min(1, pct)) * durationSec * 1000);
-      }}
-    >
+    <div className="mt-4 h-1.5 rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={durationSec} aria-valuenow={Math.floor(positionSec)}>
       <div
-        className="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-200 ease-linear"
+        className="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-300 ease-linear"
         style={{ width: `${ratio * 100}%` }}
       />
     </div>
@@ -433,7 +409,7 @@ function buildInviteUrl(code: string): string {
 
 function RoomCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
-  const inviteUrl = buildInviteUrl(code);
+  const inviteUrl = useMemo(() => buildInviteUrl(code), [code]);
   const onCopy = async () => {
     try {
       await navigator.clipboard.writeText(inviteUrl);
