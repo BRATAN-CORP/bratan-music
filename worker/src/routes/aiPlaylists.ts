@@ -30,7 +30,7 @@ aiPlaylists.post('/generate', async (c) => {
   const body = await c.req.json<GenerateBody>().catch(() => ({} as GenerateBody));
   const prompt = (body.prompt ?? '').trim();
   if (!prompt) return c.json({ error: 'Промпт обязателен' }, 400);
-  if (prompt.length > 800) return c.json({ error: 'Промпт слишком длинный (максимум 800 символов)' }, 400);
+  if (prompt.length > 200) return c.json({ error: 'Промпт слишком длинный (максимум 200 символов)' }, 400);
 
   try {
     const svc = new AiPlaylistService(c.env);
