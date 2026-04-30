@@ -69,6 +69,9 @@ export interface RoomRow {
   created_at: number;
   updated_at: number;
   last_activity_at: number;
+  /** 0 / 1. When 1, only the host can change the playing track —
+   *  members get 403 from /control on `kind:'track'`. */
+  host_only_control: number;
 }
 
 export interface RoomStateRow {
@@ -119,6 +122,7 @@ export interface RoomDetail {
   hostId: string;
   status: 'active' | 'closed';
   createdAt: number;
+  hostOnlyControl: boolean;
   state: RoomState;
   members: RoomMember[];
   serverNowMs: number;
@@ -185,8 +189,8 @@ export class RoomService {
         await this.env.DB.batch([
           this.env.DB.prepare(
             `INSERT INTO listening_rooms
-             (id, code, host_id, name, status, created_at, updated_at, last_activity_at)
-             VALUES (?, ?, ?, ?, 'active', ?, ?, ?)`
+             (id, code, host_id, name, status, created_at, updated_at, last_activity_at, host_only_control)
+             VALUES (?, ?, ?, ?, 'active', ?, ?, ?, 0)`
           ).bind(id, code, hostId, cleanName, now, now, now),
           this.env.DB.prepare(
             `INSERT INTO listening_room_state
@@ -202,6 +206,7 @@ export class RoomService {
         return {
           id, code, host_id: hostId, name: cleanName, status: 'active',
           created_at: now, updated_at: now, last_activity_at: now,
+          host_only_control: 0,
         };
       } catch (err) {
         // Unique-constraint clash on `code` → regenerate and retry.
@@ -355,6 +360,20 @@ export class RoomService {
     const state = await this.getState(roomId);
     if (!state) throw new Error('Состояние комнаты не найдено');
 
+    // Host-only-control gate: when the host has flipped the toggle,
+    // only they can set a different track. Play/pause/seek stay open
+    // to everyone — the spec is "хост хочет чтобы другие не могли
+    // ПОСТАВИТЬ трек, чтобы только слушать", which is specifically
+    // about track changes, not about pausing the room momentarily.
+    if (action.kind === 'track') {
+      const room = await this.findById(roomId);
+      if (room?.host_only_control === 1 && room.host_id !== userId) {
+        const err = new Error('Только хост может менять трек в этой комнате');
+        (err as { status?: number }).status = 403;
+        throw err;
+      }
+    }
+
     const now = nowMs();
     let track = parseTrackJson(state.track_json);
     let trackId = state.track_id;
@@ -443,6 +462,7 @@ export class RoomService {
       hostId: room.host_id,
       status: room.status,
       createdAt: room.created_at,
+      hostOnlyControl: room.host_only_control === 1,
       state: state ? this.toRoomState(state) : emptyState(),
       members,
       serverNowMs: nowMs(),
@@ -555,6 +575,21 @@ export class RoomService {
       body: r.body,
       createdAtMs: r.created_at_ms,
     }));
+  }
+
+  /**
+   * Toggle the "только хост ставит треки" flag. Throws if the caller
+   * isn't the room host — caller guards against forged userIds via the
+   * usual JWT-gated route.
+   */
+  async setHostOnlyControl(roomId: string, hostId: string, value: boolean): Promise<void> {
+    const room = await this.findById(roomId);
+    if (!room) throw new Error('Комната не найдена');
+    if (room.host_id !== hostId) throw new Error('Только хост может менять настройки');
+    await this.env.DB.prepare(
+      `UPDATE listening_rooms SET host_only_control = ?, updated_at = ? WHERE id = ?`
+    ).bind(value ? 1 : 0, nowSec(), roomId).run();
+    await this.touchRoom(roomId);
   }
 
   /**

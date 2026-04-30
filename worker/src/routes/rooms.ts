@@ -27,6 +27,10 @@ interface ControlBody {
 }
 interface ChatBody { body?: string }
 
+interface SettingsBody {
+  hostOnlyControl?: boolean;
+}
+
 rooms.post('/', async (c) => {
   const userId = c.get('userId');
   const body = await c.req.json<CreateBody>().catch(() => ({} as CreateBody));
@@ -205,7 +209,16 @@ rooms.post('/:id/control', async (c) => {
       return c.json({ error: `Неизвестный kind: ${String(body.kind)}` }, 400);
     }
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : 'Ошибка' }, 500);
+    const message = err instanceof Error ? err.message : 'Ошибка';
+    // RoomService stamps a numeric `status` on errors that should bubble
+    // out as a specific HTTP code (e.g. host-only-control rejection
+    // returns 403 instead of "500 Server Error"). Anything without a
+    // valid status is treated as a generic 500.
+    const stamped = (err as { status?: number } | null | undefined)?.status;
+    if (stamped === 403) return c.json({ error: message }, 403);
+    if (stamped === 400) return c.json({ error: message }, 400);
+    if (stamped === 404) return c.json({ error: message }, 404);
+    return c.json({ error: message }, 500);
   }
   return c.json({ ok: true, state: newState, serverNowMs: Date.now() });
 });
@@ -216,6 +229,30 @@ rooms.post('/:id/leave', async (c) => {
   const svc = new RoomService(c.env);
   await svc.removeMember(id, userId);
   return c.json({ ok: true });
+});
+
+/**
+ * Host-only patch for room toggles. For now there's a single field
+ * (`hostOnlyControl`); we accept the whole body so adding more flags
+ * later doesn't change the URL.
+ */
+rooms.patch('/:id/settings', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const body = await c.req.json<SettingsBody>().catch(() => ({} as SettingsBody));
+  const svc = new RoomService(c.env);
+  const room = await svc.findById(id);
+  if (!room || room.status !== 'active') {
+    return c.json({ error: 'Комната не найдена' }, 404);
+  }
+  if (room.host_id !== userId) {
+    return c.json({ error: 'Менять настройки может только хост' }, 403);
+  }
+  if (typeof body.hostOnlyControl === 'boolean') {
+    await svc.setHostOnlyControl(id, userId, body.hostOnlyControl);
+  }
+  const detail = await svc.detail(await svc.findById(id) as NonNullable<typeof room>);
+  return c.json(detail);
 });
 
 /**
