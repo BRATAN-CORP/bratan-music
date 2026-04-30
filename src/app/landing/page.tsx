@@ -1,6 +1,6 @@
 import {
-  ArrowUpRight, Headphones, Library, Search, Shield, ShieldOff,
-  Sliders, Share2, Replace, Waves, Bolt,
+  ArrowUpRight, Headphones, Library, Search, ShieldOff,
+  Sliders, Share2, Replace, Waves, Bolt, Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
@@ -63,9 +63,10 @@ const features = [
     desc: 'Плейлисты, лайки, очередь, история — твои. Никаких «может тебе понравится» поверх твоей коллекции.',
   },
   {
-    icon: Shield,
-    title: 'Без алгоритма-надсмотрщика',
-    desc: 'Никаких подсунутых рекомендаций и оплаченных треков. Слушаешь то, что выбрал, а не что хотят показать.',
+    icon: Sparkles,
+    title: 'Плейлисты по запросу',
+    desc: 'Опиши настроение или сюжет — ИИ соберёт плейлист из реального каталога. Сохраняешь как свой и слушаешь.',
+    href: '/ai',
   },
   {
     icon: Share2,
@@ -174,8 +175,9 @@ export function LandingPage() {
         </Reveal>
 
         <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map(({ icon: Icon, title, desc }) => (
-            <motion.div key={title} variants={staggerItem}>
+          {features.map((f) => {
+            const Icon = f.icon;
+            const card = (
               <TiltCard intensity={8} className="h-full rounded-[var(--radius-lg)]">
                 <div className="group relative flex h-full flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)]">
                   <div
@@ -193,15 +195,34 @@ export function LandingPage() {
                     <Icon size={16} />
                   </div>
                   <p className="relative text-base font-semibold tracking-tight" style={{ transform: 'translateZ(30px)' }}>
-                    {title}
+                    {f.title}
                   </p>
                   <p className="relative text-sm leading-relaxed text-muted-foreground" style={{ transform: 'translateZ(20px)' }}>
-                    {desc}
+                    {f.desc}
                   </p>
+                  {'href' in f && f.href && (
+                    <span
+                      className="relative mt-1 inline-flex items-center gap-1 text-xs font-medium text-[var(--color-accent)] opacity-0 transition-opacity group-hover:opacity-100"
+                      style={{ transform: 'translateZ(40px)' }}
+                    >
+                      Открыть <ArrowUpRight size={12} />
+                    </span>
+                  )}
                 </div>
               </TiltCard>
-            </motion.div>
-          ))}
+            );
+            return (
+              <motion.div key={f.title} variants={staggerItem}>
+                {'href' in f && f.href ? (
+                  <Link to={f.href} className="block h-full">
+                    {card}
+                  </Link>
+                ) : (
+                  card
+                )}
+              </motion.div>
+            );
+          })}
         </Stagger>
       </section>
 
