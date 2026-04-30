@@ -49,15 +49,43 @@ export function AlbumPage() {
           <p className="text-sm text-muted-foreground">Загрузка...</p>
         ) : album ? (
           <>
-            <div className="mb-10 flex flex-col gap-6 border-b border-border pb-10 sm:flex-row">
+            {/* Hero, mirrored from the artist page: the cover doubles
+                as a blurred ambience layer that bleeds beyond the
+                visible bounds (so the soft blur radius is fully behind
+                the parent's overflow-hidden mask — no ragged feathered
+                edges) plus a soft top-down vignette and accent radial.
+                If there is no cover at all, a soft accent radial keeps
+                the hero from looking flat. */}
+            <div className="relative isolate -mx-4 mb-10 overflow-hidden border-b border-border px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
+              {album.coverUrl ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute -inset-[15%] -z-10 bg-cover bg-center blur-2xl saturate-150 opacity-60"
+                  style={{ backgroundImage: `url(${album.coverUrl})` }}
+                />
+              ) : (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(80%_120%_at_30%_0%,var(--color-accent-glow),transparent_70%)] opacity-40"
+                />
+              )}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/10 via-[var(--color-bg)]/35 to-[var(--color-bg)]"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-25"
+              />
+              <div className="flex flex-col gap-6 sm:flex-row">
               {album.coverUrl ? (
                 <img
                   src={album.coverUrl}
                   alt={album.title}
-                  className="h-48 w-48 rounded-[var(--radius-md)] border border-border object-cover"
+                  className="h-48 w-48 rounded-[var(--radius-md)] border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
                 />
               ) : (
-                <div className="flex h-48 w-48 items-center justify-center rounded-[var(--radius-md)] border border-border bg-secondary">
+                <div className="flex h-48 w-48 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-secondary/60 shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]">
                   <Disc3 size={36} className="text-muted-foreground" />
                 </div>
               )}
@@ -117,6 +145,7 @@ export function AlbumPage() {
                     ariaLabel="Поделиться альбомом"
                   />
                 </div>
+              </div>
               </div>
             </div>
 
