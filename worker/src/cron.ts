@@ -72,5 +72,13 @@ export async function runScheduledJobs(env: Env): Promise<void> {
     console.error('[cron] gc seen', err instanceof Error ? err.message : err);
   }
 
+  try {
+    const { RoomService } = await import('./services/RoomService');
+    const closed = await new RoomService(env).gc();
+    if (closed.closed > 0) console.log('[cron] gc rooms closed=', closed.closed);
+  } catch (err) {
+    console.error('[cron] gc rooms', err instanceof Error ? err.message : err);
+  }
+
   console.log('[cron] done in', Date.now() - start, 'ms,', userIds.length, 'users');
 }
