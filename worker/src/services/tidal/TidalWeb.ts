@@ -1,4 +1,5 @@
 import { TidalAuth } from './TidalAuth';
+import type { Env } from '../../types/env';
 
 const API_BASE = 'https://api.tidal.com/v1';
 
@@ -26,17 +27,55 @@ export interface ResolvedStream {
 
 const QUALITY_LADDER = ['HI_RES_LOSSLESS', 'HI_RES', 'LOSSLESS', 'HIGH', 'LOW'];
 
+// Tidal returns DRM-encrypted manifests for high qualities (FLAC and
+// up) and a plain CDN URL for HIGH/LOW. The actual cutoff between
+// "encrypted" and "playable in a bare <audio>" depends on per-track
+// licensing, so the only way to discover the highest-playable
+// quality is empirical: try the requested quality, decode the
+// manifest, fall through if it's encrypted, repeat.
+//
+// In practice the answer is stable per track (a given Tidal track
+// always exposes the same set of qualities), so caching the highest
+// unencrypted quality the ladder ever resolved to lets every
+// subsequent resolve land in one HTTP round trip instead of up to
+// five. The cache TTL is long because tracks are immutable, but
+// finite so a Tidal-side licensing change eventually re-probes.
+const QUALITY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
+const QUALITY_CACHE_PREFIX = 'tidal-track-quality:';
+
 export class TidalWeb {
-  constructor(private auth: TidalAuth) {}
+  private kv: KVNamespace | null;
+
+  constructor(private auth: TidalAuth, env?: Env) {
+    this.kv = env?.SESSIONS ?? null;
+  }
 
   async getStreamUrl(trackId: string, quality: string = 'HIGH'): Promise<string> {
     const resolved = await this.resolveStream(trackId, quality);
     return resolved.url;
   }
 
+  /**
+   * Resolve the best playable stream for a track. We always cap at the
+   * caller's requested quality but, if KV has previously memoised a
+   * known-good quality for this track, we start the ladder from there
+   * — turning the typical resolve into a single HTTP round trip.
+   * On miss we walk the full ladder and write the answer back.
+   */
   async resolveStream(trackId: string, requestedQuality: string = 'HIGH'): Promise<ResolvedStream> {
-    const startIdx = QUALITY_LADDER.indexOf(requestedQuality.toUpperCase());
-    const ladder = startIdx >= 0 ? QUALITY_LADDER.slice(startIdx) : ['HIGH', 'LOW'];
+    const requestedIdx = QUALITY_LADDER.indexOf(requestedQuality.toUpperCase());
+    const cap = requestedIdx >= 0 ? requestedIdx : QUALITY_LADDER.indexOf('HIGH');
+
+    let startIdx = cap;
+    const cached = await this.readCachedQuality(trackId);
+    if (cached) {
+      const cachedIdx = QUALITY_LADDER.indexOf(cached);
+      // Only honour the cache if it's at-or-below the requested cap;
+      // otherwise we'd silently downgrade the caller.
+      if (cachedIdx >= cap) startIdx = cachedIdx;
+    }
+
+    const ladder = QUALITY_LADDER.slice(startIdx);
     let lastError = '';
 
     for (const quality of ladder) {
@@ -51,6 +90,9 @@ export class TidalWeb {
           lastError = `${quality}: encrypted`;
           continue;
         }
+        // Memoise the working quality so the next call to this track
+        // skips the upper rungs of the ladder.
+        await this.writeCachedQuality(trackId, quality);
         return {
           url: manifest.urls[0],
           quality,
@@ -62,6 +104,31 @@ export class TidalWeb {
       }
     }
     throw new Error(`Не удалось получить поток: ${lastError}`);
+  }
+
+  private async readCachedQuality(trackId: string): Promise<string | null> {
+    if (!this.kv) return null;
+    try {
+      const raw = await this.kv.get(`${QUALITY_CACHE_PREFIX}${trackId}`);
+      if (!raw) return null;
+      const upper = raw.toUpperCase();
+      return QUALITY_LADDER.includes(upper) ? upper : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async writeCachedQuality(trackId: string, quality: string): Promise<void> {
+    if (!this.kv) return;
+    try {
+      await this.kv.put(
+        `${QUALITY_CACHE_PREFIX}${trackId}`,
+        quality.toUpperCase(),
+        { expirationTtl: QUALITY_CACHE_TTL_S },
+      );
+    } catch {
+      /* ignore — cache is best-effort */
+    }
   }
 
   async getPlaybackInfo(trackId: string, quality: string = 'HIGH'): Promise<PlaybackInfo> {

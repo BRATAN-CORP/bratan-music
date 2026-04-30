@@ -362,7 +362,7 @@ export class TidalService implements MusicService {
   constructor(env: Env) {
     const auth = new TidalAuth(env);
     this.api = new TidalApi(auth);
-    this.web = new TidalWeb(auth);
+    this.web = new TidalWeb(auth, env);
   }
 
   async search(
@@ -633,6 +633,15 @@ export class TidalService implements MusicService {
 
   async getStreamUrl(trackId: string, quality?: string): Promise<string> {
     return this.web.getStreamUrl(trackId, quality ?? 'HIGH');
+  }
+
+  /**
+   * Same as `getStreamUrl` but returns the actual quality the ladder
+   * resolved to (e.g. caller asks for HI_RES_LOSSLESS, the track only
+   * has a clear stream at HIGH, returned `quality` reads `HIGH`).
+   */
+  async resolveStream(trackId: string, quality?: string) {
+    return this.web.resolveStream(trackId, quality ?? 'HIGH');
   }
 
   async getDownloadUrl(trackId: string): Promise<string> {
