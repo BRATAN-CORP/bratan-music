@@ -265,6 +265,7 @@ function reloadWithoutCors(slot: Slot) {
   const b = getBundle();
   const audio = b.audios[slot];
   if (corsRetried[slot] || !audio.src) return;
+  console.warn('[audio-debug] reloadWithoutCors firing', { slot, currentTime: audio.currentTime, src: audio.src.slice(0, 80), readyState: audio.readyState, error: audio.error?.code });
   corsRetried[slot] = true;
   // Capture the user's current playback position BEFORE the reload —
   // `audio.load()` rewinds currentTime to 0 unconditionally, so we
@@ -286,11 +287,14 @@ function reloadWithoutCors(slot: Slot) {
       audio.removeEventListener('canplay', onCanPlay);
       if (isFinite(audio.duration) && audio.duration > 0) {
         try {
+          console.warn('[audio-debug] reloadWithoutCors restoring currentTime', { slot, target: restoreTarget });
           audio.currentTime = Math.min(restoreTarget, audio.duration);
         } catch { /* ignore */ }
       }
     };
     audio.addEventListener('canplay', onCanPlay, { once: true });
+  } else {
+    console.warn('[audio-debug] reloadWithoutCors NOT restoring (restoreTarget <= 0.5) — track will play from 0', { slot, restoreTarget });
   }
   safePlay(slot).catch(() => {});
 }
@@ -504,15 +508,30 @@ function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: nu
   const b = getBundle();
   const ctx = b.ctx;
   const gainNode = b.gains[slot];
-  const audio = b.audios[slot];
 
-  // No Web Audio graph (iOS, or graph init failed): we can't ramp the
-  // gain via audio time. RAF would be throttled in hidden tabs, so we
-  // just snap to the target. The user trades a fade for guaranteed
-  // correct volume in the background — much better than the
-  // alternation-between-100%-and-user-volume bug it replaces.
-  if (!ctx || !gainNode) {
-    setSlotGain(slot, toValue);
+  // SAFETY-FIRST: snap the gain to the target value immediately. If
+  // anything below this point fails — ctx suspended in a hidden tab,
+  // graph not initialised on iOS, browser bug — the slot still ends
+  // up at the right level. The fade animation that follows is purely
+  // cosmetic. This is the actual fix for the user-reported "трек
+  // звучит на 100% громкости в фоновой вкладке" bug: PR #196's
+  // attempt to drive the ramp through `linearRampToValueAtTime` did
+  // not survive Chromium silently suspending audio rendering on
+  // hidden tabs (the ctx clock advances but the schedule doesn't
+  // always commit when the page isn't visible), so we no longer
+  // depend on the ramp completing — we depend on `setSlotGain(to)`
+  // having already fired before any of the scheduling primitives
+  // ever get a chance to disagree.
+  setSlotGain(slot, toValue);
+
+  // No Web Audio graph (iOS / `ctxFailed`) → we already wrote
+  // `audio.volume = to` via `setSlotGain` above. Nothing to animate.
+  if (!ctx || !gainNode) return Promise.resolve();
+
+  // Hidden tab → don't even try to animate. RAF is paused, the ctx
+  // clock can be throttled, and the only thing we care about is the
+  // gain landing on `to` (already done by the snap above).
+  if (typeof document !== 'undefined' && document.hidden) {
     return Promise.resolve();
   }
 
@@ -520,25 +539,17 @@ function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: nu
     const now = ctx.currentTime;
     const endAt = now + Math.max(0.001, durationMs / 1000);
     try {
+      // Reset to `from` and ramp back to `to` for the visible
+      // crossfade swell. This rewinds the snap above for the
+      // duration of the ramp, but the schedule is cancelled cleanly
+      // on completion / cancel so the final value is `to` either way.
       gainNode.gain.cancelScheduledValues(now);
       gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, fromValue)), now);
       gainNode.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, toValue)), endAt);
-    } catch { /* ignore — fall through to the timer snap below */ }
-    // Mirror to audio.volume so a bundle that has lost its ctx (rare,
-    // but possible after device sleep) still reaches the right level.
-    // We do it at both endpoints rather than per-frame because RAF is
-    // unreliable in background tabs and the ctx ramp already smooths
-    // the actual audio output.
-    audio.volume = Math.max(0, Math.min(1, toValue));
+    } catch { /* ignore — snap above already wrote the target */ }
 
-    // setTimeout DOES fire in background tabs (clamped to 1 s minimum
-    // in some browsers but never paused entirely the way RAF is), so
-    // the await chain in startCrossfade always completes.
     const timer = window.setTimeout(() => {
       try {
-        // Land exactly on the target so any subsequent reads observe
-        // the final value, not whatever interpolation point we were
-        // at when the ramp ran.
         gainNode.gain.cancelScheduledValues(ctx.currentTime);
         gainNode.gain.setValueAtTime(Math.max(0, Math.min(1, toValue)), ctx.currentTime);
       } catch { /* ignore */ }
@@ -551,10 +562,8 @@ function rampGain(slot: Slot, fromValue: number, toValue: number, durationMs: nu
         window.clearTimeout(timer);
         try {
           const t = ctx.currentTime;
-          // Freeze gain at its current scheduled value so a cancelled
-          // ramp doesn't snap back to fromValue when the schedule is
-          // wiped. We approximate "current value" via the AudioParam's
-          // `.value` read (which reflects the live output).
+          // Freeze at the current scheduled value so a cancelled
+          // ramp doesn't snap back to `fromValue`.
           const v = gainNode.gain.value;
           gainNode.gain.cancelScheduledValues(t);
           gainNode.gain.setValueAtTime(v, t);
@@ -628,6 +637,7 @@ export function useAudioPlayer() {
       const onErr = () => { cleanup(); resolve(false); };
       audio.addEventListener('canplay', onCanPlay, { once: true });
       audio.addEventListener('error', onErr, { once: true });
+      console.warn('[audio-debug] tryLoadSrc setting src + audio.load()', { src: url.slice(0, 80) });
       audio.src = url;
       audio.load();
     });
@@ -639,6 +649,7 @@ export function useAudioPlayer() {
   const loadTrack = useCallback(async (track: { id: string; source?: string }, quality?: string) => {
     const trackId = track.id;
     const b = getBundle();
+    console.warn('[audio-debug] loadTrack ENTRY', { trackId, slot: b.active, loadedActive: b.loaded[b.active], loadedInactive: b.loaded[inactiveSlot(b)], pendingRestore: pendingRestoreProgressRef.current, preloaded: preloadedIncomingRef.current });
     loadingRef.current = trackId;
     let effectiveQuality = quality ?? currentQualityRef.current;
     setError(null);
@@ -785,7 +796,14 @@ export function useAudioPlayer() {
       // Make sure old slot is silent + paused.
       safePause(b.active);
       b.active = newActive;
-      setSlotGain(newActive, 1);
+      // Use the user's CURRENT stored volume, not a hard-coded 1.
+      // The previous `setSlotGain(newActive, 1)` was responsible for
+      // every promoted-slot path being mysteriously loud, including
+      // a tail of the bg-tab volume bug — when the natural-end
+      // crossfade promoted the preloaded slot it landed at gain=1
+      // regardless of the user's slider.
+      const ps = usePlayerStore.getState();
+      setSlotGain(newActive, ps.muted ? 0 : ps.volume);
       setSlotGain(inactiveSlot(b), 0);
       crossfadingRef.current = false;
       b.crossfadingInto = null;
@@ -803,6 +821,7 @@ export function useAudioPlayer() {
     }
 
     const trackChanged = currentTrack.id !== b.loaded[b.active] && currentTrack.id !== loadingRef.current;
+    console.warn('[audio-debug] track-change effect', { newId: currentTrack.id, loadedActive: b.loaded[b.active], loadedInactive: b.loaded[inactiveSlot(b)], active: b.active, loadingRef: loadingRef.current, trackChanged, versionBumped });
     if (trackChanged || versionBumped) {
       // Reset quality fallback to user's chosen quality for the new track.
       currentQualityRef.current = tidalQuality;
@@ -1199,6 +1218,7 @@ export function useAudioPlayer() {
           && realT < 0.5
           && storeProgressNow > 2
         ) {
+          console.warn('[audio-debug] spurious-reset gate triggered — seeking back to storeProgress', { slot, realT, storeProgressNow, duration: audio.duration });
           if (isFinite(audio.duration) && audio.duration > 0) {
             pendingRestoreProgressRef.current = storeProgressNow;
             try {
@@ -1277,6 +1297,7 @@ export function useAudioPlayer() {
         if (!isOwnerSlot()) return;
         const target = pendingRestoreProgressRef.current;
         if (target !== null && isFinite(audio.duration) && audio.duration > 0) {
+          console.warn('[audio-debug] onLoadedMetadata seeking to restore target', { slot, target, duration: audio.duration });
           // Kick off the seek but DON'T clear the ref here — onTimeUpdate
           // clears it only once audio.currentTime actually reaches the
           // target. Browsers can fire timeupdate(0) after the seek call
@@ -1301,6 +1322,7 @@ export function useAudioPlayer() {
       };
       const onError = () => {
         if (!isOwnerSlot()) return;
+        console.warn('[audio-debug] onError fired', { slot, code: audio.error?.code, message: audio.error?.message, currentTime: audio.currentTime, fallbackInProgress: fallbackInProgressRef.current, crossOrigin: audio.crossOrigin, corsRetried: corsRetried[slot] });
         // During loadTrack's internal fallback loop, errors are handled
         // by tryLoadSrc — ignore them here to prevent visual stutter.
         if (fallbackInProgressRef.current) return;
