@@ -604,11 +604,27 @@ function rampGain(
     });
   }
 
-  // GRAPH PATH: drive the ramp through Web Audio's scheduler. Force
-  // `audio.volume` to 1 so the element-level volume doesn't multiply
-  // INTO the gain ramp (Chromium + Safari both scale the source bus
-  // by `audio.volume` even when wired into a `MediaElementAudioSource`).
-  audio.volume = 1;
+  // GRAPH PATH: drive the ramp through Web Audio's scheduler. Park
+  // `audio.volume` at the user's chosen volume so the element-level
+  // multiplier matches the steady-state pre-fade scaling instead of
+  // booting it up to 1 — Chromium + Safari multiply `audio.volume`
+  // INTO the source bus before the `MediaElementAudioSource`, so the
+  // total signal during the fade is `audio.volume * gainRamp`.
+  // Pre-fade total was `userVolume²` (setSlotGain writes `userVolume`
+  // into BOTH `audio.volume` AND `gain.gain`); a previous revision
+  // forced `audio.volume = 1` here, which made the fade-window total
+  // jump to `userVolume * gainRamp` ≈ 1/userVolume × the steady-state
+  // loudness. The user heard "the volume swells up to ~100% during the
+  // fade then snaps back down". Reading the user's *current* volume
+  // from the store (rather than the closure-captured `fromV`/`toV`)
+  // also covers the muted case (fall back to 1 so the source bus
+  // still flows; the gain ramp itself ends at 0 either way) and the
+  // case where the user adjusts the slider mid-fade — the ramp keeps
+  // running but the source-bus scaling tracks the live setting on
+  // each subsequent ramp.
+  const ps = usePlayerStore.getState();
+  const userTarget = ps.muted ? 0 : ps.volume;
+  audio.volume = userTarget > 0 ? userTarget : 1;
 
   // Hidden tab: the audio render thread can be suspended even though
   // the ctx clock advances, so a scheduled ramp may not commit any
