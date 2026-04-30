@@ -25,59 +25,57 @@ import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
  * ("стриминг, в котором решаешь ты").
  */
 
+// 9 tiles → exactly 3×3 on lg, 2-col on sm, 1-col on mobile.
+// No `col-span-2` overrides: those left empty cells in the grid when
+// the math didn't tile (3 spans of 2 + 7 spans of 1 = 13 cells in a
+// 3-col grid → ragged bottom-right corner). Equal-weight tiles read
+// like a feature inventory rather than a marketing manifest, and the
+// hero/sub above already carries the leading anti-censorship pitch.
 const features = [
   {
     icon: Replace,
-    title: 'Подмена зацензуренных треков',
-    desc: 'Вырезанный или приглушённый релиз ложится твоей версией поверх каталога. Бесшовно, lossless, видно только тебе.',
-    span: 'lg:col-span-2',
+    title: 'Поверх цензуры — твоя версия',
+    desc: 'Загружаешь оригинал — он подменяет вырезанный или приглушённый трек прямо в каталоге. Никто, кроме тебя, не видит подмены.',
   },
   {
     icon: Waves,
-    title: 'Моя волна за 60 секунд',
-    desc: 'Назови 1–6 артистов — и поднимется бесконечный поток под твой вкус, который учится с каждой реакцией.',
+    title: 'Своя волна',
+    desc: 'Накидаешь 5 артистов — и плеер не остановится. Лайки и скипы он запоминает, и поток постепенно становится твоим.',
   },
   {
     icon: Headphones,
     title: '24-bit lossless',
-    desc: 'HiFi и Master, когда есть в каталоге. Никаких пережатых mp3 и фейковых «high quality».',
+    desc: 'Когда в каталоге есть мастер — слышишь мастер. Никаких mp3 на 128 и значков «HD» поверх обычного потока.',
   },
   {
     icon: Bolt,
     title: 'Crossfade и gapless',
-    desc: 'Треки сшиваются без щелчка и тишины. Как в студии, не как в плеере.',
+    desc: 'Альбомы играют без чёрной дыры между треками. Следующий подмешиваем сверху — щелчков и пауз нет.',
   },
   {
     icon: Sliders,
-    title: '10-band параметрический EQ',
-    desc: 'Свои пресеты, на любую акустику и наушники. Сохраняем за тобой между устройствами.',
-    span: 'lg:col-span-2',
+    title: '10-band EQ',
+    desc: 'Свои пресеты под наушники, машину, кухню. Один раз настроил — едет за тобой между устройствами.',
   },
   {
     icon: Library,
     title: 'Своя библиотека',
-    desc: 'Плейлисты, лайки, история — твои. Не алгоритм решает, что ты услышишь завтра.',
+    desc: 'Плейлисты, лайки, очередь, история — твои. Никаких «может тебе понравится» поверх твоей коллекции.',
   },
   {
     icon: Shield,
     title: 'Без алгоритма-надсмотрщика',
-    desc: 'Алгоритм не решает за тебя, что слушать. Без рекламы, без подсунутых рекомендаций, без платных регионов.',
+    desc: 'Никаких подсунутых рекомендаций и оплаченных треков. Слушаешь то, что выбрал, а не что хотят показать.',
   },
   {
     icon: Share2,
-    title: 'Плейлисты по ссылке',
-    desc: 'Делишься плейлистом одним URL, без логина — и собеседник слышит то же, что и ты.',
+    title: 'Шер плейлиста ссылкой',
+    desc: 'Кидаешь URL — собеседник открывает и слушает то же. Без логинов, без баннера «установите наше приложение».',
   },
   {
     icon: Search,
-    title: 'Поиск без границ',
-    desc: '100M+ треков, альбомов и артистов в одном поле. Без жанровых стен и платных регионов.',
-    span: 'lg:col-span-2',
-  },
-  {
-    icon: Send,
-    title: 'Вход через Telegram',
-    desc: 'Один тап — и в браузере откроется твоя библиотека. Никаких карт, e-mail и App Store. Оплата только Stars — 99⋆/мес.',
+    title: 'Поиск 100M+ треков',
+    desc: 'Альбомы, артисты и треки в одном поле. Не блокируется по региону и не урезается подпиской.',
   },
 ];
 
@@ -180,8 +178,8 @@ export function LandingPage() {
         </Reveal>
 
         <Stagger className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map(({ icon: Icon, title, desc, span }) => (
-            <motion.div key={title} variants={staggerItem} className={span ?? ''}>
+          {features.map(({ icon: Icon, title, desc }) => (
+            <motion.div key={title} variants={staggerItem}>
               <TiltCard intensity={8} className="h-full rounded-[var(--radius-lg)]">
                 <div className="group relative flex h-full flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)]">
                   <div
