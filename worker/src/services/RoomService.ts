@@ -124,6 +124,26 @@ export interface RoomDetail {
   serverNowMs: number;
 }
 
+export interface RoomMessageRow {
+  id: number;
+  room_id: string;
+  user_id: string;
+  body: string;
+  created_at_ms: number;
+}
+
+export interface RoomMessage {
+  id: number;
+  userId: string;
+  username: string | null;
+  name: string | null;
+  body: string;
+  createdAtMs: number;
+}
+
+const CHAT_MAX_LEN = 1000;
+const CHAT_MIN_INTERVAL_MS = 600;
+
 function nowMs() { return Date.now(); }
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
@@ -427,6 +447,114 @@ export class RoomService {
       members,
       serverNowMs: nowMs(),
     };
+  }
+
+  /**
+   * Append a chat message. Trims and length-clamps the body and
+   * enforces a per-user ~600ms cooldown so a runaway client can't
+   * spam the polling feed. Returns the row joined with the author's
+   * tg_username/tg_name so callers can echo it back without a
+   * follow-up users query.
+   */
+  async appendMessage(
+    roomId: string,
+    userId: string,
+    rawBody: string,
+  ): Promise<RoomMessage> {
+    const body = (rawBody ?? '').trim();
+    if (!body) {
+      const err = new Error('Сообщение не может быть пустым');
+      (err as { status?: number }).status = 400;
+      throw err;
+    }
+    const clipped = body.slice(0, CHAT_MAX_LEN);
+    const last = await this.env.DB.prepare(
+      `SELECT created_at_ms FROM listening_room_messages
+       WHERE room_id = ? AND user_id = ?
+       ORDER BY id DESC LIMIT 1`
+    ).bind(roomId, userId).first<{ created_at_ms: number }>();
+    const now = nowMs();
+    if (last && now - last.created_at_ms < CHAT_MIN_INTERVAL_MS) {
+      const err = new Error('Слишком часто. Подожди секунду.');
+      (err as { status?: number }).status = 429;
+      throw err;
+    }
+    const res = await this.env.DB.prepare(
+      `INSERT INTO listening_room_messages (room_id, user_id, body, created_at_ms)
+       VALUES (?, ?, ?, ?)`
+    ).bind(roomId, userId, clipped, now).run();
+    const id = Number(res.meta?.last_row_id ?? 0);
+    await this.touchRoom(roomId);
+    const author = await this.env.DB.prepare(
+      `SELECT tg_username, tg_name FROM users WHERE id = ?`
+    ).bind(userId).first<{ tg_username: string | null; tg_name: string | null }>();
+    return {
+      id,
+      userId,
+      username: author?.tg_username ?? null,
+      name: author?.tg_name ?? null,
+      body: clipped,
+      createdAtMs: now,
+    };
+  }
+
+  /**
+   * Pull the most recent chat history. Used by the initial render. The
+   * polling endpoint instead uses `listMessagesSince` with a cursor.
+   */
+  async listRecentMessages(roomId: string, limit = 100): Promise<RoomMessage[]> {
+    const cap = Math.min(Math.max(limit, 1), 200);
+    const rows = await this.env.DB.prepare(
+      `SELECT m.id, m.user_id, m.body, m.created_at_ms,
+              u.tg_username, u.tg_name
+       FROM listening_room_messages m
+       INNER JOIN users u ON u.id = m.user_id
+       WHERE m.room_id = ?
+       ORDER BY m.id DESC
+       LIMIT ?`
+    ).bind(roomId, cap).all<{
+      id: number; user_id: string; body: string; created_at_ms: number;
+      tg_username: string | null; tg_name: string | null;
+    }>();
+    // Reverse so callers get ascending order.
+    return (rows.results ?? [])
+      .map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        username: r.tg_username,
+        name: r.tg_name,
+        body: r.body,
+        createdAtMs: r.created_at_ms,
+      }))
+      .reverse();
+  }
+
+  /**
+   * Pull every message strictly newer than `sinceId`. The chat polling
+   * loop calls this every ~2.5s with the highest id it has rendered.
+   */
+  async listMessagesSince(roomId: string, sinceId: number): Promise<RoomMessage[]> {
+    const cursor = Number.isFinite(sinceId) && sinceId > 0 ? Math.floor(sinceId) : 0;
+    const rows = await this.env.DB.prepare(
+      `SELECT m.id, m.user_id, m.body, m.created_at_ms,
+              u.tg_username, u.tg_name
+       FROM listening_room_messages m
+       INNER JOIN users u ON u.id = m.user_id
+       WHERE m.room_id = ? AND m.id > ?
+       ORDER BY m.id ASC
+       LIMIT 200`
+    ).bind(roomId, cursor).all<{
+      id: number; user_id: string; body: string; created_at_ms: number;
+      tg_username: string | null; tg_name: string | null;
+    }>();
+    return (rows.results ?? []).map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      username: r.tg_username,
+      name: r.tg_name,
+      body: r.body,
+      createdAtMs: r.created_at_ms,
+    }));
   }
 
   /**

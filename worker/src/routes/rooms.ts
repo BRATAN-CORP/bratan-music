@@ -25,6 +25,7 @@ interface ControlBody {
   isPaused?: boolean;
   track?: RoomTrackSnapshot;
 }
+interface ChatBody { body?: string }
 
 rooms.post('/', async (c) => {
   const userId = c.get('userId');
@@ -115,6 +116,54 @@ rooms.post('/:id/heartbeat', async (c) => {
   if (!member) return c.json({ error: 'Нет доступа' }, 403);
   await svc.heartbeat(id, userId);
   return c.json({ ok: true, serverNowMs: Date.now() });
+});
+
+/**
+ * Initial chat snapshot (most recent ~100 messages, ascending). With
+ * `?since=<id>` the endpoint becomes the polling cursor — returns only
+ * messages strictly newer than the supplied id.
+ */
+rooms.get('/:id/chat', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const svc = new RoomService(c.env);
+  const member = await svc.isMember(id, userId);
+  if (!member) return c.json({ error: 'Нет доступа' }, 403);
+  const since = parseInt(c.req.query('since') ?? '', 10);
+  if (Number.isFinite(since) && since >= 0) {
+    const messages = await svc.listMessagesSince(id, since);
+    return c.json({ messages, serverNowMs: Date.now() });
+  }
+  const messages = await svc.listRecentMessages(id);
+  return c.json({ messages, serverNowMs: Date.now() });
+});
+
+/**
+ * Append a chat message. Length-clamped + cooldown-rate-limited inside
+ * the service. Returns the created row so the sender can echo it
+ * optimistically without a follow-up poll.
+ */
+rooms.post('/:id/chat', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const svc = new RoomService(c.env);
+  const room = await svc.findById(id);
+  if (!room || room.status !== 'active') {
+    return c.json({ error: 'Комната не найдена' }, 404);
+  }
+  const member = await svc.isMember(id, userId);
+  if (!member) return c.json({ error: 'Нет доступа' }, 403);
+  const body = await c.req.json<ChatBody>().catch(() => ({} as ChatBody));
+  try {
+    const message = await svc.appendMessage(id, userId, body.body ?? '');
+    return c.json({ message, serverNowMs: Date.now() });
+  } catch (err) {
+    const stamped = (err as { status?: number } | null | undefined)?.status;
+    const text = err instanceof Error ? err.message : 'Ошибка';
+    if (stamped === 400) return c.json({ error: text }, 400);
+    if (stamped === 429) return c.json({ error: text }, 429);
+    return c.json({ error: text }, 500);
+  }
 });
 
 rooms.post('/:id/control', async (c) => {

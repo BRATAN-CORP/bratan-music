@@ -66,3 +66,17 @@ export interface RoomStatePoll {
   members?: RoomMember[];
   serverNowMs: number;
 }
+
+export interface RoomMessage {
+  id: number;
+  userId: string;
+  username: string | null;
+  name: string | null;
+  body: string;
+  createdAtMs: number;
+}
+
+export interface RoomChatPoll {
+  messages: RoomMessage[];
+  serverNowMs: number;
+}
