@@ -9,6 +9,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CoverFallback } from '@/components/ui/CoverFallback';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
@@ -280,7 +281,9 @@ function ProgressBar({ positionMs, durationSec, onSeek }: { positionMs: number; 
 }
 
 function MemberChip({ member, isMe }: { member: RoomMember; isMe: boolean }) {
-  const label = (member.username && '@' + member.username) || member.name || 'аноним';
+  // Display label leans on `name` first per the unified UX spec — username
+  // is only shown when there's no real display name.
+  const label = member.name?.trim() || (member.username && '@' + member.username) || 'аноним';
   return (
     <div
       className={`flex items-center gap-2 rounded-full border bg-background pl-1 pr-3 py-1 text-xs transition-opacity ${
@@ -288,12 +291,14 @@ function MemberChip({ member, isMe }: { member: RoomMember; isMe: boolean }) {
       }`}
       title={member.isLive ? 'Сейчас на связи' : 'Был в комнате'}
     >
-      <div className="relative h-7 w-7 overflow-hidden rounded-full">
-        <CoverFallback src={null} name={label} className="rounded-full" initialsClassName="text-xs" />
-        {member.isLive && (
-          <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-background bg-emerald-500" />
-        )}
-      </div>
+      <UserAvatar
+        name={member.name}
+        username={member.username}
+        id={member.userId}
+        online={member.isLive}
+        className="h-7 w-7 rounded-full"
+        initialsClassName="text-xs"
+      />
       <span className="truncate font-medium">
         {label}{isMe ? ' · ты' : ''}
       </span>
@@ -412,7 +417,7 @@ function trackToSnapshot(t: Track): RoomTrackSnapshot {
 
 function memberLabel(m: RoomMember, meId?: string): string {
   if (m.userId === meId) return 'ты';
-  return (m.username && '@' + m.username) || m.name || 'аноним';
+  return m.name?.trim() || (m.username && '@' + m.username) || 'аноним';
 }
 
 function formatTime(seconds: number): string {
