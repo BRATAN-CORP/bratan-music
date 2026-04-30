@@ -1,7 +1,9 @@
 # Quality discovery without fallback — design spec
 
 > **Status:** Planning. Not implemented yet.
-> **Owner:** TBA.
+> **Scope:** Replace the quality-fallback ladder inside
+> `TidalWeb.resolveStream` with a single discovery call. Nothing else
+> changes.
 > **Audience:** the next agent / engineer who picks this up.
 
 ---
@@ -10,30 +12,31 @@
 
 Today, picking the right Tidal stream quality for a track is a *probe*:
 
-1. Client requests `GET /tracks/:id/stream?quality=HI_RES_LOSSLESS`.
-2. Worker calls Tidal `getStreamUrl` for `HI_RES_LOSSLESS`.
-3. If Tidal answers `404 / 403 / "not available at this quality"`, worker
-   walks down the ladder — `LOSSLESS` → `HIGH` → `LOW` — until something
-   succeeds, then hands the URL back.
+1. Client asks for `quality=HI_RES_LOSSLESS`.
+2. Worker calls `playbackinfopostpaywall` for that quality.
+3. If Tidal returns no URLs, returns `encrypted`, or 4xx's, the worker
+   walks down the ladder — `LOSSLESS` → `HIGH` → `LOW` — calling
+   `playbackinfopostpaywall` once per rung until something succeeds,
+   then hands the URL back.
 
-That ladder traversal is a **probe**: each rung is one round trip to
-Tidal. On a cold cache (a track the user has never streamed before in
-this account) the worker does up to 4 round trips before it can answer
-the client. The user sees this as the spinner sitting longer than it
-should and, occasionally, an audible delay between clicking the track
-and hearing audio.
+That ladder is up to **4 round trips to Tidal** on the first listen of
+a track. Today this is partly masked by a 30-day KV cache that
+remembers "highest quality that worked for this trackId" so the next
+listener skips the upper rungs — but:
 
-The current code masks this with a 30-day KV cache of "highest quality
-that worked for this trackId", but the first listen is still slow, and
-when Tidal flips a track between qualities (which they do — masters
-get re-encoded, region availability changes) the cache poisons the
-result for 30 days.
+- the **first** listener always pays.
+- when Tidal flips a track between qualities (re-encoded masters,
+  region availability changes), the cache poisons the answer for
+  30 days.
 
-We want the worker to **answer in one round trip**: ask Tidal "what
-qualities does this track have?", get the full list, and return the
-highest one ≤ user's preferred ceiling.
+We want exactly one round trip *for discovery*, then the existing
+single-shot resolve. Simple.
 
-The user found the right primitive:
+---
+
+## 2. The primitive
+
+Tidal exposes the entire quality matrix for a track in one call:
 
 ```http
 GET https://openapi.tidal.com/v2/trackManifests/:id?
@@ -45,7 +48,7 @@ GET https://openapi.tidal.com/v2/trackManifests/:id?
 Authorization: Bearer <token>
 ```
 
-Response body (relevant excerpt):
+Response (relevant fields):
 
 ```json
 {
@@ -54,465 +57,266 @@ Response body (relevant excerpt):
     "type": "trackManifests",
     "attributes": {
       "trackPresentation": "FULL",
-      "uri": "data:application/dash+xml;base64,...",
       "formats": ["FLAC"],
-      "drmData": { "drmSystem": "WIDEVINE", ... },
-      "albumAudioNormalizationData": { ... },
-      "trackAudioNormalizationData": { ... }
+      "uri": "data:application/dash+xml;base64,...",
+      "drmData": { "drmSystem": "WIDEVINE", ... }
     }
   }
 }
 ```
 
-The `formats` array tells us which audio codecs Tidal has for this
-track. The base64-decoded `uri` is a DASH MPD that enumerates each
-representation (codec, sample rate, bit depth, bandwidth) and the
-segment URLs.
+The `formats` array is the answer. For this track, only `FLAC` is
+available. If we'd asked for `FLAC_HIRES` we'd get told "not
+available" without consuming a `playbackinfopostpaywall` call.
 
-That's the full picture in one call.
-
----
-
-## 2. The catch
-
-`trackManifests` returns a **DASH manifest** (or HLS, depending on
-`manifestType`), not a single FLAC/M4A URL. DASH means:
-
-- The track is split into ~4 second `.mp4` segments served from
-  CloudFront under signed URLs that expire ~1 hour after issue.
-- Browsers cannot play DASH natively from `<audio>`. The decode path
-  has to go through Media Source Extensions (MSE) with a
-  segment-fetching scheduler in JS.
-- DRM (Widevine `cbcs`) is wired in at the `ContentProtection` element
-  level, even for FLAC. Browsers happen to accept FLAC-in-DASH without
-  Widevine sometimes (because the Widevine block is lazy-evaluated), but
-  it is not guaranteed and breaks on Safari.
-
-So we cannot just call `trackManifests`, parse the URL out, and hand
-it to `<audio>.src` like we do today. **Two architectural paths exist;
-we have to pick one.**
+We don't need the `uri` (the base64 DASH MPD) for playback — that's
+for Tidal's own DASH player. We just need the `formats` list.
 
 ---
 
-## 3. Two paths
+## 3. The plan
 
-### Path A — DASH on the client (`hls.js`/`shaka-player`)
+Two small changes, no client code touched.
 
-The client takes the responsibility of being a DASH/HLS player:
+### 3.1 New: discover qualities
 
-```
-Client                                      Worker                  Tidal
-──────                                      ──────                  ─────
-GET /tracks/:id/manifest                  ─►
-                                            GET /v2/trackManifests ─►
-                                            ◄─ {formats, uri (b64)}
-                                            decode b64
-                                            extract representation list
-                                          ◄─ { quality, mpd, codec, bitrate }
-new Shaka(audioEl).load(mpd)
-   ├─ fetch /tracks/audio?url=<segment_1> ─► proxy ──► CloudFront
-   ├─ fetch /tracks/audio?url=<segment_2> ─► proxy ──► CloudFront
-   └─ ...                                   ...
-```
-
-**Pros**
-
-- Worker does one round trip per track. Quality discovery is
-  literally "read the `formats` array".
-- Adaptive bitrate is "free" — Shaka picks the best representation
-  based on bandwidth.
-- No re-encoding cost on the worker.
-
-**Cons**
-
-- New big dep on the client. Shaka is ~150 KB gzipped. The current
-  bundle is already 233 KB gzipped — that's a +60% bundle size hit
-  unless we lazy-load (which we should).
-- DRM. FLAC tracks ship with a Widevine `ContentProtection` block.
-  In practice the browser will play unencrypted FLAC-in-DASH without
-  asking for keys, but **only if** we strip the `<ContentProtection>`
-  elements from the MPD before handing it to Shaka. That's a fragile
-  hack — Tidal could start actually encrypting FLAC any week.
-- Safari compatibility is poor. Native HLS is fine but DASH requires
-  Shaka, and Shaka on Safari requires native MSE which iOS Safari only
-  exposes inside `<video>` (not `<audio>`). We'd have to render a
-  hidden `<video>` for audio playback on iOS, which collides with
-  the existing `useAudioPlayer` graph routing through `<audio>` +
-  WebAudio.
-- HLS+CBCS + Widevine combination is a minefield. We have to verify
-  per-region availability — Tidal may serve a non-DRM AAC track for
-  one region and DRM-FLAC for another.
-
-### Path B — Worker remuxes DASH segments into a single stream
-
-The worker becomes a smart proxy that hides DASH from the client:
-
-```
-Client                                      Worker                       Tidal
-──────                                      ──────                       ─────
-GET /tracks/:id/stream?quality=…          ─►
-                                            GET /v2/trackManifests     ─►
-                                            ◄─ {formats, uri (b64)}
-                                            parse MPD
-                                            pick representation
-                                            for each segment:
-                                              fetch CloudFront seg     ─►
-                                              ◄─ raw bytes
-                                              concat / remux
-                                          ◄─ Content-Type: audio/flac
-                                              Content-Length: <total>
-                                              Accept-Ranges: bytes
-                                              <body: full FLAC/M4A>
-audio.src = url; audio.play()
-```
-
-The worker either:
-
-- **B1.** Concats raw segments and emits a single `audio/mp4` (since
-  DASH segments already are `.mp4` boxes — strip the `moof` and append
-  `mdat` payloads, fix the `mvhd` duration, ship). This is the
-  "fragmented MP4 → single MP4" remux. Crucially, **no decode/encode**
-  — bytes are just rewrapped. CPU cost is bounded.
-
-- **B2.** Decodes segments and re-encodes to a single FLAC/MP3. Far
-  more CPU. We do not want this on a worker.
-
-Always pick B1.
-
-**Pros**
-
-- Client stays oblivious. Plain `<audio>.src = url`. No new deps.
-- Existing CORS-proxy + Range-request handling in `/tracks/audio`
-  applies as-is.
-- DRM problem deferred — if Tidal returns a DRM-only representation,
-  the worker just doesn't pick it (or returns an explicit "not playable
-  without DRM" error, same UX as a 402).
-- iOS Safari works without changes.
-- Quality discovery happens once: the worker reads `formats` and the
-  decoded MPD, and the response shape can include
-  `availableQualities: ["FLAC_HIRES", "FLAC", "AACLC"]` so the UI can
-  show "available at" labels without further round trips.
-
-**Cons**
-
-- Worker has to parse DASH MPD XML. Cloudflare Workers don't ship a
-  DOM parser; we need a tiny streaming parser (e.g.
-  [`fast-xml-parser`](https://www.npmjs.com/package/fast-xml-parser),
-  ~15 KB). That's fine.
-- Worker has to fetch all segments before it can stream. Two options:
-  - **B1a.** Pre-fetch all → write into a single ReadableStream → ship.
-    Latency: ~track length / N \* RTT. For a 4-min track at 4 s
-    segments = 60 segments \* ~50 ms = 3 s of upfront delay. Bad.
-  - **B1b.** Streaming concat: open the response stream immediately,
-    emit each segment as soon as we have it, in order. The `<audio>`
-    element starts decoding as bytes arrive. This is what the existing
-    `/tracks/audio` proxy already does for direct CloudFront URLs —
-    we just have to adapt it to walk the segment list.
-- Range requests. `<audio>` issues `Range: bytes=0-` on initial probe
-  and follow-up Ranges for seeks. Stitching ranges across segment
-  boundaries is non-trivial. Two simplifications:
-  - For initial playback, ignore Range and stream the full file.
-    Browsers are happy as long as `Content-Length` is reported.
-  - For seek, look up which segment covers the target time (the MPD
-    has a `SegmentTimeline` with per-segment `t` / `d` so we know
-    exactly), skip earlier segments, start streaming from there. Fix
-    up the Range response headers so the browser believes it's
-    getting the requested byte range.
-- We have to decode the base64 MPD on every stream request unless we
-  cache it. Caching the parsed MPD by `(trackId, quality)` for ~1
-  hour (Tidal segment URLs expire on roughly that schedule) is fine.
-
----
-
-## 4. Recommendation
-
-**Implement Path B1b (streaming-remux on the worker) for now.** It's
-the smaller blast radius:
-
-- One service file change on the worker. No client changes for
-  playback. UI gets a new endpoint to call for "what qualities does
-  this track have" (read from the same trackManifests response).
-- iOS / Safari work out of the box.
-- DRM tracks are quietly skipped, same UX as today's "track not
-  available".
-
-Reserve Path A for the future if/when:
-
-- Adaptive bitrate becomes a feature ask (currently the user has a
-  single setting in Profile and we honour it).
-- Tidal flips most of the catalog to DRM-required and the worker
-  remux can no longer get clean segments.
-
----
-
-## 5. Concrete implementation plan (Path B1b)
-
-### 5.1 Worker: new manifest service
-
-`worker/src/services/tidal/TidalManifestService.ts`
+`worker/src/services/tidal/TidalWeb.ts` (or a sibling file):
 
 ```ts
-import { TidalService } from './TidalService';
+const FORMAT_TO_QUALITY: Record<string, string> = {
+  // openapi.tidal.com format names → our QUALITY_LADDER values.
+  FLAC_HIRES: 'HI_RES_LOSSLESS',
+  FLAC:       'LOSSLESS',
+  AACLC:      'HIGH',
+  HEAACV1:    'LOW',
+};
 
-export interface TrackQuality {
-  /** Tidal quality name: 'FLAC_HIRES' | 'FLAC' | 'AACLC' | 'HEAACV1'. */
-  name: string;
-  codec: string;            // 'flac', 'mp4a.40.2', etc.
-  bitrate: number;          // bps
-  sampleRate: number;
-  bitDepth?: number;        // FLAC only
-  drmRequired: boolean;
+const DISCOVERY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days, matches today.
+const DISCOVERY_CACHE_PREFIX = 'tidal-track-formats:';
+
+interface DiscoveredQualities {
+  /** Subset of QUALITY_LADDER, sorted high → low. */
+  qualities: string[];
 }
 
-export interface TrackManifest {
-  trackId: string;
-  qualities: TrackQuality[];
-  /** `data:application/dash+xml;base64,…` decoded into raw XML. */
-  mpdXml: string;
-  /** Cache TTL hint — mirror Tidal's segment-URL expiry. */
-  ttlSeconds: number;
-}
+async function discoverQualities(
+  trackId: string,
+  auth: TidalAuth,
+  kv: KVNamespace | null,
+): Promise<DiscoveredQualities> {
+  if (kv) {
+    const cached = await kv.get(`${DISCOVERY_CACHE_PREFIX}${trackId}`, 'json');
+    if (cached) return cached as DiscoveredQualities;
+  }
 
-export class TidalManifestService {
-  constructor(private env: Env) {}
+  const url = new URL(`https://openapi.tidal.com/v2/trackManifests/${trackId}`);
+  url.searchParams.set('adaptive', 'false');
+  url.searchParams.set('manifestType', 'MPEG_DASH');
+  url.searchParams.set('uriScheme', 'DATA');
+  url.searchParams.set('usage', 'PLAYBACK');
+  for (const f of ['HEAACV1', 'AACLC', 'FLAC', 'FLAC_HIRES']) {
+    url.searchParams.append('formats', f);
+  }
 
-  async fetchManifest(trackId: string): Promise<TrackManifest> {
-    // 1. Try KV cache.
-    const cached = await this.env.KV.get(`manifest:${trackId}`, 'json');
-    if (cached && cached.expiresAt > Date.now()) return cached.manifest;
+  const token = await auth.getAccessToken();
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    // Don't fail loudly — fall back to "trust the requested quality"
+    // so worst case we behave exactly like today's code does.
+    return { qualities: [] };
+  }
+  const json = await res.json<TrackManifestsResponse>();
+  const formats: string[] = json.data?.attributes?.formats ?? [];
 
-    // 2. Hit Tidal trackManifests with all four formats. We pass
-    //    every format every time — Tidal returns only the ones the
-    //    track actually has, so this is the cheapest way to get the
-    //    full catalogue in one call.
-    const tidal = new TidalService(this.env);
-    const token = await tidal.getServiceToken(); // existing helper
-    const url = new URL(
-      `https://openapi.tidal.com/v2/trackManifests/${trackId}`,
+  // Drop DRM-only formats. `drmData` non-null means widevine; for our
+  // purposes that quality is unplayable on a plain `<audio>` tag, so
+  // we treat it as unavailable. (If Tidal ever flips a track entirely
+  // to DRM-only, qualities will be empty and we'll fall back to the
+  // legacy ladder — see step 3.2.)
+  const drm = !!json.data?.attributes?.drmData;
+  const usable = drm ? [] : formats;
+
+  const qualities = usable
+    .map((f) => FORMAT_TO_QUALITY[f])
+    .filter((q): q is string => !!q)
+    .sort((a, b) => QUALITY_LADDER.indexOf(a) - QUALITY_LADDER.indexOf(b));
+
+  const out: DiscoveredQualities = { qualities };
+  if (kv) {
+    await kv.put(
+      `${DISCOVERY_CACHE_PREFIX}${trackId}`,
+      JSON.stringify(out),
+      { expirationTtl: DISCOVERY_CACHE_TTL_S },
     );
-    url.searchParams.set('adaptive', 'false');
-    url.searchParams.set('manifestType', 'MPEG_DASH');
-    url.searchParams.set('uriScheme', 'DATA');
-    url.searchParams.set('usage', 'PLAYBACK');
-    for (const f of ['HEAACV1', 'AACLC', 'FLAC', 'FLAC_HIRES']) {
-      url.searchParams.append('formats', f);
-    }
-
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      throw new Error(`trackManifests ${res.status}`);
-    }
-    const json = await res.json();
-    const attrs = json.data.attributes;
-
-    // 3. Decode base64 MPD.
-    const dataUri = attrs.uri as string; // 'data:application/dash+xml;base64,…'
-    const b64 = dataUri.split('base64,')[1];
-    const mpdXml = atob(b64);
-
-    // 4. Parse representations from the MPD.
-    const qualities = parseQualities(mpdXml);
-
-    const manifest: TrackManifest = {
-      trackId,
-      qualities,
-      mpdXml,
-      ttlSeconds: 3300, // 55 min — safely under the 1 h CloudFront TTL.
-    };
-    await this.env.KV.put(
-      `manifest:${trackId}`,
-      JSON.stringify({
-        manifest,
-        expiresAt: Date.now() + manifest.ttlSeconds * 1000,
-      }),
-      { expirationTtl: manifest.ttlSeconds },
-    );
-    return manifest;
   }
+  return out;
 }
 ```
 
-`parseQualities(mpdXml)` reads `<Representation>` nodes via
-`fast-xml-parser`, extracts `codecs` / `bandwidth` / `audioSamplingRate`
-/ optional bit-depth, and flips `drmRequired` true if any
-`<ContentProtection>` is present on that representation's parent
-`<AdaptationSet>` (excluding the `mp4protection:2011` placeholder which
-Tidal sets even on unencrypted tracks — match by `schemeIdUri` to the
-`urn:uuid:edef8ba9-…` Widevine UUID specifically).
-
-### 5.2 Worker: new stream-remux route
-
-`worker/src/routes/tracks.ts` gains:
+### 3.2 Change: `resolveStream` uses discovery, no ladder
 
 ```ts
-// GET /tracks/:id/manifest → JSON describing all qualities. UI uses
-// this to render quality chips, room-host pre-checks, etc.
-tracks.get('/:id/manifest', async (c) => {
-  const id = c.req.param('id');
-  const svc = new TidalManifestService(c.env);
-  try {
-    const m = await svc.fetchManifest(id);
-    return c.json({
-      trackId: id,
-      qualities: m.qualities.filter((q) => !q.drmRequired),
-    });
-  } catch (err) {
-    return c.json({ error: errMessage(err) }, 502);
-  }
-});
+async resolveStream(
+  trackId: string,
+  requestedQuality: string = 'HIGH',
+): Promise<ResolvedStream> {
+  const requestedIdx = QUALITY_LADDER.indexOf(requestedQuality.toUpperCase());
+  const cap = requestedIdx >= 0 ? requestedIdx : QUALITY_LADDER.indexOf('HIGH');
 
-// GET /tracks/:id/stream-v2?quality=FLAC → audio/mp4 streaming response.
-// Same shape as today's /tracks/:id/stream but no quality fallback ladder.
-tracks.get('/:id/stream-v2', async (c) => {
-  const id = c.req.param('id');
-  const requested = (c.req.query('quality') ?? 'LOSSLESS').toUpperCase();
-  const svc = new TidalManifestService(c.env);
-  const m = await svc.fetchManifest(id);
+  // 1. Discover what the track actually has. One round trip on a
+  //    cold cache, zero round trips on a warm one.
+  const { qualities } = await discoverQualities(trackId, this.auth, this.kv);
 
-  // Pick the representation closest to requested without going over.
-  const rep = pickRepresentation(m.qualities, requested);
-  if (!rep) return c.json({ error: 'Не доступно' }, 404);
-
-  return streamRemux(c.env, m.mpdXml, rep, c.req.header('Range'));
-});
-```
-
-`streamRemux` walks the MPD's `<SegmentTemplate initialization=… media=… startNumber=…>` block, fetches the init segment + each media segment in order, and emits a `ReadableStream` to the client:
-
-```ts
-async function streamRemux(
-  env: Env,
-  mpdXml: string,
-  rep: Representation,
-  rangeHeader: string | undefined,
-): Promise<Response> {
-  const segments = enumerateSegments(mpdXml, rep);
-  // segments = [initUrl, mediaUrl_1, mediaUrl_2, …]
-
-  const totalBytes = segments.reduce((acc, s) => acc + s.expectedBytes, 0);
-  const startSeg = findStartSegment(segments, rangeHeader);
-  // For the first cut, ignore Range and stream from segment 0.
-
-  const { readable, writable } = new TransformStream();
-  (async () => {
-    const writer = writable.getWriter();
-    try {
-      for (let i = startSeg; i < segments.length; i++) {
-        const r = await fetch(segments[i].url);
-        if (!r.body) throw new Error(`segment ${i} empty`);
-        const reader = r.body.getReader();
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          await writer.write(value);
-        }
-      }
-    } catch (err) {
-      console.error('[stream-v2] remux failed', err);
-    } finally {
-      await writer.close();
+  // 2. Pick the highest available quality at-or-below the cap.
+  let target: string | null = null;
+  for (const q of qualities) {
+    const idx = QUALITY_LADDER.indexOf(q);
+    if (idx >= cap) {
+      target = q;
+      break;
     }
-  })();
+  }
 
-  return new Response(readable, {
-    status: 200,
-    headers: {
-      'Content-Type': mimeFor(rep.codec), // 'audio/mp4' or 'audio/flac'
-      'Accept-Ranges': 'bytes',
-      'Cache-Control': 'no-store',
-    },
-  });
+  // 3. Cold-fallback: if discovery returned nothing (5xx, unknown
+  //    response shape, DRM-only track), fall back to the old ladder
+  //    *exactly as today*. This keeps the change a strict
+  //    superset — discovery is an optimisation, never a regression.
+  if (!target) {
+    return this.legacyResolveStream(trackId, requestedQuality);
+  }
+
+  // 4. Single-shot playbackinfo for the picked quality.
+  const info = await this.getPlaybackInfo(trackId, target);
+  const manifest = this.decodeManifest(info.manifest, info.manifestMimeType);
+  if (!manifest.urls.length) {
+    return this.legacyResolveStream(trackId, requestedQuality);
+  }
+  if (manifest.encryptionType && manifest.encryptionType.toUpperCase() !== 'NONE') {
+    return this.legacyResolveStream(trackId, requestedQuality);
+  }
+
+  return {
+    url: manifest.urls[0],
+    quality: target,
+    codec: manifest.codecs,
+    mimeType: manifest.mimeType,
+  };
+}
+
+/**
+ * The current ladder-walking implementation, renamed. Stays in the
+ * file as a safety net: if `trackManifests` ever lies to us about
+ * what's playable (e.g. lists FLAC but `playbackinfopostpaywall`
+ * answers `encrypted` for that quality), we fall through here and
+ * behave exactly like today.
+ */
+private async legacyResolveStream(
+  trackId: string,
+  requestedQuality: string,
+): Promise<ResolvedStream> {
+  /* current body of resolveStream — unchanged. */
 }
 ```
 
-> **Important.** Cloudflare Workers limit subrequests per request: free
-> tier 50, paid 1000. A 4-min track at 4 s segments = 60 segments
-> *in addition to* the manifest fetch and any KV call. We need the
-> paid plan's 1000 subrequest cap. Verify in `wrangler.toml` before
-> shipping.
+That's the entire backend change. Two functions, ~80 lines.
 
-### 5.3 Client: quality chips + queue eviction
+### 3.3 Existing 30-day quality KV cache
 
-`src/hooks/useAudioPlayer.ts`:
+Keep it. With discovery in place its job becomes "remember the
+*resolved* quality" rather than "skip ladder rungs", but the cache
+shape is identical and the 30-day TTL is fine. Discovery's own KV
+cache is a separate prefix (`tidal-track-formats:`) so the two don't
+collide.
 
-- New helper `fetchQualities(trackId)` calls `/tracks/:id/manifest`.
-- The fallback ladder loop (lines ~803-849 today) is gone.
-  `loadTrack` now does:
-    1. `fetchQualities(trackId)`
-    2. Pick the highest available `≤ tidalQuality`.
-    3. `audio.src = /tracks/:id/stream-v2?quality=<picked>`
-    4. `audio.load()`
-    5. If it fails, surface the error directly — no probing.
+If we ever want to be extra safe, write the resolved quality back
+into the discovery cache too — that way if discovery is the freshest
+truth the next listener picks the same answer instantly.
 
-- Existing `getNextFallbackQuality` stays as a deprecated helper for
-  the old `/stream` endpoint until we delete the v1 path.
+### 3.4 Frontend
 
-`src/components/features/QualityChip.tsx` (new):
+**No change required.** `<audio>.src = /tracks/:id/stream?quality=…`
+keeps working because the resolve still returns a CloudFront URL
+proxied through `/tracks/audio`. The user gets faster time-to-first-
+audio on cold tracks, nothing else moves.
 
-- Reads `useQualityForTrack(trackId)` (a small wrapper over react-query
-  pointing at `/tracks/:id/manifest`).
-- Renders chips for each quality the track actually has, marking the
-  one currently in use.
-
-Integration points: TrackRow, NowPlaying, and (most importantly) the
-room "Track picker" — host can see at a glance which qualities the
-selected track supports before forcing it on guests.
-
-### 5.4 Migration
-
-- Land the new endpoints behind a feature flag (e.g.
-  `STREAM_V2_ENABLED` env var on the worker).
-- Frontend reads the flag from `/health`. When false, falls back to
-  the existing `/tracks/:id/stream` ladder.
-- Run both code paths side-by-side for ~1 week. Compare:
-  - p50 / p95 time-to-first-audio.
-  - Failure rate (segment fetch errors, MPD parse errors).
-- Once v2 wins on both metrics, delete the v1 path and the
-  `getNextFallbackQuality` helper.
-
-### 5.5 Testing
-
-- Unit-test `parseQualities` against the user-provided MPD sample
-  (the b64 in `QUALITY_DISCOVERY_SPEC.md` is a real production
-  payload).
-- Integration test: a Vitest scenario that uses a stubbed Tidal
-  fetch returning the same payload and asserts
-  `/tracks/:id/manifest` returns `[{ name: 'FLAC', drmRequired:
-  false }]`.
-- Manual QA: pick three tracks (one HiRes, one FLAC-only, one
-  AAC-only), confirm `<audio>` plays end-to-end on Chrome, Firefox,
-  Safari, iOS Safari, Android Chrome.
-
-### 5.6 Out of scope (for this spec)
-
-- Adaptive bitrate switching mid-track.
-- Pre-fetching the next track's manifest. (The current preload-next
-  logic in `useAudioPlayer.ts` already calls the v1 stream endpoint
-  for the next track to warm the audio buffer; switch it to v2 once
-  v2 is the default.)
-- Replacing the room stream proxy. Rooms can keep using
-  `/rooms/:id/stream/tidal/:rawId` which itself can call the v2
-  remux internally — the proxy contract for guests doesn't change.
+If we want to expose "available qualities" to the UI later (e.g. a
+chip on the now-playing card), add a `GET /tracks/:id/qualities`
+endpoint that just returns `discoverQualities(...)`. Not required
+for this work item — call it Phase 2 if the product ever asks for it.
 
 ---
 
-## 6. Open questions for the implementer
+## 4. Why not just MSE / a DASH player on the client?
 
-- **Subrequest cap.** Verify our worker plan's subrequest cap covers
-  ~60 segments per stream + 1 manifest fetch + 1 KV read. If not, we
-  need to either (a) ask Cloudflare for a higher cap or (b) cache the
-  full first-segment-batch and serve subsequent listeners from KV.
-- **Memory cap.** Streaming-remux must not buffer the full track in
-  worker memory. The TransformStream pattern above is intentional —
-  do not change it to "fetch all then write".
-- **Tidal token rotation.** `TidalService.getServiceToken` is the
-  existing helper. Confirm it's safe to call in a hot path (it's
-  cached in KV with a sane TTL, but check before the first round of
-  load tests).
-- **Fallback for DRM-only tracks.** Right now we surface "not
-  available". A subset of tracks (mostly HiRes masters) are DRM-only.
-  Decide UX: skip silently? Show an error with a link to the
-  subscription paywall? Mention to the room host so they don't pick
-  one as a queue item?
+Considered and rejected.
+
+- Bundle hit (~150 KB gzipped for Shaka).
+- DRM minefield: the same `trackManifests` response includes a
+  `drmData` block with Widevine UUIDs. Today's `<audio>` flow
+  sidesteps DRM entirely by going through Tidal's own
+  `playbackinfopostpaywall` which negotiates a non-DRM CDN URL when
+  one is available. A client-side DASH player would have to
+  re-implement that, including key delivery on Safari / iOS.
+- Solves a problem we don't have. We don't need adaptive bitrate, we
+  don't need byte-exact seek-by-segment, and we don't want to remux.
+  We just want to know what qualities a track has before asking for a
+  specific one.
+
+So: stay on `<audio>` + CloudFront URL, change only the inside of
+`resolveStream`.
+
+---
+
+## 5. Why not skip the discovery call entirely?
+
+A previous version of this spec proposed remuxing DASH segments on
+the worker. That is overkill — we don't need the MPD's segment
+URLs, just its `formats` array. One `trackManifests` call gives us
+that, and the existing `playbackinfopostpaywall` pipeline gives us
+the playable URL. Nothing in between.
+
+The `formats` array could in theory be derived from the same
+`playbackinfopostpaywall` response we already make, but that
+endpoint is per-quality — it tells you "this quality is playable"
+rather than "these qualities exist". `trackManifests` is the only
+endpoint that answers the latter in one shot.
+
+---
+
+## 6. Migration & validation
+
+- **No feature flag needed.** The legacy ladder stays in the file
+  (renamed `legacyResolveStream`) as the cold-fallback for
+  unexpected shapes from `trackManifests`. So the worst case is
+  "discovery silently fails, we behave exactly like today".
+- **Metrics to watch after deploy** (1 week):
+  - p50 / p95 time inside `resolveStream`.
+  - Ratio of legacy-fallback calls. If it's >5% something is
+    wrong with the format-name mapping.
+  - 502 rate on `/tracks/:id/stream` (should not move).
+- Once metrics are clean for ~2 weeks, `legacyResolveStream` can be
+  deleted.
+
+## 7. Testing
+
+- Unit test `discoverQualities` against the user-provided sample
+  payload (one-format response → expect `["LOSSLESS"]`).
+- Unit test the format-name mapping covers all four Tidal names.
+- Unit test that an empty `formats[]` returns an empty
+  `qualities[]` (and `resolveStream` falls back to legacy).
+- Unit test that a `drmData != null` response is treated as no
+  usable qualities.
+- Manual QA: pick a HiRes track, a FLAC-only track, an AAC-only
+  track. Confirm `getStreamUrl(id, 'HI_RES_LOSSLESS')` lands in one
+  round trip after a cache wipe and produces audible playback in the
+  app.
+
+## 8. Out of scope
+
+- Adaptive bitrate during playback.
+- Pre-fetching the next track's qualities on shuffle/queue advance.
+- Replacing the room stream proxy. Rooms call
+  `tidal.resolveStream(...)` internally; they pick up the new
+  discovery path for free.
+- Exposing `qualities[]` in the UI. Phase 2 if/when the product
+  asks for it.
