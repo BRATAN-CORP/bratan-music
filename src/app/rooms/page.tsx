@@ -16,7 +16,8 @@ import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { useRoomConnectionStore } from '@/store/roomConnection';
 import { useRoomPlayer } from '@/hooks/useRoomPlayer';
-import { useDeleteRoom, useLeaveRoom } from '@/hooks/useRooms';
+import { useDeleteRoom, useLeaveRoom, useUpdateRoomSettings } from '@/hooks/useRooms';
+import { useSettingsStore } from '@/store/settings';
 import { useSearch } from '@/hooks/useSearch';
 import type { RoomDetail, RoomMember, RoomTrackSnapshot } from '@/types/rooms';
 import type { Track } from '@/types';
@@ -78,13 +79,41 @@ function RoomPageInner() {
   const player = useRoomPlayer({ roomId: id, initial, audioRef });
   const leaveMut = useLeaveRoom();
   const deleteMut = useDeleteRoom();
+  const settingsMut = useUpdateRoomSettings(id);
   const isHost = !!initial && me?.id === initial.hostId;
+  const hostOnlyControl = settingsMut.data?.hostOnlyControl ?? initial?.hostOnlyControl ?? false;
+  const canSetTrack = isHost || !hostOnlyControl;
 
   // Update the global connection badge once we know the room name/code.
   useEffect(() => {
     if (!initial) return;
     setActiveRoom({ roomId: initial.id, roomCode: initial.code, roomName: initial.name });
   }, [initial, setActiveRoom]);
+
+  // Force shuffle=false + crossfade=false while inside a room.
+  // The user's personal prefs are saved and restored when they leave.
+  const savedCrossfade = useRef<{ on: boolean; dur: number } | null>(null);
+  const savedShuffle = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    const { crossfade, crossfadeDuration, setCrossfade, setCrossfadeDuration } = useSettingsStore.getState();
+    const { shuffle, toggleShuffle } = usePlayerStore.getState();
+    savedCrossfade.current = { on: crossfade, dur: crossfadeDuration };
+    savedShuffle.current = shuffle;
+    if (crossfade) setCrossfade(false);
+    if (crossfadeDuration !== 0) setCrossfadeDuration(0);
+    if (shuffle) toggleShuffle();
+    return () => {
+      if (savedCrossfade.current) {
+        useSettingsStore.getState().setCrossfade(savedCrossfade.current.on);
+        useSettingsStore.getState().setCrossfadeDuration(savedCrossfade.current.dur);
+      }
+      if (savedShuffle.current) {
+        const { shuffle: now } = usePlayerStore.getState();
+        if (!now) usePlayerStore.getState().toggleShuffle();
+      }
+    };
+  }, [id]);
 
   const onLeave = async () => {
     if (!id) return;
@@ -277,12 +306,48 @@ function RoomPageInner() {
         </ul>
       </section>
 
-      <section className="mt-8">
-        <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          <Search size={14} /> Поставить трек
-        </div>
-        <RoomTrackPicker onPick={(track) => player.setTrack(track)} />
-      </section>
+      {/* Host-only-control toggle (visible only to the host) */}
+      {isHost && (
+        <section className="mt-8">
+          <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-card/60 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Только хост ставит треки</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Участники смогут только слушать — переключать музыку сможешь только ты.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={hostOnlyControl}
+              onClick={() => void settingsMut.mutateAsync({ hostOnlyControl: !hostOnlyControl })}
+              disabled={settingsMut.isPending}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                hostOnlyControl ? 'bg-[var(--color-accent)]' : 'bg-secondary'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                  hostOnlyControl ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </section>
+      )}
+
+      {canSetTrack ? (
+        <section className="mt-8">
+          <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            <Search size={14} /> Поставить трек
+          </div>
+          <RoomTrackPicker onPick={(track) => player.setTrack(track)} />
+        </section>
+      ) : (
+        <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 px-4 py-6 text-center text-xs text-muted-foreground">
+          Хост включил режим «только слушать» — менять треки может только хост.
+        </section>
+      )}
 
       <div className="mt-8">
         <RoomChat roomId={id} />
@@ -291,7 +356,7 @@ function RoomPageInner() {
       <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 p-4 text-xs leading-relaxed text-muted-foreground">
         <p className="mb-2 font-medium text-foreground">Как это работает</p>
         <ul className="list-disc space-y-1 pl-4">
-          <li>Любой участник может ставить треки и управлять воспроизведением. Остальные слышат то же самое в один такт.</li>
+          <li>Любой участник может управлять воспроизведением{hostOnlyControl ? '' : ' и ставить треки'}. Остальные слышат то же самое в один такт.</li>
           <li>Громкость и mute — у каждого свои. Кроссфейд и шафл здесь отключены, чтобы не было рассинхрона.</li>
           <li>Загруженные треки и перезаливы воспроизводятся через комнату только пока они активны: после смены трека старая ссылка перестаёт работать.</li>
         </ul>

@@ -45,6 +45,9 @@ export interface RoomDetail {
   hostId: string;
   status: 'active' | 'closed';
   createdAt: number;
+  /** When true the worker rejects `kind:'track'` control from
+   *  non-host members (host-only listening mode). */
+  hostOnlyControl: boolean;
   state: RoomState;
   members: RoomMember[];
   serverNowMs: number;

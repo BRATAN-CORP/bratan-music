@@ -52,3 +52,22 @@ export function useDeleteRoom() {
     },
   });
 }
+
+/**
+ * Toggle a room's host-only-control flag. PATCH returns the updated
+ * RoomDetail so callers can hand it straight back to the room-detail
+ * cache without an extra round-trip — the worker has already paid the
+ * cost of recomputing state + members.
+ */
+export function useUpdateRoomSettings(roomId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: { hostOnlyControl?: boolean }) => {
+      if (!roomId) throw new Error('roomId required');
+      return api.patch<RoomDetail>(`/rooms/${roomId}/settings`, settings);
+    },
+    onSuccess: (next) => {
+      qc.setQueryData(['rooms', 'detail', roomId], next);
+    },
+  });
+}
