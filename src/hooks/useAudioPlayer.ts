@@ -861,6 +861,20 @@ export function useAudioPlayer() {
     }
 
     b.loaded[slot] = trackId;
+    // Burn the slot's CORS-retry budget: tryLoadSrc just succeeded for
+    // this track, so any LATER error event we see on this slot is mid-
+    // stream (range-request 4xx, network glitch, server stopped sending
+    // CORS headers, ...) and is NOT a CORS-credentials issue that
+    // benefits from `reloadWithoutCors`. The spurious-reset gate then
+    // protects user position. If we leave `corsRetried[slot] = false`
+    // here, an error fired ~1 s into a freshly-loaded track triggers
+    // `reloadWithoutCors`, which calls `audio.load()` (rewinds
+    // `currentTime` to 0), and — because the captured
+    // `restoreTarget = max(audio.currentTime, store.progress)` is itself
+    // < 0.5 right at the start of a track — falls through to the "play
+    // from 0" branch. The user heard "track plays 1 sec, then resets to
+    // 0:00, then plays normally" on every manual switch.
+    corsRetried[slot] = true;
     ensureAudioGraph();
     {
       const ps = usePlayerStore.getState();
@@ -1228,11 +1242,31 @@ export function useAudioPlayer() {
       if (!crossfadingRef.current) return; // cancelled
       teardown(true);
       setTrack(nextTrack);
+      // Hand the timeline + duration surfaces over to the new active
+      // slot. The `durationchange` event for the incoming slot fired
+      // during preload while `isOwnerSlot()` returned false (the store
+      // still pointed at the outgoing track), so the listener
+      // suppressed the update — without an explicit re-publish here
+      // `store.duration` keeps reading the OUTGOING track's length and
+      // the timer shows e.g. "0:05 / 3:42" mid-fade where 3:42 is the
+      // PREVIOUS track. We also snap `store.progress` to the new
+      // slot's actual playhead so the timeline doesn't briefly drop to
+      // 0 (`setTrack` resets progress to 0) before the next timeupdate
+      // fires from the incoming audio element.
+      const newAudio = b.audios[b.active];
+      const newDuration = newAudio.duration;
+      if (isFinite(newDuration) && newDuration > 0) {
+        setDuration(newDuration);
+      }
+      const newProgress = newAudio.currentTime;
+      if (isFinite(newProgress) && newProgress > 0) {
+        setProgress(newProgress);
+      }
     } catch (err) {
       console.warn('[crossfade] failed, falling back to hard switch', err);
       teardown(false);
     }
-  }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, tidalQuality]);
+  }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, setDuration, setProgress, tidalQuality]);
 
   // Proactive preload of queue[idx+1] into the inactive slot while the
   // user is playing with crossfade enabled. By the time startCrossfade
