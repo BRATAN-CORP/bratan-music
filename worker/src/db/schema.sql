@@ -202,3 +202,40 @@ CREATE TABLE user_preferences (
     prefs      TEXT NOT NULL DEFAULT '{}',
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE listening_rooms (
+    id              TEXT PRIMARY KEY,
+    code            TEXT NOT NULL UNIQUE,
+    host_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL DEFAULT 'Комната',
+    status          TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','closed')),
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL,
+    last_activity_at INTEGER NOT NULL
+);
+CREATE INDEX idx_listening_rooms_host ON listening_rooms(host_id, status);
+CREATE INDEX idx_listening_rooms_activity ON listening_rooms(status, last_activity_at);
+
+CREATE TABLE listening_room_state (
+    room_id          TEXT PRIMARY KEY REFERENCES listening_rooms(id) ON DELETE CASCADE,
+    track_json       TEXT,
+    track_id         TEXT,
+    track_source     TEXT,
+    started_at_ms    INTEGER NOT NULL DEFAULT 0,
+    position_ms      INTEGER NOT NULL DEFAULT 0,
+    is_paused        INTEGER NOT NULL DEFAULT 1,
+    controller_id    TEXT,
+    version          INTEGER NOT NULL DEFAULT 0,
+    updated_at_ms    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE listening_room_members (
+    room_id      TEXT NOT NULL REFERENCES listening_rooms(id) ON DELETE CASCADE,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('host','member')),
+    joined_at    INTEGER NOT NULL,
+    last_seen_ms INTEGER NOT NULL,
+    PRIMARY KEY (room_id, user_id)
+);
+CREATE INDEX idx_listening_room_members_user ON listening_room_members(user_id);
+CREATE INDEX idx_listening_room_members_seen ON listening_room_members(room_id, last_seen_ms);

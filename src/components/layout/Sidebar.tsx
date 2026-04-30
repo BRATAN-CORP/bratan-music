@@ -1,6 +1,6 @@
 import { Link, NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Library, User, Home, Heart, ListMusic, Pin, Crown } from 'lucide-react';
+import { Search, Library, User, Home, Heart, ListMusic, Pin, Headphones, Crown } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
 import { usePlaylistsList } from '@/hooks/useLibrary';
 import { api } from '@/lib/api';
@@ -9,6 +9,7 @@ const navItems = [
   { to: '/', icon: Home, label: 'Главная' },
   { to: '/search', icon: Search, label: 'Поиск' },
   { to: '/library', icon: Library, label: 'Библиотека' },
+  { to: '/rooms', icon: Headphones, label: 'Комнаты' },
   { to: '/profile', icon: User, label: 'Профиль' },
 ];
 
