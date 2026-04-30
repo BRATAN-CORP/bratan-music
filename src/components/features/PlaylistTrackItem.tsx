@@ -1,16 +1,16 @@
-import { useRef, useState } from 'react';
-import { Download, Heart, MoreHorizontal, Pause, Play, Trash2, GripVertical, Upload } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Heart, Pause, Play, GripVertical, Upload } from 'lucide-react';
 import { Reorder, useDragControls, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { PopoverMenu } from '@/components/ui/PopoverMenu';
-import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
+import { useToggleLike } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { TrackKebabMenu } from '@/components/features/TrackKebabMenu';
 
 interface PlaylistTrackItemProps {
   track: Track;
@@ -46,14 +46,11 @@ export function PlaylistTrackItem({
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
   const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
-  const removeMutation = useRemoveTrackFromPlaylist();
   const coarse = useCoarsePointer();
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
-  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -66,11 +63,6 @@ export function PlaylistTrackItem({
     } finally {
       setDownloading(false);
     }
-  };
-
-  const handleRemove = () => {
-    setMenuOpen(false);
-    removeMutation.mutate({ playlistId, trackId: track.id });
   };
 
   const handleDragStart = (e: React.PointerEvent) => {
@@ -182,42 +174,11 @@ export function PlaylistTrackItem({
             </Button>
           </>
         )}
-        {!hideRemoveMenu && (
-          <>
-            <Button
-              ref={menuTriggerRef}
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen((v) => !v);
-              }}
-              aria-label="Ещё"
-            >
-              <MoreHorizontal size={14} />
-            </Button>
-            <PopoverMenu
-              open={menuOpen}
-              onClose={() => setMenuOpen(false)}
-              triggerRef={menuTriggerRef}
-              anchor="bottom"
-              align="end"
-              width={200}
-              className="p-1"
-            >
-              <button
-                type="button"
-                onClick={handleRemove}
-                disabled={removeMutation.isPending}
-                className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)] disabled:opacity-60"
-              >
-                <Trash2 size={14} />
-                Удалить из плейлиста
-              </button>
-            </PopoverMenu>
-          </>
-        )}
+        <TrackKebabMenu
+          track={track}
+          playlistId={playlistId}
+          hideRemoveFromPlaylist={hideRemoveMenu}
+        />
       </div>
 
       <TrackOverrideModal

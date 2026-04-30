@@ -1,18 +1,16 @@
-import { useRef, useState } from 'react';
-import { Download, Heart, ListOrdered, ListPlus, MoreHorizontal, Pause, Play, Trash2, Upload } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Heart, Pause, Play, Upload } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { PopoverMenu } from '@/components/ui/PopoverMenu';
-import { useToggleLike, useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
+import { useToggleLike } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
-import { usePlayerStore } from '@/store/player';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
-import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { TrackKebabMenu } from '@/components/features/TrackKebabMenu';
 
 interface TrackItemProps {
   track: Track;
@@ -36,14 +34,12 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   const liked = isAuthed && isLiked(track.id);
   const coarse = useCoarsePointer();
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
-  const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
-  const menuTriggerRef = useRef<HTMLButtonElement>(null);
-  const removeFromPlaylist = useRemoveTrackFromPlaylist();
-  const addToQueue = usePlayerStore((s) => s.addToQueue);
-  const playNext = usePlayerStore((s) => s.playNext);
+  // Pinned-visible flag for the right-hand action row while the kebab
+  // popover is open. The popover lives in a body portal so the row's
+  // `md:focus-within` selector can't pick it up.
+  const [menuOpen, setMenuOpen] = useState(false);
   // True when *this* row is the currently-loaded track. Used to swap
   // the cover-overlay icon (Play↔Pause) and to route clicks through
   // togglePlay() instead of restarting the track from zero. Resuming
@@ -68,51 +64,6 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   const handleOpenOverride = (e: React.MouseEvent) => {
     e.stopPropagation();
     setOverrideOpen(true);
-  };
-
-  const handleRemove = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!playlistId) return;
-    setMenuOpen(false);
-    removeFromPlaylist.mutate({ playlistId, trackId: track.id });
-  };
-
-  const handleAddToPlaylist = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenuOpen(false);
-    setAddToPlaylistOpen(true);
-  };
-
-  const handleAddToQueue = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenuOpen(false);
-    addToQueue({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl,
-      duration: track.duration,
-    });
-  };
-
-  const handlePlayNext = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenuOpen(false);
-    playNext({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl,
-      duration: track.duration,
-    });
   };
 
   return (
@@ -218,68 +169,12 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
             </Button>
           </>
         )}
-        <Button
-          ref={menuTriggerRef}
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          aria-label="Ещё"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-        >
-          <MoreHorizontal size={14} />
-        </Button>
-        <PopoverMenu
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          triggerRef={menuTriggerRef}
-          anchor="bottom"
-          align="end"
-          width={208}
-        >
-                {isAuthed && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={handleAddToPlaylist}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                  >
-                    <ListPlus size={14} />
-                    Добавить в плейлист
-                  </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handlePlayNext}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                >
-                  <ListOrdered size={14} />
-                  Воспроизвести следующим
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleAddToQueue}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
-                >
-                  <ListOrdered size={14} />
-                  Добавить в очередь
-                </button>
-                {playlistId && !hideRemoveMenu && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={handleRemove}
-                    disabled={removeFromPlaylist.isPending}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-muted)] disabled:opacity-60"
-                  >
-                    <Trash2 size={14} />
-                    Удалить из плейлиста
-                  </button>
-                )}
-        </PopoverMenu>
+        <TrackKebabMenu
+          track={track}
+          playlistId={playlistId}
+          hideRemoveFromPlaylist={hideRemoveMenu}
+          onOpenChange={setMenuOpen}
+        />
       </div>
 
       <TrackOverrideModal
@@ -287,12 +182,6 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
         onClose={() => setOverrideOpen(false)}
         trackId={track.id}
         trackTitle={`${track.artist} — ${track.title}`}
-      />
-
-      <AddToPlaylistDialog
-        open={addToPlaylistOpen}
-        onClose={() => setAddToPlaylistOpen(false)}
-        track={track}
       />
     </motion.div>
   );
