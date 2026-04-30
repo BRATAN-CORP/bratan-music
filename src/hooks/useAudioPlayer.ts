@@ -1930,11 +1930,47 @@ export function usePlaybackVisuals(): {
         // the seek lands, so `store.progress` continues to reflect the
         // pre-reload target during the restore window.
         const storeProgress = usePlayerStore.getState().progress;
-        if (storeProgress > 0.5 && realT < storeProgress - 1.5) {
-          displayed = storeProgress;
+
+        // Authoritative-store mirror. `store.progress` is updated
+        // SYNCHRONOUSLY by `seek()` to the user's target before
+        // `audio.currentTime` is touched, and (for natural playback)
+        // by `onTimeUpdate` to the audio element's most recent sample.
+        //
+        // We only mirror when storeProgress is AHEAD of realT — i.e.
+        // a seek (or restore) just landed and the audio element hasn't
+        // yet caught up. During an active scrub this is exactly the
+        // case: the user expresses a target via seek(), `setProgress`
+        // writes it into the store synchronously, but audio.currentTime
+        // takes one or more frames to settle (especially when the
+        // target isn't buffered yet — common on long tracks where
+        // dragging the thumb past the buffered range happens often).
+        // The previous prediction-only path integrated against the
+        // lagged realT and the thumb visibly trailed the cursor by
+        // ~v_drag * 0.05 / 0.06 seconds — about 0.8 s at 2× drag speed,
+        // up to several seconds when the drag covers most of a long
+        // track. Mirroring storeProgress here pins the bar+thumb to
+        // the cursor for the duration of the scrub.
+        //
+        // We do NOT mirror when realT > storeProgress (natural
+        // playback between timeupdate samples — audio.currentTime is
+        // ahead of the discretely-sampled store value). The smoothing
+        // prediction path below handles that case correctly.
+        //
+        // This also subsumes the old reload-restore guard (`realT <
+        // storeProgress - 1.5`) since the post-reload state is just
+        // one specific case of "store ahead of realT", and fixes the
+        // track-switch playhead leak ("new track shows previous
+        // track's 1:23 for a frame then snaps to 0:00") because right
+        // after setTrack, store.progress is 0 while audio_active.
+        // currentTime is still the outgoing track's playhead until
+        // audio.load() resets it.
+        const slotHasCurrent = currentId !== null && b.loaded[slot] === currentId;
+        const storeAhead = storeProgress > realT + 0.25;
+        if (storeAhead || (currentId !== null && !slotHasCurrent)) {
+          displayed = Math.max(0, storeProgress);
           const dur2 = audio.duration;
           if (isFinite(dur2) && dur2 > 0) {
-            displayed = Math.max(0, Math.min(displayed, dur2));
+            displayed = Math.min(displayed, dur2);
           } else {
             const storeDuration = usePlayerStore.getState().duration;
             if (storeDuration > 0) durationSeconds.set(storeDuration);
@@ -1946,27 +1982,7 @@ export function usePlaybackVisuals(): {
           // the "bar plays for half a second then jumps to 0:00" bug.
           initialised = true;
           // Skip the prediction/buffered branches this frame — they'd
-          // overwrite the restored value with realT (= 0).
-          raf = requestAnimationFrame(tick);
-          return;
-        }
-
-        // Track-switch leak guard: if the resolved slot does NOT have
-        // `currentId` loaded, the audio engine is mid-switch (we just
-        // called `setTrack(newTrack)`, but `loadTrack`'s `audio.src =
-        // newUrl` + `canplay` chain hasn't completed yet). Reading
-        // `audio.currentTime` in this window leaks the OUTGOING track's
-        // playhead (the audio element still has the old src) — which
-        // the user sees as "the new track shows 1:23 from the previous
-        // song for a moment, then snaps to 0:00 when the load lands".
-        // Mirror store.progress (= 0 right after setTrack) so the bar
-        // starts cleanly at 0:00 and the first real timeupdate from
-        // the new track is what advances it.
-        const slotHasCurrent = currentId !== null && b.loaded[slot] === currentId;
-        if (currentId !== null && !slotHasCurrent) {
-          displayed = Math.max(0, storeProgress);
-          progressSeconds.set(displayed);
-          initialised = true;
+          // overwrite the restored value with realT.
           raf = requestAnimationFrame(tick);
           return;
         }
