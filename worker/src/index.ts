@@ -19,6 +19,7 @@ import { recommendations } from './routes/recommendations';
 import { dailyPlaylists } from './routes/dailyPlaylists';
 import { history } from './routes/history';
 import { rooms } from './routes/rooms';
+import { aiPlaylists } from './routes/aiPlaylists';
 import { runScheduledJobs } from './cron';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -67,6 +68,7 @@ app.route('/recommendations', recommendations);
 app.route('/daily-playlists', dailyPlaylists);
 app.route('/history', history);
 app.route('/rooms', rooms);
+app.route('/ai/playlists', aiPlaylists);
 
 app.notFound((c) => c.json({ error: 'Маршрут не найден' }, 404));
 

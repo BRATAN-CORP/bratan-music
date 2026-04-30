@@ -42,3 +42,6 @@ bucket_name = "bratanmusic-tracks"
 # JWT_SECRET
 # JWT_REFRESH_SECRET
 # SESSION_ENCRYPTION_KEY
+# YANDEX_API_TOKEN
+# YANDEX_FOLDER_ID
+# YANDEX_MODEL_URI (опционально, по умолчанию gpt://<folder>/gpt-oss-120b/latest)
