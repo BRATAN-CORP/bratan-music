@@ -18,6 +18,7 @@ import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
+import { ResetTourPanel } from '@/components/features/ResetTourPanel';
 
 interface GrantResponse {
   ok: boolean;
@@ -152,7 +153,10 @@ export function ProfilePage() {
           </SettingsCard>
         </div>
 
-        <ResetRecommendationsPanel />
+        <div className="grid gap-4 md:grid-cols-2">
+          <ResetRecommendationsPanel />
+          <ResetTourPanel />
+        </div>
 
         <Button
           onClick={logout}
