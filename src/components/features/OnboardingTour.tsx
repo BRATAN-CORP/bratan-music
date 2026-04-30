@@ -47,7 +47,10 @@ interface TourStep {
 const STEPS: TourStep[] = [
   {
     targetId: 'tour-wave',
-    route: '/home',
+    // Home is the index route mounted at "/" (see router.tsx —
+    // `{ index: true, element: <HomeOrLanding /> }`). There is no
+    // dedicated `/home` path; navigating there hits NotFoundPage.
+    route: '/',
     title: 'Твоя волна. Под твой вкус.',
     body:
       'Назови 1–6 любимых артистов — и плеер соберёт бесконечный поток ' +
