@@ -145,10 +145,14 @@ function AiPlaylistPromo() {
       <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10">
         <Link
           to="/ai"
-          className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-5 transition-colors hover:border-[var(--color-border-strong)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
+          className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
         >
+          {/* Idle state: clean card. On hover, fade in the same accent
+              gradient + halo we use on the wave hero so the two cards
+              read as a related family without screaming for attention
+              when you're scrolling past. */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-80"
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
             aria-hidden
             style={{
               background:
@@ -245,7 +249,7 @@ function WaveHero({
   return (
     <Reveal>
       <div className="group rounded-[var(--radius-2xl)]" data-tour-id="tour-wave">
-        <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card transition-colors hover:border-[var(--color-border-strong)]">
+        <div className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
           <div
             className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
             aria-hidden
@@ -254,13 +258,13 @@ function WaveHero({
                 'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
             }}
           />
-          {/* Decorative animated gradient layer behind the content. The
-              actual cover preview sits on the right and uses the user's
-              wave seeds — so the visual is alive without being a
-              static asset. */}
+          {/* Decorative gradient layer that fades in on hover — keeps
+              the idle card calm so the page doesn't read as 'every
+              card is shouting' on scroll, then comes alive when the
+              user actually engages with this hero. */}
           <div className="pointer-events-none absolute inset-0" aria-hidden>
             <div
-              className="absolute inset-0 opacity-80"
+              className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
               style={{
                 background:
                   'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
