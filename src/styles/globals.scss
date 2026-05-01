@@ -31,6 +31,30 @@ body {
   line-height: 1.5;
   min-height: 100dvh;
   overflow-x: hidden;
+  /* Suppress the legacy 300ms double-tap-to-zoom gesture on touch
+     devices. With `manipulation` browsers still allow pan and
+     pinch-zoom, but skip the synthetic dblclick that would otherwise
+     fire — which is what made the user's accidental taps zoom the
+     whole app while navigating between tabs. */
+  touch-action: manipulation;
+  /* Hide the highlight rectangle iOS Safari draws on tap. We
+     already give every interactive element its own focus / hover
+     state. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * iOS Safari auto-zooms any focused input whose font-size is below
+ * 16px — that's exactly what triggered the "everything zoomed when
+ * I tapped a search field" complaint. Force >=16px on touch
+ * pointers; desktop keeps the existing visual weight.
+ */
+@media (hover: none) and (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 #root {
