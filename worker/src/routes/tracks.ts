@@ -147,27 +147,54 @@ tracks.get('/:id/stream', async (c) => {
 
   if (!isAdmin && !sub) {
     const today = new Date().toISOString().split('T')[0];
-    // Atomic increment + read-back. The previous SELECT-then-UPDATE
-    // pair was racy: ten concurrent stream calls could all observe
-    // count=2 and proceed past the gate, letting the user blow well
-    // past the 3/day limit. SQLite's UPSERT with RETURNING gives us
-    // the post-increment value in a single statement.
-    const upserted = await c.env.DB.prepare(
-      `INSERT INTO daily_listens (user_id, date, count)
-       VALUES (?, ?, 1)
-       ON CONFLICT(user_id, date) DO UPDATE SET count = count + 1
-       RETURNING count`
-    ).bind(userId, today).first<{ count: number }>();
-
-    const newCount = upserted?.count ?? 1;
-    if (newCount > 3) {
-      // Over the limit — still recorded the attempt (so spamming
-      // requests doesn't help), and refuse to hand out a stream URL.
+    // Per-track dedup: the free quota is "3 unique tracks per day".
+    // The previous shape incremented `daily_listens.count` on every
+    // hit to this endpoint, which had two problems:
+    //   1) the frontend's quality-fallback ladder retries the same
+    //      track at lower qualities on load failure (HI_RES_LOSSLESS
+    //      → LOSSLESS → HIGH → LOW) and every retry hit this
+    //      endpoint independently, so one user-perceived play could
+    //      consume 2-4 quota slots — reports of "лимит 3, а отдают
+    //      2 трека" all trace to this
+    //   2) replaying a track the user already heard today (refresh
+    //      the page, play it again) also charged a slot
+    // Deduping by (user, date, track_id) fixes both: a given track
+    // costs exactly one slot per day, no matter how many times it's
+    // resolved or how many qualities the fallback ladder tries.
+    //
+    // The INSERT + COUNT pair runs as a D1 batch so it's atomic
+    // — without that, two concurrent first-time plays on different
+    // tracks could both observe count=3 and slip past the gate.
+    // `RETURNING 1` reports whether the row was newly inserted (a
+    // first play of this track today) or whether the ON CONFLICT
+    // DO NOTHING fired (a replay we want to let through unconditionally).
+    const insertStmt = c.env.DB.prepare(
+      `INSERT INTO daily_listen_tracks (user_id, date, track_id) VALUES (?, ?, ?)
+       ON CONFLICT DO NOTHING
+       RETURNING 1 AS inserted`
+    ).bind(userId, today, id);
+    const countStmt = c.env.DB.prepare(
+      `SELECT COUNT(*) AS cnt FROM daily_listen_tracks WHERE user_id = ? AND date = ?`
+    ).bind(userId, today);
+    const [insertResult, countResult] = await c.env.DB.batch<{ cnt?: number; inserted?: number }>([
+      insertStmt,
+      countStmt,
+    ]);
+    const wasNew = (insertResult.results?.length ?? 0) > 0;
+    const cnt = countResult.results?.[0]?.cnt ?? 0;
+    if (wasNew && cnt > 3) {
+      // The just-inserted row pushed the user over the quota — roll
+      // it back so this trackId doesn't permanently squat a slot they
+      // were never allowed to consume. The `wasNew` guard makes sure
+      // we never accidentally delete one of the first 3 tracks the
+      // user actually paid for: a replay (ON CONFLICT DO NOTHING)
+      // never reaches this branch.
+      await c.env.DB.prepare(
+        `DELETE FROM daily_listen_tracks WHERE user_id = ? AND date = ? AND track_id = ?`
+      ).bind(userId, today, id).run();
       // Status MUST be 402 Payment Required: the client (`useAudioPlayer`)
       // branches on `ApiError.status === 402` to surface the global
-      // subscription paywall dialog. Returning 403 here used to make the
-      // dialog never open and the user got a generic "не удалось
-      // загрузить трек" instead of the upgrade prompt.
+      // subscription paywall dialog.
       return c.json({ error: 'Лимит 3 трека в сутки исчерпан. Оформите подписку.' }, 402);
     }
   }
