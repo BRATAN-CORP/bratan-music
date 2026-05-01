@@ -156,12 +156,56 @@ tracks.get('/:id/stream', async (c) => {
   const allowedQuality = ['LOW', 'HIGH', 'LOSSLESS', 'HI_RES_LOSSLESS', 'HI_RES'];
   const requested = c.req.query('quality');
   const quality = requested && allowedQuality.includes(requested) ? requested : undefined;
+
+  // Hot-path: the resolved Tidal CDN URL is the single biggest cost on
+  // /tracks/:id/stream — the underlying `playbackinfopostpaywall` round
+  // trip costs 500-700 ms even on a warm cache. Tidal CDN URLs are
+  // signed with timestamps and stay valid well over an hour, so a
+  // short-lived KV memo of the FULL resolved URL turns repeat plays
+  // (same track, same browser tab, same quality) from ~800 ms into
+  // ~50 ms. We deliberately keep the TTL well below the URL's actual
+  // expiry to hide any signing-window slop and avoid handing out a
+  // stale URL after a Tidal-side rotation.
+  const cacheKey = `tidal-stream-url:${id}:${quality ?? 'HIGH'}`;
+  const cached = await c.env.SESSIONS.get<{ url: string; quality: string; expiresAt: number }>(
+    cacheKey,
+    'json',
+  );
+  if (cached && cached.expiresAt > Date.now() && cached.url) {
+    const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(cached.url)}`;
+    return c.json({
+      url: proxied,
+      direct: cached.url,
+      source: 'tidal',
+      quality: cached.quality,
+      requestedQuality: quality ?? 'HIGH',
+      cached: true,
+    });
+  }
+
   // Use resolveStream so we can echo back the actually-resolved quality
   // (it can be lower than `requested` when the track only has clear
   // audio for HIGH/LOW). The resolver memoises the working quality in
   // KV so repeat calls for the same track skip the upper rungs.
   const resolved = await tidal.resolveStream(id, quality);
   const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(resolved.url)}`;
+
+  // Write the resolved URL back into KV for the next play of this
+  // track. `waitUntil` keeps the response on the fast path — the
+  // client doesn't have to wait for the KV round trip.
+  const STREAM_URL_TTL_S = 300;
+  c.executionCtx.waitUntil(
+    c.env.SESSIONS.put(
+      cacheKey,
+      JSON.stringify({
+        url: resolved.url,
+        quality: resolved.quality,
+        expiresAt: Date.now() + (STREAM_URL_TTL_S - 30) * 1000,
+      }),
+      { expirationTtl: STREAM_URL_TTL_S },
+    ),
+  );
+
   return c.json({
     url: proxied,
     direct: resolved.url,
