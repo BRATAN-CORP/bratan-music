@@ -82,11 +82,16 @@ user.get('/limits', async (c) => {
   }
 
   const today = new Date().toISOString().split('T')[0];
+  // Source of truth for the daily quota is the dedup table — same as
+  // the gate in `tracks/:id/stream`. The legacy `daily_listens.count`
+  // overcounted (every quality-fallback retry incremented it), so we
+  // can't trust its rows for the user-facing "сколько осталось"
+  // counter either.
   const listen = await c.env.DB.prepare(
-    'SELECT count FROM daily_listens WHERE user_id = ? AND date = ?'
-  ).bind(userId, today).first<{ count: number }>();
+    'SELECT COUNT(*) AS cnt FROM daily_listen_tracks WHERE user_id = ? AND date = ?'
+  ).bind(userId, today).first<{ cnt: number }>();
 
-  const used = listen?.count ?? 0;
+  const used = listen?.cnt ?? 0;
 
   return c.json({
     daily: { used, limit: 3, unlimited: false, remaining: Math.max(0, 3 - used) },
