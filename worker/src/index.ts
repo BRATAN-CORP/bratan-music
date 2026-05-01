@@ -22,6 +22,11 @@ import { rooms } from './routes/rooms';
 import { aiPlaylists } from './routes/aiPlaylists';
 import { runScheduledJobs } from './cron';
 
+// Re-exported so wrangler can register the Durable Object class. The
+// binding is declared in wrangler.toml under [[durable_objects.bindings]]
+// and instances are addressed by `env.CHAT_ROOM.idFromName(roomId)`.
+export { ChatRoomDO } from './do/ChatRoomDO';
+
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use('*', corsMiddleware);

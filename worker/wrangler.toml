@@ -33,6 +33,21 @@ id = "2f2ca120b5104617a262332524b27190"
 binding = "TRACKS"
 bucket_name = "bratanmusic-tracks"
 
+# Durable Object: per-room WebSocket broadcast hub.
+# Persists nothing of its own — D1 remains the source of truth for
+# chat rows. The DO just fans new messages out to subscribed sockets
+# so receivers don't have to wait for the polling tick.
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoomDO"
+
+# CF Workers requires class migrations for every new DO class. The tag
+# is opaque to us — wrangler tracks which migrations were applied to a
+# given script. Keep this list append-only.
+[[migrations]]
+tag = "v1-chat-room-do"
+new_classes = ["ChatRoomDO"]
+
 # Secrets (задаются через wrangler secret put):
 # TIDAL_CLIENT_ID
 # TIDAL_CLIENT_SECRET
