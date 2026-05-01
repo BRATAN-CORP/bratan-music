@@ -105,19 +105,58 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
   // Stable merge — order, dedupe, advance cursor, cap memory. Pending
   // optimistic rows (id < 0) stay at the tail until they get replaced
   // with their server-side counterparts in `send`.
+  //
+  // Race-condition guard for the "double pop on send" the user has
+  // reported: the WebSocket can deliver our OWN echo back before
+  // `send()`'s POST has resolved. Without special handling the WS row
+  // is treated as a brand-new message, gets appended with a fresh
+  // `srv-${id}` React key, and `<AnimatePresence>` plays the
+  // entrance animation a SECOND time on top of the optimistic row
+  // (which is still sitting in the list waiting for `send()` to
+  // reconcile it). When the POST finally lands, `send()` then dedupes
+  // by `m.id === real.id`, removing the WS row — and that exit
+  // triggers another visible flicker.
+  //
+  // We can't fix the race upstream (the broadcast is racing the
+  // HTTP response on different paths), but we CAN match incoming
+  // confirmed rows against pending optimistic rows by sender + body
+  // and merge them in place, preserving the optimistic row's
+  // `clientKey` so React/Motion treat it as the same row. Result:
+  // a single entrance animation regardless of whether WS or POST
+  // wins the race.
   const mergeMessages = useCallback((incoming: RoomMessage[]) => {
     setMessages((prev) => {
       const seen = new Set(prev.map((m) => m.id));
-      const combined = prev.slice();
+      const working: UiRoomMessage[] = prev.slice();
       for (const m of incoming) {
         if (seen.has(m.id)) continue;
+        if (m.id >= 0) {
+          // Try to absorb this confirmed row into a pending
+          // optimistic row from the same sender carrying the same
+          // body. We only match the FIRST such pending row so
+          // back-to-back identical messages still each get their
+          // own server row.
+          const pendingIdx = working.findIndex(
+            (p) =>
+              p.id < 0 &&
+              p.pending === true &&
+              p.userId === m.userId &&
+              p.body === m.body,
+          );
+          if (pendingIdx >= 0) {
+            const pending = working[pendingIdx]!;
+            working[pendingIdx] = { ...m, clientKey: pending.clientKey };
+            seen.add(m.id);
+            continue;
+          }
+        }
         seen.add(m.id);
-        combined.push(m);
+        working.push(m);
       }
       // Sort confirmed rows by id, then append still-pending rows so
       // they always render at the bottom regardless of arrival order.
-      const confirmed = combined.filter((m) => m.id >= 0).sort((a, b) => a.id - b.id);
-      const pending = combined.filter((m) => m.id < 0);
+      const confirmed = working.filter((m) => m.id >= 0).sort((a, b) => a.id - b.id);
+      const pending = working.filter((m) => m.id < 0);
       const merged = confirmed.concat(pending);
       const top = confirmed[confirmed.length - 1];
       if (top && top.id > lastIdRef.current) lastIdRef.current = top.id;
