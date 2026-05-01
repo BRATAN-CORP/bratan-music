@@ -105,40 +105,67 @@ tracks.get('/:id/stream', async (c) => {
   const userId = c.get('userId');
   const isAdmin = c.get('isAdmin');
 
-  if (!isAdmin) {
-    const now = Math.floor(Date.now() / 1000);
-    const sub = await c.env.DB.prepare(
-      'SELECT id FROM subscriptions WHERE user_id = ? AND status = ? AND expires_at > ? LIMIT 1'
-    ).bind(userId, 'active', now).first();
+  // Per-call quality preference. The provider hierarchy is documented on
+  // TidalWeb#getStreamUrl; unknown values fall back to the service default.
+  const allowedQuality = ['LOW', 'HIGH', 'LOSSLESS', 'HI_RES_LOSSLESS', 'HI_RES'];
+  const requested = c.req.query('quality');
+  const quality = requested && allowedQuality.includes(requested) ? requested : undefined;
+  const cacheKey = `tidal-stream-url:${id}:${quality ?? 'HIGH'}`;
+  const origin = new URL(c.req.url).origin;
 
-    if (!sub) {
-      const today = new Date().toISOString().split('T')[0];
-      // Atomic increment + read-back. The previous SELECT-then-UPDATE
-      // pair was racy: ten concurrent stream calls could all observe
-      // count=2 and proceed past the gate, letting the user blow well
-      // past the 3/day limit. SQLite's UPSERT with RETURNING gives us
-      // the post-increment value in a single statement.
-      const upserted = await c.env.DB.prepare(
-        `INSERT INTO daily_listens (user_id, date, count)
-         VALUES (?, ?, 1)
-         ON CONFLICT(user_id, date) DO UPDATE SET count = count + 1
-         RETURNING count`
-      ).bind(userId, today).first<{ count: number }>();
-
-      const newCount = upserted?.count ?? 1;
-      if (newCount > 3) {
-        // Over the limit — still recorded the attempt (so spamming
-        // requests doesn't help), and refuse to hand out a stream URL.
-        return c.json({ error: 'Лимит 3 трека в сутки исчерпан. Оформите подписку.' }, 403);
-      }
-    }
-  }
-
-  const override = await c.env.DB.prepare(
+  // Fan out the three independent reads we always need into one
+  // round trip instead of three sequential ones. Subscription /
+  // override / KV-cached-CDN-URL are all user-scoped reads with no
+  // ordering dependency between them, and on the warm-cache path
+  // (the dominant case once a user has played a track in the last
+  // 5 minutes) every millisecond saved here lands directly on the
+  // click-to-audible budget. With Cloudflare's typical D1+KV RTTs
+  // this saves ~50–150 ms per request on top of the worker's
+  // existing KV memo. The previous shape was three sequential
+  // awaits (subscription → daily-listens → override → KV), which
+  // turned every call into a 4-trip round-robin even when nothing
+  // changed.
+  const now = Math.floor(Date.now() / 1000);
+  const subPromise = isAdmin
+    ? Promise.resolve<{ id: number } | null>({ id: 0 })
+    : c.env.DB.prepare(
+        'SELECT id FROM subscriptions WHERE user_id = ? AND status = ? AND expires_at > ? LIMIT 1'
+      ).bind(userId, 'active', now).first<{ id: number }>();
+  const overridePromise = c.env.DB.prepare(
     'SELECT r2_key, mime_type FROM track_overrides WHERE user_id = ? AND track_id = ? LIMIT 1'
   ).bind(userId, id).first<{ r2_key: string; mime_type: string }>();
+  const cachedPromise = c.env.SESSIONS.get<{ url: string; quality: string; expiresAt: number }>(
+    cacheKey,
+    'json',
+  );
 
-  const origin = new URL(c.req.url).origin;
+  const [sub, override, cached] = await Promise.all([
+    subPromise,
+    overridePromise,
+    cachedPromise,
+  ]);
+
+  if (!isAdmin && !sub) {
+    const today = new Date().toISOString().split('T')[0];
+    // Atomic increment + read-back. The previous SELECT-then-UPDATE
+    // pair was racy: ten concurrent stream calls could all observe
+    // count=2 and proceed past the gate, letting the user blow well
+    // past the 3/day limit. SQLite's UPSERT with RETURNING gives us
+    // the post-increment value in a single statement.
+    const upserted = await c.env.DB.prepare(
+      `INSERT INTO daily_listens (user_id, date, count)
+       VALUES (?, ?, 1)
+       ON CONFLICT(user_id, date) DO UPDATE SET count = count + 1
+       RETURNING count`
+    ).bind(userId, today).first<{ count: number }>();
+
+    const newCount = upserted?.count ?? 1;
+    if (newCount > 3) {
+      // Over the limit — still recorded the attempt (so spamming
+      // requests doesn't help), and refuse to hand out a stream URL.
+      return c.json({ error: 'Лимит 3 трека в сутки исчерпан. Оформите подписку.' }, 403);
+    }
+  }
 
   if (override) {
     // The audio element can't send Authorization headers, so we hand it
@@ -150,13 +177,6 @@ tracks.get('/:id/stream', async (c) => {
     return c.json({ url, mimeType: override.mime_type, source: 'override' });
   }
 
-  const tidal = new TidalService(c.env);
-  // Per-call quality preference. The provider hierarchy is documented on
-  // TidalWeb#getStreamUrl; unknown values fall back to the service default.
-  const allowedQuality = ['LOW', 'HIGH', 'LOSSLESS', 'HI_RES_LOSSLESS', 'HI_RES'];
-  const requested = c.req.query('quality');
-  const quality = requested && allowedQuality.includes(requested) ? requested : undefined;
-
   // Hot-path: the resolved Tidal CDN URL is the single biggest cost on
   // /tracks/:id/stream — the underlying `playbackinfopostpaywall` round
   // trip costs 500-700 ms even on a warm cache. Tidal CDN URLs are
@@ -166,11 +186,6 @@ tracks.get('/:id/stream', async (c) => {
   // ~50 ms. We deliberately keep the TTL well below the URL's actual
   // expiry to hide any signing-window slop and avoid handing out a
   // stale URL after a Tidal-side rotation.
-  const cacheKey = `tidal-stream-url:${id}:${quality ?? 'HIGH'}`;
-  const cached = await c.env.SESSIONS.get<{ url: string; quality: string; expiresAt: number }>(
-    cacheKey,
-    'json',
-  );
   if (cached && cached.expiresAt > Date.now() && cached.url) {
     const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(cached.url)}`;
     return c.json({
@@ -182,6 +197,8 @@ tracks.get('/:id/stream', async (c) => {
       cached: true,
     });
   }
+
+  const tidal = new TidalService(c.env);
 
   // Use resolveStream so we can echo back the actually-resolved quality
   // (it can be lower than `requested` when the track only has clear
