@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Send, MessageSquare } from 'lucide-react';
-import { useRoomChat } from '@/hooks/useRoomChat';
+import { Send, MessageSquare, Loader2, AlertCircle } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useRoomChat, type UiRoomMessage } from '@/hooks/useRoomChat';
 import { useAuthStore } from '@/store/auth';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-import type { RoomMessage } from '@/types/rooms';
 
 const MAX_LEN = 1000;
 
@@ -14,15 +14,26 @@ interface RoomChatProps {
 /**
  * Polling-based chat panel that lives inside the room page. Mirrors
  * the visual language of the existing room body (rounded card on
- * `bg-card/60`, dashed-border meta strips). The actual transport is
- * handled by `useRoomChat` — here we just render the rolling list and
+ * `bg-card/60`, dashed-border meta strips). Transport is handled by
+ * `useRoomChat` — this component just renders the rolling list and
  * the composer.
+ *
+ * UX notes:
+ *   - Avatars are circular (`rounded-full`) and slightly larger than
+ *     in the previous iteration to read clearly at message density.
+ *   - Each row mounts with a spring entrance (motion.dev) so new
+ *     messages drift in instead of popping in.
+ *   - The composer is **not disabled while sending** — the optimistic
+ *     row appears in the list instantly and the input clears, so the
+ *     user can immediately type the next message. A subtle spinner on
+ *     the send button conveys background activity without blocking.
  */
 export function RoomChat({ roomId }: RoomChatProps) {
   const me = useAuthStore((s) => s.user);
   const { messages, send, sending, error } = useRoomChat(roomId);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [text, setText] = useState('');
+  const reduceMotion = useReducedMotion();
 
   // Auto-scroll to the bottom when new messages arrive — but only if
   // the user was already pinned to the bottom. If they scrolled up to
@@ -41,13 +52,17 @@ export function RoomChat({ roomId }: RoomChatProps) {
     wasAtBottomRef.current = distance < 32;
   };
 
-  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const value = text.trim();
     if (!value) return;
+    // Clear input synchronously *before* awaiting send — the
+    // optimistic row is already in the list, so the user gets
+    // instant feedback and can keep typing without waiting for the
+    // server round-trip.
     setText('');
     wasAtBottomRef.current = true;
-    await send(value);
+    void send(value);
   };
 
   return (
@@ -66,9 +81,16 @@ export function RoomChat({ roomId }: RoomChatProps) {
             Пока тишина. Напиши что-нибудь — все увидят.
           </div>
         ) : (
-          messages.map((m) => (
-            <ChatRow key={m.id} message={m} mine={m.userId === me?.id} />
-          ))
+          <AnimatePresence initial={false}>
+            {messages.map((m) => (
+              <ChatRow
+                key={m.id}
+                message={m}
+                mine={m.userId === me?.id}
+                reduceMotion={!!reduceMotion}
+              />
+            ))}
+          </AnimatePresence>
         )}
       </div>
 
@@ -80,16 +102,23 @@ export function RoomChat({ roomId }: RoomChatProps) {
           placeholder="Сообщение"
           className="h-9 flex-1 rounded-[var(--radius-sm)] border border-border bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-[var(--color-accent)]"
           maxLength={MAX_LEN}
-          disabled={sending}
+          autoComplete="off"
         />
-        <button
+        <motion.button
           type="submit"
-          disabled={!text.trim() || sending}
+          disabled={!text.trim()}
           aria-label="Отправить"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent)] text-white transition-opacity disabled:opacity-50"
+          whileTap={reduceMotion ? undefined : { scale: 0.92 }}
+          whileHover={reduceMotion ? undefined : { scale: 1.04 }}
+          transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent)] text-white shadow-sm transition-opacity disabled:opacity-50"
         >
-          <Send size={14} />
-        </button>
+          {sending ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Send size={14} />
+          )}
+        </motion.button>
       </form>
 
       {error && (
@@ -99,13 +128,36 @@ export function RoomChat({ roomId }: RoomChatProps) {
   );
 }
 
-function ChatRow({ message, mine }: { message: RoomMessage; mine: boolean }) {
+interface ChatRowProps {
+  message: UiRoomMessage;
+  mine: boolean;
+  reduceMotion: boolean;
+}
+
+function ChatRow({ message, mine, reduceMotion }: ChatRowProps) {
   const display = message.name?.trim() || message.username?.trim() || 'Гость';
+  const bubbleTone = mine
+    ? 'bg-[var(--color-accent)]/15 text-foreground'
+    : 'bg-secondary text-foreground';
+  const failed = !!message.failed;
+  const pending = !!message.pending;
+
   return (
-    <div className={`flex gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
+    <motion.div
+      layout
+      initial={
+        reduceMotion
+          ? { opacity: 0 }
+          : { opacity: 0, y: 12, scale: 0.96 }
+      }
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 520, damping: 32, mass: 0.6 }}
+      className={`flex gap-2 ${mine ? 'flex-row-reverse' : ''}`}
+    >
       <UserAvatar
-        className="h-7 w-7 shrink-0"
-        initialsClassName="text-[10px]"
+        className="h-8 w-8 shrink-0 rounded-full"
+        initialsClassName="text-[11px]"
         name={message.name}
         username={message.username}
         id={message.userId}
@@ -114,18 +166,21 @@ function ChatRow({ message, mine }: { message: RoomMessage; mine: boolean }) {
         <div className={`flex items-baseline gap-2 text-[11px] ${mine ? 'flex-row-reverse' : ''}`}>
           <span className="font-medium text-foreground/80">{display}</span>
           <span className="text-muted-foreground">{formatTime(message.createdAtMs)}</span>
+          {failed && (
+            <span className="inline-flex items-center gap-1 text-red-400">
+              <AlertCircle size={11} /> не доставлено
+            </span>
+          )}
         </div>
         <div
-          className={`whitespace-pre-wrap break-words rounded-[var(--radius-sm)] px-3 py-1.5 text-sm leading-snug ${
-            mine
-              ? 'bg-[var(--color-accent)]/15 text-foreground'
-              : 'bg-secondary text-foreground'
-          }`}
+          className={`whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-sm leading-snug ${bubbleTone} ${
+            pending ? 'opacity-70' : ''
+          } ${failed ? 'border border-red-400/40' : ''}`}
         >
           {message.body}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
