@@ -3,7 +3,25 @@ import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { RoomChatPoll, RoomMessage } from '@/types/rooms';
 
-const POLL_INTERVAL_MS = 2500;
+/**
+ * Polling cadence for the chat list. Tuned for perceived latency:
+ *   - `ACTIVE`: tab is visible AND the document has focus. Other
+ *     participants' messages need to land within ~1 user beat, so we
+ *     poll fairly aggressively. The endpoint round-trip is one
+ *     indexed D1 query (`SELECT ... WHERE id > ?`) and a sub-2 KB
+ *     payload, so the cost is negligible compared to the perceived
+ *     UX win.
+ *   - `BLURRED`: tab is visible but unfocused (user typing in another
+ *     window). Slightly slower so we don't burn battery on a chat
+ *     nobody is currently watching.
+ *   - `HIDDEN`: tab is in the background or the device is asleep.
+ *     We mostly trust the browser to throttle setTimeout there
+ *     anyway, but pick a long interval so we don't fire a burst of
+ *     stale requests when the tab wakes up.
+ */
+const POLL_INTERVAL_ACTIVE_MS = 900;
+const POLL_INTERVAL_BLURRED_MS = 2200;
+const POLL_INTERVAL_HIDDEN_MS = 8000;
 const MAX_MESSAGES_KEPT = 400;
 
 /** Optimistic-rendering metadata layered on top of `RoomMessage`. */
@@ -85,13 +103,40 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
     };
   }, [roomId]);
 
-  // Initial fetch + polling loop.
+  // Holds the latest `tick` so external callers (`send`,
+  // visibilitychange / focus listeners) can request an immediate
+  // poll without having to manage their own timers. Re-bound on each
+  // render via `tickRef.current = tick` below.
+  const pokeRef = useRef<() => void>(() => {});
+
+  // Initial fetch + adaptive polling loop. The interval is recomputed
+  // on every tick and on every visibility/focus change so we shorten
+  // it the moment the user comes back to the tab.
   useEffect(() => {
     if (!roomId) return;
     let timer: number | null = null;
+    let inFlight = false;
+
+    const computeIntervalMs = (): number => {
+      if (typeof document === 'undefined') return POLL_INTERVAL_ACTIVE_MS;
+      if (document.visibilityState === 'hidden') return POLL_INTERVAL_HIDDEN_MS;
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        return POLL_INTERVAL_BLURRED_MS;
+      }
+      return POLL_INTERVAL_ACTIVE_MS;
+    };
 
     const tick = async () => {
       if (cancelledRef.current) return;
+      // Coalesce overlapping pokes — if a request is already in
+      // flight just let it land, the response will trigger the next
+      // schedule.
+      if (inFlight) return;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      inFlight = true;
       try {
         const since = lastIdRef.current;
         const path = since > 0
@@ -112,15 +157,33 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
         }
         setError(err instanceof Error ? err.message : 'Ошибка чата');
       } finally {
+        inFlight = false;
         if (!cancelledRef.current) {
-          timer = window.setTimeout(tick, POLL_INTERVAL_MS);
+          timer = window.setTimeout(tick, computeIntervalMs());
         }
       }
     };
 
+    pokeRef.current = () => {
+      // Fire-and-forget — the function is async but callers
+      // (event listeners, `send`) don't need to wait for it.
+      void tick();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void tick();
+    };
+    const onFocus = () => void tick();
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+
     void tick();
     return () => {
       if (timer !== null) window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+      pokeRef.current = () => {};
     };
   }, [roomId, mergeMessages]);
 
@@ -173,6 +236,10 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
             : merged;
         });
         setError(null);
+        // Trigger an immediate background poll so any messages other
+        // participants sent in the same window arrive without waiting
+        // for the next scheduled tick.
+        pokeRef.current();
       } catch (err) {
         // 3. Mark the optimistic row as failed so the UI can show a
         //    retry hint. Don't drop it — the user's text shouldn't
