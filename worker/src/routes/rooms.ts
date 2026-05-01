@@ -146,6 +146,13 @@ rooms.get('/:id/chat', async (c) => {
  * Append a chat message. Length-clamped + cooldown-rate-limited inside
  * the service. Returns the created row so the sender can echo it
  * optimistically without a follow-up poll.
+ *
+ * After D1 commit we fire the new row at the per-room Durable Object
+ * via `waitUntil` so every other tab with an open WebSocket sees it
+ * immediately, instead of waiting up to ~900 ms for the next poll
+ * tick. The broadcast is intentionally non-blocking — if the DO
+ * rejects, the receiver still picks the row up via `?since=<id>`
+ * polling.
  */
 rooms.post('/:id/chat', async (c) => {
   const userId = c.get('userId');
@@ -160,6 +167,10 @@ rooms.post('/:id/chat', async (c) => {
   const body = await c.req.json<ChatBody>().catch(() => ({} as ChatBody));
   try {
     const message = await svc.appendMessage(id, userId, body.body ?? '');
+    // Fan out to anyone with an active WebSocket. Don't await — the
+    // sender already has the canonical row in the response body and
+    // shouldn't block on broadcast delivery.
+    c.executionCtx.waitUntil(broadcastChatMessage(c.env, id, message));
     return c.json({ message, serverNowMs: Date.now() });
   } catch (err) {
     const stamped = (err as { status?: number } | null | undefined)?.status;
@@ -169,6 +180,65 @@ rooms.post('/:id/chat', async (c) => {
     return c.json({ error: text }, 500);
   }
 });
+
+/**
+ * WebSocket subscription for live chat updates. Authenticated via
+ * `?token=` because browsers can't attach an Authorization header to
+ * a `new WebSocket(...)` upgrade request — this is the same fallback
+ * pattern the override-stream / track-audio routes use. Membership is
+ * enforced against `listening_room_members` here, before forwarding
+ * the upgrade to the room's Durable Object.
+ */
+rooms.get('/:id/chat/ws', async (c) => {
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const upgrade = c.req.header('Upgrade');
+  if (upgrade !== 'websocket') {
+    return c.json({ error: 'expected websocket upgrade' }, 426);
+  }
+  const svc = new RoomService(c.env);
+  const room = await svc.findById(id);
+  if (!room || room.status !== 'active') {
+    return c.json({ error: 'Комната не найдена' }, 404);
+  }
+  const member = await svc.isMember(id, userId);
+  if (!member) return c.json({ error: 'Нет доступа' }, 403);
+
+  const stub = c.env.CHAT_ROOM.get(c.env.CHAT_ROOM.idFromName(id));
+  // Forward the original upgrade headers so the DO can complete the
+  // 101 handshake. Path/host are fixed because the DO only inspects
+  // pathname.endsWith('/connect') / '/broadcast'.
+  const url = new URL('https://internal/connect');
+  return stub.fetch(new Request(url, c.req.raw));
+});
+
+/** Internal helper — invoked from the chat POST after D1 commit. */
+async function broadcastChatMessage(
+  env: Env,
+  roomId: string,
+  message: {
+    id: number;
+    userId: string;
+    username: string | null;
+    name: string | null;
+    body: string;
+    createdAtMs: number;
+  },
+): Promise<void> {
+  try {
+    const stub = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName(roomId));
+    await stub.fetch(new Request('https://internal/broadcast', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message }),
+    }));
+  } catch (err) {
+    // Soft-fail — D1 already has the row, the polling fallback on
+    // every client will pick it up on the next tick.
+    console.warn('[rooms] broadcastChatMessage failed:',
+      err instanceof Error ? err.message : err);
+  }
+}
 
 rooms.post('/:id/control', async (c) => {
   const userId = c.get('userId');

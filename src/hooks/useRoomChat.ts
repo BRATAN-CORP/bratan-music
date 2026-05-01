@@ -4,13 +4,16 @@ import { useAuthStore } from '@/store/auth';
 import type { RoomChatPoll, RoomMessage } from '@/types/rooms';
 
 /**
- * Polling cadence for the chat list. Tuned for perceived latency:
- *   - `ACTIVE`: tab is visible AND the document has focus. Other
- *     participants' messages need to land within ~1 user beat, so we
- *     poll fairly aggressively. The endpoint round-trip is one
- *     indexed D1 query (`SELECT ... WHERE id > ?`) and a sub-2 KB
- *     payload, so the cost is negligible compared to the perceived
- *     UX win.
+ * Polling cadence for the chat list. The hook's primary delivery path
+ * is now the per-room WebSocket (see worker/src/do/ChatRoomDO.ts);
+ * polling is kept as a robustness fallback so a dropped socket, a
+ * dev-tools breakpoint or a flapping connection still surface new
+ * messages within a few seconds.
+ *
+ *   - `ACTIVE`: tab is visible AND the document has focus. Cadence is
+ *     loose because the WebSocket should be carrying real-time updates
+ *     — polling here just covers the edge case where the socket
+ *     dropped without a clean close event yet.
  *   - `BLURRED`: tab is visible but unfocused (user typing in another
  *     window). Slightly slower so we don't burn battery on a chat
  *     nobody is currently watching.
@@ -18,11 +21,32 @@ import type { RoomChatPoll, RoomMessage } from '@/types/rooms';
  *     We mostly trust the browser to throttle setTimeout there
  *     anyway, but pick a long interval so we don't fire a burst of
  *     stale requests when the tab wakes up.
+ *   - `WS_BROKEN`: WebSocket isn't currently delivering. Drop back to
+ *     the original 0.9 s cadence so the user still sees other people's
+ *     messages within ~1 beat even if the socket can't be re-opened.
  */
-const POLL_INTERVAL_ACTIVE_MS = 900;
-const POLL_INTERVAL_BLURRED_MS = 2200;
-const POLL_INTERVAL_HIDDEN_MS = 8000;
+const POLL_INTERVAL_ACTIVE_MS = 4000;
+const POLL_INTERVAL_BLURRED_MS = 6000;
+const POLL_INTERVAL_HIDDEN_MS = 12000;
+const POLL_INTERVAL_WS_BROKEN_MS = 900;
 const MAX_MESSAGES_KEPT = 400;
+
+/**
+ * Where to send the WebSocket upgrade request. Mirrors `API_BASE` from
+ * `@/lib/api` but rewritten with the `wss:` scheme. We resolve the
+ * URL lazily so a hostile DOM (`window.location` clobber etc.) can't
+ * affect the choice — we only consult `import.meta.env.VITE_API_URL`,
+ * the same env var the REST client uses.
+ */
+function chatWsUrl(roomId: string, token: string): string {
+  const base = (import.meta.env.VITE_API_URL as string | undefined)
+    ?? 'https://bratan-music-api.bratan-corp.workers.dev';
+  const wsBase = base.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+  return `${wsBase}/rooms/${encodeURIComponent(roomId)}/chat/ws?token=${encodeURIComponent(token)}`;
+}
+
+/** Reconnect schedule when the WebSocket fails. Exponential up to ~16s. */
+const WS_BACKOFF_MS = [500, 1000, 2000, 4000, 8000, 16000] as const;
 
 /** Optimistic-rendering metadata layered on top of `RoomMessage`. */
 export interface UiRoomMessage extends RoomMessage {
@@ -109,20 +133,36 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
   // render via `tickRef.current = tick` below.
   const pokeRef = useRef<() => void>(() => {});
 
-  // Initial fetch + adaptive polling loop. The interval is recomputed
-  // on every tick and on every visibility/focus change so we shorten
-  // it the moment the user comes back to the tab.
+  // Initial fetch + adaptive polling loop + WebSocket live-stream.
+  //
+  // The WebSocket is the primary delivery channel: every message is
+  // broadcast from the worker right after the D1 commit lands (see
+  // `worker/src/do/ChatRoomDO.ts`), so the receiver typically sees
+  // it within ~50 ms RTT. Polling sticks around as a robustness
+  // fallback — if the socket drops or fails to upgrade we fall back
+  // to the original 0.9 s cadence so the chat keeps working.
+  //
+  // The interval is recomputed on every tick, on every visibility /
+  // focus change, and on socket open/close so we widen it as soon as
+  // the WS is delivering messages and tighten it the moment it isn't.
   useEffect(() => {
     if (!roomId) return;
     let timer: number | null = null;
     let inFlight = false;
+    /** True while the WebSocket is open AND has received the `hello`
+     *  greeting from the DO. While true, polling backs off to the
+     *  loose intervals — we trust the socket to push new rows. */
+    let wsHealthy = false;
+    let socket: WebSocket | null = null;
+    let reconnectAttempt = 0;
+    let reconnectTimer: number | null = null;
 
     const computeIntervalMs = (): number => {
       if (typeof document === 'undefined') return POLL_INTERVAL_ACTIVE_MS;
       if (document.visibilityState === 'hidden') return POLL_INTERVAL_HIDDEN_MS;
-      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
-        return POLL_INTERVAL_BLURRED_MS;
-      }
+      const blurred = typeof document.hasFocus === 'function' && !document.hasFocus();
+      if (!wsHealthy) return POLL_INTERVAL_WS_BROKEN_MS;
+      if (blurred) return POLL_INTERVAL_BLURRED_MS;
       return POLL_INTERVAL_ACTIVE_MS;
     };
 
@@ -170,8 +210,98 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       void tick();
     };
 
+    /** Reschedule the next poll relative to "right now" using the
+     *  current cadence. Called when the WS state flips so the polling
+     *  loop tightens or loosens immediately, not on the next cycle. */
+    const reschedulePoll = () => {
+      if (cancelledRef.current) return;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      timer = window.setTimeout(tick, computeIntervalMs());
+    };
+
+    const closeSocket = (sock: WebSocket | null) => {
+      if (!sock) return;
+      try { sock.close(); } catch { /* already closed */ }
+    };
+
+    const scheduleReconnect = () => {
+      if (cancelledRef.current) return;
+      if (reconnectTimer !== null) return;
+      const delay = WS_BACKOFF_MS[Math.min(reconnectAttempt, WS_BACKOFF_MS.length - 1)];
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        if (!cancelledRef.current) openSocket();
+      }, delay);
+    };
+
+    const openSocket = () => {
+      if (cancelledRef.current) return;
+      if (typeof WebSocket === 'undefined') return;
+      const token = useAuthStore.getState().accessToken;
+      if (!token) {
+        // Without a token we can't authenticate the upgrade; let
+        // polling carry the channel and try again on next reconnect.
+        scheduleReconnect();
+        return;
+      }
+      let next: WebSocket;
+      try {
+        next = new WebSocket(chatWsUrl(roomId, token));
+      } catch {
+        scheduleReconnect();
+        return;
+      }
+      socket = next;
+      next.addEventListener('open', () => {
+        // Don't flip wsHealthy here — wait for the `hello` envelope so
+        // we know the DO accepted us, not just that TCP/TLS finished.
+        // (The DO sends `hello` synchronously after `accept()`.)
+      });
+      next.addEventListener('message', (event) => {
+        if (cancelledRef.current) return;
+        const raw = typeof event.data === 'string' ? event.data : '';
+        if (!raw) return;
+        try {
+          const env = JSON.parse(raw) as
+            | { kind: 'hello'; serverNowMs?: number }
+            | { kind: 'message'; message: RoomMessage };
+          if (env.kind === 'hello') {
+            wsHealthy = true;
+            reconnectAttempt = 0;
+            reschedulePoll();
+            return;
+          }
+          if (env.kind === 'message' && env.message) {
+            mergeMessages([env.message]);
+          }
+        } catch {
+          // Corrupt frame — ignore. Next message or polling tick will
+          // cover the row if it matters.
+        }
+      });
+      const onLost = () => {
+        if (socket !== next) return;
+        socket = null;
+        if (wsHealthy) {
+          wsHealthy = false;
+          reschedulePoll();
+        }
+        if (!cancelledRef.current) scheduleReconnect();
+      };
+      next.addEventListener('close', onLost);
+      next.addEventListener('error', onLost);
+    };
+
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void tick();
+      if (document.visibilityState === 'visible') {
+        void tick();
+        // Re-arm the socket if it was torn down while the tab was hidden.
+        if (!socket && reconnectTimer === null) openSocket();
+      }
     };
     const onFocus = () => void tick();
 
@@ -179,8 +309,12 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
     window.addEventListener('focus', onFocus);
 
     void tick();
+    openSocket();
     return () => {
       if (timer !== null) window.clearTimeout(timer);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      closeSocket(socket);
+      socket = null;
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onFocus);
       pokeRef.current = () => {};

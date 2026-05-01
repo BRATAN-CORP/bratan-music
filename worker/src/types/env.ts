@@ -2,6 +2,8 @@ export interface Env {
   DB: D1Database;
   SESSIONS: KVNamespace;
   TRACKS: R2Bucket;
+  /** Per-room broadcast hub — see worker/src/do/ChatRoomDO.ts. */
+  CHAT_ROOM: DurableObjectNamespace;
 
   TIDAL_CLIENT_ID: string;
   TIDAL_CLIENT_SECRET: string;
