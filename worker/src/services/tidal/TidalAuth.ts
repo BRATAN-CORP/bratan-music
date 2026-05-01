@@ -42,7 +42,25 @@ interface TidalJwtPayload {
 }
 
 export class TidalAuth {
+  /**
+   * Per-instance memo of the loaded session. CF Workers re-instantiate
+   * this class on every request, so the memo's lifetime is bounded by
+   * the request and there's no risk of serving a stale token across
+   * users. Within a single request we get hit 3+ times (`getAccessToken`,
+   * `candidateClients`, `getCountryCode`, etc.); without this each call
+   * was issuing a D1 read + AES-GCM decrypt + KV fallback, costing
+   * ~50-100 ms per repeat.
+   */
+  private sessionPromise: Promise<TidalTokens | null> | null = null;
+
   constructor(private env: Env) {}
+
+  /** Drop the per-instance session memo. Call after writes
+   *  (`cacheSession`, `clearCachedSession`) so the next reader sees the
+   *  fresh row instead of the cached one. */
+  private invalidateSessionCache(): void {
+    this.sessionPromise = null;
+  }
 
   private clientId(): string {
     return this.env.TIDAL_CLIENT_ID || DEFAULT_CLIENT_ID;
@@ -369,6 +387,7 @@ export class TidalAuth {
     await this.env.DB.prepare('DELETE FROM tidal_session WHERE id = 1').run().catch(() => null);
     // Best-effort KV cleanup so legacy data doesn't shadow D1.
     await this.env.SESSIONS.delete(KV_KEY).catch(() => {});
+    this.invalidateSessionCache();
   }
 
   /**
@@ -384,6 +403,12 @@ export class TidalAuth {
   }
 
   private async getCachedSession(): Promise<TidalTokens | null> {
+    if (this.sessionPromise) return this.sessionPromise;
+    this.sessionPromise = this.loadSessionFromStorage();
+    return this.sessionPromise;
+  }
+
+  private async loadSessionFromStorage(): Promise<TidalTokens | null> {
     // Primary: D1. Fallback: legacy KV blob from before the migration.
     const row = await this.env.DB
       .prepare(
@@ -435,6 +460,10 @@ export class TidalAuth {
   }
 
   private async cacheSession(tokens: TidalTokens): Promise<void> {
+    // Drop the per-instance memo — the row is about to change and the
+    // next reader needs the fresh data, not the version we loaded
+    // earlier in the request.
+    this.invalidateSessionCache();
     const updatedAt = Math.floor(Date.now() / 1000);
     const key = this.env.SESSION_ENCRYPTION_KEY;
     const [accessToken, refreshToken, clientSecret] = await Promise.all([
