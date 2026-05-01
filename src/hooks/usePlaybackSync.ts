@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import { usePlayerStore } from '@/store/player';
+import { useSettingsStore } from '@/store/settings';
+import { primeAudioForPlay, prefetchStreamUrl } from '@/hooks/useAudioPlayer';
 import type { Track } from '@/types';
 
 /** Minimal subset the player store accepts via setTrack(). Pages and lists
@@ -52,6 +54,26 @@ export function useTrackPlayback(trackId: string) {
         togglePlay();
         return;
       }
+      // We're in a guaranteed user gesture (a click). Prime the
+      // audio engine SYNCHRONOUSLY before propagating the new track
+      // into the store: that's the only chance browsers give us to
+      // build/resume the AudioContext without a deferred-gesture
+      // failure, and it lets the device's audio HAL spin up in
+      // parallel with the React render + Zustand subscriber chain
+      // that eventually triggers `loadTrack`. Saves ~50-300 ms on
+      // every cold-start play.
+      primeAudioForPlay();
+      // Same gesture, parallel: kick off the stream URL fetch into
+      // the in-flight cache. By the time `useAudioPlayer.loadTrack`
+      // is reached (typically one React render later) the request
+      // is already mid-flight, and on a cache hit it's instant.
+      // Cache hits skip this entirely. Tidal-stream tracks only —
+      // upload and pre-resolved (room-bridge) tracks short-circuit
+      // inside `prefetchStreamUrl`.
+      prefetchStreamUrl(
+        { id: track.id },
+        useSettingsStore.getState().tidalQuality,
+      );
       setTrack(toPlayable(track));
       if (queue) setQueue(queue.map(toPlayable));
     },
@@ -87,6 +109,11 @@ export function useCollectionPlayback(trackIds: string[]) {
       }
       const first = tracks[0];
       if (!first) return;
+      primeAudioForPlay();
+      prefetchStreamUrl(
+        { id: first.id },
+        useSettingsStore.getState().tidalQuality,
+      );
       setTrack(toPlayable(first));
       setQueue(tracks.map(toPlayable));
     },
@@ -94,4 +121,24 @@ export function useCollectionPlayback(trackIds: string[]) {
   );
 
   return { isCollectionActive, isCollectionPlaying, playCollection };
+}
+
+/** Hover/long-press hint for "the user is about to play this track."
+ *  Kicks off the stream URL fetch in the background so the click that
+ *  follows lands on a warm cache. Idempotent — calling it on every
+ *  pointerenter is fine, the in-flight cache will dedupe. Skipped for
+ *  the currently-active track (already loaded) and for non-Tidal
+ *  sources (handled by `prefetchStreamUrl`). */
+export function useTrackHoverPrefetch(): (track: { id: string }) => void {
+  const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  return useCallback(
+    (track) => {
+      if (track.id === currentId) return;
+      prefetchStreamUrl(
+        { id: track.id },
+        useSettingsStore.getState().tidalQuality,
+      );
+    },
+    [currentId],
+  );
 }

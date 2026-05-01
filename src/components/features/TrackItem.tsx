@@ -5,7 +5,7 @@ import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
-import { useTrackPlayback } from '@/hooks/usePlaybackSync';
+import { useTrackPlayback, useTrackHoverPrefetch } from '@/hooks/usePlaybackSync';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -47,6 +47,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   // in the app, not just on the active row, so we use `isActive` (not
   // `isActivePlaying`) as the toggle gate.
   const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
+  const hoverPrefetch = useTrackHoverPrefetch();
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -74,6 +75,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min((index ?? 0) * 0.025, 0.4) }}
       className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
+      onPointerEnter={() => hoverPrefetch(track)}
       onClick={() => {
         // Active row → toggle play/pause (whether currently playing or
         // paused). Inactive row → owner's onPlay callback wires up the

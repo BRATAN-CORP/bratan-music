@@ -5,6 +5,10 @@ import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 import { api, ApiError } from '@/lib/api';
+import {
+  getCachedStreamUrl,
+  getOrStartInFlight,
+} from '@/lib/streamUrlCache';
 
 import type { TidalQuality } from '@/store/settings';
 
@@ -28,6 +32,13 @@ function getNextFallbackQuality(current: string): TidalQuality | null {
  * skip the global quality-fallback ladder entirely. The room owns its
  * own quality decision so guests are listening to the same selection
  * the host streamed, not whatever the guest's personal preference was.
+ *
+ * Tidal-track URLs are routed through `getOrStartInFlight` which both
+ * memoises the resolved URL in a per-session in-memory cache and
+ * coalesces concurrent prefetches (e.g. hover-prefetch + click-play)
+ * into a single worker call. Cache TTL mirrors the worker's KV TTL of
+ * 300 s with a generous slop window so we never hand the audio element
+ * a URL that's about to expire.
  */
 async function fetchStreamUrl(track: { id: string; source?: string; streamUrl?: string }, quality: string): Promise<string> {
   if (track.streamUrl) return track.streamUrl;
@@ -36,8 +47,48 @@ async function fetchStreamUrl(track: { id: string; source?: string; streamUrl?: 
     const token = useAuthStore.getState().accessToken ?? '';
     return `${API_BASE}/uploads/${rawId}/stream?token=${encodeURIComponent(token)}`;
   }
-  const res = await api.get<{ url: string }>(`/tracks/${track.id}/stream?quality=${encodeURIComponent(quality)}`);
-  return res.url;
+  // Hot path — synchronous cache hit. Skips the whole worker round
+  // trip, including the warm KV cache (~50 ms) and the audio.crossOrigin
+  // CORS handshake's preconnect cost (~30 ms on cold connections).
+  const cached = getCachedStreamUrl(track.id, quality);
+  if (cached) return cached;
+  return getOrStartInFlight(track.id, quality, async () => {
+    const res = await api.get<{ url: string }>(
+      `/tracks/${track.id}/stream?quality=${encodeURIComponent(quality)}`,
+    );
+    return res.url;
+  });
+}
+
+/**
+ * Synchronous side-effect to fire from a UI click handler so the
+ * stream URL fetch starts in the SAME tick as the click — not on the
+ * next React render after `setTrack` propagates through Zustand. The
+ * deferred path (set state → re-render → useEffect → loadTrack →
+ * fetchStreamUrl) is what made the audible-after-click number sit
+ * around ~3 s on mobile: the React render alone can be ~50 ms on
+ * lower-end devices and adds up with the Tidal round trip and
+ * loadeddata buffer. Calling this from the row's onClick gives us a
+ * zero-cost head start.
+ *
+ * Caller MUST also call `setTrack(track)` immediately afterwards —
+ * this only kicks off the network fetch into the in-flight promise
+ * map, where `loadTrack`'s `fetchStreamUrl` will later pick it up
+ * via `getOrStartInFlight`.
+ */
+export function prefetchStreamUrl(
+  track: { id: string; source?: string; streamUrl?: string },
+  quality: string,
+): void {
+  if (track.streamUrl) return;
+  if (track.id.startsWith('upload:') || track.source === 'upload') return;
+  if (getCachedStreamUrl(track.id, quality)) return;
+  void getOrStartInFlight(track.id, quality, async () => {
+    const res = await api.get<{ url: string }>(
+      `/tracks/${track.id}/stream?quality=${encodeURIComponent(quality)}`,
+    );
+    return res.url;
+  }).catch(() => { /* swallow — loadTrack will surface real errors */ });
 }
 
 type Slot = 'a' | 'b';
@@ -411,6 +462,39 @@ function ensureAudioGraph(): AudioBundle {
     b.ctxFailed = true;
   }
   return b;
+}
+
+/**
+ * Wake the audio engine inside a user gesture. Call from a row's
+ * `onClick`, the player's play button, etc. — anywhere we KNOW we're
+ * about to play in the same tick. Two effects:
+ *
+ *   1. Builds the AudioContext if it hasn't been built yet. The first
+ *      `new AudioContext()` call must happen inside a user gesture or
+ *      Chrome/Safari leave the context in `suspended` state and refuse
+ *      to resume it later without another gesture. The deferred path
+ *      (build inside `loadTrack`, after `await fetchStreamUrl`) was
+ *      stuck behind ~50–800 ms of network latency on cold starts and
+ *      occasionally lost the gesture, leaving silent playback even
+ *      though the audio element was ticking.
+ *
+ *   2. Resumes the context if it's already suspended (auto-suspended
+ *      after long inactivity, after the user backgrounded the tab,
+ *      after the OS interrupted audio for a phone call, …). Resuming
+ *      from a real gesture wakes the output device synchronously,
+ *      shaving ~50–300 ms off the first-note latency on devices that
+ *      lazily power up the audio HAL.
+ *
+ * Does nothing on iOS (we never build an AudioContext there — see
+ * `ensureAudioGraph`). The audio element's native output is gestured
+ * implicitly by the upcoming `audio.play()` call.
+ */
+export function primeAudioForPlay(): void {
+  if (typeof window === 'undefined') return;
+  const b = ensureAudioGraph();
+  if (b.ctx && b.ctx.state === 'suspended') {
+    void b.ctx.resume().catch(() => { /* gesture-not-recent edge case */ });
+  }
 }
 
 function inactiveSlot(b: AudioBundle): Slot {
@@ -802,6 +886,29 @@ export function useAudioPlayer() {
     const initialStoreProgress = usePlayerStore.getState().progress;
     if (initialStoreProgress > 0.05) {
       pendingRestoreProgressRef.current = initialStoreProgress;
+    }
+
+    // Build the AudioContext + filter chain BEFORE we await on the
+    // network. The first `new AudioContext()` call has to happen
+    // inside a user gesture or the browser leaves the context
+    // suspended; the click handler also calls `primeAudioForPlay`
+    // which builds the graph synchronously, but doing it here as
+    // well covers the auto-advance / room-bridge / programmatic-play
+    // paths that don't pass through the click handler. No-op if the
+    // graph is already built.
+    ensureAudioGraph();
+
+    // Kick off ctx.resume() in PARALLEL with the stream URL fetch
+    // and the loadeddata wait below. Awaiting it after the network
+    // round trip (the previous shape) was responsible for ~50–300 ms
+    // of dead air on devices that lazily power up the audio HAL —
+    // resume() returns the moment the output is ready, so launching
+    // it now lets the device wake while we're already busy on the
+    // network. We don't await the promise — playback flows can
+    // proceed once the output is up, which is essentially always
+    // before the audio element finishes buffering.
+    if (b.ctx && b.ctx.state === 'suspended') {
+      void b.ctx.resume().catch(() => { /* ignore — gesture stale */ });
     }
 
     // Wait for any in-flight play promise before touching the audio element.
