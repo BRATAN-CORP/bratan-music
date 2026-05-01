@@ -85,7 +85,17 @@ export async function decryptSecret(stored: string | null | undefined, rawKey: s
   if (!key) {
     throw new Error('SESSION_ENCRYPTION_KEY too short / invalid');
   }
-  const [, ivPart, ctPart] = stored.split(':');
+  // Stored format is `enc:v1:<iv>:<ct>` — split produces 4 parts:
+  // ['enc', 'v1', '<iv>', '<ct>']. Slice past the prefix and split on
+  // the single remaining colon so we always pick up the iv and ct
+  // even if the version string ever grows extra colons in the future.
+  const rest = stored.slice(ENC_PREFIX.length);
+  const sep = rest.indexOf(':');
+  if (sep <= 0) {
+    throw new Error('Malformed encrypted Tidal token blob');
+  }
+  const ivPart = rest.slice(0, sep);
+  const ctPart = rest.slice(sep + 1);
   if (!ivPart || !ctPart) {
     throw new Error('Malformed encrypted Tidal token blob');
   }
