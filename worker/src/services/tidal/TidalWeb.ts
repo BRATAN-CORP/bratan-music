@@ -85,6 +85,13 @@ const DISCOVERY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 // transiently returned an error.
 const DISCOVERY_NEGATIVE_CACHE_TTL_S = 60 * 60; // 1 hour
 const DISCOVERY_CACHE_PREFIX = 'tidal-track-formats:';
+// When the discovery endpoint returns a structural failure (404 —
+// endpoint not accessible with the current auth; or 403), we set a
+// global breaker that suppresses ALL subsequent discovery calls for
+// the TTL below. This avoids paying 1 wasted RTT per cold track when
+// the endpoint simply can't work right now.
+const DISCOVERY_BREAKER_KEY = 'tidal-discovery-breaker';
+const DISCOVERY_BREAKER_TTL_S = 60 * 60; // 1 hour
 
 export class TidalWeb {
   private kv: KVNamespace | null;
@@ -235,6 +242,13 @@ export class TidalWeb {
    * instead of failing hard.
    */
   private async discoverQualities(trackId: string): Promise<DiscoveredQualities> {
+    // Global circuit breaker: if a previous call discovered that
+    // openapi.tidal.com is unreachable (wrong auth scope, 404,
+    // etc.), skip all per-track attempts for up to 1 hour.
+    if (await this.isDiscoveryBreakerOpen()) {
+      return { qualities: [] };
+    }
+
     const cached = await this.readDiscoveryCache(trackId);
     if (cached) return cached;
 
@@ -288,13 +302,17 @@ export class TidalWeb {
     }
 
     if (!res.ok) {
-      // Read body for diagnostics. Capped to keep noisy 4xx pages
-      // out of the worker tail.
       let detail = '';
       try { detail = (await res.text()).slice(0, 200); } catch { /* ignore */ }
       console.warn(
         `[TidalWeb] discoverQualities ${trackId} non-OK status=${res.status} body=${detail}`,
       );
+      // Structural 4xx (403, 404) means the endpoint is unreachable
+      // with the current auth. Trip the global breaker so every
+      // subsequent cold track skips discovery for the next hour.
+      if (res.status === 403 || res.status === 404) {
+        await this.tripDiscoveryBreaker();
+      }
       return finalize([]);
     }
 
@@ -356,6 +374,38 @@ export class TidalWeb {
       );
     } catch {
       /* ignore — cache is best-effort */
+    }
+  }
+
+  // ── Global discovery circuit breaker ────────────────────────────
+  //
+  // When openapi.tidal.com is unreachable (returns 403/404 because
+  // the worker's user-bearer token isn't accepted by the developer
+  // platform), hammering it per-track wastes one RTT on every cold
+  // listen. The breaker caches a single flag for 1h; while it's
+  // set, `discoverQualities` bails immediately.
+
+  private async isDiscoveryBreakerOpen(): Promise<boolean> {
+    if (!this.kv) return false;
+    try {
+      const v = await this.kv.get(DISCOVERY_BREAKER_KEY);
+      return v != null;
+    } catch {
+      return false;
+    }
+  }
+
+  private async tripDiscoveryBreaker(): Promise<void> {
+    if (!this.kv) return;
+    try {
+      await this.kv.put(DISCOVERY_BREAKER_KEY, '1', {
+        expirationTtl: DISCOVERY_BREAKER_TTL_S,
+      });
+      console.warn(
+        `[TidalWeb] discovery breaker tripped — suppressing openapi.tidal.com calls for ${DISCOVERY_BREAKER_TTL_S}s`,
+      );
+    } catch {
+      /* ignore */
     }
   }
 
