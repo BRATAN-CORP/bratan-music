@@ -175,6 +175,27 @@ const AUTO_CROSSFADE_SEEK_GUARD_MS = 750;
 let bundle: AudioBundle | null = null;
 let corsRetried: Record<Slot, boolean> = { a: false, b: false };
 
+/**
+ * Module-level record of what the queue[idx+1] preload has buffered
+ * into the inactive slot. Lifted out of the hook (was a useRef) so the
+ * promotion path B in the track-change effect can read it cleanly and
+ * future external callers (a hover-driven byte preload, etc.) can plug
+ * in without prop-drilling a ref through React state.
+ *
+ * Set when the inactive slot finishes a preload (`tryLoadSrc` resolved).
+ * Cleared when (a) the slot is consumed by a successful crossfade /
+ * promotion, (b) the user-driven track change wipes the slot, or
+ * (c) a fresh preload supersedes it. Kept SEPARATE from `b.loaded[slot]`
+ * because setting `b.loaded` would make the auto-crossfade-finished
+ * branch falsely match a yet-to-play preload and skip the fade.
+ */
+let preloadedIncoming: { slot: Slot; trackId: string } | null = null;
+/** Track id currently being byte-preloaded into the inactive slot.
+ *  Module-level so the promotion path B in the track-change effect can
+ *  detect a preload-in-flight and avoid a duplicate fetch on the active
+ *  slot. */
+let preloadingNext: string | null = null;
+
 export const EQ_BANDS = [60, 170, 350, 1000, 3500, 10000] as const;
 
 /**
@@ -501,6 +522,8 @@ function inactiveSlot(b: AudioBundle): Slot {
   return b.active === 'a' ? 'b' : 'a';
 }
 
+
+
 /**
  * Which slot currently "owns" the display surfaces (timeline, duration,
  * seek target) for the given track id. Normally this is `b.active`, but
@@ -823,15 +846,11 @@ export function useAudioPlayer() {
    *  metadata loads. Cleared after the seek lands or playback advances. */
   const pendingRestoreProgressRef = useRef<number | null>(null);
 
-  /**
-   * What the preload effect has (or is about to) buffer into the inactive
-   * slot. Kept separate from `b.loaded[slot]` because a preloaded-but-
-   * not-yet-played slot must NOT trick the track-change effect into
-   * auto-promoting the inactive slot (which would hard-switch into the
-   * next track without a crossfade). startCrossfade (and soft-switch)
-   * consult this ref to decide whether they can skip the fetch+load step.
-   */
-  const preloadedIncomingRef = useRef<{ slot: Slot; trackId: string } | null>(null);
+  // What the preload effect has buffered into the inactive slot lives
+  // in module-level `preloadedIncoming` (see top of file). Lifted out
+  // of the hook so the promotion path B in the track-change effect can
+  // read/clear it cleanly and future external callers can record their
+  // own preloads without prop-drilling a ref through React state.
 
   /** Try loading the audio src and wait for it to become playable.
    *  Resolves with true on success, false on media error.
@@ -1097,6 +1116,78 @@ export function useAudioPlayer() {
       return;
     }
 
+    // Promotion path B: the inactive slot was speculatively pre-buffered
+    // by the queue[idx+1] preload (or a hover / click-time
+    // `preloadTrackBytes` call) and the user just asked to play exactly
+    // that track. The bytes are already loaded; we hard-switch the
+    // active slot pointer instead of going through a fresh
+    // `loadTrack` round-trip. This is the change that makes the
+    // manual "next" button feel instant for users who never had the
+    // crossfade setting on (it was previously gated behind it).
+    //
+    // Two guards are deliberately strict:
+    //  1. The audio element must have actually loaded its first frame
+    //     (`readyState >= 2`). `tryLoadSrc` resolved on `loadeddata`,
+    //     but if anything cleared the slot in between (a competing
+    //     crossfade, a `versionBumped` reload) we'd otherwise promote
+    //     a dead element and `safePlay` would reject.
+    //  2. We bail out if a crossfade is currently in flight. Promoting
+    //     mid-fade would tear the gain ramp and the user would hear
+    //     an audible cut. The auto-fade-finished branch above already
+    //     handles the post-fade case via `b.loaded`.
+    if (
+      preloadedIncoming != null
+      && preloadedIncoming.trackId === currentTrack.id
+      && preloadedIncoming.slot === inactiveSlot(b)
+      && !versionBumped
+      && !crossfadingRef.current
+    ) {
+      const incoming = preloadedIncoming.slot;
+      const outgoing = b.active;
+      const incomingAudio = b.audios[incoming];
+      if (incomingAudio.src && incomingAudio.readyState >= 2) {
+        cancelRamp();
+        crossfadingRef.current = false;
+        b.crossfadingInto = null;
+        b.crossfadeKind = null;
+        safePause(outgoing);
+        setSlotGain(outgoing, 0);
+        b.loaded[outgoing] = null;
+        b.active = incoming;
+        b.loaded[incoming] = currentTrack.id;
+        try { incomingAudio.currentTime = 0; } catch { /* ignore */ }
+        const ps = usePlayerStore.getState();
+        setSlotGain(incoming, ps.muted ? 0 : ps.volume);
+        // tryLoadSrc just succeeded for this slot; burn the CORS budget
+        // so a mid-stream error doesn't trigger `reloadWithoutCors`
+        // (which calls `audio.load()` and rewinds to 0).
+        corsRetried[incoming] = true;
+        // Reset per-slot timing trackers so isNaturalProgression /
+        // auto-crossfade trigger judge the new track fresh.
+        b.lastRealT[incoming] = 0;
+        b.lastSeekAt[incoming] = 0;
+        // Slot consumed.
+        preloadedIncoming = null;
+        // Re-publish duration into the store now that the incoming
+        // slot owns the track id (durationchange already fired during
+        // the preload, but the owner-slot guard suppressed it).
+        const dur = incomingAudio.duration;
+        if (isFinite(dur) && dur > 0) {
+          setDuration(dur);
+        }
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            artwork: currentTrack.coverUrl
+              ? [{ src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' }]
+              : [],
+          });
+        }
+        return;
+      }
+    }
+
     const trackChanged = currentTrack.id !== b.loaded[b.active] && currentTrack.id !== loadingRef.current;
     if (trackChanged || versionBumped) {
       // Reset quality fallback to user's chosen quality for the new track.
@@ -1156,10 +1247,10 @@ export function useAudioPlayer() {
       // startCrossfade that the upcoming track is already buffered
       // and skip the fetch — leading to "next-natural-end fades into
       // silence" on rare edge cases.
-      preloadedIncomingRef.current = null;
+      preloadedIncoming = null;
       loadTrack(currentTrack);
     }
-  }, [currentTrack, loadTrack, streamVersion, tidalQuality]);
+  }, [currentTrack, loadTrack, streamVersion, tidalQuality, setDuration]);
 
   // Play / pause toggle on the active slot.
   useEffect(() => {
@@ -1293,8 +1384,8 @@ export function useAudioPlayer() {
     // so the track-change effect's "promote preloaded slot" branch
     // doesn't mistake the preload for a completed soft-switch.
     const preloaded =
-      preloadedIncomingRef.current?.trackId === nextTrack.id
-      && preloadedIncomingRef.current?.slot === incoming
+      preloadedIncoming?.trackId === nextTrack.id
+      && preloadedIncoming?.slot === incoming
       && audio.src !== ''
       && audio.readyState >= 2;
 
@@ -1342,8 +1433,8 @@ export function useAudioPlayer() {
         b.loaded[incoming] = nextTrack.id;
         b.lastRealT[incoming] = 0;
         b.lastSeekAt[incoming] = 0;
-        if (preloadedIncomingRef.current?.slot === incoming) {
-          preloadedIncomingRef.current = null;
+        if (preloadedIncoming?.slot === incoming) {
+          preloadedIncoming = null;
         }
       }
 
@@ -1412,14 +1503,25 @@ export function useAudioPlayer() {
   }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, setDuration, setProgress, tidalQuality]);
 
   // Proactive preload of queue[idx+1] into the inactive slot while the
-  // user is playing with crossfade enabled. By the time startCrossfade
-  // fires, the incoming stream is already buffered — no fetch + canplay
-  // latency in the critical fade window. Tracked via `preloadedIncomingRef`
-  // (NOT `b.loaded`), so the track-change effect's "promote inactive slot"
-  // branch doesn't mistake a preload for a completed soft-switch.
-  const preloadingNextRef = useRef<string | null>(null);
+  // user is playing. By the time startCrossfade fires (or the user
+  // clicks `next` manually), the incoming stream is already buffered —
+  // no fetch + canplay latency in the critical promotion window.
+  // Tracked via `preloadedIncoming` (NOT `b.loaded`), so the
+  // auto-crossfade-finished branch in the track-change effect doesn't
+  // mistake a preload for a completed soft-switch; a parallel branch
+  // further down checks `preloadedIncoming` explicitly to promote the
+  // pre-buffered slot on manual jumps.
+  //
+  // No longer gated on `crossfade` — even when the user has the
+  // smooth-fade setting OFF, having `queue[idx+1]` already in the
+  // inactive slot is the difference between a 4-second click-to-audible
+  // gap and an effectively-instant one for the most common
+  // "I want the next song" interaction (manual next button or end-of-
+  // track auto-advance). The Tidal-side cost is the same: exactly one
+  // `playbackinfopostpaywall` per track the user actually wanted to
+  // hear, just paid earlier in time.
   useEffect(() => {
-    if (!crossfade || !isPlaying || !currentTrack) return;
+    if (!isPlaying || !currentTrack) return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
     const nextTrack = queue[idx + 1];
@@ -1429,11 +1531,11 @@ export function useAudioPlayer() {
     // Don't fight with an in-flight crossfade or a stale preload.
     if (crossfadingRef.current) return;
     if (
-      preloadedIncomingRef.current?.trackId === nextTrack.id
-      && preloadedIncomingRef.current?.slot === incoming
+      preloadedIncoming?.trackId === nextTrack.id
+      && preloadedIncoming?.slot === incoming
     ) return;
-    if (preloadingNextRef.current === nextTrack.id) return;
-    preloadingNextRef.current = nextTrack.id;
+    if (preloadingNext === nextTrack.id) return;
+    preloadingNext = nextTrack.id;
     let cancelled = false;
     (async () => {
       try {
@@ -1447,24 +1549,27 @@ export function useAudioPlayer() {
         const ok = await tryLoadSrc(audio, url);
         if (cancelled || !ok) return;
         try { audio.currentTime = 0; } catch { /* ignore */ }
-        // Record the preload in OUR ref only. We intentionally don't
-        // touch `b.loaded[incoming]` — that would make the track-change
-        // effect auto-promote the inactive slot on a user `next()` click
-        // and skip the crossfade ramp entirely.
-        preloadedIncomingRef.current = { slot: incoming, trackId: nextTrack.id };
+        // Record the preload in module state only. We intentionally
+        // don't touch `b.loaded[incoming]` — that would make the
+        // auto-crossfade-finished branch in the track-change effect
+        // mis-promote a yet-to-be-played preload as a finished soft-
+        // switch and skip the crossfade ramp entirely. The promotion
+        // path lives a few lines down with explicit `preloadedIncoming`
+        // checks.
+        preloadedIncoming = { slot: incoming, trackId: nextTrack.id };
         b.lastRealT[incoming] = 0;
         b.lastSeekAt[incoming] = 0;
       } catch {
         // Swallow — the normal startCrossfade path will retry with its
         // own fallback chain.
       } finally {
-        if (preloadingNextRef.current === nextTrack.id) {
-          preloadingNextRef.current = null;
+        if (preloadingNext === nextTrack.id) {
+          preloadingNext = null;
         }
       }
     })();
     return () => { cancelled = true; };
-  }, [crossfade, isPlaying, currentTrack, queue, tidalQuality]);
+  }, [isPlaying, currentTrack, queue, tidalQuality]);
 
   // Time updates + ended + error + crossfade trigger.
   useEffect(() => {
