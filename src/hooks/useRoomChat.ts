@@ -54,6 +54,17 @@ export interface UiRoomMessage extends RoomMessage {
   pending?: boolean;
   /** True if `send()` failed and the row should be marked as undelivered. */
   failed?: boolean;
+  /**
+   * Stable React-key for the row that survives the swap of an
+   * optimistic row (negative `id`) for the canonical server row
+   * (positive `id`). Without this, `<AnimatePresence>` sees the key
+   * change as an exit-then-enter and replays the row's entrance
+   * animation a second time the moment the server echo lands —
+   * exactly the "double pop on send" the user reported. Pending
+   * rows get a random `clientKey` at insert time and we carry it
+   * over when we replace them with the real row.
+   */
+  clientKey?: string;
 }
 
 interface UseRoomChatResult {
@@ -327,11 +338,14 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       const trimmed = body.trim();
       if (!trimmed) return;
 
-      // 1. Build an optimistic row keyed by a unique negative id. We
-      //    use `-Date.now() - <jitter>` so concurrent sends never
-      //    collide with each other (and never collide with server ids
-      //    which are positive).
+      // 1. Build an optimistic row keyed by a unique negative id +
+      //    a stable `clientKey`. The `clientKey` is what React uses
+      //    as the row's identity inside `<AnimatePresence>`, so when
+      //    the server echo lands and we replace `id` with the real
+      //    positive id below, the row keeps the same key and does
+      //    NOT replay its entrance animation.
       const tempId = -(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+      const clientKey = `local-${tempId}`;
       const optimistic: UiRoomMessage = {
         id: tempId,
         userId: me?.id ?? 'me',
@@ -340,6 +354,7 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
         body: trimmed,
         createdAtMs: Date.now(),
         pending: true,
+        clientKey,
       };
       setMessages((prev) => [...prev, optimistic]);
       setPendingCount((n) => n + 1);
@@ -353,17 +368,28 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
         if (!real) {
           // Server didn't echo a row — drop the optimistic placeholder
           // and rely on the next poll. Shouldn't happen but is safe.
-          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          setMessages((prev) => prev.filter((m) => m.clientKey !== clientKey));
           return;
         }
-        // 2. Swap the placeholder for the canonical row in-place,
-        //    deduping in case the next poll already picked it up.
+        // 2. Replace the optimistic row IN PLACE — same `clientKey`,
+        //    same array slot — so React/Motion treats this as an
+        //    update of the existing row, not an exit + enter. The
+        //    pending dim reverts and `id` flips to the real one
+        //    without any visible animation. Also drop any duplicate
+        //    that the next poll might have already merged.
         setMessages((prev) => {
-          const without = prev.filter((m) => m.id !== tempId && m.id !== real.id);
-          const next: UiRoomMessage[] = [...without, real];
-          const confirmed = next.filter((m) => m.id >= 0).sort((a, b) => a.id - b.id);
-          const pending = next.filter((m) => m.id < 0);
-          const merged = confirmed.concat(pending);
+          let replaced = false;
+          const merged: UiRoomMessage[] = [];
+          for (const m of prev) {
+            if (m.clientKey === clientKey) {
+              merged.push({ ...real, clientKey });
+              replaced = true;
+              continue;
+            }
+            if (m.id === real.id) continue;
+            merged.push(m);
+          }
+          if (!replaced) merged.push({ ...real, clientKey });
           if (real.id > lastIdRef.current) lastIdRef.current = real.id;
           return merged.length > MAX_MESSAGES_KEPT
             ? merged.slice(merged.length - MAX_MESSAGES_KEPT)
@@ -379,7 +405,9 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
         //    retry hint. Don't drop it — the user's text shouldn't
         //    silently disappear.
         setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...m, pending: false, failed: true } : m)),
+          prev.map((m) =>
+            m.clientKey === clientKey ? { ...m, pending: false, failed: true } : m,
+          ),
         );
         setError(err instanceof Error ? err.message : 'Не удалось отправить');
       } finally {

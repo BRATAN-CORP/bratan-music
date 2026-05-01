@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Send, MessageSquare, Loader2, AlertCircle } from 'lucide-react';
+import { Send, MessageSquare, AlertCircle } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRoomChat, type UiRoomMessage } from '@/hooks/useRoomChat';
 import { useAuthStore } from '@/store/auth';
@@ -22,15 +22,19 @@ interface RoomChatProps {
  *   - Avatars are circular (`rounded-full`) and slightly larger than
  *     in the previous iteration to read clearly at message density.
  *   - Each row mounts with a spring entrance (motion.dev) so new
- *     messages drift in instead of popping in.
+ *     messages drift in instead of popping in. The optimistic row
+ *     gets a stable `clientKey` from `useRoomChat`, so when the
+ *     server echo lands and we replace `id` with the real one the
+ *     row keeps its key — no exit-then-enter, no second pop.
  *   - The composer is **not disabled while sending** — the optimistic
  *     row appears in the list instantly and the input clears, so the
- *     user can immediately type the next message. A subtle spinner on
- *     the send button conveys background activity without blocking.
+ *     user can immediately type the next message. The send button
+ *     is intentionally always rendered with the same icon, so there
+ *     is no in-flight spinner to flash and feel laggy.
  */
 export function RoomChat({ roomId }: RoomChatProps) {
   const me = useAuthStore((s) => s.user);
-  const { messages, send, sending, error } = useRoomChat(roomId);
+  const { messages, send, error } = useRoomChat(roomId);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [text, setText] = useState('');
   const reduceMotion = useReducedMotion();
@@ -84,7 +88,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
           <AnimatePresence initial={false}>
             {messages.map((m) => (
               <ChatRow
-                key={m.id}
+                key={m.clientKey ?? `srv-${m.id}`}
                 message={m}
                 mine={m.userId === me?.id}
                 reduceMotion={!!reduceMotion}
@@ -113,11 +117,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
           transition={{ type: 'spring', stiffness: 520, damping: 28 }}
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent)] text-white shadow-sm transition-opacity disabled:opacity-50"
         >
-          {sending ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Send size={14} />
-          )}
+          <Send size={14} />
         </motion.button>
       </form>
 
@@ -140,7 +140,6 @@ function ChatRow({ message, mine, reduceMotion }: ChatRowProps) {
     ? 'bg-[var(--color-accent)]/15 text-foreground'
     : 'bg-secondary text-foreground';
   const failed = !!message.failed;
-  const pending = !!message.pending;
 
   return (
     <motion.div
@@ -174,8 +173,8 @@ function ChatRow({ message, mine, reduceMotion }: ChatRowProps) {
         </div>
         <div
           className={`whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-sm leading-snug ${bubbleTone} ${
-            pending ? 'opacity-70' : ''
-          } ${failed ? 'border border-red-400/40' : ''}`}
+            failed ? 'border border-red-400/40' : ''
+          }`}
         >
           {message.body}
         </div>
