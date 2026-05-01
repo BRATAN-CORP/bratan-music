@@ -44,9 +44,18 @@ class_name = "ChatRoomDO"
 # CF Workers requires class migrations for every new DO class. The tag
 # is opaque to us — wrangler tracks which migrations were applied to a
 # given script. Keep this list append-only.
+#
+# `new_sqlite_classes` is the SQLite-backed DO storage backend.
+# We don't actually use storage on `ChatRoomDO` (the broadcast hub is
+# stateless beyond an in-memory `Set<WebSocket>`), but Cloudflare
+# requires this variant on the Workers Free plan — the older
+# `new_classes` form provisions a KV-backed namespace which is paid-
+# tier only and the API rejects the deploy with code 10097. SQLite-
+# backed DOs are forward-compatible with the paid plan, so this same
+# config works whether or not the project moves to a paid tier.
 [[migrations]]
 tag = "v1-chat-room-do"
-new_classes = ["ChatRoomDO"]
+new_sqlite_classes = ["ChatRoomDO"]
 
 # Secrets (задаются через wrangler secret put):
 # TIDAL_CLIENT_ID
