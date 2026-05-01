@@ -283,7 +283,27 @@ export function useRoomBridge(): void {
             streamUrl,
           };
           ps.setTrackAt(trackPayload, targetPositionMs / 1000, !state.isPaused);
-          ps.setQueue([trackPayload]);
+          // Only replace the queue when the local one doesn't already
+          // contain this track. The previous unconditional
+          // `setQueue([trackPayload])` destroyed the host's own queue
+          // every time the bridge round-tripped the host's freshly
+          // chosen track back through `/state` — leaving the host
+          // (and any guest who'd built up their own queue) with a
+          // single-item queue. That broke next/prev buttons, the
+          // horizontal swipe gesture on the mini-player and
+          // fullscreen cover, and the auto-advance at end-of-track,
+          // because all three resolve the next item via
+          // `queue[idx + 1]` and there was no idx + 1.
+          //
+          // We still want a guest who joins a room cold (empty queue,
+          // or a queue from a different browsing context) to at least
+          // have the room's current track in their queue so the UI
+          // surfaces (queue list, idx-based navigation) line up with
+          // what's playing. So: keep the local queue when it already
+          // contains the track, otherwise seed it with the single
+          // room track exactly like before.
+          const queueHasTrack = ps.queue.some((t) => t.id === trackPayload.id);
+          if (!queueHasTrack) ps.setQueue([trackPayload]);
           r.appliedStreamUrlForTrackId = state.track.id;
         } else {
           // Same track, same URL. The version bumped because of a
