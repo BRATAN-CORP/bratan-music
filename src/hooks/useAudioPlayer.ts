@@ -750,16 +750,26 @@ export function useAudioPlayer() {
   const preloadedIncomingRef = useRef<{ slot: Slot; trackId: string } | null>(null);
 
   /** Try loading the audio src and wait for it to become playable.
-   *  Resolves with true on success, false on media error. */
+   *  Resolves with true on success, false on media error.
+   *
+   *  We resolve on `loadeddata` (decoder accepted the first frame) rather
+   *  than `canplay` (browser has buffered enough to play uninterrupted).
+   *  For Tidal HIGH (320kbps AAC) the gap is ~600-1200ms because the
+   *  browser waits to buffer ~2-3s of audio before firing canplay, which
+   *  the user perceived as the click-to-audible regression. `loadeddata`
+   *  fires after just a frame or two — the audio element keeps buffering
+   *  while the rest of the load pipeline runs and `audio.play()` is
+   *  called below; if the stream actually fails to decode mid-track the
+   *  `error` handler still triggers the quality fallback chain. */
   const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<boolean> => {
     return new Promise((resolve) => {
       const cleanup = () => {
-        audio.removeEventListener('canplay', onCanPlay);
+        audio.removeEventListener('loadeddata', onReady);
         audio.removeEventListener('error', onErr);
       };
-      const onCanPlay = () => { cleanup(); resolve(true); };
+      const onReady = () => { cleanup(); resolve(true); };
       const onErr = () => { cleanup(); resolve(false); };
-      audio.addEventListener('canplay', onCanPlay, { once: true });
+      audio.addEventListener('loadeddata', onReady, { once: true });
       audio.addEventListener('error', onErr, { once: true });
       audio.src = url;
       audio.load();
