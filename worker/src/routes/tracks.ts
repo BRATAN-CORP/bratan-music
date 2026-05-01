@@ -163,7 +163,12 @@ tracks.get('/:id/stream', async (c) => {
     if (newCount > 3) {
       // Over the limit — still recorded the attempt (so spamming
       // requests doesn't help), and refuse to hand out a stream URL.
-      return c.json({ error: 'Лимит 3 трека в сутки исчерпан. Оформите подписку.' }, 403);
+      // Status MUST be 402 Payment Required: the client (`useAudioPlayer`)
+      // branches on `ApiError.status === 402` to surface the global
+      // subscription paywall dialog. Returning 403 here used to make the
+      // dialog never open and the user got a generic "не удалось
+      // загрузить трек" instead of the upgrade prompt.
+      return c.json({ error: 'Лимит 3 трека в сутки исчерпан. Оформите подписку.' }, 402);
     }
   }
 
