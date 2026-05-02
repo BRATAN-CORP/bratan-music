@@ -147,11 +147,56 @@ export function AdminHealthPanel() {
   useEffect(() => { void load(); }, []);
   useEffect(() => { void loadLogs(); }, [loadLogs]);
 
-  // Auto-refresh the overview every 30s while the page is open. We don't
-  // poll the log feed because admins click a level to see fresh entries.
+  // Auto-refresh the overview while the admin keeps the tab visible.
+  // Two cost-saving rules over the previous "30s tick forever" loop —
+  // we were burning ~2 880 worker requests per day per open tab on
+  // health alone, and each /admin/health internally fans out to a D1
+  // write-probe + R2 head + Tidal pool count, so the real cost was
+  // 4-5x that. Cloudflare Workers free plan caps at 100 000 req/day.
+  //
+  //   1. Bump the interval to 90s. The health page is a glance dash,
+  //      not real-time monitoring — 90s freshness is plenty for
+  //      "did the cron run, are accounts ok, is D1 reachable".
+  //   2. Pause polling when the tab is hidden (visibilityState !==
+  //      'visible') and immediately fire one tick on return so the
+  //      checkboxes are accurate the moment the admin comes back.
+  //
+  // We don't poll the log feed at all — admins click a level/source
+  // filter to refresh, which already triggers a `loadLogs()` via the
+  // `[loadLogs]` effect above.
   useEffect(() => {
-    const id = setInterval(() => { void load(); }, 30_000);
-    return () => clearInterval(id);
+    let id: number | null = null;
+
+    const start = () => {
+      if (id !== null) return;
+      id = window.setInterval(() => { void load(); }, 90_000);
+    };
+    const stop = () => {
+      if (id !== null) {
+        window.clearInterval(id);
+        id = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        // One immediate tick so the checkboxes reflect the current
+        // state right when the admin focuses the tab — without this
+        // they'd see stale data for up to 90s after returning.
+        void load();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   // Compute the four "checkbox" severities. Layered thresholds:
