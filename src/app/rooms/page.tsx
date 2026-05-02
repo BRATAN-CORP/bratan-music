@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Switch } from '@/components/ui/Switch';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
@@ -296,29 +297,26 @@ function RoomPageInner() {
       {/* Host-only-control toggle (visible only to the host) */}
       {isHost && (
         <section className="mt-8">
-          <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-border bg-card/60 px-4 py-3">
-            <div>
+          <div className="flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-border bg-card/60 px-4 py-3">
+            <div className="min-w-0">
               <p className="text-sm font-medium">Только хост ставит треки</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Участники смогут только слушать — переключать музыку сможешь только ты.
               </p>
+              {settingsMut.isError && (
+                <p className="mt-1 text-xs text-destructive">
+                  Не удалось сохранить настройку. Попробуй ещё раз.
+                </p>
+              )}
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={hostOnlyControl}
-              onClick={() => void settingsMut.mutateAsync({ hostOnlyControl: !hostOnlyControl })}
+            <Switch
+              checked={hostOnlyControl}
+              onCheckedChange={(next) => {
+                settingsMut.mutate({ hostOnlyControl: next });
+              }}
               disabled={settingsMut.isPending}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
-                hostOnlyControl ? 'bg-[var(--color-accent)]' : 'bg-secondary'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-                  hostOnlyControl ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+              ariaLabel="Только хост ставит треки"
+            />
           </div>
         </section>
       )}

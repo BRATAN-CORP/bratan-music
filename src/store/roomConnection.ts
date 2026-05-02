@@ -66,7 +66,17 @@ export const useRoomConnectionStore = create<RoomConnectionState>((set) => ({
   members: [],
   serverNowMs: 0,
   setActive: ({ roomId, roomCode, roomName, hostId, hostOnlyControl }) =>
-    set({ roomId, roomCode, roomName, hostId, hostOnlyControl, isLive: false, state: null, members: [] }),
+    set((prev) => {
+      // Switching to a different room: tear down stale state so the
+      // bridge doesn't briefly render the previous room's playback.
+      if (prev.roomId !== roomId) {
+        return { roomId, roomCode, roomName, hostId, hostOnlyControl, isLive: false, state: null, members: [] };
+      }
+      // Same room — refresh metadata in place so we don't flicker the
+      // members list / "live" badge while the detail query refetches
+      // (e.g. after an optimistic settings update bumps the cache).
+      return { roomCode, roomName, hostId, hostOnlyControl };
+    }),
   setHostOnlyControl: (hostOnlyControl) => set({ hostOnlyControl }),
   setLive: (isLive) => set({ isLive }),
   setRemote: ({ state, members, serverNowMs }) => set({ state, members, serverNowMs }),

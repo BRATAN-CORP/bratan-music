@@ -589,6 +589,12 @@ export class RoomService {
     await this.env.DB.prepare(
       `UPDATE listening_rooms SET host_only_control = ?, updated_at = ? WHERE id = ?`
     ).bind(value ? 1 : 0, nowSec(), roomId).run();
+    // Bump the state row version so all members' /state polls see the
+    // change on their next tick — without this they'd keep their stale
+    // hostOnlyControl until they re-fetched the room detail.
+    await this.env.DB.prepare(
+      `UPDATE listening_room_state SET version = version + 1, updated_at_ms = ? WHERE room_id = ?`
+    ).bind(nowMs(), roomId).run();
     await this.touchRoom(roomId);
   }
 
