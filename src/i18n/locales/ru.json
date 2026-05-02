@@ -30,8 +30,6 @@
     "appearance": "Внешний вид",
     "language": "Язык интерфейса",
     "languageHint": "Меняет язык всех текстов в приложении.",
-    "languageDeviceBadge": "С устройства",
-    "languageDeviceBadgeAria": "Совпадает с языком устройства",
     "themeLight": "Светлая",
     "themeDark": "Тёмная",
     "crossfade": "Плавное переключение",

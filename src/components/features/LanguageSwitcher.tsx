@@ -1,15 +1,15 @@
-import { useMemo } from 'react';
-import { motion, LayoutGroup, useReducedMotion } from 'motion/react';
-import { Globe, Check, Sparkles } from 'lucide-react';
-import { LOCALES, detectDeviceLocale, useI18n, type Locale } from '@/i18n';
+import { motion, LayoutGroup } from 'motion/react';
+import { Check } from 'lucide-react';
+import { LOCALES, useI18n, type Locale } from '@/i18n';
 
 /**
  * Pill-style segmented language switcher with a motion-driven sliding
- * highlight, tactile press feedback, and a subtle gradient sheen on
- * the active option. Sits inside the existing `<SettingsCard />` so
- * the visual grammar matches the other toggles on the profile page.
+ * highlight. Sits inside a `<SettingsCard />` on the profile page; the
+ * card already provides the title + hint so this component is purely
+ * the radio group itself — keeping it free of inner headings avoids
+ * the "title above another title" layout glitch we used to ship.
  *
- * Why a custom component instead of `<Switch />`:
+ * Why a custom segmented control instead of `<Switch />`:
  *   - Switch is the project idiom for binary toggles; "language"
  *     deserves a discoverable label per choice.
  *   - The sliding highlight gives the user a clear "where I am →
@@ -30,55 +30,26 @@ import { LOCALES, detectDeviceLocale, useI18n, type Locale } from '@/i18n';
  */
 export function LanguageSwitcher() {
   const { locale, setLocale, t } = useI18n();
-  // The Telegram WebApp / `navigator.languages` chain is read once on
-  // mount — it doesn't move under the user, and we want a stable
-  // anchor for the "matches your device" hint so toggling between
-  // locales doesn't make the badge jump around.
-  const deviceLocale = useMemo(() => detectDeviceLocale(), []);
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-sm font-medium">
-            <motion.span
-              initial={false}
-              animate={{ rotate: locale === 'en' ? 180 : 0 }}
-              transition={{ type: 'spring', stiffness: 220, damping: 18 }}
-              aria-hidden
-              className="inline-flex"
-            >
-              <Globe size={13} className="text-muted-foreground" />
-            </motion.span>
-            {t('settings.language')}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('settings.languageHint')}
-          </p>
-        </div>
+    <LayoutGroup id="lang-switcher">
+      <div
+        role="radiogroup"
+        aria-label={t('settings.language')}
+        className="inline-flex rounded-full border border-border bg-background p-1 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+      >
+        {LOCALES.map((option) => (
+          <LocaleButton
+            key={option.code}
+            code={option.code}
+            flag={option.flag}
+            label={t(option.nameKey)}
+            active={locale === option.code}
+            onSelect={() => setLocale(option.code)}
+          />
+        ))}
       </div>
-      <LayoutGroup id="lang-switcher">
-        <div
-          role="radiogroup"
-          aria-label={t('settings.language')}
-          className="mt-3 inline-flex rounded-full border border-border bg-background p-1 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
-        >
-          {LOCALES.map((option) => (
-            <LocaleButton
-              key={option.code}
-              code={option.code}
-              flag={option.flag}
-              label={t(option.nameKey)}
-              active={locale === option.code}
-              isDevice={option.code === deviceLocale}
-              deviceBadge={t('settings.languageDeviceBadge')}
-              deviceBadgeAria={t('settings.languageDeviceBadgeAria')}
-              onSelect={() => setLocale(option.code)}
-            />
-          ))}
-        </div>
-      </LayoutGroup>
-    </div>
+    </LayoutGroup>
   );
 }
 
@@ -87,23 +58,10 @@ interface LocaleButtonProps {
   flag: string;
   label: string;
   active: boolean;
-  isDevice: boolean;
-  deviceBadge: string;
-  deviceBadgeAria: string;
   onSelect: () => void;
 }
 
-function LocaleButton({
-  code,
-  flag,
-  label,
-  active,
-  isDevice,
-  deviceBadge,
-  deviceBadgeAria,
-  onSelect,
-}: LocaleButtonProps) {
-  const reducedMotion = useReducedMotion();
+function LocaleButton({ code, flag, label, active, onSelect }: LocaleButtonProps) {
   return (
     <motion.button
       type="button"
@@ -118,7 +76,7 @@ function LocaleButton({
       {active && (
         <motion.span
           layoutId="lang-highlight"
-          className="absolute inset-0 overflow-hidden rounded-full"
+          className="absolute inset-0 rounded-full"
           style={{
             background:
               'linear-gradient(135deg, var(--color-accent) 0%, color-mix(in oklab, var(--color-accent) 85%, fuchsia) 100%)',
@@ -127,22 +85,7 @@ function LocaleButton({
           }}
           transition={{ type: 'spring', stiffness: 500, damping: 35 }}
           aria-hidden
-        >
-          {/* Diagonal sheen that sweeps across the active pill once
-              when it's selected. Pure cosmetic; suppressed under
-              prefers-reduced-motion so we don't flash anything at
-              motion-sensitive users. */}
-          {!reducedMotion && (
-            <motion.span
-              key="sheen"
-              initial={{ x: '-120%', opacity: 0 }}
-              animate={{ x: '120%', opacity: [0, 0.55, 0] }}
-              transition={{ duration: 0.9, ease: 'easeOut', delay: 0.05 }}
-              aria-hidden
-              className="absolute inset-y-0 left-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/55 to-transparent"
-            />
-          )}
-        </motion.span>
+        />
       )}
       <span
         className={`relative z-10 inline-flex items-center gap-1.5 ${
@@ -164,24 +107,6 @@ function LocaleButton({
         )}
         <span className="sr-only">{code}</span>
       </span>
-      {/* "From device" hint — shows on the option that matches the
-          probe-detected device locale (Telegram WebApp / navigator).
-          Helps the user understand that the auto-detected default
-          isn't a server-side guess: it followed their phone. The
-          badge is anchored on the upper-right corner of the pill so
-          it doesn't reflow the inner label whatever the locale's
-          word length. Hidden when this option is currently active —
-          the active state already communicates "this is your
-          choice", so layering both indicators reads as clutter. */}
-      {isDevice && !active && (
-        <span
-          aria-label={deviceBadgeAria}
-          className="pointer-events-none absolute -top-1.5 -right-1 inline-flex items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-        >
-          <Sparkles size={8} className="text-[var(--color-accent)]" aria-hidden />
-          {deviceBadge}
-        </span>
-      )}
     </motion.button>
   );
 }
