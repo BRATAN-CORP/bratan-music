@@ -558,7 +558,9 @@
       "censored": "censored",
       "yourCut": "your cut",
       "aiPrompt": "«drifting down empty highways at 3am»",
-      "aiResult": "→ 24 tracks • 1h 38m"
+      "aiResult": "→ 24 tracks • 1h 38m",
+      "lineBefore": "hear it",
+      "lineWord": "uncut"
     },
     "features": {
       "censorOverlay": {

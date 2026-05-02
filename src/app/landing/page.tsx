@@ -387,43 +387,82 @@ function FeatureTile({ feature, t }: { feature: Feature; t: Translate }) {
 }
 
 /**
- * Censorship-override demo: shows a censored "[—]" placeholder that
- * gets replaced on hover with the unredacted waveform. Captures the
- * product pitch in a single visual without needing copy.
+ * Censorship-override demo: a slowly-spinning vinyl on the left
+ * pairs with a one-word "redaction band" in the centre. On idle the
+ * band covers the word; on hover (the parent feature card uses
+ * `group`) the band retracts left-to-right with a soft motion-blur
+ * and the underlying word reveals in accent colour. The "censored"
+ * tag on the right slides up to expose "your cut" underneath, giving
+ * the whole demo a single, legible state-flip that captures the
+ * anti-censorship pitch without a fake waveform.
  */
 function CensorshipDemo({ t }: { t: Translate }) {
+  const reduce = useReducedMotion();
   return (
     <div className="relative h-12 w-full overflow-hidden rounded-md border border-border bg-background">
-      {/* Censored row */}
-      <div className="absolute inset-0 flex items-center gap-1.5 px-3 transition-opacity duration-500 group-hover:opacity-0">
-        {Array.from({ length: 18 }).map((_, i) => (
+      {/* Ambient accent sweep — a soft glow that scans across the
+          surface so the demo doesn't sit dead while idle. Skipped
+          under prefers-reduced-motion. */}
+      {!reduce && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 w-16"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--color-accent) 10%, transparent) 50%, transparent 100%)',
+          }}
+          animate={{ x: ['-50%', '320%'] }}
+          transition={{ duration: 5.5, repeat: Infinity, ease: 'linear' }}
+        />
+      )}
+
+      {/* Spinning vinyl anchors the music context. Continuous slow
+          rotation reads as "playing"; rendered as nested rings + an
+          accent label dot at the center. */}
+      <motion.div
+        aria-hidden
+        animate={reduce ? undefined : { rotate: 360 }}
+        transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+        className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8"
+      >
+        <div className="relative h-full w-full rounded-full bg-gradient-to-br from-[#1f1f1f] to-[#0a0a0a] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+          <div className="absolute inset-1 rounded-full border border-white/5" />
+          <div className="absolute inset-2 rounded-full border border-white/5" />
+          <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent-glow)]" />
+        </div>
+      </motion.div>
+
+      {/* The lyric line: plain prefix + redacted word that reveals on
+          hover. The redaction band lives on a `pointer-events-none`
+          overlay that scales-x to 0 on `group-hover` (the bento card
+          owns the `group` class). A subtle blur during the transition
+          sells the "censor coming off" feel. */}
+      <div className="absolute left-12 right-16 top-1/2 -translate-y-1/2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em]">
+        <span className="shrink-0 text-foreground">{t('landing.demos.lineBefore')}</span>
+        <span className="relative inline-flex items-center">
+          <span className="px-1 font-semibold text-[var(--color-accent)]">
+            {t('landing.demos.lineWord')}
+          </span>
           <span
-            key={i}
-            className="h-2 flex-1 rounded-full bg-[var(--color-text-subtle)]/30"
-            style={{ opacity: i % 5 === 2 || i % 7 === 4 ? 0.15 : 0.6 }}
+            aria-hidden
+            className="pointer-events-none absolute inset-0 origin-left rounded-[2px] bg-foreground transition-[transform,filter,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] group-hover:scale-x-0 group-hover:opacity-0 group-hover:[filter:blur(2px)]"
           />
-        ))}
-        <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          {t('landing.demos.censored')}
         </span>
       </div>
-      {/* Restored row */}
-      <div className="absolute inset-0 flex items-center gap-1.5 px-3 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-        {Array.from({ length: 18 }).map((_, i) => {
-          // Asymmetric heights → looks like a real waveform. Pseudo-
-          // random but deterministic so SSR doesn't flicker.
-          const h = ((i * 137) % 9) + 4;
-          return (
-            <span
-              key={i}
-              className="flex-1 rounded-full bg-[var(--color-accent)]"
-              style={{ height: `${h}px` }}
-            />
-          );
-        })}
-        <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
-          {t('landing.demos.yourCut')}
-        </span>
+
+      {/* Right-side badge: idle reads "censored" in muted ink, on
+          hover the slot scrolls up by one row to expose the
+          accent-tinted "your cut" stamp below. Single column overflow
+          mask makes the swap feel like a tape-deck flip. */}
+      <div className="absolute right-2 top-1.5 h-[18px] overflow-hidden">
+        <div className="flex h-[18px] flex-col transition-transform duration-500 ease-out group-hover:-translate-y-[18px]">
+          <span className="flex h-[18px] items-center rounded-sm border border-border bg-background/80 px-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            {t('landing.demos.censored')}
+          </span>
+          <span className="flex h-[18px] items-center rounded-sm border border-[var(--color-accent)]/60 bg-[var(--color-accent)]/10 px-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--color-accent)]">
+            {t('landing.demos.yourCut')}
+          </span>
+        </div>
       </div>
     </div>
   );
