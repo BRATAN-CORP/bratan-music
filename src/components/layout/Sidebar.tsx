@@ -4,13 +4,13 @@ import { useUiStore } from '@/store/ui';
 import { usePlaylistsList } from '@/hooks/useLibrary';
 import { useT, type TranslationKey } from '@/i18n';
 
-const navItems: { to: string; icon: typeof Home; labelKey: TranslationKey; fallback: string }[] = [
-  { to: '/', icon: Home, labelKey: 'nav.home', fallback: 'Главная' },
-  { to: '/search', icon: Search, labelKey: 'nav.search', fallback: 'Поиск' },
-  { to: '/library', icon: Library, labelKey: 'nav.library', fallback: 'Библиотека' },
-  { to: '/ai', icon: Sparkles, labelKey: 'nav.aiPlaylist', fallback: 'AI плейлист' },
-  { to: '/rooms', icon: Headphones, labelKey: 'nav.rooms', fallback: 'Комнаты' },
-  { to: '/profile', icon: User, labelKey: 'nav.profile', fallback: 'Профиль' },
+const navItems: { to: string; icon: typeof Home; labelKey: TranslationKey }[] = [
+  { to: '/', icon: Home, labelKey: 'nav.home' },
+  { to: '/search', icon: Search, labelKey: 'nav.search' },
+  { to: '/library', icon: Library, labelKey: 'nav.library' },
+  { to: '/ai', icon: Sparkles, labelKey: 'nav.aiPlaylist' },
+  { to: '/rooms', icon: Headphones, labelKey: 'nav.rooms' },
+  { to: '/profile', icon: User, labelKey: 'nav.profile' },
 ];
 
 export function Sidebar() {
@@ -44,7 +44,7 @@ export function Sidebar() {
         Bratan&nbsp;Music
       </Link>
       <nav className="flex flex-col gap-0.5 px-3">
-        {navItems.map(({ to, icon: Icon, labelKey, fallback }) => (
+        {navItems.map(({ to, icon: Icon, labelKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -58,7 +58,7 @@ export function Sidebar() {
             }
           >
             <Icon size={16} />
-            {t(labelKey) || fallback}
+            {t(labelKey)}
           </NavLink>
         ))}
       </nav>
@@ -67,7 +67,7 @@ export function Sidebar() {
         <div className="mt-4 flex flex-col gap-1 px-3">
           <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
             <Pin size={10} />
-            Закреплённые
+            {t('sidebar.pinned')}
           </div>
           {pinned.map((p) => (
             <NavLink
@@ -90,7 +90,7 @@ export function Sidebar() {
                   <ListMusic size={12} className="text-muted-foreground" />
                 )}
               </span>
-              <span className="min-w-0 flex-1 truncate">{p.isLiked ? 'Любимое' : p.name}</span>
+              <span className="min-w-0 flex-1 truncate">{p.isLiked ? t('sidebar.liked') : p.name}</span>
             </NavLink>
           ))}
         </div>

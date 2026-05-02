@@ -3,6 +3,7 @@ import { animate, motion, AnimatePresence, useReducedMotion } from 'motion/react
 import { Loader2, X } from 'lucide-react';
 import { useLyrics, parseLrc, type LyricLine } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/store/player';
+import { useT } from '@/i18n';
 
 interface LyricsContentProps {
   trackId: string;
@@ -30,8 +31,8 @@ function LyricsContent({ trackId, onSeek }: LyricsContentProps) {
     let result = -1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      const t = lines[mid]?.time ?? Infinity;
-      if (t <= progress) {
+      const lineTime = lines[mid]?.time ?? Infinity;
+      if (lineTime <= progress) {
         result = mid;
         lo = mid + 1;
       } else {
@@ -69,6 +70,7 @@ interface LyricsPanelProps {
 
 export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }: LyricsPanelProps) {
   const reduce = useReducedMotion();
+  const t = useT();
 
   if (mode === 'side') {
     // Side pane on md+. Borderless and transparent so it visually merges
@@ -91,7 +93,7 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
             }}
             style={{ transformOrigin: 'right center' }}
             className="hidden h-full w-full overflow-hidden md:block"
-            aria-label="Текст песни"
+            aria-label={t('lyrics.title')}
           >
             <LyricsContent trackId={trackId} onSeek={onSeek} />
           </motion.aside>
@@ -121,7 +123,7 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
           className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-xl md:hidden"
           role="dialog"
           aria-modal="true"
-          aria-label="Текст песни"
+          aria-label={t('lyrics.title')}
         >
           <motion.div
             className="relative flex shrink-0 items-center justify-end px-3 pt-3"
@@ -132,7 +134,7 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
             <button
               type="button"
               onClick={onClose}
-              aria-label="Закрыть текст"
+              aria-label={t('lyrics.closeAria')}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/80 text-muted-foreground shadow-[var(--shadow-md)] backdrop-blur transition-colors hover:text-foreground"
             >
               <X size={16} />
@@ -165,6 +167,7 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
   const lineRefs = useRef<(HTMLParagraphElement | null)[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const reduce = useReducedMotion();
+  const t = useT();
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -207,21 +210,21 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
     return (
       <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
         <Loader2 size={16} className="animate-spin" />
-        Загружаем текст…
+        {t('lyrics.loading')}
       </div>
     );
   }
   if (isError) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Не удалось загрузить текст. Попробуйте позже.
+        {t('lyrics.error')}
       </div>
     );
   }
   if (!data?.available) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Для этого трека текст недоступен.
+        {t('lyrics.empty')}
       </div>
     );
   }
@@ -322,7 +325,7 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
           onClick={() => setAutoScroll(true)}
           className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/85 px-4 py-2 text-xs font-medium text-foreground shadow-[0_10px_32px_-6px_rgba(0,0,0,0.55),0_0_24px_-2px_var(--color-accent-soft)] backdrop-blur ring-1 ring-white/10 transition-shadow hover:shadow-[0_12px_36px_-4px_rgba(0,0,0,0.65),0_0_32px_-2px_var(--color-accent-soft)]"
         >
-          Прокручивать вместе с песней
+          {t('lyrics.followAlong')}
         </button>
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, Share2 } from 'lucide-react';
+import { useT } from '@/i18n';
 
 interface ShareButtonProps {
   /** Pathname relative to the deployed app, e.g. "/artist/123". */
@@ -21,6 +22,7 @@ interface ShareButtonProps {
  * brief moment after a successful copy so the user gets feedback.
  */
 export function ShareButton({ path, shareTitle, shareText, ariaLabel, className }: ShareButtonProps) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   const handleClick = async () => {
@@ -49,7 +51,7 @@ export function ShareButton({ path, shareTitle, shareText, ariaLabel, className 
       try {
         document.execCommand('copy');
       } catch {
-        window.prompt('Скопируйте ссылку:', url);
+        window.prompt(t('share.copyPrompt'), url);
       } finally {
         document.body.removeChild(textarea);
       }
@@ -62,7 +64,7 @@ export function ShareButton({ path, shareTitle, shareText, ariaLabel, className 
     <button
       type="button"
       onClick={handleClick}
-      aria-label={ariaLabel ?? 'Поделиться'}
+      aria-label={ariaLabel ?? t('share.shareGeneric')}
       className={
         className ??
         'inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-90'
