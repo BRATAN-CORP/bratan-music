@@ -87,6 +87,7 @@ export function useSettingsSync() {
         tidalQuality: state.tidalQuality,
         infinitePlayback: state.infinitePlayback,
         eqGains: state.eqGains,
+        locale: state.locale,
       };
       // Mirror EQ updates onto the live graph immediately. The store
       // is the source of truth; the graph just reflects it. Gain

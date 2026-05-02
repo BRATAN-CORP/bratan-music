@@ -8,6 +8,8 @@
 export { I18nProvider } from './I18nProvider';
 export { useI18n, useT } from './hooks';
 export {
-  DEFAULT_LOCALE, LOCALES,
+  DEFAULT_LOCALE, LOCALES, SUPPORTED_LOCALES,
+  detectDeviceLocale, normalizeLanguageTag,
+  readLegacyStoredLocale, clearLegacyStoredLocale,
   type Locale, type TranslationKey, type I18nContextValue,
 } from './types';
