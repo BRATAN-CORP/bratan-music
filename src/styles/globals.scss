@@ -22,6 +22,33 @@ html {
      player, bottom nav) jump horizontally by the scrollbar width when a
      modal sets `body { overflow: hidden }` and the scrollbar disappears. */
   scrollbar-gutter: stable;
+  /*
+   * Lock the document to the viewport horizontally. Mobile browsers
+   * (Chrome Android, Safari iOS in normal tabs) ignore
+   * `maximum-scale=1, user-scalable=no` for accessibility, so the user
+   * can still pinch-zoom — and once they pinch-zoom IN, releasing back
+   * out lets the browser fit the actual content width into the visual
+   * viewport. If anything in the layout (decorative blobs, tilt-cards
+   * with 3D transforms, hero auroras with negative offsets, etc.)
+   * physically extends past `100vw`, the browser treats that wider
+   * value as the page's "real" width — pinch-out then exposes black
+   * space on the right of the body, exactly the artefact the user
+   * reported on mobile (not reproducible in DevTools, which simulates
+   * the layout viewport but not the visual zoom dynamics).
+   *
+   * `overflow-x: hidden` is the legacy way to suppress this, but per
+   * CSS spec it implicitly turns `overflow-y` into `auto`, which
+   * establishes a scroll container on `<html>` and breaks
+   * `position: sticky` on descendants (the desktop sidebar) plus
+   * `100dvh` measurement quirks on iOS. `overflow-x: clip` is strictly
+   * better: it visually clips horizontal overflow without creating a
+   * scroll container, so `overflow-y` stays `visible` and sticky/dvh
+   * behaviour are untouched. We declare both so older Safari / Firefox
+   * fall back to `hidden` (still better than uncontained overflow)
+   * while modern engines pick up `clip`.
+   */
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -30,7 +57,13 @@ body {
   color: var(--color-text);
   line-height: 1.5;
   min-height: 100dvh;
+  /* Same hidden→clip ladder as `<html>`. Body is the second line of
+     defence in case a future page mounts an absolutely-positioned
+     decoration outside the per-page wrapper. `clip` keeps the body
+     from becoming a scroll container of its own (which would also
+     trap the page scroll on iOS Safari). */
   overflow-x: hidden;
+  overflow-x: clip;
   /* Suppress the legacy 300ms double-tap-to-zoom gesture on touch
      devices. With `manipulation` browsers still allow pan and
      pinch-zoom, but skip the synthetic dblclick that would otherwise
