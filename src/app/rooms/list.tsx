@@ -5,6 +5,7 @@ import { Headphones, Plus, ArrowRight, Sparkles, Users, KeyRound, Loader2, Trash
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { TiltCard } from '@/components/ui/TiltCard';
 import { useCreateRoom, useDeleteRoom, useJoinRoom, useRoomsList } from '@/hooks/useRooms';
 import { ApiError } from '@/lib/api';
 import { EASE_SPRING } from '@/lib/motion';
@@ -99,19 +100,38 @@ function RoomsListInner() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-10">
-      {/* Hero matched to the daily-playlist hover formula on /home —
-          clean idle (no decorative layer at full opacity), on hover
-          the card lifts via border-strong + shadow-md while the
-          accent halo + pill-icon scale 1.05 over 700ms. The Create /
-          Join input + segmented tabs all sit on the relative content
-          layer above the `pointer-events-none` decoration, so they
-          stay fully interactive — same pattern as the wave hero. */}
+      {/* Premium-hover hero: TiltCard provides the 3D parallax (the
+          new TiltCard #287 already snaps flat on press over interactive
+          children, so the Create/Join input + buttons + segmented tabs
+          all stay on a stable hit-grid). On top of TiltCard we keep the
+          two-corner static idle gradient + hover-only halo signature
+          shared with WaveHero, AiPlaylistPromo, AI prompt, and
+          SubscriptionCard so the high-value entry surfaces all read as
+          one premium family. */}
+      <TiltCard
+        intensity={6}
+        hoverScale={1}
+        glareStrength={0.45}
+        className="rounded-[var(--radius-xl)]"
+      >
       <motion.section
         initial={reduce ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: EASE_SPRING }}
         className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-8 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-10"
       >
+        {/* Static idle gradient — same two-corner signature as the
+            SubscriptionCard reference in /profile. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            background:
+              'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+          }}
+        />
+        {/* Existing hover-only accent halo, kept as-is so the lift
+            still reads stronger than the idle baseline. */}
         <div
           className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-90"
           aria-hidden
@@ -196,6 +216,7 @@ function RoomsListInner() {
           </div>
         </div>
       </motion.section>
+      </TiltCard>
 
       <section className="mt-10">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
