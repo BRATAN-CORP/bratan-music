@@ -52,27 +52,34 @@ export function TiltCard({
       `radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,${glareStrength}) 0%, rgba(255,255,255,${glareStrength * 0.4}) 25%, transparent 60%)`,
   );
 
-  // Freeze tilt updates while the pointer is pressed. CSS 3D
-  // transforms move children by a few pixels between mousedown and
-  // mouseup at any non-zero intensity, and the browser hit-tests
-  // pointerup against whatever element the cursor is over at release
-  // time. With the spring still in flight the button can drift out
-  // from under the cursor and the click is lost.
+  // Freeze + flatten tilt while the pointer is pressed on an
+  // interactive descendant. Without this, CSS 3D rotation moves the
+  // children by a few pixels between mousedown and mouseup at any
+  // non-zero intensity, and the browser hit-tests pointerup against
+  // whatever element the cursor is over at release time → the click
+  // misses on fast taps.
   //
-  // We do two things on press to guarantee the click lands:
-  //   1. `pressed.current = true` so onMove stops feeding new targets
-  //      to the springs.
-  //   2. If the press lands on an interactive descendant (button,
-  //      link, input, textarea, [role="button"], or any element
-  //      opting in via `data-tilt-snap`), we *jump* the tilt springs
-  //      to neutral. The card straightens instantly so mouseup hits
-  //      the exact pixel mousedown started on. Visual cost is a brief
-  //      flatten that reads as the card "responding" to the click.
+  // First attempt (#287) was to `jump()` the springs to 0 on press.
+  // That fixes the spring's logical value synchronously, but motion-
+  // dom batches its actual DOM writes via rAF — for fast clicks
+  // (~50ms hold) the next frame hasn't rendered when pointerup fires,
+  // so the hit-test still runs against the rotated rect.
+  //
+  // The reliable fix is to mutate the DOM transform synchronously
+  // ourselves, *before* the browser's pointerup hit-test. We do that
+  // by adding a `.tilt-flatten` class with `transform: none
+  // !important` (defined in globals.scss). A class with !important
+  // beats motion's inline `style.transform = ...` (which is written
+  // without priority), and `classList.add` updates the computed
+  // style synchronously — the very next mouseup / click hit-test
+  // uses the un-rotated rect.
   //
   // For non-interactive presses (e.g. user drags from the empty card
-  // background) we just freeze without snapping — the card stays
-  // tilted and gives a more tactile press feel.
+  // background) we just freeze the spring target without flattening —
+  // the card stays tilted and gives a more tactile press feel.
   const pressed = useRef(false);
+  const interactiveSelector =
+    'button, a, input, textarea, select, label, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [role="checkbox"], [role="switch"], [data-tilt-snap]';
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     if (reduce || !ref.current || pressed.current) return;
@@ -91,25 +98,30 @@ export function TiltCard({
     y.set(0);
     hover.set(0);
     pressed.current = false;
+    ref.current?.classList.remove('tilt-flatten');
   };
 
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
     pressed.current = true;
     const target = e.target as Element | null;
-    if (
-      target?.closest(
-        'button, a, input, textarea, select, label, [role="button"], [role="link"], [data-tilt-snap]',
-      )
-    ) {
-      // Jump the springs straight to neutral so the button hit-box
-      // doesn't drift between mousedown and mouseup.
+    if (target?.closest(interactiveSelector)) {
+      // Synchronous DOM-level flatten — wins over motion's inline
+      // transform via !important, so the next pointerup hit-test
+      // uses an un-rotated rect and the click lands.
+      ref.current?.classList.add('tilt-flatten');
+      // Also reset the spring logical state so when the press ends
+      // and the class comes off, motion picks back up from neutral
+      // instead of snapping to whatever rotated value it had cached.
       x.set(0);
       y.set(0);
       sx.jump(0);
       sy.jump(0);
     }
   };
-  const onUp = () => { pressed.current = false; };
+  const onUp = () => {
+    pressed.current = false;
+    ref.current?.classList.remove('tilt-flatten');
+  };
 
   if (reduce) {
     return (

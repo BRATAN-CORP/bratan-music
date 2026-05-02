@@ -239,46 +239,66 @@ export function ProfilePage() {
 function RoomsShortcut() {
   const t = useT();
   return (
-    <Link
-      to="/rooms"
-      className="group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-4 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-5"
+    <TiltCard
+      intensity={6}
+      hoverScale={1}
+      glareStrength={0.4}
+      className="rounded-[var(--radius-2xl)]"
     >
-      <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
-        aria-hidden
-        style={{
-          background:
-            'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
-        aria-hidden
-        style={{
-          background: 'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
-        }}
-      />
-      <div className="relative flex items-center gap-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)]">
-          <Headphones size={18} />
+      <Link
+        to="/rooms"
+        className="group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-4 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      >
+        {/* Static idle gradient — same two-corner signature shared with
+            WaveHero, AiPlaylistPromo, AI prompt and the rooms-list hero
+            so the entry-point cards read as one premium family. */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{
+            background:
+              'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+          }}
+        />
+        {/* Existing hover-only halo, kept so the lift reads stronger
+            than the idle baseline. */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
+          aria-hidden
+          style={{
+            background:
+              'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+          }}
+        />
+        <div
+          className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+          aria-hidden
+          style={{
+            background: 'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+          }}
+        />
+        <div className="relative flex items-center gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)]">
+            <Headphones size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+              {t('rooms.shortcutLabel')}
+            </div>
+            <div className="mt-0.5 text-sm font-semibold tracking-tight sm:text-base">
+              {t('rooms.shortcutTitle')}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {t('rooms.shortcutHint')}
+            </div>
+          </div>
         </div>
-        <div className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            {t('rooms.shortcutLabel')}
-          </div>
-          <div className="mt-0.5 text-sm font-semibold tracking-tight sm:text-base">
-            {t('rooms.shortcutTitle')}
-          </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
-            {t('rooms.shortcutHint')}
-          </div>
-        </div>
-      </div>
-      <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
-        {t('rooms.shortcutCta')}
-        <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
-      </span>
-    </Link>
+        <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
+          {t('rooms.shortcutCta')}
+          <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </Link>
+    </TiltCard>
   );
 }
 

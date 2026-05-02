@@ -493,3 +493,19 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
     overflow: visible;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────
+   TiltCard pressed-flat utility
+   ────────────────────────────────────────────────────────────────────
+   Toggled directly via `classList.add` from the TiltCard pointerdown
+   handler when the pointer presses an interactive descendant (button,
+   link, input, textarea, etc). Inline `transform: rotateX(...) ...`
+   written by motion-dom has no priority, so this class with
+   `!important` wins synchronously — without waiting for the next rAF
+   that motion uses to flush its own DOM writes. The pointerup
+   hit-test then runs against an unrotated rect and the click lands
+   on the same element it started on. Removed on pointerup /
+   pointerleave / pointercancel. */
+.tilt-flatten {
+  transform: none !important;
+}
