@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+// Import directly from `@/i18n/types` (not the package barrel) to break a
+// dependency cycle — the I18nProvider re-exported from `@/i18n` reads
+// this very store, so going through the barrel here would form a loop.
+import {
+  detectDeviceLocale,
+  readLegacyStoredLocale,
+  clearLegacyStoredLocale,
+  type Locale,
+} from '@/i18n/types';
 
 /**
  * Tidal stream qualities that the proxy account can request. We expose a
@@ -46,6 +55,15 @@ interface SettingsState {
    */
   eqGains: number[];
   /**
+   * Active interface locale. Default is auto-detected from the
+   * Telegram WebApp user language / `navigator.languages` chain on
+   * the very first visit, then persisted locally and roamed across
+   * devices via /user/preferences. The `<I18nProvider />` reads this
+   * slice and renders accordingly — single source of truth so the
+   * user's choice in Settings is reflected everywhere instantly.
+   */
+  locale: Locale;
+  /**
    * Server-side hydration marker. `true` once we've successfully
    * pulled prefs from /user/preferences (or confirmed there were
    * none). Used by `useSettingsSync` to suppress an immediate echo
@@ -59,6 +77,7 @@ interface SettingsState {
   setInfinitePlayback: (on: boolean) => void;
   setEqGain: (index: number, value: number) => void;
   setEqGains: (gains: number[]) => void;
+  setLocale: (locale: Locale) => void;
   /**
    * Merge server-returned preferences over the current state. Only
    * keys we recognise are applied; extras are ignored. Marks the
@@ -84,6 +103,30 @@ function normaliseGains(input: unknown): number[] {
   return out;
 }
 
+function normaliseLocale(input: unknown): Locale | null {
+  return input === 'ru' || input === 'en' ? input : null;
+}
+
+/**
+ * Pick the locale a brand-new user (or a returning user from before
+ * locale moved into the settings store) should land on. Order:
+ *
+ *   1. Legacy `bratan-locale` localStorage entry — preserves the
+ *      explicit choice they made before this refactor.
+ *   2. Device auto-detect (Telegram WebApp / navigator).
+ *
+ * Once seeded, this value participates in the regular persist + sync
+ * flow so the legacy entry can be safely scrubbed.
+ */
+function pickInitialLocale(): Locale {
+  const legacy = readLegacyStoredLocale();
+  if (legacy) {
+    clearLegacyStoredLocale();
+    return legacy;
+  }
+  return detectDeviceLocale();
+}
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
@@ -95,6 +138,7 @@ export const useSettingsStore = create<SettingsState>()(
       // ровно там, где положил.
       infinitePlayback: true,
       eqGains: defaultGains(),
+      locale: pickInitialLocale(),
       hydrated: false,
       setCrossfade: (on) => set({ crossfade: on }),
       setCrossfadeDuration: (s) => set({ crossfadeDuration: Math.max(1, Math.min(12, s)) }),
@@ -108,6 +152,7 @@ export const useSettingsStore = create<SettingsState>()(
         set({ eqGains: next });
       },
       setEqGains: (gains) => set({ eqGains: normaliseGains(gains) }),
+      setLocale: (locale) => set({ locale }),
       hydrateFromServer: (prefs) => {
         const patch: Partial<SettingsState> = { hydrated: true };
         if (typeof prefs.crossfade === 'boolean') patch.crossfade = prefs.crossfade;
@@ -124,6 +169,8 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (typeof prefs.infinitePlayback === 'boolean') patch.infinitePlayback = prefs.infinitePlayback;
         if (Array.isArray(prefs.eqGains)) patch.eqGains = normaliseGains(prefs.eqGains);
+        const fromServer = normaliseLocale(prefs.locale);
+        if (fromServer) patch.locale = fromServer;
         set(patch);
       },
       markHydrated: () => set({ hydrated: true }),
@@ -140,6 +187,7 @@ export const useSettingsStore = create<SettingsState>()(
         tidalQuality: s.tidalQuality,
         infinitePlayback: s.infinitePlayback,
         eqGains: s.eqGains,
+        locale: s.locale,
       }),
     },
   ),
