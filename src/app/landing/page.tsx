@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useRef } from 'react';
 import { useAutoAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/auth';
 import { TelegramLoginButton } from '@/components/features/TelegramLoginButton';
@@ -14,7 +15,6 @@ import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { TiltCard } from '@/components/ui/TiltCard';
-import { UserAvatar } from '@/components/ui/UserAvatar';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useT, type TranslationKey } from '@/i18n';
@@ -406,50 +406,119 @@ function FeatureTile({ feature, t }: { feature: Feature; t: Translate }) {
 }
 
 /**
- * Censorship-override demo: a single-line phrase that morphs on
- * hover. Idle reads "Don't hear ~~the censor~~" with a strikethrough
- * over the noun; on hover the whole line crossfades through a soft
- * blur into "Hear it uncut", with the noun in accent colour. The
- * spinning vinyl on the left anchors the music context so the demo
- * doesn't read as a generic "click to reveal" pattern. No more
- * decorative redaction bar, no more right-side badge — the phrase
- * itself carries the entire pitch.
+ * Continuous math-driven waveform. The path's `d` attribute is
+ * recomputed every frame from a sum of three sines whose frequencies
+ * are pairwise irrational (1.3, 0.71, 2.07) — the pattern never
+ * repeats, so it looks alive without the hard reset jump a looped
+ * keyframe animation would have. Stroke uses a horizontal gradient
+ * that fades to transparent on both edges, so the wave reads as a
+ * cross-section of "ongoing sound" rather than a fixed sample.
+ *
+ * Performance: 64 path segments updated at 60fps on a single SVG
+ * path. Negligible main-thread cost — the demo zone is 220 × 48 in
+ * its largest layout; the path attribute write doesn't trigger
+ * style recalculation outside the SVG.
+ */
+function MathWave({
+  className,
+  intensity = 1,
+  gradientId,
+}: {
+  className?: string;
+  intensity?: number;
+  gradientId: string;
+}) {
+  const reduce = useReducedMotion();
+  const pathRef = useRef<SVGPathElement>(null);
+
+  useEffect(() => {
+    const pts = (t: number) => {
+      const W = 200, H = 24, N = 64;
+      const out: string[] = [];
+      for (let i = 0; i <= N; i++) {
+        const x = (i / N) * W;
+        const phase = i * 0.18;
+        const y =
+          H / 2 +
+          Math.sin(t * 1.3 + phase) * 4.4 * intensity +
+          Math.sin(t * 0.71 + phase * 1.7 + 0.7) * 3.0 * intensity +
+          Math.sin(t * 2.07 + phase * 2.4 + 1.4) * 1.6 * intensity;
+        out.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`);
+      }
+      return out.join(' ');
+    };
+
+    if (reduce) {
+      // Static neutral wave — single snapshot at t=0 gives a calm,
+      // non-flat profile rather than a dead horizontal line.
+      pathRef.current?.setAttribute('d', pts(0));
+      return;
+    }
+
+    let raf = 0;
+    const start = performance.now();
+    const tick = () => {
+      const t = (performance.now() - start) / 1000;
+      pathRef.current?.setAttribute('d', pts(t));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [reduce, intensity]);
+
+  return (
+    <svg
+      viewBox="0 0 200 24"
+      preserveAspectRatio="none"
+      className={cn('block h-full w-full', className)}
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0" />
+          <stop offset="20%" stopColor="var(--color-accent)" stopOpacity="0.9" />
+          <stop offset="80%" stopColor="var(--color-accent)" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path
+        ref={pathRef}
+        fill="none"
+        stroke={`url(#${gradientId})`}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Censorship-override demo. Background is a continuously-flowing
+ * `MathWave` (sum of three irrational-frequency sines, recomputed
+ * each frame, no resets / loops / sweeps) that visually represents
+ * "the audio that should be there". On top of it floats a single
+ * line of copy that morphs on hover:
+ *
+ *   idle  → "Don't hear ~~the censor~~"
+ *   hover → "Hear it uncut" (noun in accent colour)
+ *
+ * The earlier vinyl-disc + 5.5-second ambient sweep are gone — the
+ * sweep had a visible reset jump at the end of each cycle (the
+ * keyframe loops `x: -50% → 320%` instantly), and the disc didn't
+ * read as a vinyl in such a small slot. The wave is steady, has no
+ * loop seam, and leans into the actual feature pitch (audio that
+ * keeps flowing).
  */
 function CensorshipDemo({ t }: { t: Translate }) {
-  const reduce = useReducedMotion();
   return (
     <div className="relative h-12 w-full overflow-hidden rounded-md border border-border bg-background">
-      {/* Ambient accent sweep — a soft glow that scans across the
-          surface so the demo doesn't sit dead while idle. Skipped
-          under prefers-reduced-motion. */}
-      {!reduce && (
-        <motion.div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 w-16"
-          style={{
-            background:
-              'linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--color-accent) 10%, transparent) 50%, transparent 100%)',
-          }}
-          animate={{ x: ['-50%', '320%'] }}
-          transition={{ duration: 5.5, repeat: Infinity, ease: 'linear' }}
-        />
-      )}
-
-      {/* Spinning vinyl anchors the music context. Continuous slow
-          rotation reads as "playing"; rendered as nested rings + an
-          accent label dot at the center. */}
-      <motion.div
-        aria-hidden
-        animate={reduce ? undefined : { rotate: 360 }}
-        transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-        className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8"
-      >
-        <div className="relative h-full w-full rounded-full bg-gradient-to-br from-[#1f1f1f] to-[#0a0a0a] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-          <div className="absolute inset-1 rounded-full border border-white/5" />
-          <div className="absolute inset-2 rounded-full border border-white/5" />
-          <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent-glow)]" />
-        </div>
-      </motion.div>
+      {/* Living waveform — fills the demo zone, dim by default so the
+          phrase reads cleanly, slightly brighter on hover. */}
+      <div className="pointer-events-none absolute inset-0 opacity-40 transition-opacity duration-500 group-hover:opacity-95">
+        <MathWave gradientId="censor-demo-wave" />
+      </div>
 
       {/* Crossfade phrase — both states share an invisible width-sizer
           so the layout never reflows. Idle phrase is the "don't"
@@ -457,8 +526,8 @@ function CensorshipDemo({ t }: { t: Translate }) {
           phrase is the "do" variant with the alternative noun in
           accent colour. Soft blur on the leaving / entering side of
           the swap softens the transition into a single visual gesture. */}
-      <div className="absolute left-12 right-3 top-1/2 -translate-y-1/2 font-mono text-[12px] uppercase tracking-[0.16em]">
-        <span className="relative inline-block whitespace-nowrap">
+      <div className="absolute inset-0 flex items-center justify-center px-3 font-mono text-[12px] uppercase tracking-[0.16em]">
+        <span className="relative inline-block whitespace-nowrap rounded-md bg-background/75 px-2.5 py-0.5 backdrop-blur-[2px]">
           {/* Width-sizer: render both phrases stacked invisibly so the
               container always reserves enough room for the longer one. */}
           <span className="invisible block">
@@ -469,7 +538,7 @@ function CensorshipDemo({ t }: { t: Translate }) {
           </span>
 
           {/* Idle phrase. */}
-          <span className="absolute inset-0 flex items-center gap-1.5 text-foreground transition-[opacity,filter] duration-500 ease-out group-hover:opacity-0 group-hover:[filter:blur(3px)]">
+          <span className="absolute inset-0 flex items-center justify-center gap-1.5 text-foreground transition-[opacity,filter] duration-500 ease-out group-hover:opacity-0 group-hover:[filter:blur(3px)]">
             <span>{t('landing.demos.censorPrefix')}</span>
             <span className="line-through decoration-foreground decoration-[1.5px] underline-offset-2">
               {t('landing.demos.censorWord')}
@@ -477,7 +546,7 @@ function CensorshipDemo({ t }: { t: Translate }) {
           </span>
 
           {/* Hover phrase — accent on the reveal noun. */}
-          <span className="absolute inset-0 flex items-center gap-1.5 opacity-0 [filter:blur(3px)] transition-[opacity,filter] duration-500 ease-out group-hover:opacity-100 group-hover:[filter:blur(0)]">
+          <span className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-0 [filter:blur(3px)] transition-[opacity,filter] duration-500 ease-out group-hover:opacity-100 group-hover:[filter:blur(0)]">
             <span className="text-foreground">{t('landing.demos.revealPrefix')}</span>
             <span className="font-semibold text-[var(--color-accent)]">
               {t('landing.demos.revealWord')}
@@ -490,39 +559,52 @@ function CensorshipDemo({ t }: { t: Translate }) {
 }
 
 /**
- * Listening-rooms demo: a static stack of three real-looking
- * `UserAvatar`s (gradient + initial via the same fixture seeds the
- * rest of the app uses for live users) on the left, paired with a
- * "live" `Radio` icon and a mock playback timestamp on the right.
+ * Listening-rooms demo: three muted listener disks on the left + a
+ * "live" indicator and a mock playback timestamp on the right.
  *
- * The earlier pulse animation made the gradient avatars look like
- * bobbing heads — fine on the original A/B/C letter circles, awful
- * on real-looking avatars. The static stack reads as "three people
- * in a room" at a glance, and the accent ring still appears on
- * `group-hover` so the card lift remains rewarding.
+ * Earlier iterations went from A/B/C letter placeholders → real
+ * `UserAvatar`s with gradient backgrounds. The gradient version
+ * looked great in the live `/rooms/:id` member list (where it
+ * matches the rest of the app's avatar treatment) but turned the
+ * tiny demo zone into a neon clash — three saturated circles
+ * fighting the bento card's accent palette, especially when the
+ * parent TiltCard scaled them on hover.
+ *
+ * The new version keeps the "three distinct people" reading via
+ * stacked initials in muted ink on a flat surface-elevated fill —
+ * Discord-idle aesthetic, no neon, no wobble. The first disk
+ * carries a thin accent border to flag the room host; the rest sit
+ * on standard border tone.
  */
 function RoomsDemo() {
   return (
     <div className="relative flex h-12 w-full items-center justify-between rounded-md border border-border bg-background px-3">
       <div className="flex items-center -space-x-1.5">
-        {ROOM_DEMO_LISTENERS.map((listener, i) => (
-          <div
-            key={listener.username}
-            className="relative"
-            style={{ zIndex: ROOM_DEMO_LISTENERS.length - i }}
-          >
-            <UserAvatar
-              name={listener.name}
-              username={listener.username}
-              className="h-7 w-7 rounded-full ring-2 ring-background"
-              initialsClassName="text-[10px]"
-            />
-            <span
-              className="pointer-events-none absolute -inset-0.5 rounded-full border border-[var(--color-accent)]/40 opacity-0 transition-opacity group-hover:opacity-100"
-              aria-hidden
-            />
-          </div>
-        ))}
+        {ROOM_DEMO_LISTENERS.map((listener, i) => {
+          const initials = listener.name
+            .split(' ')
+            .map((p) => p.charAt(0).toUpperCase())
+            .join('')
+            .slice(0, 2);
+          const isHost = i === 0;
+          return (
+            <div
+              key={listener.username}
+              className={cn(
+                'relative flex h-6 w-6 items-center justify-center rounded-full border bg-[var(--color-surface-elevated)] ring-2 ring-background',
+                isHost
+                  ? 'border-[var(--color-accent)]/55'
+                  : 'border-border',
+              )}
+              style={{ zIndex: ROOM_DEMO_LISTENERS.length - i }}
+              title={listener.name}
+            >
+              <span className="text-[8.5px] font-semibold tracking-[0.04em] text-muted-foreground">
+                {initials}
+              </span>
+            </div>
+          );
+        })}
       </div>
       <div className="flex items-center gap-1.5">
         <Radio size={12} className="text-[var(--color-accent)]" />
