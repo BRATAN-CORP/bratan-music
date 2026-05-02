@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { Aurora } from '@/components/ui/Aurora';
+import { TiltCard } from '@/components/ui/TiltCard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { usePlayerStore } from '@/store/player';
 import {
@@ -125,18 +126,36 @@ function Inner() {
             </p>
           </motion.div>
 
-          {/* Hover treatment matched to the daily-playlist cards on
-              home: clean idle, on hover border-strong + shadow-md lift
-              + a soft corner glow fades in. The textarea, suggestion
-              chips and the segmented "20 / 30 / 40" buttons sit on a
-              relative content layer above the `pointer-events-none`
-              decoration, so they stay fully interactive throughout. */}
+          {/* Hover treatment matched to the SubscriptionCard reference
+              in /profile: subtle tilt via TiltCard (intensity=6,
+              hoverScale=1 — keeps the textarea hit-box stable so taps
+              land), a static two-corner gradient on idle, plus a
+              hover-only halo. The textarea, suggestion chips and the
+              segmented "20 / 30 / 40" buttons sit on a relative content
+              layer above the `pointer-events-none` decoration, so they
+              stay fully interactive throughout. */}
+          <TiltCard
+            intensity={6}
+            hoverScale={1}
+            glareStrength={0.45}
+            className="rounded-[var(--radius-xl)]"
+          >
           <motion.div
             initial={reduce ? false : { opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: EASE_SPRING, delay: 0.05 }}
             className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-6"
           >
+            {/* Static idle gradient — same two-corner signature as the
+                SubscriptionCard reference in /profile. */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              aria-hidden
+              style={{
+                background:
+                  'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+              }}
+            />
             <div
               className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-90"
               aria-hidden
@@ -218,6 +237,7 @@ function Inner() {
               </AnimatePresence>
             </div>
           </motion.div>
+          </TiltCard>
         </div>
       </section>
 

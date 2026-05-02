@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { TiltCard } from '@/components/ui/TiltCard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { ArtistPicker } from '@/components/features/ArtistPicker';
 
@@ -155,10 +156,28 @@ function AiPlaylistPromo() {
   return (
     <Reveal>
       <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10">
+        <TiltCard
+          intensity={6}
+          hoverScale={1}
+          glareStrength={0.45}
+          className="rounded-[var(--radius-xl)]"
+        >
         <Link
           to="/ai"
           className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
         >
+          {/* Static idle gradient — same two-corner signature as the
+              SubscriptionCard reference in /profile. Lives below the
+              hover-only halo on the same `pointer-events-none` layer
+              so the "Попробовать" pill stays interactive. */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+            }}
+          />
           <div
             className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-90"
             aria-hidden
@@ -188,6 +207,7 @@ function AiPlaylistPromo() {
             <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
+        </TiltCard>
       </section>
     </Reveal>
   );
@@ -253,8 +273,24 @@ function WaveHero({
   // артистов" buttons sit on a stable, fully clickable pixel grid.
   return (
     <Reveal>
+      <TiltCard
+        intensity={6}
+        hoverScale={1}
+        glareStrength={0.45}
+        className="rounded-[var(--radius-xl)]"
+      >
       <div className="group rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
         <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
+          {/* Static idle gradient — same two-corner signature as the
+              SubscriptionCard reference in /profile. */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+            }}
+          />
           <div
             className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
             aria-hidden
@@ -336,6 +372,7 @@ function WaveHero({
           </div>
         </div>
       </div>
+      </TiltCard>
     </Reveal>
   );
 }
