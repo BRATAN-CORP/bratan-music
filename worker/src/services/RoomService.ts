@@ -623,6 +623,24 @@ function emptyState(): RoomState {
   };
 }
 
+// Upload covers are stored client-side as `data:image/...;base64,...` URLs,
+// shipped through the room snapshot the same way Tidal http(s) URLs are.
+// The previous 1024-char cap fit Tidal CDN URLs (~120 chars) fine, but
+// quietly chopped data URLs in the middle of their base64 payload — so
+// every user-uploaded track in a room rendered with a broken cover.
+//
+// `/uploads` accepts data URLs up to `MAX_COVER_BYTES * 1.4` (~360 KB) and
+// the room snapshot must accept the same upper bound, plus a small
+// envelope budget for the `data:image/...;base64,` prefix.
+//
+// Worth noting on the cost side:
+//   - The snapshot is only re-broadcast when `state.version` changes
+//     (i.e. on play / pause / seek / track-change), not on every poll —
+//     `?since=<version>` returns `{ unchanged: true }` between events.
+//   - D1's row size cap is 1 MB. A 400 KB coverUrl + the rest of the
+//     snapshot still fits with room to spare.
+const MAX_COVER_URL_LEN = 400 * 1024;
+
 function sanitiseTrack(t: RoomTrackSnapshot): RoomTrackSnapshot {
   // Strip unexpected fields and clamp lengths so an attacker who controls
   // the track snapshot can't poison the JSON column with megabytes of
@@ -638,8 +656,8 @@ function sanitiseTrack(t: RoomTrackSnapshot): RoomTrackSnapshot {
       : undefined,
     album: t.album ? str(t.album, 300) : null,
     albumId: t.albumId ? str(t.albumId, 200) : null,
-    coverUrl: t.coverUrl ? str(t.coverUrl, 1024) : null,
-    coverVideoUrl: t.coverVideoUrl ? str(t.coverVideoUrl, 1024) : null,
+    coverUrl: t.coverUrl ? str(t.coverUrl, MAX_COVER_URL_LEN) : null,
+    coverVideoUrl: t.coverVideoUrl ? str(t.coverVideoUrl, MAX_COVER_URL_LEN) : null,
     duration: typeof t.duration === 'number' && Number.isFinite(t.duration)
       ? Math.max(0, Math.floor(t.duration))
       : 0,

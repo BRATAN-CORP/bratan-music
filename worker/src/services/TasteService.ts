@@ -58,7 +58,20 @@ export class TasteService {
     // 90-day window: we want enough data to produce a stable vector but
     // also want listeners' tastes to drift over time. The half-life
     // weighting handles "more recent matters more" inside this window.
-    const since = now - 90 * 24 * 60 * 60 * 1000;
+    const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000;
+    // Honor the per-user "Сбросить рекомендации" checkpoint: plays before
+    // `users.recommendations_reset_at` don't count toward the taste vector.
+    // Without this filter recompute would happily rebuild the same profile
+    // from the preserved play_history immediately after a reset, and the
+    // wave / daily playlists would feel unchanged. The reset endpoint
+    // wipes user_taste_profile and stamps this column simultaneously, so
+    // the next recompute genuinely starts cold.
+    const resetRow = await this.env.DB
+      .prepare(`SELECT recommendations_reset_at FROM users WHERE id = ?`)
+      .bind(userId)
+      .first<{ recommendations_reset_at: number }>();
+    const resetAt = resetRow?.recommendations_reset_at ?? 0;
+    const since = Math.max(ninetyDaysAgo, resetAt);
 
     const playsRes = await this.env.DB
       .prepare(
