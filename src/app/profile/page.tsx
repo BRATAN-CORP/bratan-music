@@ -163,7 +163,11 @@ export function ProfilePage() {
           </SettingsCard>
         </div>
 
-        <SettingsCard title={t('profile.languageTitle')} icon={Languages}>
+        <SettingsCard
+          title={t('profile.languageTitle')}
+          icon={Languages}
+          hint={t('settings.languageHint')}
+        >
           <LanguageSwitcher />
         </SettingsCard>
 
