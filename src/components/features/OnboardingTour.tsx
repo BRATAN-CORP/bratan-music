@@ -6,13 +6,14 @@ import { ArrowRight, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import { useT, type TranslationKey } from '@/i18n';
 
 /**
  * Spotlight onboarding tour — runs once per user on the first dashboard
  * visit after a successful login. The completion timestamp is persisted
  * server-side as `users.tour_completed_at`, mirrored on the auth store
  * via `User.tourCompletedAt`. Clearing the timestamp (server-side) or
- * pressing "Пройти заново" in the profile page replays the tour on the
+ * pressing the "replay" button in the profile page replays the tour on the
  * next mount.
  *
  * Design choices:
@@ -36,8 +37,8 @@ interface TourStep {
   targetId: string;
   /** Route to navigate to before measuring `targetId`. */
   route: string;
-  title: string;
-  body: string;
+  titleKey: TranslationKey;
+  bodyKey: TranslationKey;
   /** Where the tooltip sits relative to the target. Defaults to
    *  `bottom`; we override per-step when the natural placement would
    *  collide with the viewport edge or a fixed nav. */
@@ -51,38 +52,29 @@ const STEPS: TourStep[] = [
     // `{ index: true, element: <HomeOrLanding /> }`). There is no
     // dedicated `/home` path; navigating there hits NotFoundPage.
     route: '/',
-    title: 'Твоя волна. Под твой вкус.',
-    body:
-      'Назови 1–6 любимых артистов — и плеер соберёт бесконечный поток ' +
-      'под тебя. Каждый лайк, скип и повтор учат волну дальше.',
+    titleKey: 'onboarding.tour.wave.title',
+    bodyKey: 'onboarding.tour.wave.body',
     placement: 'bottom',
   },
   {
     targetId: 'tour-search',
     route: '/search',
-    title: 'Поиск без границ.',
-    body:
-      '100M+ треков, альбомов и артистов в одном поле. Без жанровых стен, ' +
-      'без платных регионов, без лент-бесконечностей.',
+    titleKey: 'onboarding.tour.search.title',
+    bodyKey: 'onboarding.tour.search.body',
     placement: 'bottom',
   },
   {
     targetId: 'tour-library',
     route: '/library',
-    title: 'Своя библиотека.',
-    body:
-      'Лайки, плейлисты, история — твои. Не алгоритм решает, что ты ' +
-      'услышишь завтра.',
+    titleKey: 'onboarding.tour.library.title',
+    bodyKey: 'onboarding.tour.library.body',
     placement: 'bottom',
   },
   {
     targetId: 'tour-profile',
     route: '/profile',
-    title: 'Расцензура и lossless.',
-    body:
-      'Подписка за 99 Stars/мес: 24-bit lossless, безлимит прослушиваний, ' +
-      'и право подменить любой зацензуренный трек своей версией. Никто, ' +
-      'кроме тебя, не услышит правки.',
+    titleKey: 'onboarding.tour.profile.title',
+    bodyKey: 'onboarding.tour.profile.body',
     placement: 'bottom',
   },
 ];
@@ -154,6 +146,7 @@ interface TourCardProps {
 }
 
 function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
+  const t = useT();
   const isLast = index === total - 1;
   const cardRef = useRef<HTMLDivElement | null>(null);
   // Real card height after layout. We keep a sensible initial guess
@@ -251,7 +244,7 @@ function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
         // The portal wrapper carries `pointer-events-none` so the dim
         // backdrop from the spotlight box-shadow doesn't swallow clicks
         // on app chrome. The card itself has to opt back in, otherwise
-        // its buttons (Пропустить / Дальше / X) inherit the disabled
+        // its buttons inherit the disabled
         // state and never fire onClick.
         pointerEvents: 'auto',
       }}
@@ -265,25 +258,25 @@ function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
           type="button"
           onClick={onSkip}
           className="-m-1 rounded p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label="Пропустить тур"
+          aria-label={t('onboarding.skipAria')}
         >
           <X size={14} />
         </button>
       </div>
       <h3 id="tour-title" className="text-base font-semibold leading-tight">
-        {step.title}
+        {t(step.titleKey)}
       </h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t(step.bodyKey)}</p>
       <div className="mt-4 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onSkip}
           className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          Пропустить
+          {t('onboarding.skip')}
         </button>
         <Button size="sm" onClick={onNext} className="gap-1.5">
-          {isLast ? 'Готово' : 'Дальше'}
+          {isLast ? t('onboarding.done') : t('onboarding.next')}
           {!isLast && <ArrowRight size={14} />}
         </Button>
       </div>
