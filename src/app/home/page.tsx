@@ -39,6 +39,9 @@ import { useAuthStore } from '@/store/auth';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { Track } from '@/types';
+import { useT, type TranslationKey } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
 
 /**
  * Home dashboard for authenticated users. Three sections:
@@ -62,6 +65,7 @@ import type { Track } from '@/types';
  * after a wave save or genre-seed change).
  */
 export function HomePage() {
+  const t = useT();
   const user = useAuthStore((s) => s.user);
   const reduce = useReducedMotion();
 
@@ -90,14 +94,14 @@ export function HomePage() {
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
               <Sparkles size={12} className="text-[var(--color-accent)]" />
               <span>
-                {greeting()}{user?.name ? ',' : ''}
+                {greeting(t)}{user?.name ? ',' : ''}
                 {user?.name ? <span className="ml-1 text-foreground">{user.name}</span> : null}
               </span>
             </span>
 
             <h1 className="max-w-3xl text-[clamp(2rem,5vw,3.6rem)] font-semibold leading-[1.04] tracking-tight">
-              Слушай <span className="font-serif italic text-muted-foreground">так</span>, как
-              <br className="hidden sm:block" /> подойдёт <span className="shine-text">только тебе</span>.
+              {t('home.heroLine1')}{' '}<span className="font-serif italic text-muted-foreground">{t('home.heroLine1Italic')}</span>{t('home.heroLine1End')}
+              <br className="hidden sm:block" /> {t('home.heroLine2Start')}{' '}<span className="shine-text">{t('home.heroLine2Highlight')}</span>.
             </h1>
           </motion.div>
 
@@ -140,6 +144,7 @@ export function HomePage() {
  * the two read as a related family at the top of the page.
  */
 function AiPlaylistPromo() {
+  const t = useT();
   // Hover treatment matched to the daily-playlist cards directly
   // below this on /home: clean idle (no decorative layer visible),
   // and on hover the card lifts via border-strong + shadow-md while
@@ -168,18 +173,18 @@ function AiPlaylistPromo() {
             </div>
             <div className="min-w-0">
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                AI плейлист
+                {t('home.aiPlaylistEyebrow')}
               </div>
               <div className="mt-1 text-base font-semibold tracking-tight sm:text-lg">
-                Опиши настроение — соберу плейлист
+                {t('home.aiPlaylistTitle')}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Жанры, артисты и эпохи на русском и английском за один шаг.
+                {t('home.aiPlaylistHint')}
               </div>
             </div>
           </div>
           <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
-            Попробовать
+            {t('home.aiPlaylistCta')}
             <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
@@ -199,6 +204,7 @@ function WaveHero({
   onChangeArtists: () => void;
   hasSeedArtists: boolean;
 }) {
+  const t = useT();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -213,7 +219,7 @@ function WaveHero({
   // Treat any preview track being currently active as "the wave is on
   // air" — let the CTA collapse to play/pause behaviour instead of
   // re-spawning a fresh wave (which would replace the user's queue).
-  const previewIds = useMemo(() => (previewQ.data ?? []).map((t) => t.id), [previewQ.data]);
+  const previewIds = useMemo(() => (previewQ.data ?? []).map((tr) => tr.id), [previewQ.data]);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
@@ -229,7 +235,7 @@ function WaveHero({
     try {
       await startMyWave();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось запустить волну');
+      setError(err instanceof Error ? err.message : t('home.waveError'));
     } finally {
       setStarting(false);
     }
@@ -263,14 +269,14 @@ function WaveHero({
               <div className="flex flex-col gap-3">
                 <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
                   <Disc3 size={12} className="text-[var(--color-accent)]" />
-                  Моя волна
+                  {t('home.waveBadge')}
                 </div>
                 <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-                  Бесконечная музыка под{' '}
-                  <span className="font-serif italic text-muted-foreground">твой</span> вкус.
+                  {t('home.waveTitleA')}{' '}
+                  <span className="font-serif italic text-muted-foreground">{t('home.waveTitleItalic')}</span> {t('home.waveTitleB')}
                 </h2>
                 <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-                  Один тап — и плеер не остановится. Подбираем по тому, что ты слушал, и подмешиваем близкое, чего ещё не слышал. Чем больше слушаешь, тем точнее.
+                  {t('home.waveSubtitle')}
                 </p>
               </div>
 
@@ -284,29 +290,29 @@ function WaveHero({
                   {starting ? (
                     <>
                       <RefreshCw size={16} className="animate-spin" />
-                      Запускаем…
+                      {t('home.waveStarting')}
                     </>
                   ) : waveOnAir && isPlaying ? (
                     <>
                       <Pause size={16} fill="currentColor" />
-                      Пауза
+                      {t('home.wavePause')}
                     </>
                   ) : waveOnAir ? (
                     <>
                       <Play size={16} fill="currentColor" />
-                      Продолжить
+                      {t('home.waveContinue')}
                     </>
                   ) : (
                     <>
                       <Play size={16} fill="currentColor" />
-                      Включить волну
+                      {t('home.waveStart')}
                     </>
                   )}
                 </Button>
 
                 <Button variant="outline" size="lg" onClick={onChangeArtists} className="gap-2">
                   <Sparkles size={16} />
-                  {hasSeedArtists ? 'Поменять артистов' : 'Подобрать артистов'}
+                  {hasSeedArtists ? t('home.waveChangeArtists') : t('home.wavePickArtists')}
                 </Button>
               </div>
 
@@ -475,6 +481,7 @@ function PreviewStripRow({ track, index, tracks }: { track: Track; index: number
 // ────────────────────────────────────────────────────────────────────
 
 function DailyPlaylistsSection() {
+  const t = useT();
   const reduce = useReducedMotion();
   const dailyQ = useQuery({
     queryKey: ['daily-playlists', 'today'],
@@ -488,13 +495,13 @@ function DailyPlaylistsSection() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
             <ListMusic size={12} className="text-[var(--color-accent)]" />
-            Плейлисты дня
+            {t('home.dailyBadge')}
           </div>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Три варианта на сегодня
+            {t('home.dailyTitle')}
           </h2>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
-            Знакомое, открытия и подборка под настроение. Обновляются каждое утро.
+            {t('home.dailyHint')}
           </p>
         </div>
       </div>
@@ -509,7 +516,7 @@ function DailyPlaylistsSection() {
 
       {dailyQ.isError && (
         <div className="rounded-[var(--radius-lg)] border border-border bg-card p-6 text-sm text-muted-foreground">
-          Не удалось загрузить плейлисты дня. Попробуй обновить страницу.
+          {t('home.dailyError')}
         </div>
       )}
 
@@ -526,13 +533,14 @@ function DailyPlaylistsSection() {
   );
 }
 
-const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; label: string; icon: typeof Sparkles }> = {
-  familiar: { hue: '#5E6AD2', label: 'Знакомое', icon: Heart },
-  discover: { hue: '#c2185b', label: 'Открытия', icon: Sparkles },
-  mood: { hue: '#0ea5e9', label: 'Под настроение', icon: Disc3 },
+const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; labelKey: TranslationKey; icon: typeof Sparkles }> = {
+  familiar: { hue: '#5E6AD2', labelKey: 'home.dailyVariantFamiliar', icon: Heart },
+  discover: { hue: '#c2185b', labelKey: 'home.dailyVariantDiscover', icon: Sparkles },
+  mood: { hue: '#0ea5e9', labelKey: 'home.dailyVariantMood', icon: Disc3 },
 };
 
 function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
+  const t = useT();
   const theme = VARIANT_THEME[playlist.variant];
   const VariantIcon = theme.icon;
   const queryClient = useQueryClient();
@@ -547,7 +555,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   // from this daily playlist is currently active the buttons swap
   // to a Pause icon and clicking pauses/resumes in place instead of
   // restarting the queue from the top.
-  const trackIds = useMemo(() => playlist.tracks.map((t) => t.id), [playlist.tracks]);
+  const trackIds = useMemo(() => playlist.tracks.map((tr) => tr.id), [playlist.tracks]);
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
   const play = (e?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
@@ -603,12 +611,12 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
 
         <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
           <VariantIcon size={12} />
-          {theme.label}
+          {t(theme.labelKey)}
         </div>
 
         <button
           onClick={(e) => play(e)}
-          aria-label={isCollectionPlaying ? 'Пауза' : 'Запустить плейлист'}
+          aria-label={isCollectionPlaying ? t('home.dailyPause') : t('home.dailyPlayAria')}
           className={cn(
             'absolute bottom-4 right-4 inline-flex h-12 w-12 items-center justify-center rounded-full shadow-[var(--shadow-lg)]',
             'transition-all hover:scale-110 active:scale-95',
@@ -632,7 +640,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
         </div>
 
         <div className="text-xs text-muted-foreground">
-          {playlist.tracks.length} {pluralRu(playlist.tracks.length, ['трек', 'трека', 'треков'])}
+          {t('home.dailyTracksCount', { count: playlist.tracks.length, form: t(dailyTrackUnitKey(playlist.tracks.length)) })}
         </div>
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
@@ -640,12 +648,12 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
             {isCollectionPlaying ? (
               <>
                 <Pause size={14} fill="currentColor" />
-                Пауза
+                {t('home.dailyPause')}
               </>
             ) : (
               <>
                 <Play size={14} fill="currentColor" />
-                {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                {isCollectionActive ? t('home.dailyContinue') : t('home.dailyListen')}
               </>
             )}
           </Button>
@@ -657,7 +665,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
             disabled={saving || isSaved}
           >
             {isSaved ? <Check size={14} /> : <Library size={14} />}
-            {isSaved ? 'Сохранено' : saving ? 'Сохраняем…' : 'В библиотеку'}
+            {isSaved ? t('home.dailySaved') : saving ? t('home.dailySaving') : t('home.dailySave')}
           </Button>
         </div>
       </div>
@@ -670,6 +678,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
 // ────────────────────────────────────────────────────────────────────
 
 function RecentSection() {
+  const t = useT();
   const recentQ = useQuery({
     queryKey: ['history', 'recent'],
     queryFn: () => fetchRecentPlays(12),
@@ -697,10 +706,10 @@ function RecentSection() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
             <HistoryIcon size={12} className="text-[var(--color-accent)]" />
-            Недавно
+            {t('home.recentBadge')}
           </div>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Что ты слушал
+            {t('home.recentTitle')}
           </h2>
         </div>
 
@@ -708,7 +717,7 @@ function RecentSection() {
           to="/library"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
-          Библиотека
+          {t('home.recentLibraryLink')}
           <ArrowRight size={14} />
         </Link>
       </div>
@@ -754,20 +763,20 @@ function toTrack(r: RecentTrack): Track {
   };
 }
 
-function greeting(): string {
+function greeting(t: Translate): string {
   const h = new Date().getHours();
-  if (h < 5) return 'Доброй ночи';
-  if (h < 12) return 'Доброе утро';
-  if (h < 18) return 'Привет';
-  return 'Добрый вечер';
+  if (h < 5) return t('home.greetingNight');
+  if (h < 12) return t('home.greetingMorning');
+  if (h < 18) return t('home.greetingDay');
+  return t('home.greetingEvening');
 }
 
-function pluralRu(n: number, forms: [string, string, string]): string {
-  const m = Math.abs(n) % 100;
+function dailyTrackUnitKey(count: number): TranslationKey {
+  const m = Math.abs(count) % 100;
   const m1 = m % 10;
-  if (m > 10 && m < 20) return forms[2];
-  if (m1 > 1 && m1 < 5) return forms[1];
-  if (m1 === 1) return forms[0];
-  return forms[2];
+  if (m > 10 && m < 20) return 'home.dailyTrackUnit5plus';
+  if (m1 > 1 && m1 < 5) return 'home.dailyTrackUnit2_4';
+  if (m1 === 1) return 'home.dailyTrackUnit1';
+  return 'home.dailyTrackUnit5plus';
 }
 

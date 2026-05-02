@@ -14,8 +14,10 @@ import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { toPlayerTrack } from '@/lib/playerTrack';
+import { useT } from '@/i18n';
 
 export function ArtistPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const { data: artist, isLoading } = useArtist(id ?? '');
   const { data: radio } = useArtistRadio(id ?? '');
@@ -33,7 +35,7 @@ export function ArtistPage() {
   // Hero "Play" button on the artist page targets the current top-track
   // queue — if anything in that list is the active player track, the
   // button mirrors play state and toggles instead of restarting.
-  const topTrackIds = artist?.topTracks?.map((t) => t.id) ?? [];
+  const topTrackIds = artist?.topTracks?.map((tr) => tr.id) ?? [];
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(topTrackIds);
 
   const handlePlayTrack = (track: Track) => {
@@ -61,7 +63,7 @@ export function ArtistPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Загрузка...</p>
+          <p className="text-sm text-muted-foreground">{t('artistPage.loading')}</p>
         ) : artist ? (
           <>
             {/* Hero with blurred ambience layer derived from the artist
@@ -126,17 +128,17 @@ export function ArtistPage() {
                 <FallbackAvatar name={artist.name} />
               )}
               <div className="flex flex-col gap-3">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Артист</span>
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('artistPage.eyebrow')}</span>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{artist.name}</h1>
                 <div className="flex items-center gap-2 pt-2">
                   <Button onClick={handlePlayAll}>
                     {isCollectionPlaying ? (
                       <>
-                        <Pause size={14} fill="currentColor" /> Пауза
+                        <Pause size={14} fill="currentColor" /> {t('artistPage.pause')}
                       </>
                     ) : (
                       <>
-                        <Play size={14} fill="currentColor" /> {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                        <Play size={14} fill="currentColor" /> {isCollectionActive ? t('artistPage.continue') : t('artistPage.listen')}
                       </>
                     )}
                   </Button>
@@ -148,7 +150,7 @@ export function ArtistPage() {
                         ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
                         : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
                     }`}
-                    aria-label={liked ? 'Отписаться' : 'Подписаться'}
+                    aria-label={liked ? t('artistPage.unfollow') : t('artistPage.follow')}
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </button>
@@ -157,16 +159,16 @@ export function ArtistPage() {
                       type="button"
                       onClick={handlePlayRadio}
                       className="inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-                      aria-label="Запустить радио артиста"
+                      aria-label={t('artistPage.radioAria')}
                     >
-                      <Radio size={14} /> Радио
+                      <Radio size={14} /> {t('artistPage.radio')}
                     </button>
                   ) : null}
                   <ShareButton
                     path={`/artist/${artist.id}`}
                     shareTitle={artist.name}
-                    shareText={`Артист: ${artist.name}`}
-                    ariaLabel="Поделиться артистом"
+                    shareText={t('artistPage.shareText', { name: artist.name })}
+                    ariaLabel={t('artistPage.shareAria')}
                   />
                 </div>
               </div>
@@ -175,7 +177,7 @@ export function ArtistPage() {
 
             {artist.topTracks?.length > 0 && (
               <section className="mb-12">
-                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Популярные треки</h2>
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">{t('artistPage.topTracks')}</h2>
                 <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
                   {artist.topTracks.map((track, i) => (
                     <TrackItem key={track.id} track={track} index={i} onPlay={handlePlayTrack} />
@@ -187,13 +189,13 @@ export function ArtistPage() {
             {artist.albums?.length > 0 && (
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-                  <h2 className="text-base font-semibold tracking-tight">Альбомы</h2>
+                  <h2 className="text-base font-semibold tracking-tight">{t('artistPage.albums')}</h2>
                   {((artist.albumsMoreTotal ?? artist.albums.length) > 10) && (
                     <Link
                       to={`/artist/${artist.id}/albums`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      Показать все →
+                      {t('artistPage.showAll')}
                     </Link>
                   )}
                 </div>
@@ -208,13 +210,13 @@ export function ArtistPage() {
             {artist.singles?.length > 0 && (
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-                  <h2 className="text-base font-semibold tracking-tight">Синглы</h2>
+                  <h2 className="text-base font-semibold tracking-tight">{t('artistPage.singles')}</h2>
                   {((artist.singlesMoreTotal ?? artist.singles.length) > 10) && (
                     <Link
                       to={`/artist/${artist.id}/singles`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     >
-                      Показать все →
+                      {t('artistPage.showAll')}
                     </Link>
                   )}
                 </div>
@@ -228,7 +230,7 @@ export function ArtistPage() {
 
             {artist.similarArtists?.length > 0 && (
               <section>
-                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">Похожие артисты</h2>
+                <h2 className="mb-4 border-b border-border pb-3 text-base font-semibold tracking-tight">{t('artistPage.similar')}</h2>
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
                   {artist.similarArtists.map((a) => (
                     <ArtistCard key={a.id} artist={a} />
@@ -238,7 +240,7 @@ export function ArtistPage() {
             )}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Артист не найден</p>
+          <p className="text-sm text-muted-foreground">{t('artistPage.notFound')}</p>
         )}
       </div>
     </AuthGuard>

@@ -10,6 +10,7 @@ import { usePlaylistsList } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { ExplorePage, ExplorePlaylist, Track } from '@/types';
+import { useT } from '@/i18n';
 
 /**
  * Detail page for a Tidal editorial playlist (curated by Tidal, not
@@ -22,6 +23,7 @@ import type { ExplorePage, ExplorePlaylist, Track } from '@/types';
  * #131.
  */
 export function TidalPlaylistPage() {
+  const t = useT();
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -66,7 +68,7 @@ export function TidalPlaylistPage() {
     else navigate('/search');
   };
 
-  const trackIds = useMemo(() => tracks.map((t) => t.id), [tracks]);
+  const trackIds = useMemo(() => tracks.map((tr) => tr.id), [tracks]);
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
   const handlePlayAll = () => {
@@ -102,7 +104,7 @@ export function TidalPlaylistPage() {
     saveMutation.mutate(
       {
         tidalId: uuid,
-        name: meta?.title ?? 'Плейлист Tidal',
+        name: meta?.title ?? t('explorePlaylist.fallbackTitle'),
         coverUrl: meta?.coverUrl ?? null,
         curator: meta?.curator ?? null,
         trackCount: typeof seedCount === 'number' ? seedCount : null,
@@ -120,10 +122,10 @@ export function TidalPlaylistPage() {
           type="button"
           onClick={handleBack}
           className="mb-4 inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] px-2 -ml-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-[0.98] lg:hidden"
-          aria-label="Назад"
+          aria-label={t('explorePlaylist.back')}
         >
           <ChevronLeft size={18} />
-          <span>Назад</span>
+          <span>{t('explorePlaylist.back')}</span>
         </button>
 
         {isLoading ? (
@@ -144,13 +146,13 @@ export function TidalPlaylistPage() {
           </div>
         ) : isError ? (
           <div className="flex flex-col items-start gap-3 py-12">
-            <p className="text-sm text-muted-foreground">Не удалось загрузить плейлист.</p>
+            <p className="text-sm text-muted-foreground">{t('explorePlaylist.failedLoad')}</p>
             <button
               type="button"
               onClick={() => refetch()}
               className="inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] bg-secondary px-3 text-sm font-medium transition-colors hover:bg-secondary/80"
             >
-              Повторить
+              {t('explorePlaylist.retry')}
             </button>
           </div>
         ) : (
@@ -160,7 +162,7 @@ export function TidalPlaylistPage() {
                 {meta?.coverUrl ? (
                   <img
                     src={meta.coverUrl}
-                    alt={`Обложка плейлиста ${meta.title}`}
+                    alt={t('explorePlaylist.coverAlt', { title: meta.title })}
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -169,14 +171,14 @@ export function TidalPlaylistPage() {
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-                  Плейлист · Tidal
+                  {t('explorePlaylist.subtitleTidal')}
                 </span>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  {meta?.title ?? 'Плейлист Tidal'}
+                  {meta?.title ?? t('explorePlaylist.fallbackTitle')}
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   {meta?.curator ?? 'Tidal'}
-                  {tracks.length > 0 ? ` · ${tracks.length} треков` : ''}
+                  {tracks.length > 0 ? ` · ${t('explorePlaylist.tracksCount', { count: tracks.length })}` : ''}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
@@ -188,12 +190,12 @@ export function TidalPlaylistPage() {
                     {isCollectionPlaying ? (
                       <>
                         <Pause size={16} fill="currentColor" />
-                        Пауза
+                        {t('explorePlaylist.pause')}
                       </>
                     ) : (
                       <>
                         <Play size={16} fill="currentColor" />
-                        {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                        {isCollectionActive ? t('explorePlaylist.continue') : t('explorePlaylist.listen')}
                       </>
                     )}
                   </button>
@@ -208,7 +210,7 @@ export function TidalPlaylistPage() {
                     ) : (
                       <Plus size={16} />
                     )}
-                    {linkedCopy ? 'Открыть в библиотеке' : 'Сохранить в библиотеку'}
+                    {linkedCopy ? t('explorePlaylist.openInLibrary') : t('explorePlaylist.save')}
                   </button>
                 </div>
               </div>
@@ -216,7 +218,7 @@ export function TidalPlaylistPage() {
 
             {tracks.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">
-                В этом плейлисте пока нет треков.
+                {t('explorePlaylist.empty')}
               </p>
             ) : (
               <div className="flex flex-col gap-1">

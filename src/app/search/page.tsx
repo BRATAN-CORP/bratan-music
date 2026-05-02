@@ -10,12 +10,14 @@ import { useSearch, useSearchInfinite } from '@/hooks/useSearch';
 import { useRecentSearches } from '@/hooks/useRecentSearches';
 import { usePlayerStore } from '@/store/player';
 import type { SearchResult, Track } from '@/types';
+import { useT } from '@/i18n';
 
 type SearchFilter = 'all' | 'tracks' | 'albums' | 'artists';
 
 const FILTERS: readonly SearchFilter[] = ['all', 'tracks', 'albums', 'artists'];
 
 export function SearchPage() {
+  const t = useT();
   // Persist query + active filter in the URL so a reload (or a
   // bookmark / shared link) restores both. Using `useSearchParams`
   // keeps the source of truth on the URL and side-steps the extra
@@ -157,8 +159,8 @@ export function SearchPage() {
     <AuthGuard>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Поиск</span>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Найдите треки, альбомы и артистов</h1>
+          <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('search.pageEyebrow')}</span>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('search.pageTitle')}</h1>
         </div>
         <div data-tour-id="tour-search">
           <SearchBar value={query} onChange={setQuery} />
@@ -185,7 +187,7 @@ export function SearchPage() {
                 {infinite.isFetchingNextPage && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 size={14} className="animate-spin" />
-                    Загружаем ещё…
+                    {t('search.loadingMore')}
                   </div>
                 )}
               </div>

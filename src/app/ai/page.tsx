@@ -15,15 +15,16 @@ import {
 } from '@/hooks/useAiPlaylist';
 import type { Track } from '@/types';
 import { EASE_SPRING } from '@/lib/motion';
+import { useT, type TranslationKey } from '@/i18n';
 
 const PROMPT_LIMIT = 200;
-const SUGGESTIONS = [
-  'Дип-хаус для длинной поездки',
-  'Грустный синтвейв',
-  'Русский рок 2020-х',
-  'Ламповый джаз вечером',
-  'Фанк и диско для пятницы',
-  'Lo-fi для учёбы',
+const SUGGESTION_KEYS: TranslationKey[] = [
+  'ai.suggestionDeepHouse',
+  'ai.suggestionSadSynthwave',
+  'ai.suggestionRussianRock',
+  'ai.suggestionWarmJazz',
+  'ai.suggestionFunkDisco',
+  'ai.suggestionLofiStudy',
 ];
 
 export function AiPlaylistPage() {
@@ -35,6 +36,7 @@ export function AiPlaylistPage() {
 }
 
 function Inner() {
+  const t = useT();
   const reduce = useReducedMotion();
   const [prompt, setPrompt] = useState('');
   const [size, setSize] = useState<20 | 30 | 40>(20);
@@ -54,14 +56,14 @@ function Inner() {
   const handleGenerate = async () => {
     setError(null);
     if (prompt.trim().length < 3) {
-      setError('Опиши плейлист хотя бы парой слов');
+      setError(t('ai.errPromptTooShort'));
       return;
     }
     try {
       const res = await generate.mutateAsync({ prompt: prompt.trim(), size });
       setPreview(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сгенерировать');
+      setError(e instanceof Error ? e.message : t('ai.errGenerate'));
     }
   };
 
@@ -79,7 +81,7 @@ function Inner() {
       qc.invalidateQueries({ queryKey: ['playlists'] });
       qc.invalidateQueries({ queryKey: ['playlist', saved.id] });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить плейлист');
+      setError(e instanceof Error ? e.message : t('ai.errSave'));
     }
   };
 
@@ -112,15 +114,14 @@ function Inner() {
           >
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
               <Sparkles size={12} className="text-[var(--color-accent)]" />
-              AI плейлист
+              {t('ai.eyebrow')}
             </span>
             <h1 className="max-w-3xl text-[clamp(1.8rem,4vw,2.8rem)] font-semibold leading-[1.06] tracking-tight">
-              Опиши <span className="font-serif italic text-muted-foreground">настроение</span>
-              <br className="hidden sm:block" />— соберу плейлист.
+              {t('ai.titlePart1')}{' '}<span className="font-serif italic text-muted-foreground">{t('ai.titlePart2')}</span>
+              <br className="hidden sm:block" />{t('ai.titlePart3')}
             </h1>
             <p className="max-w-xl text-sm text-muted-foreground">
-              Промпт превращается в несколько поисков по Tidal: жанры, артисты, эпохи на русском и английском —
-              чтобы поймать и западный, и русскоязычный каталог.
+              {t('ai.subtitle')}
             </p>
           </motion.div>
 
@@ -148,7 +149,7 @@ function Inner() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value.slice(0, PROMPT_LIMIT))}
-                  placeholder="Например: «электроника 2010-х для долгой ночной прогулки»"
+                  placeholder={t('ai.placeholder')}
                   rows={2}
                   className="w-full resize-none rounded-[var(--radius-md)] border border-border bg-background px-4 py-3 pr-16 text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 />
@@ -158,21 +159,24 @@ function Inner() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setPrompt(s)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-all hover:-translate-y-0.5 hover:border-[var(--color-accent)]/40 hover:text-foreground"
-                  >
-                    <Lightbulb size={11} />
-                    {s}
-                  </button>
-                ))}
+                {SUGGESTION_KEYS.map((sk) => {
+                  const label = t(sk);
+                  return (
+                    <button
+                      key={sk}
+                      onClick={() => setPrompt(label)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-all hover:-translate-y-0.5 hover:border-[var(--color-accent)]/40 hover:text-foreground"
+                    >
+                      <Lightbulb size={11} />
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="font-medium uppercase tracking-wider text-muted-foreground">Треков:</span>
+                  <span className="font-medium uppercase tracking-wider text-muted-foreground">{t('ai.tracksLabel')}</span>
                   {[20, 30, 40].map((n) => (
                     <button
                       key={n}
@@ -190,11 +194,11 @@ function Inner() {
                 <Button onClick={handleGenerate} disabled={generate.isPending} size="lg" className="gap-2">
                   {generate.isPending ? (
                     <>
-                      <Loader2 size={14} className="animate-spin" /> Думаю…
+                      <Loader2 size={14} className="animate-spin" /> {t('ai.thinking')}
                     </>
                   ) : (
                     <>
-                      <Wand2 size={14} /> {preview ? 'Перегенерировать' : 'Сгенерировать'}
+                      <Wand2 size={14} /> {preview ? t('ai.regenerate') : t('ai.generate')}
                     </>
                   )}
                 </Button>
@@ -241,31 +245,31 @@ function Inner() {
                       value={preview.name}
                       onChange={(e) => setPreview({ ...preview, name: e.target.value.slice(0, 80) })}
                       className="w-full bg-transparent text-base font-semibold tracking-tight outline-none placeholder:text-muted-foreground sm:text-lg"
-                      placeholder="Название"
+                      placeholder={t('ai.nameField')}
                     />
                     <input
                       value={preview.description}
                       onChange={(e) => setPreview({ ...preview, description: e.target.value.slice(0, 280) })}
                       className="mt-1 w-full bg-transparent text-xs text-muted-foreground outline-none placeholder:text-muted-foreground/60"
-                      placeholder="Описание"
+                      placeholder={t('ai.descField')}
                     />
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                    {preview.tracks.length} треков
+                    {t('ai.tracksCount', { count: preview.tracks.length })}
                   </span>
-                  <Button variant="ghost" size="icon" onClick={handleGenerate} disabled={generate.isPending} title="Перегенерировать с тем же промптом">
+                  <Button variant="ghost" size="icon" onClick={handleGenerate} disabled={generate.isPending} title={t('ai.regenerateTitle')}>
                     <RefreshCw size={13} className={generate.isPending ? 'animate-spin' : ''} />
                   </Button>
                   {savedId ? (
                     <Button onClick={() => navigate(`/playlist/${savedId}`)} className="gap-2">
-                      <ArrowRight size={13} /> Открыть
+                      <ArrowRight size={13} /> {t('ai.open')}
                     </Button>
                   ) : (
                     <Button onClick={handleSave} disabled={save.isPending || preview.tracks.length === 0} className="gap-2">
                       {save.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                      Сохранить в библиотеку
+                      {t('ai.save')}
                     </Button>
                   )}
                 </div>
@@ -278,21 +282,21 @@ function Inner() {
               {preview.tracks.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12 text-center">
                   <ListMusic size={28} className="text-muted-foreground" />
-                  <p className="text-sm font-medium">Все треки убраны</p>
-                  <p className="text-xs text-muted-foreground">Перегенерируй или измени промпт.</p>
+                  <p className="text-sm font-medium">{t('ai.emptyTitle')}</p>
+                  <p className="text-xs text-muted-foreground">{t('ai.emptyHint')}</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
                   <AnimatePresence initial={false}>
-                    {preview.tracks.map((t, i) => (
+                    {preview.tracks.map((tr, i) => (
                       <motion.li
-                        key={`${t.source ?? 'tidal'}:${t.id}`}
+                        key={`${tr.source ?? 'tidal'}:${tr.id}`}
                         layout
                         initial={reduce ? false : { opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0, transition: { duration: 0.3, delay: Math.min(i * 0.02, 0.2) } }}
                         exit={reduce ? undefined : { opacity: 0, x: 12 }}
                       >
-                        <TrackItem track={t} index={i + 1} onPlay={handlePlay} />
+                        <TrackItem track={tr} index={i + 1} onPlay={handlePlay} />
                       </motion.li>
                     ))}
                   </AnimatePresence>
@@ -302,7 +306,7 @@ function Inner() {
               {/* Plan tail — show how the AI broke down the prompt */}
               <details className="border-t border-border bg-secondary/40 px-5 py-3 text-xs">
                 <summary className="cursor-pointer text-muted-foreground">
-                  Как AI разложил промпт ({preview.plan.queries.length} поисков)
+                  {t('ai.planSummary', { count: preview.plan.queries.length })}
                 </summary>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {preview.plan.queries.map((q, i) => (
