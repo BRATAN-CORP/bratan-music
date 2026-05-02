@@ -1,3 +1,5 @@
+import { t } from '@/i18n/runtime';
+
 /**
  * Reads a File and returns a square JPEG data URL no larger than `size` px.
  * Centre-crops the source so non-square images don't get squashed. Quality
@@ -14,7 +16,7 @@ export async function resizeImageToDataUrl(
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas 2D недоступен');
+    if (!ctx) throw new Error(t('image.canvasUnavailable'));
 
     const srcW = bitmap.width;
     const srcH = bitmap.height;
@@ -32,7 +34,7 @@ export async function resizeImageToDataUrl(
       dataUrl = canvas.toDataURL('image/jpeg', q);
     }
     if (dataUrl.length > maxBytes) {
-      throw new Error('Не удалось сжать изображение до допустимого размера.');
+      throw new Error(t('image.compressFailed'));
     }
     return dataUrl;
   } finally {
@@ -57,7 +59,7 @@ async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Не удалось прочитать изображение'));
+      reject(new Error(t('image.readFailed')));
     };
     img.src = url;
   });

@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/store/auth';
+import { t } from '@/i18n/runtime';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
@@ -122,12 +123,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // Refresh definitively failed — the user has to sign in
       // again. Only this branch logs out.
       useAuthStore.getState().logout();
-      throw new ApiError(401, 'Требуется повторный вход');
+      throw new ApiError(401, t('errors_more.reLoginRequired'));
     }
     // Transient: bubble the 401 to the caller WITHOUT logging out.
     // The next request after the network recovers can re-try the
     // refresh and succeed.
-    throw new ApiError(401, 'Не удалось обновить сессию, попробуйте ещё раз');
+    throw new ApiError(401, t('errors_more.sessionRefreshFailed'));
   }
 
   if (!res.ok) throw new ApiError(res.status, parseErrorMessage(await res.text()));

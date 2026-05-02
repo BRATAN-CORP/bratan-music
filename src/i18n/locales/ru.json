@@ -36,7 +36,13 @@
     "crossfadeHint": "Микширует следующий трек поверх текущего",
     "crossfadeDuration": "Длительность",
     "infinitePlayback": "Бесконечное воспроизведение",
-    "infinitePlaybackHint": "Когда очередь почти пуста, плеер сам подтягивает похожие треки"
+    "infinitePlaybackHint": "Когда очередь почти пуста, плеер сам подтягивает похожие треки",
+    "tidalQuality": {
+      "low": "Low (~320 kbps AAC)",
+      "high": "High (16-bit / 44.1 kHz)",
+      "lossless": "Lossless (16-bit / 44.1 kHz FLAC)",
+      "hiResLossless": "Max (до 24-bit / 192 kHz)"
+    }
   },
   "profile": {
     "label": "Профиль",
@@ -143,7 +149,9 @@
       "placeholder": "Сообщение",
       "send": "Отправить",
       "guest": "Гость",
-      "failed": "не доставлено"
+      "failed": "не доставлено",
+      "errorChat": "Ошибка чата",
+      "sendFailed": "Не удалось отправить"
     }
   },
   "subscription": {
@@ -181,7 +189,18 @@
     "volume": "Громкость",
     "mute": "Звук",
     "expand": "Развернуть",
-    "radioFailed": "Не удалось запустить волну"
+    "radioFailed": "Не удалось запустить волну",
+    "dailyLimitReached": "Дневной лимит бесплатных прослушиваний исчерпан.",
+    "loadFailed": "Не удалось загрузить трек",
+    "playFailed": "Не удалось воспроизвести",
+    "errors": {
+      "aborted": "Загрузка прервана",
+      "network": "Сетевая ошибка при загрузке трека",
+      "decode": "Не удалось декодировать аудио",
+      "unsupported": "Аудио формат не поддерживается",
+      "generic": "Ошибка воспроизведения",
+      "withMessage": "Ошибка: {message}"
+    }
   },
   "errors": {
     "generic": "Произошла ошибка",
@@ -198,7 +217,8 @@
   },
   "auth": {
     "loginRequired": "Требуется повторный вход",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "error": "Ошибка авторизации"
   },
   "languages": {
     "ru": "Русский",
@@ -580,7 +600,22 @@
     "playlists": "Плейлисты",
     "tracks": "Треки",
     "albums": "Альбомы",
-    "artists": "Артисты"
+    "artists": "Артисты",
+    "seeAll": "Смотреть все",
+    "tile": {
+      "genre": "Жанр",
+      "decade": "Декада",
+      "collection": "Подборка"
+    },
+    "row": {
+      "prev": "Назад",
+      "next": "Далее"
+    },
+    "playlist": {
+      "openAria": "Открыть плейлист {title}",
+      "playAria": "Воспроизвести {title}",
+      "tracksCount": "{count} треков"
+    }
   },
   "artist": {
     "loading": "Загружаем артиста…",
@@ -1128,7 +1163,9 @@
     "rateLimit": "Слишком много запросов, подождите немного",
     "serverError": "Что-то пошло не так на нашей стороне",
     "tryAgain": "Попробовать ещё раз",
-    "premiumRequired": "Доступно по подписке"
+    "premiumRequired": "Доступно по подписке",
+    "reLoginRequired": "Требуется повторный вход",
+    "sessionRefreshFailed": "Не удалось обновить сессию, попробуйте ещё раз"
   },
   "toast": {
     "playFailed": "Не удалось воспроизвести трек",
@@ -1320,5 +1357,40 @@
     "alreadySaved": "Уже в библиотеке",
     "save": "Сохранить в библиотеку",
     "empty": "В этом плейлисте пока нет треков."
+  },
+  "artistPicker": {
+    "closeAria": "Закрыть",
+    "tuneTaste": "Настроим вкус",
+    "headingPrefix": "Каких артистов ты ",
+    "headingHighlight": "любишь",
+    "headingSuffix": "?",
+    "subheading": "Достаточно одного — соберём волну из его трек-радио и похожих. Дальше всё подстроится под то, что ты слушаешь.",
+    "searchPlaceholder": "Поиск артистов…",
+    "clearSearchAria": "Очистить поиск",
+    "emptySearch": "Ничего не нашли. Попробуй другую формулировку.",
+    "saving": "Сохраняем…",
+    "startWave": "Запустить волну",
+    "pickRange": "Выбери от {min} до {max}",
+    "pickedRatio": "{picked}/{max} выбрано"
+  },
+  "artistReleases": {
+    "allAlbums": "Все альбомы",
+    "allSingles": "Все синглы",
+    "back": "Назад",
+    "totalItems": "{count} элементов",
+    "loading": "Загружаем…",
+    "loadFailed": "Не удалось загрузить",
+    "unknownError": "Неизвестная ошибка",
+    "empty": "Пусто.",
+    "showMore": "Показать ещё"
+  },
+  "wave": {
+    "emptyHint": "Волна пока пустая — выбери жанры в онбординге",
+    "empty": "Волна пока пустая"
+  },
+  "image": {
+    "canvasUnavailable": "Canvas 2D недоступен",
+    "compressFailed": "Не удалось сжать изображение до допустимого размера.",
+    "readFailed": "Не удалось прочитать изображение"
   }
 }

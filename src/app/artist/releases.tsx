@@ -4,6 +4,7 @@ import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { useArtist, useArtistAlbumsInfinite, useArtistSinglesInfinite } from '@/hooks/useTrack';
+import { useT } from '@/i18n';
 
 interface ArtistReleasesPageProps {
   /** Whether to show the "albums" feed (ALBUM + COMPILATION) or the
@@ -21,6 +22,7 @@ interface ArtistReleasesPageProps {
  * page.
  */
 export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const artistId = id ?? '';
   const { data: artist } = useArtist(artistId);
@@ -56,7 +58,7 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
     return out;
   }, [active.data?.pages]);
   const total = active.data?.pages?.[0]?.totalItems ?? items.length;
-  const heading = kind === 'albums' ? 'Все альбомы' : 'Все синглы';
+  const heading = kind === 'albums' ? t('artistReleases.allAlbums') : t('artistReleases.allSingles');
 
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -87,31 +89,35 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
             className="inline-flex w-fit items-center gap-1 text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground transition-colors hover:text-foreground"
           >
             <ChevronLeft size={12} />
-            {artist?.name ?? 'Назад'}
+            {artist?.name ?? t('artistReleases.back')}
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{heading}</h1>
-          {total > 0 && <p className="text-xs text-muted-foreground">{total} элементов</p>}
+          {total > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('artistReleases.totalItems', { count: total })}
+            </p>
+          )}
         </div>
 
         {active.isLoading && (
           <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted-foreground">
             <Loader2 size={14} className="animate-spin" />
-            Загружаем…
+            {t('artistReleases.loading')}
           </div>
         )}
 
         {active.error && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
             <AlertCircle size={24} className="text-[var(--color-danger)]" />
-            <div className="text-sm">Не удалось загрузить</div>
+            <div className="text-sm">{t('artistReleases.loadFailed')}</div>
             <div className="text-xs text-muted-foreground">
-              {active.error instanceof Error ? active.error.message : 'Неизвестная ошибка'}
+              {active.error instanceof Error ? active.error.message : t('artistReleases.unknownError')}
             </div>
           </div>
         )}
 
         {!active.isLoading && !active.error && items.length === 0 && (
-          <p className="text-sm text-muted-foreground">Пусто.</p>
+          <p className="text-sm text-muted-foreground">{t('artistReleases.empty')}</p>
         )}
 
         {items.length > 0 && (
@@ -132,7 +138,7 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
                 onClick={() => active.fetchNextPage()}
                 className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-xs text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
               >
-                Показать ещё
+                {t('artistReleases.showMore')}
               </button>
             )}
           </div>

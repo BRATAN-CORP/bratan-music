@@ -5,6 +5,7 @@ import { Sparkles, Check, X, Search, Loader2, Music4 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Reveal } from '@/components/ui/Reveal';
 import { CoverFallback } from '@/components/ui/CoverFallback';
+import { useT } from '@/i18n';
 import {
   fetchSuggestedSeedArtists,
   searchSeedArtists,
@@ -35,6 +36,7 @@ interface ArtistPickerProps {
 }
 
 export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
+  const t = useT();
   const reduce = useReducedMotion();
   const [picked, setPicked] = useState<Map<string, SeedArtistCandidate>>(new Map());
   const [submitting, setSubmitting] = useState(false);
@@ -44,8 +46,8 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
   // 250ms debounce for the search query so we don't hammer the
   // proxy on every keystroke.
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query.trim()), 250);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebounced(query.trim()), 250);
+    return () => clearTimeout(timer);
   }, [query]);
 
   const { data: suggested = [] } = useQuery({
@@ -139,7 +141,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
           {onSkip && (
             <button
               onClick={onSkip}
-              aria-label="Закрыть"
+              aria-label={t('artistPicker.closeAria')}
               className="absolute right-4 top-4 z-20 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-[var(--color-hover-overlay)] hover:text-foreground"
             >
               <X size={16} />
@@ -150,15 +152,17 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
             <div className="flex flex-col gap-3">
               <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
                 <Music4 size={12} className="text-[var(--color-accent)]" />
-                Настроим вкус
+                {t('artistPicker.tuneTaste')}
               </div>
               <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-                Каких артистов ты{' '}
-                <span className="font-serif italic text-muted-foreground">любишь</span>?
+                {t('artistPicker.headingPrefix')}
+                <span className="font-serif italic text-muted-foreground">
+                  {t('artistPicker.headingHighlight')}
+                </span>
+                {t('artistPicker.headingSuffix')}
               </h2>
               <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-                Достаточно одного — соберём волну из его трек-радио и похожих.
-                Дальше всё подстроится под то, что ты слушаешь.
+                {t('artistPicker.subheading')}
               </p>
             </div>
 
@@ -168,7 +172,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Поиск артистов…"
+                placeholder={t('artistPicker.searchPlaceholder')}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
               {searching && <Loader2 size={14} className="shrink-0 animate-spin text-muted-foreground" />}
@@ -176,7 +180,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                 <button
                   type="button"
                   onClick={() => setQuery('')}
-                  aria-label="Очистить поиск"
+                  aria-label={t('artistPicker.clearSearchAria')}
                   className="shrink-0 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-[var(--color-hover-overlay)] hover:text-foreground"
                 >
                   <X size={14} />
@@ -186,7 +190,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
 
             {showEmpty ? (
               <p className="text-sm text-muted-foreground">
-                Ничего не нашли. Попробуй другую формулировку.
+                {t('artistPicker.emptySearch')}
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -274,20 +278,20 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                   {submitting ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      Сохраняем…
+                      {t('artistPicker.saving')}
                     </>
                   ) : (
                     <>
                       <Sparkles size={16} />
-                      Запустить волну
+                      {t('artistPicker.startWave')}
                     </>
                   )}
                 </Button>
               </motion.div>
               <span className="text-sm text-muted-foreground">
                 {picked.size === 0
-                  ? `Выбери от ${MIN_PICKS} до ${MAX_PICKS}`
-                  : `${picked.size}/${MAX_PICKS} выбрано`}
+                  ? t('artistPicker.pickRange', { min: MIN_PICKS, max: MAX_PICKS })
+                  : t('artistPicker.pickedRatio', { picked: picked.size, max: MAX_PICKS })}
               </span>
             </div>
           </div>

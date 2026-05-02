@@ -9,6 +9,7 @@ import {
   getCachedStreamUrl,
   getOrStartInFlight,
 } from '@/lib/streamUrlCache';
+import { useT } from '@/i18n';
 
 import type { TidalQuality } from '@/store/settings';
 
@@ -806,6 +807,7 @@ function rampGain(
 }
 
 export function useAudioPlayer() {
+  const t = useT();
   const {
     currentTrack,
     isPlaying,
@@ -989,7 +991,7 @@ export function useAudioPlayer() {
 
     if (paywall) {
       useUiStore.getState().openSubscriptionPrompt(
-        'Дневной лимит бесплатных прослушиваний исчерпан.',
+        t('player.dailyLimitReached'),
       );
       setError(null);
       pause();
@@ -997,7 +999,7 @@ export function useAudioPlayer() {
     }
 
     if (!loaded) {
-      setError('Не удалось загрузить трек');
+      setError(t('player.loadFailed'));
       pause();
       return;
     }
@@ -1065,10 +1067,10 @@ export function useAudioPlayer() {
       await safePlay(slot);
     } catch (err) {
       if (loadingRef.current !== trackId) return;
-      setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
+      setError(err instanceof Error ? err.message : t('player.playFailed'));
       pause();
     }
-  }, [pause, setError, setDuration]);
+  }, [pause, setError, setDuration, t]);
 
   // Reload when track id changes (or stream version bumped).
   const lastStreamVersionRef = useRef(streamVersion);
@@ -1277,7 +1279,7 @@ export function useAudioPlayer() {
         ctxBundle.ctx.resume().catch(() => {});
       }
       safePlay(slot).catch((err) => {
-        setError(err instanceof Error ? err.message : 'Не удалось воспроизвести');
+        setError(err instanceof Error ? err.message : t('player.playFailed'));
         pause();
       });
     } else {
@@ -1297,7 +1299,7 @@ export function useAudioPlayer() {
         b.loaded[inactiveSlot(b)] = null;
       }
     }
-  }, [isPlaying, currentTrack?.id, pause, setError]);
+  }, [isPlaying, currentTrack?.id, pause, setError, t]);
 
   // Volume / mute always apply to whichever slot is active. The opposite slot
   // is held at gain=0 except during a crossfade when both are ramped.
@@ -1748,14 +1750,14 @@ export function useAudioPlayer() {
           return;
         }
         const messages: Record<number, string> = {
-          1: 'Загрузка прервана',
-          2: 'Сетевая ошибка при загрузке трека',
-          3: 'Не удалось декодировать аудио',
-          4: 'Аудио формат не поддерживается',
+          1: t('player.errors.aborted'),
+          2: t('player.errors.network'),
+          3: t('player.errors.decode'),
+          4: t('player.errors.unsupported'),
         };
         const nativeMsg = audio.error?.message;
         const msg = messages[code ?? 0]
-          ?? (nativeMsg ? `Ошибка: ${nativeMsg}` : 'Ошибка воспроизведения');
+          ?? (nativeMsg ? t('player.errors.withMessage', { message: nativeMsg }) : t('player.errors.generic'));
         setError(msg);
       };
       audio.addEventListener('timeupdate', onTimeUpdate);
@@ -1774,7 +1776,7 @@ export function useAudioPlayer() {
     const offA = wireSlot('a');
     const offB = wireSlot('b');
     return () => { offA(); offB(); };
-  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade, currentTrack, loadTrack]);
+  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade, currentTrack, loadTrack, t]);
 
   const seek = useCallback((time: number) => {
     const b = getBundle();

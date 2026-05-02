@@ -15,6 +15,7 @@ import { TrackItem } from './TrackItem';
 import { usePlayerStore } from '@/store/player';
 import { api } from '@/lib/api';
 import { tidalImageUrl } from '@/lib/tidal-image';
+import { useT } from '@/i18n';
 
 interface ExploreModulesProps {
   modules: ExploreModule[];
@@ -162,9 +163,10 @@ function SectionHeader({
   icon?: React.ReactNode;
   seeAllHref?: string;
 }) {
+  const t = useT();
   // Some hero rows deliberately suppress the title to reduce visual
-  // noise, but still want the "Смотреть все" affordance when
-  // upstream offers pagination. If both are empty, render nothing.
+  // noise, but still want the see-all affordance when upstream
+  // offers pagination. If both are empty, render nothing.
   if (!title && !seeAllHref) return null;
   return (
     <div className="flex items-end justify-between gap-3">
@@ -181,7 +183,7 @@ function SectionHeader({
           to={seeAllHref}
           className="shrink-0 text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:text-foreground"
         >
-          Смотреть все
+          {t('explore.seeAll')}
         </Link>
       )}
     </div>
@@ -272,6 +274,7 @@ function GenreTile({
   index: number;
   variant: 'hero' | 'row';
 }) {
+  const t = useT();
   // Larger CDN size on hero tiles so they stay crisp on retina
   // screens; row tiles stay at 480 to keep payloads light.
   const img = tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
@@ -327,7 +330,7 @@ function GenreTile({
             />
             <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
               <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/60">
-                {variant === 'hero' ? 'Жанр' : 'Подборка'}
+                {variant === 'hero' ? t('explore.tile.genre') : t('explore.tile.collection')}
               </span>
               <span className="line-clamp-2 text-sm font-semibold text-white sm:text-base">
                 {item.title}
@@ -343,7 +346,7 @@ function GenreTile({
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                {isDecade ? 'Декада' : 'Подборка'}
+                {isDecade ? t('explore.tile.decade') : t('explore.tile.collection')}
               </span>
               <span className="line-clamp-2 text-base font-semibold tracking-tight">
                 {item.title}
@@ -460,6 +463,7 @@ function SnapScroller({
   seeAllHref?: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -822,7 +826,7 @@ function SnapScroller({
         {canPrev && (
           <button
             type="button"
-            aria-label="Назад"
+            aria-label={t('explore.row.prev')}
             onClick={() => step(-1)}
             className="absolute left-0 top-1/2 hidden h-10 w-10 -translate-y-1/2 -translate-x-1 items-center justify-center rounded-full border border-border bg-background/80 text-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-background md:flex"
           >
@@ -832,7 +836,7 @@ function SnapScroller({
         {canNext && (
           <button
             type="button"
-            aria-label="Далее"
+            aria-label={t('explore.row.next')}
             onClick={() => step(1)}
             className="absolute right-0 top-1/2 hidden h-10 w-10 -translate-y-1/2 translate-x-1 items-center justify-center rounded-full border border-border bg-background/80 text-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-background md:flex"
           >
@@ -918,6 +922,7 @@ function ExplorePlaylistCard({
   playlist: ExplorePlaylist;
   variant: 'hero' | 'compact';
 }) {
+  const t = useT();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const queryClient = useQueryClient();
@@ -964,7 +969,7 @@ function ExplorePlaylistCard({
     <Link
       to={`/explore/playlist/${playlist.id}`}
       className="group flex flex-col gap-2.5 focus:outline-none"
-      aria-label={`Открыть плейлист ${playlist.title}`}
+      aria-label={t('explore.playlist.openAria', { title: playlist.title })}
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary shadow-sm transition-shadow duration-300 group-hover:shadow-xl">
         {playlist.coverUrl ? (
@@ -993,7 +998,7 @@ function ExplorePlaylistCard({
         <button
           type="button"
           onClick={handlePlay}
-          aria-label={`Воспроизвести ${playlist.title}`}
+          aria-label={t('explore.playlist.playAria', { title: playlist.title })}
           className="absolute bottom-2 right-2 flex h-9 w-9 translate-y-3 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] opacity-0 shadow-lg transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
@@ -1005,7 +1010,9 @@ function ExplorePlaylistCard({
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {playlist.curator ?? 'Tidal'}
-          {typeof playlist.trackCount === 'number' ? ` · ${playlist.trackCount} треков` : ''}
+          {typeof playlist.trackCount === 'number'
+            ? ` · ${t('explore.playlist.tracksCount', { count: playlist.trackCount })}`
+            : ''}
         </p>
         {variant === 'hero' && playlist.description && (
           <p className="mt-1 line-clamp-2 text-xs text-muted-foreground/80">
