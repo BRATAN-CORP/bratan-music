@@ -753,6 +753,74 @@
     "pinned": "Pinned",
     "liked": "Liked"
   },
+  "admin": {
+    "heading": "Admin tools",
+    "users": "Users",
+    "usersHint": "Search, filters, gift subscriptions, bans and roles.",
+    "searchPlaceholder": "Search by @username, name or ID",
+    "clearAria": "Clear",
+    "loading": "Loading",
+    "gateLoading": "Loading…",
+    "you": "you",
+    "filter": {
+      "role": "Role",
+      "ban": "Ban",
+      "subscription": "Subscription",
+      "allOption": "All",
+      "adminsOption": "Admins",
+      "usersOption": "Users",
+      "bannedOption": "Banned",
+      "activeOption": "Active",
+      "subActiveOption": "Active",
+      "subNoneOption": "None"
+    },
+    "sort": {
+      "newest": "Newest first",
+      "activity": "By activity",
+      "name": "By name"
+    },
+    "col": {
+      "user": "User",
+      "role": "Role",
+      "subscription": "Subscription",
+      "listened": "Listened",
+      "created": "Joined",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No matches",
+      "hint": "Clear the filters or refine your query."
+    },
+    "role": {
+      "admin": "Admin",
+      "user": "User"
+    },
+    "sub": {
+      "daysLeft": "{days}d left",
+      "free": "Free"
+    },
+    "action": {
+      "grantSub": "Gift 30-day subscription",
+      "removeAdmin": "Remove admin",
+      "makeAdmin": "Make admin",
+      "unban": "Lift ban",
+      "ban": "Ban",
+      "banPlaceholder": "Ban reason (optional, up to 280 characters)",
+      "banConfirm": "Ban",
+      "cancel": "Cancel"
+    },
+    "pagination": {
+      "range": "{start}–{end} of {total}",
+      "empty": "—",
+      "page": "Page {page} / {total}"
+    },
+    "relative": {
+      "justNow": "just now",
+      "minutes": "{n}m ago",
+      "hours": "{n}h ago",
+      "days": "{n}d ago"
+    }
+  },
   "share": {
     "shareTrack": "Share track",
     "sharePlaylist": "Share playlist",
@@ -827,6 +895,9 @@
   "admin_panels": {
     "tidal": {
       "title": "Tidal accounts",
+      "headerHint": "Tidal account proxy pool. The worker hands out streams round-robin (LRU) and auto-disables an account after 5 errors in a row. Add an account via refresh token or the device-flow on link.tidal.com.",
+      "refreshAria": "Refresh",
+      "close": "Close",
       "addAccount": "Add account",
       "removeAccount": "Remove",
       "primary": "Primary",
@@ -839,9 +910,77 @@
       "refresh": "Refresh token",
       "refreshing": "Refreshing…",
       "refreshFailed": "Couldn't refresh",
-      "loadFailed": "Couldn't load",
+      "loadFailed": "Couldn't load the pool",
       "loginFlow": "Sign in with Tidal",
-      "addHint": "Drop Tidal accounts here — we'll round-robin them for streaming."
+      "addHint": "Drop Tidal accounts here — we'll round-robin them for streaming.",
+      "empty": "Pool is empty. Add the first account — refresh token or device-flow.",
+      "stats": {
+        "accounts": "Accounts",
+        "active": "Active",
+        "errors": "With errors",
+        "totalUsage": "Total requests"
+      },
+      "form": {
+        "tabAria": "Add method",
+        "refreshTokenTab": "Refresh token",
+        "deviceTab": "Device-flow",
+        "labelPlaceholder": "Label (optional): \"main\", \"backup-eu\" …",
+        "refreshTokenPlaceholder": "Refresh token: eyJraWQiOi…",
+        "refreshTokenHint": "The worker swaps your refresh token for an access token and pulls the subscription tier. An account with the same Tidal user id refreshes its tokens without duplicating.",
+        "applyButton": "Apply",
+        "deviceHint": "Sign in via the Tidal site: hit \"Start\", get a short code, type it on link.tidal.com and confirm. The worker creates or updates the pool entry automatically.",
+        "deviceStartButton": "Start",
+        "enterCodeAt": "Enter the code on link.tidal.com:",
+        "codeAria": "Code",
+        "copyCodeAria": "Copy code",
+        "openVerification": "Open {url}",
+        "waitingConfirmation": "Waiting for confirmation…",
+        "cancel": "Cancel"
+      },
+      "toast": {
+        "accountAdded": "Account added to the pool",
+        "addError": "Add failed",
+        "deviceCodeFailed": "Couldn't get device code",
+        "tidalConnected": "Tidal connected via device-flow",
+        "authCanceled": "Authorization cancelled",
+        "pollError": "Polling error",
+        "copied": "{label} copied",
+        "copyFailed": "Couldn't copy",
+        "accountEnabled": "Account enabled in the pool",
+        "accountDisabled": "Account disabled",
+        "statusChangeFailed": "Couldn't change status",
+        "renameFailed": "Couldn't rename",
+        "subscriptionRefreshed": "Subscription refreshed",
+        "refreshFailed": "Couldn't refresh",
+        "accountRemoved": "Account removed",
+        "removeFailed": "Couldn't remove"
+      },
+      "confirm": {
+        "removeAccount": "Remove account from the pool? This is irreversible."
+      },
+      "account": {
+        "nameFallback": "Account #{id}",
+        "untilDate": "until {date}",
+        "refreshAria": "Refresh subscription",
+        "enableAria": "Enable",
+        "disableAria": "Disable",
+        "removeAria": "Remove",
+        "stats": {
+          "usage": "Requests",
+          "lastUsed": "Last used",
+          "accessToken": "Access token",
+          "accessTokenExpired": "expired",
+          "accessTokenMinutes": "{n}m",
+          "consecutiveErrors": "Errors in a row"
+        }
+      },
+      "relative": {
+        "never": "never",
+        "justNow": "just now",
+        "minutes": "{n}m ago",
+        "hours": "{n}h ago",
+        "days": "{n}d ago"
+      }
     },
     "adminFlag": {
       "title": "User admin flags",
@@ -887,14 +1026,53 @@
     },
     "health": {
       "title": "Service health",
+      "headerHint": "One glance covers it all: Tidal pool alive, D1 writes, R2 not over, crons ran today.",
+      "refreshAria": "Refresh",
+      "refreshLogsAria": "Refresh logs",
       "uptime": "Uptime",
       "version": "Version",
       "logs": "Service log",
       "logsLoading": "Loading log…",
-      "logsEmpty": "Log is empty",
+      "logsEmpty": "Quiet. No {level} {sourceClause} — that's good.",
+      "logsAnyEvent": "events",
+      "logsFromSource": "from {source}",
+      "logsTitle": "Service logs",
+      "logsRecentErrors": "{count} in 24h",
+      "logsLevelAll": "all levels",
+      "logsSourceAll": "all sources",
       "refresh": "Refresh",
       "loading": "Loading…",
-      "loadFailed": "Couldn't load"
+      "loadFailed": "Couldn't load health",
+      "tile": {
+        "tidalTitle": "Tidal pool",
+        "tidalPrimary": "{enabled}/{total} active",
+        "dbTitle": "D1 writing",
+        "dbMs": "{ms} ms",
+        "noResponse": "no response",
+        "r2Objects": "{n} objects{plus}",
+        "cronTitle": "Crons",
+        "cronNotRun": "never ran"
+      },
+      "row": {
+        "errors": "errors",
+        "expired": "expired",
+        "last": "last",
+        "error": "error",
+        "size": "size",
+        "truncated": "truncated",
+        "yes": "yes",
+        "no": "no",
+        "processed": "processed",
+        "errorCount": "errors",
+        "start": "start"
+      },
+      "relative": {
+        "never": "never",
+        "justNow": "just now",
+        "minutes": "{n}m ago",
+        "hours": "{n}h ago",
+        "days": "{n}d ago"
+      }
     },
     "grant": {
       "title": "Grant subscription",

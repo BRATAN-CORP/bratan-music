@@ -753,6 +753,74 @@
     "pinned": "Закреплённые",
     "liked": "Любимое"
   },
+  "admin": {
+    "heading": "Администрирование",
+    "users": "Пользователи",
+    "usersHint": "Поиск, фильтры, выдача подписки, баны и роли.",
+    "searchPlaceholder": "Поиск по @username, имени или ID",
+    "clearAria": "Очистить",
+    "loading": "Загружаем",
+    "gateLoading": "Загружаем…",
+    "you": "ты",
+    "filter": {
+      "role": "Роль",
+      "ban": "Бан",
+      "subscription": "Подписка",
+      "allOption": "Все",
+      "adminsOption": "Админы",
+      "usersOption": "Юзеры",
+      "bannedOption": "Забанены",
+      "activeOption": "Активны",
+      "subActiveOption": "Активна",
+      "subNoneOption": "Нет"
+    },
+    "sort": {
+      "newest": "Сначала новые",
+      "activity": "По активности",
+      "name": "По имени"
+    },
+    "col": {
+      "user": "Пользователь",
+      "role": "Роль",
+      "subscription": "Подписка",
+      "listened": "Прослушано",
+      "created": "Зарегистрирован",
+      "actions": "Действия"
+    },
+    "empty": {
+      "title": "Никого не нашли",
+      "hint": "Сбрось фильтры или измени поисковый запрос."
+    },
+    "role": {
+      "admin": "Админ",
+      "user": "Юзер"
+    },
+    "sub": {
+      "daysLeft": "{days}д осталось",
+      "free": "Бесплатно"
+    },
+    "action": {
+      "grantSub": "Дать подписку на 30 дней",
+      "removeAdmin": "Снять админа",
+      "makeAdmin": "Сделать админом",
+      "unban": "Снять бан",
+      "ban": "Забанить",
+      "banPlaceholder": "Причина бана (необязательно, до 280 символов)",
+      "banConfirm": "Забанить",
+      "cancel": "Отмена"
+    },
+    "pagination": {
+      "range": "{start}–{end} из {total}",
+      "empty": "—",
+      "page": "Стр {page} / {total}"
+    },
+    "relative": {
+      "justNow": "только что",
+      "minutes": "{n}м назад",
+      "hours": "{n}ч назад",
+      "days": "{n}д назад"
+    }
+  },
   "share": {
     "shareTrack": "Поделиться треком",
     "sharePlaylist": "Поделиться плейлистом",
@@ -827,6 +895,9 @@
   "admin_panels": {
     "tidal": {
       "title": "Tidal-аккаунты",
+      "headerHint": "Прокси-пул аккаунтов Tidal. Воркер раздаёт стримы по least-recently-used и сам выключает аккаунт после 5 ошибок подряд. Добавь аккаунт через refresh token или device-flow на link.tidal.com.",
+      "refreshAria": "Обновить",
+      "close": "Закрыть",
       "addAccount": "Добавить аккаунт",
       "removeAccount": "Удалить",
       "primary": "Основной",
@@ -839,9 +910,77 @@
       "refresh": "Обновить токен",
       "refreshing": "Обновляем…",
       "refreshFailed": "Не удалось обновить",
-      "loadFailed": "Не удалось загрузить",
+      "loadFailed": "Не удалось загрузить пул",
       "loginFlow": "Войти через Tidal",
-      "addHint": "Добавьте сюда учётки Tidal — мы будем использовать их пул для стриминга."
+      "addHint": "Добавьте сюда учётки Tidal — мы будем использовать их пул для стриминга.",
+      "empty": "Пул пуст. Добавь первый аккаунт — refresh token или device-flow.",
+      "stats": {
+        "accounts": "Аккаунтов",
+        "active": "Активных",
+        "errors": "С ошибками",
+        "totalUsage": "Запросов всего"
+      },
+      "form": {
+        "tabAria": "Способ добавления",
+        "refreshTokenTab": "Refresh token",
+        "deviceTab": "Device-flow",
+        "labelPlaceholder": "Метка (необязательно): «main», «backup-eu» …",
+        "refreshTokenPlaceholder": "Refresh token: eyJraWQiOi…",
+        "refreshTokenHint": "Worker сам обменяет refresh token на access token и подтянет тип подписки. Аккаунт с тем же Tidal user id обновит токены, не дублируясь.",
+        "applyButton": "Применить",
+        "deviceHint": "Логин через сайт Tidal: жмёшь «Запустить», получаешь короткий код, вводишь его на link.tidal.com и подтверждаешь. Worker создаст или обновит запись в пуле автоматически.",
+        "deviceStartButton": "Запустить",
+        "enterCodeAt": "Введи код на link.tidal.com:",
+        "codeAria": "Код",
+        "copyCodeAria": "Скопировать код",
+        "openVerification": "Открыть {url}",
+        "waitingConfirmation": "Ждём подтверждения…",
+        "cancel": "Отменить"
+      },
+      "toast": {
+        "accountAdded": "Аккаунт добавлен в пул",
+        "addError": "Ошибка добавления",
+        "deviceCodeFailed": "Не удалось получить device code",
+        "tidalConnected": "Tidal подключён через device-flow",
+        "authCanceled": "Авторизация отменена",
+        "pollError": "Ошибка опроса",
+        "copied": "{label} скопирован",
+        "copyFailed": "Не удалось скопировать",
+        "accountEnabled": "Аккаунт включён в пул",
+        "accountDisabled": "Аккаунт выключен",
+        "statusChangeFailed": "Не удалось изменить статус",
+        "renameFailed": "Не удалось переименовать",
+        "subscriptionRefreshed": "Подписка обновлена",
+        "refreshFailed": "Не удалось обновить",
+        "accountRemoved": "Аккаунт удалён",
+        "removeFailed": "Не удалось удалить"
+      },
+      "confirm": {
+        "removeAccount": "Удалить аккаунт из пула? Действие необратимо."
+      },
+      "account": {
+        "nameFallback": "Аккаунт #{id}",
+        "untilDate": "до {date}",
+        "refreshAria": "Обновить подписку",
+        "enableAria": "Включить",
+        "disableAria": "Выключить",
+        "removeAria": "Удалить",
+        "stats": {
+          "usage": "Запросов",
+          "lastUsed": "Последний",
+          "accessToken": "Access token",
+          "accessTokenExpired": "истёк",
+          "accessTokenMinutes": "{n} мин",
+          "consecutiveErrors": "Подряд ошибок"
+        }
+      },
+      "relative": {
+        "never": "никогда",
+        "justNow": "только что",
+        "minutes": "{n} мин назад",
+        "hours": "{n} ч назад",
+        "days": "{n} д назад"
+      }
     },
     "adminFlag": {
       "title": "Админ-флаги пользователей",
@@ -887,14 +1026,53 @@
     },
     "health": {
       "title": "Состояние сервиса",
+      "headerHint": "Один экран на все галочки: Tidal-пул жив, D1 пишет, R2 не переполнен, кроны отработали сегодня.",
+      "refreshAria": "Обновить",
+      "refreshLogsAria": "Обновить логи",
       "uptime": "Аптайм",
       "version": "Версия",
       "logs": "Лог сервиса",
       "logsLoading": "Загружаем лог…",
-      "logsEmpty": "Лог пуст",
+      "logsEmpty": "Тишина. Ни одного {level} {sourceClause} — это хорошо.",
+      "logsAnyEvent": "события",
+      "logsFromSource": "из {source}",
+      "logsTitle": "Логи сервиса",
+      "logsRecentErrors": "{count} за сутки",
+      "logsLevelAll": "все уровни",
+      "logsSourceAll": "все источники",
       "refresh": "Обновить",
       "loading": "Загружаем…",
-      "loadFailed": "Не удалось загрузить"
+      "loadFailed": "Не удалось загрузить health",
+      "tile": {
+        "tidalTitle": "Tidal пул",
+        "tidalPrimary": "{enabled}/{total} активны",
+        "dbTitle": "D1 пишет",
+        "dbMs": "{ms} мс",
+        "noResponse": "нет ответа",
+        "r2Objects": "{n} объектов{plus}",
+        "cronTitle": "Кроны",
+        "cronNotRun": "не запускался"
+      },
+      "row": {
+        "errors": "с ошибками",
+        "expired": "просрочены",
+        "last": "последний",
+        "error": "ошибка",
+        "size": "размер",
+        "truncated": "усечено",
+        "yes": "да",
+        "no": "нет",
+        "processed": "обработано",
+        "errorCount": "ошибок",
+        "start": "старт"
+      },
+      "relative": {
+        "never": "никогда",
+        "justNow": "только что",
+        "minutes": "{n} мин назад",
+        "hours": "{n} ч назад",
+        "days": "{n} д назад"
+      }
     },
     "grant": {
       "title": "Выдача подписки",

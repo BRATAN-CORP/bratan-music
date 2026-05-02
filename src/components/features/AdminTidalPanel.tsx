@@ -6,6 +6,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import { useI18n, useT } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
+
+function intlLocale(locale: string): string {
+  return locale === 'en' ? 'en' : 'ru-RU';
+}
 
 /**
  * Unified Tidal-admin panel.
@@ -16,8 +23,8 @@ import { api } from '@/lib/api';
  * Both ways of provisioning a Tidal session — pasting a refresh token
  * and the OAuth device-flow on link.tidal.com — already write to the
  * same `tidal_accounts` pool on the backend (see TidalAuth.cacheSession),
- * so we render them as **two tabs in one "Добавить аккаунт" form** above
- * a single account list. The list itself shows pool stats, per-account
+ * so we render them as **two tabs in one "add account" form** above a
+ * single account list. The list itself shows pool stats, per-account
  * status, and the same toggle / refresh-subscription / remove actions
  * that used to live in the dedicated pool panel.
  *
@@ -67,21 +74,23 @@ interface DevicePoll {
 
 type AddTab = 'token' | 'device';
 
-function formatDate(unix: number | null): string {
+function formatDate(unix: number | null, intl: string): string {
   if (!unix) return '—';
-  return new Date(unix * 1000).toLocaleString('ru-RU');
+  return new Date(unix * 1000).toLocaleString(intl);
 }
 
-function relative(unix: number | null): string {
-  if (!unix) return 'никогда';
+function relative(unix: number | null, t: Translate): string {
+  if (!unix) return t('admin_panels.tidal.relative.never');
   const diff = Math.floor(Date.now() / 1000) - unix;
-  if (diff < 60) return 'только что';
-  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`;
-  return `${Math.floor(diff / 86400)} д назад`;
+  if (diff < 60) return t('admin_panels.tidal.relative.justNow');
+  if (diff < 3600) return t('admin_panels.tidal.relative.minutes', { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t('admin_panels.tidal.relative.hours', { n: Math.floor(diff / 3600) });
+  return t('admin_panels.tidal.relative.days', { n: Math.floor(diff / 86400) });
 }
 
 export function AdminTidalPanel() {
+  const { t, locale } = useI18n();
+  const intl = intlLocale(locale);
   const [accounts, setAccounts] = useState<PoolAccount[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -118,7 +127,7 @@ export function AdminTidalPanel() {
       const data = await api.get<PoolListResponse>('/admin/tidal/accounts');
       setAccounts(data.items);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить пул');
+      setLoadError(err instanceof Error ? err.message : t('admin_panels.tidal.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -156,11 +165,11 @@ export function AdminTidalPanel() {
         refreshToken,
         label: labelInput.trim() || undefined,
       });
-      showToast('ok', 'Аккаунт добавлен в пул');
+      showToast('ok', t('admin_panels.tidal.toast.accountAdded'));
       closeAddForm();
       await load();
     } catch (err) {
-      showToast('err', err instanceof Error ? err.message : 'Ошибка добавления');
+      showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.addError'));
     } finally {
       setAdding(false);
     }
@@ -175,7 +184,7 @@ export function AdminTidalPanel() {
       setDevice(r);
       pollDevice(r.deviceCode, r.interval || 2);
     } catch (err) {
-      showToast('err', err instanceof Error ? err.message : 'Не удалось получить device code');
+      showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.deviceCodeFailed'));
     } finally {
       setDeviceBusy(false);
     }
@@ -189,7 +198,7 @@ export function AdminTidalPanel() {
         if (r.ok) {
           stopPolling();
           setDevice(null);
-          showToast('ok', 'Tidal подключён через device-flow');
+          showToast('ok', t('admin_panels.tidal.toast.tidalConnected'));
           closeAddForm();
           await load();
           return;
@@ -199,10 +208,10 @@ export function AdminTidalPanel() {
           return;
         }
         stopPolling();
-        showToast('err', r.error || 'Авторизация отменена');
+        showToast('err', r.error || t('admin_panels.tidal.toast.authCanceled'));
       } catch (err) {
         stopPolling();
-        showToast('err', err instanceof Error ? err.message : 'Ошибка опроса');
+        showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.pollError'));
       }
     };
     pollTimer.current = setTimeout(tick, intervalSec * 1000);
@@ -224,9 +233,9 @@ export function AdminTidalPanel() {
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      showToast('ok', `${label} скопирован`);
+      showToast('ok', t('admin_panels.tidal.toast.copied', { label }));
     } catch {
-      showToast('err', 'Не удалось скопировать');
+      showToast('err', t('admin_panels.tidal.toast.copyFailed'));
     }
   };
 
@@ -234,10 +243,10 @@ export function AdminTidalPanel() {
     setBusyAccount(id);
     try {
       await api.patch(`/admin/tidal/accounts/${id}`, { enabled });
-      showToast('ok', enabled ? 'Аккаунт включён в пул' : 'Аккаунт выключен');
+      showToast('ok', enabled ? t('admin_panels.tidal.toast.accountEnabled') : t('admin_panels.tidal.toast.accountDisabled'));
       await load();
     } catch (err) {
-      showToast('err', err instanceof Error ? err.message : 'Не удалось изменить статус');
+      showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.statusChangeFailed'));
     } finally {
       setBusyAccount(null);
     }
@@ -249,7 +258,7 @@ export function AdminTidalPanel() {
       await api.patch(`/admin/tidal/accounts/${id}`, { label });
       await load();
     } catch (err) {
-      showToast('err', err instanceof Error ? err.message : 'Не удалось переименовать');
+      showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.renameFailed'));
     } finally {
       setBusyAccount(null);
     }
@@ -259,24 +268,24 @@ export function AdminTidalPanel() {
     setBusyAccount(id);
     try {
       await api.post(`/admin/tidal/accounts/${id}/refresh`);
-      showToast('ok', 'Подписка обновлена');
+      showToast('ok', t('admin_panels.tidal.toast.subscriptionRefreshed'));
       await load();
     } catch (err) {
-      showToast('err', err instanceof Error ? err.message : 'Не удалось обновить');
+      showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.refreshFailed'));
     } finally {
       setBusyAccount(null);
     }
   };
 
   const removeAccount = async (id: number) => {
-    if (!confirm('Удалить аккаунт из пула? Действие необратимо.')) return;
+    if (!confirm(t('admin_panels.tidal.confirm.removeAccount'))) return;
     setBusyAccount(id);
     try {
       await api.delete(`/admin/tidal/accounts/${id}`);
-      showToast('ok', 'Аккаунт удалён');
+      showToast('ok', t('admin_panels.tidal.toast.accountRemoved'));
       await load();
     } catch (err) {
-      showToast('err', err instanceof Error ? err.message : 'Не удалось удалить');
+      showToast('err', err instanceof Error ? err.message : t('admin_panels.tidal.toast.removeFailed'));
     } finally {
       setBusyAccount(null);
     }
@@ -288,21 +297,19 @@ export function AdminTidalPanel() {
         <div>
           <h2 className="flex items-center gap-2 text-sm font-medium">
             <Server size={14} className="text-muted-foreground" />
-            Tidal-аккаунты
+            {t('admin_panels.tidal.title')}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Прокси-пул аккаунтов Tidal. Воркер раздаёт стримы по least-recently-used и сам
-            выключает аккаунт после 5 ошибок подряд. Добавь аккаунт через refresh token или
-            device-flow на link.tidal.com.
+            {t('admin_panels.tidal.headerHint')}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={load} aria-label="Обновить" className="h-8 w-8">
+          <Button variant="ghost" size="icon" onClick={load} aria-label={t('admin_panels.tidal.refreshAria')} className="h-8 w-8">
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </Button>
           <Button onClick={() => (showAdd ? closeAddForm() : setShowAdd(true))} size="sm">
             {showAdd ? <X size={14} /> : <Plus size={14} />}
-            {showAdd ? 'Закрыть' : 'Добавить аккаунт'}
+            {showAdd ? t('admin_panels.tidal.close') : t('admin_panels.tidal.addAccount')}
           </Button>
         </div>
       </div>
@@ -311,10 +318,10 @@ export function AdminTidalPanel() {
           visible so an admin can spot "0 active" at a glance. */}
       {stats && (
         <div className="mt-4 grid grid-cols-2 gap-3 rounded-[var(--radius-sm)] border border-border bg-background p-3 text-xs sm:grid-cols-4">
-          <Stat label="Аккаунтов" value={String(stats.total)} />
-          <Stat label="Активных" value={String(stats.enabled)} accent={stats.enabled > 0 ? 'ok' : 'warn'} />
-          <Stat label="С ошибками" value={String(stats.broken)} accent={stats.broken > 0 ? 'warn' : undefined} />
-          <Stat label="Запросов всего" value={String(stats.totalUsage)} />
+          <Stat label={t('admin_panels.tidal.stats.accounts')} value={String(stats.total)} />
+          <Stat label={t('admin_panels.tidal.stats.active')} value={String(stats.enabled)} accent={stats.enabled > 0 ? 'ok' : 'warn'} />
+          <Stat label={t('admin_panels.tidal.stats.errors')} value={String(stats.broken)} accent={stats.broken > 0 ? 'warn' : undefined} />
+          <Stat label={t('admin_panels.tidal.stats.totalUsage')} value={String(stats.totalUsage)} />
         </div>
       )}
 
@@ -338,9 +345,9 @@ export function AdminTidalPanel() {
           >
             <div className="mt-4 flex flex-col gap-3 rounded-[var(--radius-sm)] border border-border bg-background p-3">
               <LayoutGroup id="tidal-add-tabs">
-                <div role="tablist" aria-label="Способ добавления" className="inline-flex rounded-full border border-border bg-card p-0.5 text-xs">
-                  <TabButton label="Refresh token" active={addTab === 'token'} onSelect={() => setAddTab('token')} />
-                  <TabButton label="Device-flow" active={addTab === 'device'} onSelect={() => setAddTab('device')} />
+                <div role="tablist" aria-label={t('admin_panels.tidal.form.tabAria')} className="inline-flex rounded-full border border-border bg-card p-0.5 text-xs">
+                  <TabButton label={t('admin_panels.tidal.form.refreshTokenTab')} active={addTab === 'token'} onSelect={() => setAddTab('token')} />
+                  <TabButton label={t('admin_panels.tidal.form.deviceTab')} active={addTab === 'device'} onSelect={() => setAddTab('device')} />
                 </div>
               </LayoutGroup>
 
@@ -357,25 +364,24 @@ export function AdminTidalPanel() {
                     <input
                       value={labelInput}
                       onChange={(e) => setLabelInput(e.target.value)}
-                      placeholder="Метка (необязательно): «main», «backup-eu» …"
+                      placeholder={t('admin_panels.tidal.form.labelPlaceholder')}
                       className="rounded-[var(--radius-sm)] border border-border bg-card px-3 py-2 text-xs outline-none focus:border-[var(--color-accent)]"
                     />
                     <input
                       value={refreshTokenInput}
                       onChange={(e) => setRefreshTokenInput(e.target.value)}
-                      placeholder="Refresh token: eyJraWQiOi…"
+                      placeholder={t('admin_panels.tidal.form.refreshTokenPlaceholder')}
                       spellCheck={false}
                       autoComplete="off"
                       className="rounded-[var(--radius-sm)] border border-border bg-card px-3 py-2 font-mono text-xs outline-none focus:border-[var(--color-accent)]"
                     />
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[11px] text-muted-foreground">
-                        Worker сам обменяет refresh token на access token и подтянет тип подписки.
-                        Аккаунт с тем же Tidal user id обновит токены, не дублируясь.
+                        {t('admin_panels.tidal.form.refreshTokenHint')}
                       </p>
                       <Button onClick={addByRefreshToken} disabled={adding || !refreshTokenInput.trim()} size="sm">
                         {adding ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-                        Применить
+                        {t('admin_panels.tidal.form.applyButton')}
                       </Button>
                     </div>
                   </motion.div>
@@ -391,27 +397,25 @@ export function AdminTidalPanel() {
                     {!device ? (
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-[11px] text-muted-foreground">
-                          Логин через сайт Tidal: жмёшь «Запустить», получаешь короткий код,
-                          вводишь его на link.tidal.com и подтверждаешь. Worker создаст или
-                          обновит запись в пуле автоматически.
+                          {t('admin_panels.tidal.form.deviceHint')}
                         </p>
                         <Button onClick={startDevice} disabled={deviceBusy} size="sm">
                           {deviceBusy ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                          Запустить
+                          {t('admin_panels.tidal.form.deviceStartButton')}
                         </Button>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2 text-xs">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex flex-col">
-                            <span className="text-muted-foreground">Введи код на link.tidal.com:</span>
+                            <span className="text-muted-foreground">{t('admin_panels.tidal.form.enterCodeAt')}</span>
                             <span className="select-all font-mono text-2xl tracking-[0.4em]">{device.userCode}</span>
                           </div>
                           <Button
-                            onClick={() => copy(device.userCode, 'Код')}
+                            onClick={() => copy(device.userCode, t('admin_panels.tidal.form.codeAria'))}
                             size="icon"
                             variant="ghost"
-                            aria-label="Скопировать код"
+                            aria-label={t('admin_panels.tidal.form.copyCodeAria')}
                             className="h-7 w-7"
                           >
                             <Copy size={14} />
@@ -426,19 +430,19 @@ export function AdminTidalPanel() {
                           className="inline-flex items-center gap-1 self-start text-[var(--color-accent)] hover:underline"
                         >
                           <ExternalLink size={12} />
-                          Открыть {device.verificationUriComplete}
+                          {t('admin_panels.tidal.form.openVerification', { url: device.verificationUriComplete })}
                         </a>
                         <div className="flex items-center justify-between">
                           <span className="inline-flex items-center gap-1 text-muted-foreground">
                             {devicePolling && <Loader2 size={12} className="animate-spin" />}
-                            Ждём подтверждения…
+                            {t('admin_panels.tidal.form.waitingConfirmation')}
                           </span>
                           <button
                             type="button"
                             onClick={cancelDevice}
                             className="text-muted-foreground hover:text-foreground"
                           >
-                            Отменить
+                            {t('admin_panels.tidal.form.cancel')}
                           </button>
                         </div>
                       </div>
@@ -453,7 +457,7 @@ export function AdminTidalPanel() {
 
       {!loading && accounts && accounts.length === 0 && (
         <p className="mt-6 rounded-[var(--radius-sm)] border border-dashed border-border bg-background p-6 text-center text-xs text-muted-foreground">
-          Пул пуст. Добавь первый аккаунт — refresh token или device-flow.
+          {t('admin_panels.tidal.empty')}
         </p>
       )}
 
@@ -472,6 +476,8 @@ export function AdminTidalPanel() {
                 <AccountCard
                   account={a}
                   busy={busyAccount === a.id}
+                  intl={intl}
+                  t={t}
                   onToggle={(en) => void setEnabled(a.id, en)}
                   onRename={(label) => void renameAccount(a.id, label)}
                   onRefresh={() => void refreshSubscription(a.id)}
@@ -537,13 +543,15 @@ function TabButton({ label, active, onSelect }: TabButtonProps) {
 interface AccountCardProps {
   account: PoolAccount;
   busy: boolean;
+  intl: string;
+  t: Translate;
   onToggle: (enabled: boolean) => void;
   onRename: (label: string | null) => void;
   onRefresh: () => void;
   onRemove: () => void;
 }
 
-function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }: AccountCardProps) {
+function AccountCard({ account, busy, intl, t, onToggle, onRename, onRefresh, onRemove }: AccountCardProps) {
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState(account.label ?? '');
 
@@ -592,7 +600,7 @@ function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }:
                 onClick={() => setEditingLabel(true)}
                 className="truncate text-sm font-medium hover:text-[var(--color-accent)]"
               >
-                {account.label ?? `Аккаунт #${account.id}`}
+                {account.label ?? t('admin_panels.tidal.account.nameFallback', { id: account.id })}
               </button>
             )}
           </div>
@@ -605,7 +613,7 @@ function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }:
               </span>
             )}
             {account.subscriptionValidUntil && (
-              <span>до {formatDate(account.subscriptionValidUntil)}</span>
+              <span>{t('admin_panels.tidal.account.untilDate', { date: formatDate(account.subscriptionValidUntil, intl) })}</span>
             )}
           </div>
         </div>
@@ -615,7 +623,7 @@ function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }:
             size="icon"
             onClick={onRefresh}
             disabled={busy}
-            aria-label="Обновить подписку"
+            aria-label={t('admin_panels.tidal.account.refreshAria')}
             className="h-7 w-7"
           >
             {busy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
@@ -625,7 +633,7 @@ function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }:
             size="icon"
             onClick={() => onToggle(!account.enabled)}
             disabled={busy}
-            aria-label={account.enabled ? 'Выключить' : 'Включить'}
+            aria-label={account.enabled ? t('admin_panels.tidal.account.disableAria') : t('admin_panels.tidal.account.enableAria')}
             className="h-7 w-7"
           >
             {account.enabled
@@ -638,7 +646,7 @@ function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }:
             size="icon"
             onClick={onRemove}
             disabled={busy}
-            aria-label="Удалить"
+            aria-label={t('admin_panels.tidal.account.removeAria')}
             className="h-7 w-7 hover:text-[var(--color-danger)]"
           >
             <Trash2 size={12} />
@@ -647,16 +655,16 @@ function AccountCard({ account, busy, onToggle, onRename, onRefresh, onRemove }:
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] sm:grid-cols-4">
-        <Stat label="Запросов" value={String(account.usageCount)} compact />
-        <Stat label="Последний" value={relative(account.lastUsedAt || null)} compact />
+        <Stat label={t('admin_panels.tidal.account.stats.usage')} value={String(account.usageCount)} compact />
+        <Stat label={t('admin_panels.tidal.account.stats.lastUsed')} value={relative(account.lastUsedAt || null, t)} compact />
         <Stat
-          label="Access token"
-          value={tokenStale ? 'истёк' : `${Math.floor(expiresInS / 60)} мин`}
+          label={t('admin_panels.tidal.account.stats.accessToken')}
+          value={tokenStale ? t('admin_panels.tidal.account.stats.accessTokenExpired') : t('admin_panels.tidal.account.stats.accessTokenMinutes', { n: Math.floor(expiresInS / 60) })}
           accent={tokenStale ? 'warn' : undefined}
           compact
         />
         <Stat
-          label="Подряд ошибок"
+          label={t('admin_panels.tidal.account.stats.consecutiveErrors')}
           value={String(account.consecutiveErrors)}
           accent={account.consecutiveErrors > 0 ? 'warn' : undefined}
           compact

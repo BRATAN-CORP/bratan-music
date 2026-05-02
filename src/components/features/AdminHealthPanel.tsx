@@ -6,10 +6,17 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import { useI18n, useT } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
+
+function intlLocale(locale: string): string {
+  return locale === 'en' ? 'en' : 'ru-RU';
+}
 
 /**
- * Admin health page — one screen, four checkboxes ("Раз в день взглянул —
- * спокойно"). Every section turns green/yellow/red based on a simple
+ * Admin health page — one screen, four checkboxes (one daily glance and
+ * you're done). Every section turns green/yellow/red based on a simple
  * threshold so the admin can ack the whole stack at a glance, then drill
  * into the service log feed at the bottom for actual user-visible
  * errors.
@@ -73,28 +80,23 @@ function formatBytes(n: number | null): string {
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function formatRel(unix: number | null, unitFactor = 1000): string {
-  if (!unix) return 'никогда';
+function formatRel(unix: number | null, t: Translate, unitFactor = 1000): string {
+  if (!unix) return t('admin_panels.health.relative.never');
   const diffMs = Date.now() - unix * unitFactor;
-  if (diffMs < 60_000) return 'только что';
-  if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)} мин назад`;
-  if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)} ч назад`;
-  return `${Math.floor(diffMs / 86_400_000)} д назад`;
+  if (diffMs < 60_000) return t('admin_panels.health.relative.justNow');
+  if (diffMs < 3_600_000) return t('admin_panels.health.relative.minutes', { n: Math.floor(diffMs / 60_000) });
+  if (diffMs < 86_400_000) return t('admin_panels.health.relative.hours', { n: Math.floor(diffMs / 3_600_000) });
+  return t('admin_panels.health.relative.days', { n: Math.floor(diffMs / 86_400_000) });
 }
 
-function formatDate(unix: number | null, unitFactor = 1000): string {
+function formatDate(unix: number | null, intl: string, unitFactor = 1000): string {
   if (!unix) return '—';
-  return new Date(unix * unitFactor).toLocaleString('ru-RU');
+  return new Date(unix * unitFactor).toLocaleString(intl);
 }
-
-const LEVELS: { value: string; label: string }[] = [
-  { value: '', label: 'все уровни' },
-  { value: 'error', label: 'error' },
-  { value: 'warn', label: 'warn' },
-  { value: 'info', label: 'info' },
-];
 
 export function AdminHealthPanel() {
+  const { t, locale } = useI18n();
+  const intl = intlLocale(locale);
   const [overview, setOverview] = useState<HealthOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +107,13 @@ export function AdminHealthPanel() {
   const [logLevel, setLogLevel] = useState('error');
   const [logSource, setLogSource] = useState('');
 
+  const LEVELS: { value: string; label: string }[] = [
+    { value: '', label: t('admin_panels.health.logsLevelAll') },
+    { value: 'error', label: 'error' },
+    { value: 'warn', label: 'warn' },
+    { value: 'info', label: 'info' },
+  ];
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -112,7 +121,7 @@ export function AdminHealthPanel() {
       const data = await api.get<HealthOverview>('/admin/health');
       setOverview(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить health');
+      setError(err instanceof Error ? err.message : t('admin_panels.health.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -181,13 +190,13 @@ export function AdminHealthPanel() {
         <div>
           <h2 className="flex items-center gap-2 text-sm font-medium">
             <Activity size={14} className="text-muted-foreground" />
-            Health сервиса
+            {t('admin_panels.health.title')}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Один экран на все галочки: Tidal-пул жив, D1 пишет, R2 не переполнен, кроны отработали сегодня.
+            {t('admin_panels.health.headerHint')}
           </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={load} aria-label="Обновить" className="h-8 w-8">
+        <Button variant="ghost" size="icon" onClick={load} aria-label={t('admin_panels.health.refreshAria')} className="h-8 w-8">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </Button>
       </div>
@@ -201,23 +210,26 @@ export function AdminHealthPanel() {
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <HealthTile
           icon={Server}
-          title="Tidal пул"
+          title={t('admin_panels.health.tile.tidalTitle')}
           severity={severities?.tidal ?? 'idle'}
-          primary={overview ? `${overview.tidal.accountsEnabled}/${overview.tidal.accountsTotal} активны` : '—'}
+          primary={overview ? t('admin_panels.health.tile.tidalPrimary', {
+            enabled: overview.tidal.accountsEnabled,
+            total: overview.tidal.accountsTotal,
+          }) : '—'}
           rows={overview ? [
-            { label: 'с ошибками', value: String(overview.tidal.accountsWithErrors) },
-            { label: 'просрочены', value: String(overview.tidal.accountsExpired) },
-            { label: 'последний', value: formatRel(overview.tidal.lastSuccessAt) },
+            { label: t('admin_panels.health.row.errors'), value: String(overview.tidal.accountsWithErrors) },
+            { label: t('admin_panels.health.row.expired'), value: String(overview.tidal.accountsExpired) },
+            { label: t('admin_panels.health.row.last'), value: formatRel(overview.tidal.lastSuccessAt, t) },
           ] : []}
         />
         <HealthTile
           icon={Database}
-          title="D1 пишет"
+          title={t('admin_panels.health.tile.dbTitle')}
           severity={severities?.db ?? 'idle'}
           primary={overview?.db.ok
-            ? `${overview.db.writeMs ?? '?'} мс`
-            : 'нет ответа'}
-          rows={overview?.db.error ? [{ label: 'ошибка', value: overview.db.error }] : [
+            ? t('admin_panels.health.tile.dbMs', { ms: overview.db.writeMs ?? '?' })
+            : t('admin_panels.health.tile.noResponse')}
+          rows={overview?.db.error ? [{ label: t('admin_panels.health.row.error'), value: overview.db.error }] : [
             { label: 'probe', value: 'INSERT/DELETE' },
           ]}
         />
@@ -226,24 +238,27 @@ export function AdminHealthPanel() {
           title="R2 reachable"
           severity={severities?.r2 ?? 'idle'}
           primary={overview?.r2.ok
-            ? `${overview.r2.sampledObjects ?? 0} объектов${overview.r2.truncated ? '+' : ''}`
-            : 'нет ответа'}
+            ? t('admin_panels.health.tile.r2Objects', {
+                n: overview.r2.sampledObjects ?? 0,
+                plus: overview.r2.truncated ? '+' : '',
+              })
+            : t('admin_panels.health.tile.noResponse')}
           rows={overview?.r2.ok ? [
-            { label: 'размер', value: formatBytes(overview.r2.sampledBytes) },
-            { label: 'усечено', value: overview.r2.truncated ? 'да' : 'нет' },
-          ] : overview?.r2.error ? [{ label: 'ошибка', value: overview.r2.error }] : []}
+            { label: t('admin_panels.health.row.size'), value: formatBytes(overview.r2.sampledBytes) },
+            { label: t('admin_panels.health.row.truncated'), value: overview.r2.truncated ? t('admin_panels.health.row.yes') : t('admin_panels.health.row.no') },
+          ] : overview?.r2.error ? [{ label: t('admin_panels.health.row.error'), value: overview.r2.error }] : []}
         />
         <HealthTile
           icon={Timer}
-          title="Кроны"
+          title={t('admin_panels.health.tile.cronTitle')}
           severity={severities?.cron ?? 'idle'}
           primary={overview?.cron.lastRunStartedAt
-            ? formatRel(overview.cron.lastRunStartedAt, 1)
-            : 'не запускался'}
+            ? formatRel(overview.cron.lastRunStartedAt, t, 1)
+            : t('admin_panels.health.tile.cronNotRun')}
           rows={overview ? [
-            { label: 'обработано', value: String(overview.cron.lastRunProcessedCount) },
-            { label: 'ошибок', value: String(overview.cron.lastRunErrorCount) },
-            { label: 'старт', value: formatDate(overview.cron.lastRunStartedAt, 1) },
+            { label: t('admin_panels.health.row.processed'), value: String(overview.cron.lastRunProcessedCount) },
+            { label: t('admin_panels.health.row.errorCount'), value: String(overview.cron.lastRunErrorCount) },
+            { label: t('admin_panels.health.row.start'), value: formatDate(overview.cron.lastRunStartedAt, intl, 1) },
           ] : []}
         />
       </div>
@@ -252,12 +267,12 @@ export function AdminHealthPanel() {
       <div className="mt-6 rounded-[var(--radius-sm)] border border-border bg-background">
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
           <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Логи сервиса
+            {t('admin_panels.health.logsTitle')}
           </span>
           {overview && overview.recentErrors > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-danger-muted)] bg-[var(--color-danger-muted)] px-2 py-0.5 text-[10px] text-[var(--color-danger)]">
               <AlertTriangle size={10} />
-              {overview.recentErrors} за сутки
+              {t('admin_panels.health.logsRecentErrors', { count: overview.recentErrors })}
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -273,10 +288,10 @@ export function AdminHealthPanel() {
               onChange={(e) => setLogSource(e.target.value)}
               className="rounded-[var(--radius-sm)] border border-border bg-card px-2 py-1 text-xs outline-none focus:border-[var(--color-accent)] max-w-[180px]"
             >
-              <option value="">все источники</option>
+              <option value="">{t('admin_panels.health.logsSourceAll')}</option>
               {logSources.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <Button variant="ghost" size="icon" onClick={loadLogs} aria-label="Обновить логи" className="h-7 w-7">
+            <Button variant="ghost" size="icon" onClick={loadLogs} aria-label={t('admin_panels.health.refreshLogsAria')} className="h-7 w-7">
               <RefreshCw size={12} className={logsLoading ? 'animate-spin' : ''} />
             </Button>
           </div>
@@ -289,7 +304,10 @@ export function AdminHealthPanel() {
             </div>
           ) : logs.length === 0 ? (
             <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-              Тишина. Ни одного {logLevel || 'события'} {logSource ? `из ${logSource}` : ''} — это хорошо.
+              {t('admin_panels.health.logsEmpty', {
+                level: logLevel || t('admin_panels.health.logsAnyEvent'),
+                sourceClause: logSource ? t('admin_panels.health.logsFromSource', { source: logSource }) : '',
+              })}
             </p>
           ) : (
             <ul className="divide-y divide-border text-xs">
@@ -359,6 +377,7 @@ function SeverityChip({ severity }: { severity: Severity }) {
 }
 
 function LogRow({ row }: { row: ServiceLog }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const levelClass = row.level === 'error'
     ? 'text-[var(--color-danger)]'
@@ -388,7 +407,7 @@ function LogRow({ row }: { row: ServiceLog }) {
         </span>
         <span className="min-w-0 flex-1 break-words text-foreground">{row.message}</span>
         <span className="mt-0.5 shrink-0 text-[10px] text-muted-foreground">
-          {formatRel(row.createdAt, 1)}
+          {formatRel(row.createdAt, t, 1)}
         </span>
       </button>
       <AnimatePresence initial={false}>

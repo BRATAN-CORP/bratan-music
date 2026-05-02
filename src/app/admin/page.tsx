@@ -17,6 +17,13 @@ import {
 } from '@/hooks/useAdminUsers';
 import type { AdminUser } from '@/types/admin';
 import { EASE_SPRING } from '@/lib/motion';
+import { useI18n, useT } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
+
+function intlLocale(locale: string): string {
+  return locale === 'en' ? 'en' : 'ru-RU';
+}
 
 const PAGE_SIZE = 25;
 
@@ -29,12 +36,13 @@ export function AdminPage() {
 }
 
 function AdminGate() {
+  const t = useT();
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<{ id: string; isAdmin: boolean }>('/user/me'),
   });
   if (isLoading) {
-    return <div className="flex min-h-[40dvh] items-center justify-center text-sm text-muted-foreground">Загружаем…</div>;
+    return <div className="flex min-h-[40dvh] items-center justify-center text-sm text-muted-foreground">{t('admin.gateLoading')}</div>;
   }
   if (!profile?.isAdmin) {
     return <Navigate to="/" replace />;
@@ -44,12 +52,14 @@ function AdminGate() {
 
 /**
  * The dashboard is exported as a standalone component so the admin
- * profile page can mount it inline (under "Только для администраторов").
+ * profile page can mount it inline (under the "admins only" section).
  * The dedicated /admin route was removed — there's now just one entry
  * point to admin tools, gated behind the user's own profile screen.
  */
 export function AdminDashboard({ meId }: { meId: string }) {
   const reduce = useReducedMotion();
+  const { t, locale } = useI18n();
+  const intl = intlLocale(locale);
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [role, setRole] = useState<AdminUsersFilters['role']>('');
@@ -85,13 +95,13 @@ export function AdminDashboard({ meId }: { meId: string }) {
       >
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <Crown size={14} className="text-[var(--color-accent)]" /> Администрирование
+            <Crown size={14} className="text-[var(--color-accent)]" /> {t('admin.heading')}
           </div>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            Пользователи · {total.toLocaleString('ru-RU')}
+            {t('admin.users')} · {total.toLocaleString(intl)}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Поиск, фильтры, выдача подписки, баны и роли.
+            {t('admin.usersHint')}
           </p>
         </div>
       </motion.div>
@@ -102,14 +112,14 @@ export function AdminDashboard({ meId }: { meId: string }) {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Поиск по @username, имени или ID"
+            placeholder={t('admin.searchPlaceholder')}
             className="pl-9"
           />
           {q && (
             <button
               onClick={() => setQ('')}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
-              aria-label="Очистить"
+              aria-label={t('admin.clearAria')}
             >
               <X size={12} />
             </button>
@@ -117,31 +127,31 @@ export function AdminDashboard({ meId }: { meId: string }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FilterChip
-            label="Роль"
+            label={t('admin.filter.role')}
             options={[
-              { v: '', label: 'Все' },
-              { v: 'admin', label: 'Админы' },
-              { v: 'user', label: 'Юзеры' },
+              { v: '', label: t('admin.filter.allOption') },
+              { v: 'admin', label: t('admin.filter.adminsOption') },
+              { v: 'user', label: t('admin.filter.usersOption') },
             ]}
             value={role ?? ''}
             onChange={(v) => setRole(v as AdminUsersFilters['role'])}
           />
           <FilterChip
-            label="Бан"
+            label={t('admin.filter.ban')}
             options={[
-              { v: '', label: 'Все' },
-              { v: '1', label: 'Забанены' },
-              { v: '0', label: 'Активны' },
+              { v: '', label: t('admin.filter.allOption') },
+              { v: '1', label: t('admin.filter.bannedOption') },
+              { v: '0', label: t('admin.filter.activeOption') },
             ]}
             value={banned ?? ''}
             onChange={(v) => setBanned(v as AdminUsersFilters['banned'])}
           />
           <FilterChip
-            label="Подписка"
+            label={t('admin.filter.subscription')}
             options={[
-              { v: '', label: 'Все' },
-              { v: 'active', label: 'Активна' },
-              { v: 'none', label: 'Нет' },
+              { v: '', label: t('admin.filter.allOption') },
+              { v: 'active', label: t('admin.filter.subActiveOption') },
+              { v: 'none', label: t('admin.filter.subNoneOption') },
             ]}
             value={sub ?? ''}
             onChange={(v) => setSub(v as AdminUsersFilters['sub'])}
@@ -155,23 +165,23 @@ export function AdminDashboard({ meId }: { meId: string }) {
 
       <div className="overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card">
         <div className="hidden grid-cols-[1fr_120px_120px_120px_120px_140px] gap-4 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground lg:grid">
-          <div>Пользователь</div>
-          <div>Роль</div>
-          <div>Подписка</div>
-          <div>Прослушано</div>
-          <div>Зарегистрирован</div>
-          <div>Действия</div>
+          <div>{t('admin.col.user')}</div>
+          <div>{t('admin.col.role')}</div>
+          <div>{t('admin.col.subscription')}</div>
+          <div>{t('admin.col.listened')}</div>
+          <div>{t('admin.col.created')}</div>
+          <div>{t('admin.col.actions')}</div>
         </div>
 
         {isLoading && !data ? (
           <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-            <Loader2 size={14} className="mr-2 animate-spin" /> Загружаем
+            <Loader2 size={14} className="mr-2 animate-spin" /> {t('admin.loading')}
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <UsersIcon size={32} className="text-muted-foreground" />
-            <p className="text-sm font-medium">Никого не нашли</p>
-            <p className="text-xs text-muted-foreground">Сбрось фильтры или измени поисковый запрос.</p>
+            <p className="text-sm font-medium">{t('admin.empty.title')}</p>
+            <p className="text-xs text-muted-foreground">{t('admin.empty.hint')}</p>
           </div>
         ) : (
           <ul className={`divide-y divide-border ${isPlaceholderData && isFetching ? 'opacity-70' : ''}`}>
@@ -195,14 +205,18 @@ export function AdminDashboard({ meId }: { meId: string }) {
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
         <span>
           {total > 0
-            ? `${page * PAGE_SIZE + 1}–${Math.min(total, (page + 1) * PAGE_SIZE)} из ${total}`
-            : '—'}
+            ? t('admin.pagination.range', {
+                start: page * PAGE_SIZE + 1,
+                end: Math.min(total, (page + 1) * PAGE_SIZE),
+                total,
+              })
+            : t('admin.pagination.empty')}
         </span>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
             <ChevronLeft size={14} />
           </Button>
-          <span className="px-2">Стр {page + 1} / {totalPages}</span>
+          <span className="px-2">{t('admin.pagination.page', { page: page + 1, total: totalPages })}</span>
           <Button variant="ghost" size="icon" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page + 1 >= totalPages}>
             <ChevronRight size={14} />
           </Button>
@@ -213,6 +227,8 @@ export function AdminDashboard({ meId }: { meId: string }) {
 }
 
 function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
+  const { t, locale } = useI18n();
+  const intl = intlLocale(locale);
   const banMut = useBanUser();
   const unbanMut = useUnbanUser();
   const adminMut = useToggleAdmin();
@@ -248,7 +264,7 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-medium">{label}{isMe && ' · ты'}</span>
+            <span className="truncate text-sm font-medium">{label}{isMe && ` · ${t('admin.you')}`}</span>
           </div>
           <div className="truncate text-xs text-muted-foreground">
             {user.username ? '@' + user.username : 'ID ' + user.id}
@@ -264,9 +280,9 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
       {/* Role */}
       <div>
         {user.isAdmin ? (
-          <Pill tone="accent"><Crown size={11} /> Админ</Pill>
+          <Pill tone="accent"><Crown size={11} /> {t('admin.role.admin')}</Pill>
         ) : (
-          <Pill tone="muted">Юзер</Pill>
+          <Pill tone="muted">{t('admin.role.user')}</Pill>
         )}
       </div>
 
@@ -274,32 +290,32 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
       <div>
         {subActive ? (
           <Pill tone="success">
-            <Star size={11} /> {subDays}д осталось
+            <Star size={11} /> {t('admin.sub.daysLeft', { days: subDays })}
           </Pill>
         ) : (
-          <Pill tone="muted">Бесплатно</Pill>
+          <Pill tone="muted">{t('admin.sub.free')}</Pill>
         )}
       </div>
 
       {/* Listened */}
       <div className="text-xs text-muted-foreground">
-        {user.playCount.toLocaleString('ru-RU')} ·{' '}
-        {user.lastPlayedAt ? formatRelative(user.lastPlayedAt) : '—'}
+        {user.playCount.toLocaleString(intl)} ·{' '}
+        {user.lastPlayedAt ? formatRelative(user.lastPlayedAt, t, intl) : '—'}
       </div>
 
       {/* Created */}
-      <div className="text-xs text-muted-foreground">{formatDate(user.createdAt)}</div>
+      <div className="text-xs text-muted-foreground">{formatDate(user.createdAt, intl)}</div>
 
       {/* Actions */}
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         <ActionIcon
-          title={`Дать подписку на 30 дней`}
+          title={t('admin.action.grantSub')}
           onClick={() => grantMut.mutate({ userId: user.id, days: 30 })}
           loading={grantMut.isPending && grantMut.variables?.userId === user.id}
           icon={<Star size={13} />}
         />
         <ActionIcon
-          title={user.isAdmin ? 'Снять админа' : 'Сделать админом'}
+          title={user.isAdmin ? t('admin.action.removeAdmin') : t('admin.action.makeAdmin')}
           onClick={() => adminMut.mutate({ userId: user.id, isAdmin: !user.isAdmin })}
           disabled={isMe && user.isAdmin}
           loading={adminMut.isPending && adminMut.variables?.userId === user.id}
@@ -307,7 +323,7 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
         />
         {user.isBanned ? (
           <ActionIcon
-            title="Снять бан"
+            title={t('admin.action.unban')}
             onClick={() => unbanMut.mutate(user.id)}
             loading={unbanMut.isPending && unbanMut.variables === user.id}
             icon={<Undo2 size={13} />}
@@ -315,7 +331,7 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
           />
         ) : (
           <ActionIcon
-            title="Забанить"
+            title={t('admin.action.ban')}
             onClick={() => setBanDraft({ open: true, reason: '' })}
             disabled={isMe}
             icon={<Ban size={13} />}
@@ -336,7 +352,7 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
               <Input
                 value={banDraft.reason}
                 onChange={(e) => setBanDraft((d) => ({ ...d, reason: e.target.value }))}
-                placeholder="Причина бана (необязательно, до 280 символов)"
+                placeholder={t('admin.action.banPlaceholder')}
                 maxLength={280}
                 autoFocus
               />
@@ -350,9 +366,9 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
                   disabled={banMut.isPending}
                 >
                   {banMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
-                  Забанить
+                  {t('admin.action.banConfirm')}
                 </Button>
-                <Button variant="ghost" onClick={() => setBanDraft({ open: false, reason: '' })}>Отмена</Button>
+                <Button variant="ghost" onClick={() => setBanDraft({ open: false, reason: '' })}>{t('admin.action.cancel')}</Button>
               </div>
             </div>
           </motion.div>
@@ -425,6 +441,7 @@ function FilterChip<T extends string>({
 }
 
 function SortChip({ value, onChange }: { value: NonNullable<AdminUsersFilters['sort']>; onChange: (v: NonNullable<AdminUsersFilters['sort']>) => void }) {
+  const t = useT();
   return (
     <label className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
       <ArrowUpDown size={11} />
@@ -433,23 +450,23 @@ function SortChip({ value, onChange }: { value: NonNullable<AdminUsersFilters['s
         onChange={(e) => onChange(e.target.value as NonNullable<AdminUsersFilters['sort']>)}
         className="bg-transparent text-foreground outline-none"
       >
-        <option value="created_at" className="bg-background">Сначала новые</option>
-        <option value="last_played_at" className="bg-background">По активности</option>
-        <option value="tg_username" className="bg-background">По имени</option>
+        <option value="created_at" className="bg-background">{t('admin.sort.newest')}</option>
+        <option value="last_played_at" className="bg-background">{t('admin.sort.activity')}</option>
+        <option value="tg_username" className="bg-background">{t('admin.sort.name')}</option>
       </select>
     </label>
   );
 }
 
-function formatDate(epochSec: number): string {
-  return new Date(epochSec * 1000).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: '2-digit' });
+function formatDate(epochSec: number, intl: string): string {
+  return new Date(epochSec * 1000).toLocaleDateString(intl, { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-function formatRelative(epochSec: number): string {
+function formatRelative(epochSec: number, t: Translate, intl: string): string {
   const diff = Math.floor(Date.now() / 1000) - epochSec;
-  if (diff < 60) return 'только что';
-  if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
-  if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}д назад`;
-  return formatDate(epochSec);
+  if (diff < 60) return t('admin.relative.justNow');
+  if (diff < 3600) return t('admin.relative.minutes', { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t('admin.relative.hours', { n: Math.floor(diff / 3600) });
+  if (diff < 86400 * 30) return t('admin.relative.days', { n: Math.floor(diff / 86400) });
+  return formatDate(epochSec, intl);
 }
