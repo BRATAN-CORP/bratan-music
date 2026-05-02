@@ -4,6 +4,7 @@ import { Loader2, Compass } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/store/auth';
+import { useT } from '@/i18n';
 
 /**
  * Replay the spotlight onboarding tour on next page load.
@@ -17,6 +18,7 @@ import { useAuthStore } from '@/store/auth';
  * column on the profile page.
  */
 export function ResetTourPanel() {
+  const t = useT();
   const patchUser = useAuthStore((s) => s.patchUser);
   const [done, setDone] = useState(false);
 
@@ -32,11 +34,10 @@ export function ResetTourPanel() {
     <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
       <h2 className="flex items-center gap-2 text-sm font-medium">
         <Compass size={14} className="text-muted-foreground" />
-        Пройти онбординг заново
+        {t('reset.tourTitle')}
       </h2>
       <p className="mt-2 text-xs text-muted-foreground">
-        Запустит четырёхшаговый тур по продукту (волна, поиск, библиотека, профиль) при
-        следующей загрузке страницы.
+        {t('reset.tourHint')}
       </p>
 
       <div className="mt-3 flex flex-col gap-2">
@@ -47,22 +48,22 @@ export function ResetTourPanel() {
         >
           {reset.isPending ? (
             <>
-              <Loader2 size={14} className="animate-spin" /> Сбрасываем…
+              <Loader2 size={14} className="animate-spin" /> {t('reset.tourResetting')}
             </>
           ) : (
-            <>Пройти тур заново</>
+            <>{t('reset.tourCta')}</>
           )}
         </Button>
 
         {reset.error && (
           <p className="text-xs text-[var(--color-danger)]">
-            {reset.error instanceof Error ? reset.error.message : 'Ошибка'}
+            {reset.error instanceof Error ? reset.error.message : t('common.error')}
           </p>
         )}
 
         {done && !reset.isPending && (
           <p className="text-xs text-[var(--color-accent)]">
-            Готово. Тур запустится через секунду.
+            {t('reset.tourDone')}
           </p>
         )}
       </div>

@@ -24,6 +24,9 @@ import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
 import { ResetTourPanel } from '@/components/features/ResetTourPanel';
 import { AdminDashboard } from '@/app/admin/page';
+import { useT } from '@/i18n';
+import { useI18n } from '@/i18n';
+import type { TranslationKey } from '@/i18n';
 
 interface GrantResponse {
   ok: boolean;
@@ -55,13 +58,14 @@ interface UserProfile {
  *      divider so the user-facing profile doesn't bleed into ops UI.
  */
 
-const SUBSCRIPTION_BENEFITS: { icon: typeof Check; text: string }[] = [
-  { icon: Sparkles, text: 'Безлимитные прослушивания' },
-  { icon: Music2, text: 'HiFi и lossless без ограничений по очереди' },
-  { icon: Shield, text: 'Без рекламы и троттлинга' },
+const SUBSCRIPTION_BENEFITS: { icon: typeof Check; key: TranslationKey }[] = [
+  { icon: Sparkles, key: 'profile.benefitUnlimited' },
+  { icon: Music2, key: 'profile.benefitHifi' },
+  { icon: Shield, key: 'profile.benefitNoAds' },
 ];
 
 export function ProfilePage() {
+  const t = useT();
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, openSubscriptionPrompt } = useUiStore();
   const {
@@ -104,18 +108,18 @@ export function ProfilePage() {
         <RoomsShortcut />
 
         <div className="grid gap-4 md:grid-cols-2">
-          <SettingsCard title="Воспроизведение" icon={Sliders}>
+          <SettingsCard title={t('settings.playback')} icon={Sliders}>
             <SwitchRow
-              title="Плавное переключение"
-              hint="Микширует следующий трек поверх текущего"
+              title={t('settings.crossfade')}
+              hint={t('settings.crossfadeHint')}
               checked={crossfade}
               onCheckedChange={setCrossfade}
             />
             {crossfade && (
               <div className="mt-3">
                 <label className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Длительность</span>
-                  <span className="tabular-nums text-foreground">{crossfadeDuration} с</span>
+                  <span>{t('settings.crossfadeDuration')}</span>
+                  <span className="tabular-nums text-foreground">{t('settings.crossfadeSeconds', { value: crossfadeDuration })}</span>
                 </label>
                 <input
                   type="range"
@@ -130,14 +134,14 @@ export function ProfilePage() {
             )}
             <SettingsDivider />
             <SwitchRow
-              title="Бесконечная музыка"
-              hint="Когда очередь почти пуста, добавляем рекомендации на основе того, что играет."
+              title={t('settings.infinitePlayback')}
+              hint={t('settings.infinitePlaybackHint')}
               checked={infinitePlayback}
               onCheckedChange={setInfinitePlayback}
             />
           </SettingsCard>
 
-          <SettingsCard title="Качество (Tidal)" icon={Music2} hint="Зависит от прокси-аккаунта Tidal — недоступные качества будут урезаны до доступного уровня.">
+          <SettingsCard title={t('settings.qualityTidal')} icon={Music2} hint={t('settings.qualityHint')}>
             <div className="mt-1 grid grid-cols-2 gap-2">
               {(Object.keys(TIDAL_QUALITY_LABELS) as TidalQuality[]).map((q) => {
                 const active = tidalQuality === q;
@@ -161,7 +165,7 @@ export function ProfilePage() {
           </SettingsCard>
         </div>
 
-        <SettingsCard title="Язык" icon={Languages}>
+        <SettingsCard title={t('settings.languageCard')} icon={Languages}>
           <LanguageSwitcher />
         </SettingsCard>
 
@@ -176,7 +180,7 @@ export function ProfilePage() {
           className="w-full md:max-w-xs md:self-start"
         >
           <LogOut size={14} />
-          Выйти
+          {t('auth.logout')}
         </Button>
 
         {isAdmin && (
@@ -184,7 +188,7 @@ export function ProfilePage() {
             <div className="flex items-center gap-3 pt-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground backdrop-blur">
                 <Lock size={11} className="text-[var(--color-accent)]" />
-                Только для администраторов
+                {t('profile.adminOnly')}
               </span>
               <span className="h-px flex-1 bg-border" aria-hidden />
             </div>
@@ -229,6 +233,7 @@ export function ProfilePage() {
  * across the app.
  */
 function RoomsShortcut() {
+  const t = useT();
   return (
     <Link
       to="/rooms"
@@ -255,18 +260,18 @@ function RoomsShortcut() {
         </div>
         <div className="min-w-0">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            Комнаты
+            {t('profile.roomsShortcutEyebrow')}
           </div>
           <div className="mt-0.5 text-sm font-semibold tracking-tight sm:text-base">
-            Слушать вместе с друзьями
+            {t('profile.roomsShortcutTitle')}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">
-            Создай свою комнату или подключись по приглашению.
+            {t('profile.roomsShortcutHint')}
           </div>
         </div>
       </div>
       <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
-        Открыть
+        {t('common.open')}
         <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
       </span>
     </Link>
@@ -292,6 +297,7 @@ function IdentityHero({
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }) {
+  const t = useT();
   // Same low-intensity tilt + glare wrapper used by the WaveHero on /home
   // and the landing feature grid — gives the identity card the
   // "alive on hover" feel without rotating the theme-toggle button so
@@ -329,17 +335,17 @@ function IdentityHero({
           />
           <div className="min-w-0">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              Профиль
+              {t('profile.label')}
             </span>
             <h1 className="mt-0.5 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
-              {name ?? username ?? 'Пользователь'}
+              {name ?? username ?? t('profile.fallbackName')}
             </h1>
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {username && <span className="truncate">@{username}</span>}
               {isAdmin && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2 py-0.5 font-medium text-foreground backdrop-blur">
                   <Shield size={11} />
-                  Admin
+                  {t('profile.adminBadge')}
                 </span>
               )}
             </div>
@@ -349,7 +355,7 @@ function IdentityHero({
           type="button"
           onClick={onToggleTheme}
           className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-          aria-label="Переключить тему"
+          aria-label={t('settings.themeToggleAria')}
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.span
@@ -363,7 +369,7 @@ function IdentityHero({
               {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
             </motion.span>
           </AnimatePresence>
-          <span className="tabular-nums">{theme === 'dark' ? 'Тёмная' : 'Светлая'}</span>
+          <span className="tabular-nums">{theme === 'dark' ? t('settings.themeDark') : t('settings.themeLight')}</span>
         </button>
       </div>
     </section>
@@ -386,6 +392,7 @@ function SubscriptionCard({
   limits: UserLimits | undefined;
   onSubscribe: () => void;
 }) {
+  const { t, locale } = useI18n();
   if (isSubscribed && expiresAt) {
     return (
       <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 p-6">
@@ -395,15 +402,15 @@ function SubscriptionCard({
               <Crown size={18} />
             </span>
             <div>
-              <p className="text-base font-semibold tracking-tight">Подписка активна</p>
+              <p className="text-base font-semibold tracking-tight">{t('profile.subscriptionActive')}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Продлится до {new Date(expiresAt * 1000).toLocaleDateString('ru-RU')}
+                {t('profile.subscriptionRenewsUntil', { date: new Date(expiresAt * 1000).toLocaleDateString(locale === 'en' ? 'en-US' : 'ru-RU') })}
               </p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/40 bg-background/60 px-3 py-1 text-xs font-medium text-foreground backdrop-blur">
             <Sparkles size={11} className="text-[var(--color-accent)]" />
-            Без лимитов
+            {t('profile.subscriptionUnlimitedBadge')}
           </span>
         </div>
       </section>
@@ -439,24 +446,24 @@ function SubscriptionCard({
         <div className="flex flex-col gap-4">
           <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
             <Crown size={12} className="text-[var(--color-accent)]" />
-            Premium
+            {t('profile.premiumBadge')}
           </span>
           <h2 className="max-w-xl text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">
-            Сними потолок{' '}
-            <span className="font-serif italic text-muted-foreground">3-х треков</span>{' '}
-            в день.
+            {t('profile.headlineLead')}{' '}
+            <span className="font-serif italic text-muted-foreground">{t('profile.headlineHighlight')}</span>{' '}
+            {t('profile.headlineTrail')}
           </h2>
           <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-            Безлимитный lossless-стриминг и full HiFi за 99 ⭐ в месяц. Оплата прямо в Telegram, без карт и сайтов.
+            {t('profile.subscriptionSell')}
           </p>
 
           <ul className="flex flex-col gap-2 pt-1 text-sm">
-            {SUBSCRIPTION_BENEFITS.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-center gap-2.5">
+            {SUBSCRIPTION_BENEFITS.map(({ icon: Icon, key }) => (
+              <li key={key} className="flex items-center gap-2.5">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/12 text-[var(--color-accent)]">
                   <Icon size={12} />
                 </span>
-                <span>{text}</span>
+                <span>{t(key)}</span>
               </li>
             ))}
           </ul>
@@ -464,8 +471,8 @@ function SubscriptionCard({
           {limits && !limits.daily.unlimited && (
             <div className="mt-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Сегодня прослушано</span>
-                <span className="tabular-nums text-foreground">{used} / {limit}</span>
+                <span>{t('profile.todayUsed')}</span>
+                <span className="tabular-nums text-foreground">{t('profile.usedOfLimit', { used, limit })}</span>
               </div>
               <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-bg-muted)]">
                 <motion.div
@@ -483,7 +490,7 @@ function SubscriptionCard({
         <div className="flex flex-col items-start gap-3 lg:items-end">
           <div className="flex items-baseline gap-2">
             <span className="text-4xl font-semibold tracking-tight">99</span>
-            <span className="text-base text-muted-foreground">⭐ / мес</span>
+            <span className="text-base text-muted-foreground">{t('profile.pricePerMonth')}</span>
           </div>
           <Button
             type="button"
@@ -492,10 +499,10 @@ function SubscriptionCard({
             className="w-full gap-2 px-7 sm:w-auto"
           >
             <Crown size={16} />
-            Оформить подписку
+            {t('profile.subscribeCta')}
           </Button>
           <p className="text-[11px] text-muted-foreground">
-            Можно отменить в любой момент в Telegram.
+            {t('profile.subscribeFinePrint')}
           </p>
         </div>
       </div>
@@ -562,31 +569,32 @@ function SettingsDivider() {
 // ────────────────────────────────────────────────────────────────────
 
 function AdminGrantPanel() {
+  const { t, locale } = useI18n();
   const [target, setTarget] = useState('');
   const [days, setDays] = useState('30');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const submit = async () => {
-    const t = target.trim();
-    if (!t) return;
+    const value = target.trim();
+    if (!value) return;
     setBusy(true);
     setMsg(null);
     try {
       const payload: { userId?: string; tgUsername?: string; days: number } = { days: Number(days) || 30 };
-      if (/^\d+$/.test(t)) payload.userId = t;
-      else payload.tgUsername = t;
+      if (/^\d+$/.test(value)) payload.userId = value;
+      else payload.tgUsername = value;
       const r = await api.post<GrantResponse>('/admin/grant', payload);
       if (r.ok && r.user && r.subscription) {
         const u = r.user.username ? '@' + r.user.username : (r.user.name ?? r.user.id);
-        const exp = new Date(r.subscription.expiresAt * 1000).toLocaleDateString('ru-RU');
-        setMsg({ kind: 'ok', text: `Выдано ${u} на ${r.subscription.days} дн. (до ${exp})` });
+        const exp = new Date(r.subscription.expiresAt * 1000).toLocaleDateString(locale === 'en' ? 'en-US' : 'ru-RU');
+        setMsg({ kind: 'ok', text: t('admin.grantSuccess', { user: u, days: r.subscription.days, date: exp }) });
         setTarget('');
       } else {
-        setMsg({ kind: 'err', text: 'Не удалось выдать доступ' });
+        setMsg({ kind: 'err', text: t('admin.grantFailed') });
       }
     } catch (err) {
-      setMsg({ kind: 'err', text: err instanceof Error ? err.message : 'Ошибка' });
+      setMsg({ kind: 'err', text: err instanceof Error ? err.message : t('common.error') });
     } finally {
       setBusy(false);
     }
@@ -596,27 +604,27 @@ function AdminGrantPanel() {
     <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5">
       <h2 className="flex items-center gap-2 text-sm font-medium">
         <Wand2 size={14} className="text-muted-foreground" />
-        Выдача подписки
+        {t('admin.grantTitle')}
       </h2>
       <p className="mt-2 text-xs text-muted-foreground">
-        ID или @username и количество дней.
+        {t('admin.grantHint')}
       </p>
       <div className="mt-3 flex flex-col gap-2">
         <input
           value={target}
           onChange={(e) => setTarget(e.target.value)}
-          placeholder="user id или @username"
+          placeholder={t('admin.grantTargetPlaceholder')}
           className="w-full rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         <div className="flex items-center gap-2">
           <input
             value={days}
             onChange={(e) => setDays(e.target.value.replace(/[^\d]/g, ''))}
-            placeholder="дней"
+            placeholder={t('admin.grantDaysPlaceholder')}
             className="w-20 rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
           />
           <Button onClick={submit} disabled={busy || !target.trim()} className="flex-1">
-            {busy ? 'Выдаём…' : 'Выдать доступ'}
+            {busy ? t('admin.grantSubmitting') : t('admin.grantSubmit')}
           </Button>
         </div>
         {msg && (

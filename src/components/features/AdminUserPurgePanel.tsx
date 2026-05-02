@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, Search, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
 
 interface AdminUser {
   id: string;
@@ -23,7 +24,8 @@ interface PurgeResponse {
   error?: string;
 }
 
-const CONFIRM_PHRASE = 'УДАЛИТЬ';
+const CONFIRM_PHRASE_RU = 'УДАЛИТЬ';
+const CONFIRM_PHRASE_EN = 'DELETE';
 
 /**
  * Dangerous admin tool: search for any user of the service and purge
@@ -36,6 +38,8 @@ const CONFIRM_PHRASE = 'УДАЛИТЬ';
  * server responds, we render a short receipt of what was deleted.
  */
 export function AdminUserPurgePanel() {
+  const t = useT();
+  const confirmPhrase = t('admin.purgeConfirmPhrase');
   const qc = useQueryClient();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -65,21 +69,23 @@ export function AdminUserPurgePanel() {
       qc.invalidateQueries({ queryKey: ['admin-user-search'] });
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(err instanceof Error ? err.message : t('common.error'));
     },
   });
 
-  const canSubmit = Boolean(selected) && confirmInput.trim() === CONFIRM_PHRASE && !purge.isPending;
+  const trimmed = confirmInput.trim();
+  const matchesPhrase =
+    trimmed === CONFIRM_PHRASE_RU || trimmed === CONFIRM_PHRASE_EN;
+  const canSubmit = Boolean(selected) && matchesPhrase && !purge.isPending;
 
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 p-5 md:col-span-2">
       <h2 className="flex items-center gap-2 text-sm font-medium text-[var(--color-danger)]">
         <AlertTriangle size={14} />
-        Опасно: очистка данных пользователя
+        {t('admin.purgeTitle')}
       </h2>
       <p className="mt-2 text-xs text-muted-foreground">
-        Удаляет загрузки, плейлисты, историю и любые другие данные выбранного пользователя.
-        Действие нельзя отменить.
+        {t('admin.purgeHint')}
       </p>
 
       <div className="mt-4 flex flex-col gap-3">
@@ -88,7 +94,7 @@ export function AdminUserPurgePanel() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ID, @username или имя"
+            placeholder={t('admin.purgeSearchPlaceholder')}
             className="w-full rounded-[var(--radius-sm)] border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-accent)]"
           />
         </div>
@@ -116,11 +122,11 @@ export function AdminUserPurgePanel() {
                   <span className="flex flex-col">
                     <span className="font-medium">{display}</span>
                     <span className="text-muted-foreground">
-                      id: {u.id}
-                      {u.is_admin ? ' • admin' : ''}
+                      {t('admin.purgeIdPrefix')} {u.id}
+                      {u.is_admin ? ` • ${t('admin.purgeAdminTag')}` : ''}
                     </span>
                   </span>
-                  {isSelected && <span className="text-[var(--color-accent)]">выбран</span>}
+                  {isSelected && <span className="text-[var(--color-accent)]">{t('admin.purgeSelected')}</span>}
                 </button>
               );
             })}
@@ -128,7 +134,7 @@ export function AdminUserPurgePanel() {
         ) : null}
 
         {debounced && !search.isFetching && (search.data?.items?.length ?? 0) === 0 && (
-          <p className="text-xs text-muted-foreground">Ничего не найдено.</p>
+          <p className="text-xs text-muted-foreground">{t('admin.purgeNoResults')}</p>
         )}
 
         {selected && (
@@ -138,7 +144,7 @@ export function AdminUserPurgePanel() {
                 <div className="text-sm font-medium">
                   {selected.tg_username ? `@${selected.tg_username}` : (selected.tg_name ?? selected.id)}
                 </div>
-                <div className="text-muted-foreground">id: {selected.id}</div>
+                <div className="text-muted-foreground">{t('admin.purgeIdPrefix')} {selected.id}</div>
               </div>
               <button
                 type="button"
@@ -147,19 +153,19 @@ export function AdminUserPurgePanel() {
                   setConfirmInput('');
                 }}
                 className="text-muted-foreground hover:text-foreground"
-                aria-label="Снять выбор"
+                aria-label={t('admin.clearSelection')}
               >
                 <X size={14} />
               </button>
             </div>
             <p className="mt-3 text-muted-foreground">
-              Чтобы подтвердить удаление, введите слово{' '}
-              <code className="rounded bg-secondary px-1">{CONFIRM_PHRASE}</code>:
+              {t('admin.purgeConfirmHint')}{' '}
+              <code className="rounded bg-secondary px-1">{confirmPhrase}</code>:
             </p>
             <input
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value)}
-              placeholder={CONFIRM_PHRASE}
+              placeholder={t('admin.purgeConfirmPlaceholder', { phrase: confirmPhrase })}
               className="mt-2 w-full rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-[var(--color-danger)]"
               autoComplete="off"
             />
@@ -171,11 +177,11 @@ export function AdminUserPurgePanel() {
             >
               {purge.isPending ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" /> Удаляем…
+                  <Loader2 size={14} className="animate-spin" /> {t('admin.purgeRunning')}
                 </>
               ) : (
                 <>
-                  <Trash2 size={14} /> Удалить все данные
+                  <Trash2 size={14} /> {t('admin.purgeCta')}
                 </>
               )}
             </Button>
@@ -186,13 +192,13 @@ export function AdminUserPurgePanel() {
 
         {receipt?.ok && receipt.deleted && (
           <div className="rounded-[var(--radius-sm)] border border-border bg-card p-3 text-xs">
-            <div className="font-medium">Готово</div>
+            <div className="font-medium">{t('common.done')}</div>
             <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
-              <li>Удалена запись пользователя: {receipt.deleted.userRow}</li>
-              <li>Удалено файлов из R2: {receipt.deleted.r2Objects}</li>
+              <li>{t('admin.purgeReceiptUserRow', { n: receipt.deleted.userRow })}</li>
+              <li>{t('admin.purgeReceiptR2Ok', { n: receipt.deleted.r2Objects })}</li>
               {receipt.deleted.r2Failed > 0 && (
                 <li className="text-[var(--color-danger)]">
-                  Не удалось удалить файлов: {receipt.deleted.r2Failed}
+                  {t('admin.purgeReceiptR2Failed', { n: receipt.deleted.r2Failed })}
                 </li>
               )}
             </ul>
