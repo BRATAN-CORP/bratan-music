@@ -21,6 +21,7 @@ import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import type { Track } from '@/types';
+import { useT } from '@/i18n';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -47,6 +48,7 @@ function buildShareUrl(trackId: string): string {
 const RAIL_INSET_PX = 14;
 
 export function Player() {
+  const t = useT();
   const {
     currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
@@ -139,7 +141,7 @@ export function Player() {
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 1500);
       } catch {
-        window.prompt('Скопируйте ссылку:', url);
+        window.prompt(t('track.copyPrompt'), url);
       } finally {
         document.body.removeChild(textarea);
       }
@@ -174,7 +176,7 @@ export function Player() {
       await startTrackRadio(seed);
       setMenuOpen(false);
     } catch (err) {
-      setRadioError(err instanceof Error ? err.message : 'Не удалось запустить волну');
+      setRadioError(err instanceof Error ? err.message : t('player.radioFailed'));
       window.setTimeout(() => setRadioError(null), 4000);
     } finally {
       setRadioBusy(false);
@@ -280,15 +282,15 @@ export function Player() {
             className="flex flex-1 cursor-pointer items-center gap-3 px-3 sm:gap-4 sm:px-4"
             role="button"
             tabIndex={0}
-            aria-label="Открыть плеер"
+            aria-label={t('player.openPlayer')}
             onClick={(e) => {
               // Click anywhere on the mini-player background opens fullscreen.
               // Inner buttons (cover/title also call openFullscreen on their
               // own; artist/like/transport/menu/volume each handle their own
               // action) are detected via closest('button, a, input') and
               // skipped to avoid swallowing their clicks.
-              const t = e.target as HTMLElement | null;
-              if (t?.closest('button, a, input, [role="slider"]')) return;
+              const target = e.target as HTMLElement | null;
+              if (target?.closest('button, a, input, [role="slider"]')) return;
               openFullscreen();
             }}
             onKeyDown={(e) => {
@@ -305,7 +307,7 @@ export function Player() {
               <motion.button
                 type="button"
                 onClick={openFullscreen}
-                aria-label="Открыть плеер"
+                aria-label={t('player.openPlayer')}
                 className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-border"
                 initial={reduce ? false : { scale: 0.8, opacity: 0 }}
                 animate={reduce ? undefined : { scale: 1, opacity: 1 }}
@@ -326,7 +328,7 @@ export function Player() {
                   type="button"
                   onClick={openFullscreen}
                   className="block w-full text-left text-sm font-medium transition-opacity hover:opacity-90"
-                  aria-label="Открыть плеер"
+                  aria-label={t('player.openPlayer')}
                 >
                   <Marquee text={currentTrack.title} />
                 </button>
@@ -346,7 +348,7 @@ export function Player() {
                     type="button"
                     onClick={() => navigate(`/artist/${currentTrack.artistId}`)}
                     className="block w-full text-left text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline-offset-4"
-                    aria-label={`Открыть артиста ${currentTrack.artist}`}
+                    aria-label={t('player.openArtist', { name: currentTrack.artist })}
                   >
                     <Marquee text={currentTrack.artist} />
                   </button>
@@ -363,7 +365,7 @@ export function Player() {
                 onClick={() => currentTrack && toggle(currentTrack)}
                 variant="ghost"
                 size="icon"
-                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                aria-label={liked ? t('player.unlike') : t('player.like')}
                 className={liked ? 'text-[var(--color-accent)]' : ''}
               >
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
@@ -371,21 +373,21 @@ export function Player() {
             </motion.div>
 
             <div className="flex items-center gap-1">
-              <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Перемешать">
+              <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label={t('player.shuffle')}>
                 <Shuffle size={15} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
               </Button>
-              <Button onClick={previous} variant="ghost" size="icon" aria-label="Предыдущий">
+              <Button onClick={previous} variant="ghost" size="icon" aria-label={t('player.previous')}>
                 <SkipBack size={16} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
-                <Button onClick={togglePlay} size="icon" className="h-10 w-10 rounded-full" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
+                <Button onClick={togglePlay} size="icon" className="h-10 w-10 rounded-full" aria-label={isPlaying ? t('player.pause') : t('player.play')}>
                   {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" />}
                 </Button>
               </motion.div>
-              <Button onClick={nextManual} variant="ghost" size="icon" aria-label="Следующий">
+              <Button onClick={nextManual} variant="ghost" size="icon" aria-label={t('player.next')}>
                 <SkipForward size={16} />
               </Button>
-              <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label="Повтор">
+              <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label={t('player.repeat')}>
                 {repeat === 'one' ? (
                   <Repeat1 size={15} className="text-[var(--color-accent)]" />
                 ) : (
@@ -402,7 +404,7 @@ export function Player() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setMenuOpen((v) => !v)}
-                aria-label="Действия с треком"
+                aria-label={t('track.actions')}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
               >
@@ -426,7 +428,7 @@ export function Player() {
                   onClick={() => { toggleShuffle(); }}
                   icon={<Shuffle size={14} className={shuffle ? 'text-[var(--color-accent)]' : ''} />}
                 >
-                  {shuffle ? 'Перемешать: вкл' : 'Перемешать'}
+                  {shuffle ? t('player.shuffleOn') : t('player.shuffle')}
                 </MenuItem>
                 <MenuItem
                   mobileOnly
@@ -437,52 +439,52 @@ export function Player() {
                     <Repeat size={14} className={repeat === 'all' ? 'text-[var(--color-accent)]' : ''} />
                   )}
                 >
-                  Повтор: {repeat === 'off' ? 'выкл' : repeat === 'all' ? 'очередь' : 'один трек'}
+                  {t('player.repeatStatus', { value: repeat === 'off' ? t('player.repeatOff') : repeat === 'all' ? t('player.repeatAll') : t('player.repeatOne') })}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { setQueueOpen(true); setMenuOpen(false); }}
                   icon={<ListOrdered size={14} />}
                 >
-                  Очередь
+                  {t('player.queue')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { setAddToPlaylistOpen(true); setMenuOpen(false); }}
                   icon={<ListPlus size={14} />}
                 >
-                  Добавить в плейлист
+                  {t('track.addToPlaylist')}
                 </MenuItem>
                 <MenuItem
                   onClick={handleStartRadio}
                   disabled={radioBusy}
                   icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
                 >
-                  Запустить волну
+                  {t('track.startRadio')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { handleDownload(); setMenuOpen(false); }}
                   disabled={downloading}
                   icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                 >
-                  Скачать
+                  {t('track.download')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { setOverrideOpen(true); setMenuOpen(false); }}
                   icon={<Upload size={14} />}
                 >
-                  Загрузить свою версию
+                  {t('track.uploadOwn')}
                 </MenuItem>
                 <MenuItem
                   onClick={handleShare}
                   icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
                 >
-                  {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                  {shareCopied ? t('track.shareCopied') : t('track.share')}
                 </MenuItem>
                 {currentTrack.artistId && (
                   <MenuItem
                     onClick={handleGoToArtist}
                     icon={<UserIcon size={14} />}
                   >
-                    Перейти к артисту
+                    {t('track.goToArtist')}
                   </MenuItem>
                 )}
               </PopoverMenu>
@@ -492,7 +494,7 @@ export function Player() {
               <span className="text-xs text-muted-foreground">
                 {formatTime(progress)} / {formatTime(duration)}
               </span>
-              <Button onClick={toggleMute} variant="ghost" size="icon" className="h-9 w-9" aria-label="Звук">
+              <Button onClick={toggleMute} variant="ghost" size="icon" className="h-9 w-9" aria-label={t('player.mute')}>
                 {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
               </Button>
               {/* Custom volume slider — same thickness/visuals as the
@@ -502,7 +504,7 @@ export function Player() {
               <div
                 className="group/volume relative flex h-6 w-24 cursor-pointer touch-none items-center select-none"
                 role="slider"
-                aria-label="Громкость"
+                aria-label={t('player.volume')}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round((muted ? 0 : volume) * 100)}
@@ -545,7 +547,7 @@ export function Player() {
                   style={{ left: `${(muted ? 0 : volume) * 100}%` }}
                 />
               </div>
-              <Button onClick={openFullscreen} variant="ghost" size="icon" aria-label="Развернуть">
+              <Button onClick={openFullscreen} variant="ghost" size="icon" aria-label={t('player.expand')}>
                 <Maximize2 size={15} />
               </Button>
             </div>

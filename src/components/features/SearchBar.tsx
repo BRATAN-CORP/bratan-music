@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
 
 interface SearchBarProps {
   value: string;
@@ -8,7 +9,9 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Поиск треков, альбомов, артистов...' }: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder }: SearchBarProps) {
+  const t = useT();
+  const ph = placeholder ?? t('search.placeholder');
   const [local, setLocal] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -44,11 +47,11 @@ export function SearchBar({ value, onChange, placeholder = 'Поиск трек�
         type="text"
         value={local}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={ph}
         className="h-12 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
       />
       {local && (
-        <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="h-7 w-7" aria-label="Очистить">
+        <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="h-7 w-7" aria-label={t('search.clear')}>
           <X size={14} />
         </Button>
       )}

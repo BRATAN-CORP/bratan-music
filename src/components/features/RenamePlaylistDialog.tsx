@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useRenamePlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useT } from '@/i18n';
 
 interface RenamePlaylistDialogProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface RenamePlaylistDialogProps {
 export function RenamePlaylistDialog({
   open, onClose, playlistId, initialName,
 }: RenamePlaylistDialogProps) {
+  const t = useT();
   const [name, setName] = useState(initialName);
   const rename = useRenamePlaylist();
 
@@ -54,8 +56,8 @@ export function RenamePlaylistDialog({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-base font-semibold tracking-tight">Переименовать плейлист</h2>
-              <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label="Закрыть">
+              <h2 className="text-base font-semibold tracking-tight">{t('playlist.rename_dialog.title')}</h2>
+              <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label={t('common.close')}>
                 <X size={16} />
               </Button>
             </div>
@@ -64,13 +66,13 @@ export function RenamePlaylistDialog({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Название плейлиста"
+                placeholder={t('playlist.rename_dialog.placeholder')}
                 autoFocus
                 maxLength={120}
               />
               {rename.isError && (
                 <p className="rounded-[var(--radius-sm)] bg-[var(--color-danger-muted)] px-3 py-2 text-xs text-[var(--color-danger)]">
-                  {rename.error instanceof Error ? rename.error.message : 'Ошибка'}
+                  {rename.error instanceof Error ? rename.error.message : t('common.error')}
                 </p>
               )}
               <Button
@@ -79,7 +81,7 @@ export function RenamePlaylistDialog({
                 className="w-full"
               >
                 {rename.isPending ? <Loader2 size={14} className="animate-spin" /> : <Pencil size={14} />}
-                Сохранить
+                {rename.isPending ? t('playlist.rename_dialog.submitting') : t('playlist.rename_dialog.submit')}
               </Button>
             </form>
           </motion.div>

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/Button';
 import { useSharePlaylist, buildShareUrl } from '@/hooks/useShare';
 import type { Playlist } from '@/types';
+import { useT } from '@/i18n';
 
 interface SharePlaylistDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ interface SharePlaylistDialogProps {
  *   that saved copies are read-only references.
  */
 export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDialogProps) {
+  const t = useT();
   const share = useSharePlaylist();
   const [optimisticPublic, setOptimisticPublic] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
@@ -84,7 +86,7 @@ export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDi
           onClick={() => !share.isPending && onClose()}
           role="dialog"
           aria-modal="true"
-          aria-label="Поделиться плейлистом"
+          aria-label={t('playlist.share_dialog.title')}
         >
           <motion.div
             initial={{ scale: 0.94, opacity: 0, y: 12 }}
@@ -96,10 +98,10 @@ export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDi
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold tracking-tight">Поделиться плейлистом</h2>
+                <h2 className="text-base font-semibold tracking-tight">{t('playlist.share_dialog.title')}</h2>
                 <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{playlist.name}</p>
               </div>
-              <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Закрыть">
+              <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={t('common.close')}>
                 <X size={16} />
               </Button>
             </div>
@@ -122,11 +124,11 @@ export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDi
                   {isPublic ? <Globe size={18} /> : <Lock size={18} />}
                 </span>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium">Поделиться по ссылке</span>
+                  <span className="text-sm font-medium">{t('playlist.share_dialog.shareByLink')}</span>
                   <span className="text-xs text-muted-foreground">
                     {isPublic
-                      ? 'Включено — любой с ссылкой может открыть'
-                      : 'Сейчас плейлист доступен только вам'}
+                      ? t('playlist.share_dialog.publicOn')
+                      : t('playlist.share_dialog.publicOff')}
                   </span>
                 </div>
               </div>
@@ -160,14 +162,14 @@ export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDi
                   onFocus={(e) => e.target.select()}
                   className="min-w-0 flex-1 truncate bg-transparent text-xs text-foreground outline-none"
                 />
-                <Button onClick={handleCopy} size="sm" className="shrink-0" aria-label="Скопировать ссылку">
+                <Button onClick={handleCopy} size="sm" className="shrink-0" aria-label={t('playlist.share_dialog.copyAria')}>
                   {copied ? (
                     <>
-                      <Check size={13} /> Скопировано
+                      <Check size={13} /> {t('playlist.share_dialog.copied')}
                     </>
                   ) : (
                     <>
-                      <Copy size={13} /> Скопировать
+                      <Copy size={13} /> {t('playlist.share_dialog.copy')}
                     </>
                   )}
                 </Button>
@@ -176,14 +178,12 @@ export function SharePlaylistDialog({ open, onClose, playlist }: SharePlaylistDi
 
             {share.isError && (
               <p className="mt-3 rounded-[var(--radius-sm)] bg-[var(--color-danger-muted)] px-3 py-2 text-xs text-[var(--color-danger)]">
-                {share.error instanceof Error ? share.error.message : 'Не удалось обновить настройки'}
+                {share.error instanceof Error ? share.error.message : t('playlist.share_dialog.updateError')}
               </p>
             )}
 
             <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground/80">
-              Сохранившие плейлист увидят его в своей библиотеке как ссылку — они
-              смогут слушать треки, закреплять и удалять у себя, но не смогут
-              переименовывать или менять состав.
+              {t('playlist.share_dialog.savedHint')}
             </p>
 
             {share.isPending && (

@@ -4,6 +4,7 @@ import { TrackItem } from './TrackItem';
 import { AlbumCard } from './AlbumCard';
 import { ArtistCard } from './ArtistCard';
 import { TrackSkeleton, AlbumSkeleton } from '@/components/ui/Skeleton';
+import { useT } from '@/i18n';
 
 interface SearchResultsProps {
   data?: SearchResult;
@@ -14,6 +15,7 @@ interface SearchResultsProps {
 }
 
 export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: SearchResultsProps) {
+  const t = useT();
   if (isLoading) {
     return (
       <div className="flex flex-col gap-8">
@@ -29,7 +31,7 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
         </div>
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 size={14} className="animate-spin" />
-          Ищем в Tidal...
+          {t('search.loading')}
         </div>
       </div>
     );
@@ -40,7 +42,7 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
       <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
         <AlertCircle size={28} className="text-[var(--color-danger)]" />
         <div>
-          <p className="text-base font-semibold">Поиск не сработал</p>
+          <p className="text-base font-semibold">{t('search.failed')}</p>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">{error.message}</p>
         </div>
       </div>
@@ -58,8 +60,8 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
       <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
         <Music2 size={28} className="text-muted-foreground" />
         <div>
-          <p className="text-base font-semibold">Ничего не найдено</p>
-          <p className="text-sm text-muted-foreground">Попробуйте другой запрос или смените фильтр.</p>
+          <p className="text-base font-semibold">{t('search.empty')}</p>
+          <p className="text-sm text-muted-foreground">{t('search.emptyHint')}</p>
         </div>
       </div>
     );
@@ -69,7 +71,7 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
     <div className="flex flex-col gap-10">
       {(filter === 'all' || filter === 'tracks') && hasTracks && (
         <section>
-          {filter === 'all' && <SectionTitle title="Треки" subtitle={`${data.tracks.length} найдено`} />}
+          {filter === 'all' && <SectionTitle title={t('search.sectionTracks')} subtitle={t('search.tracksFound', { count: data.tracks.length })} />}
           <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
             {data.tracks.map((track, i) => (
               <TrackItem key={track.id} track={track} index={i} onPlay={onPlayTrack} />
@@ -80,7 +82,7 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
 
       {(filter === 'all' || filter === 'albums') && hasAlbums && (
         <section>
-          {filter === 'all' && <SectionTitle title="Альбомы" subtitle="Релизы и синглы" />}
+          {filter === 'all' && <SectionTitle title={t('search.sectionAlbums')} subtitle={t('search.albumsSubtitle')} />}
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
             {data.albums.map((album) => (
               <AlbumCard key={album.id} album={album} />
@@ -91,7 +93,7 @@ export function SearchResults({ data, isLoading, error, filter, onPlayTrack }: S
 
       {(filter === 'all' || filter === 'artists') && hasArtists && (
         <section>
-          {filter === 'all' && <SectionTitle title="Артисты" subtitle="Лучшие совпадения" />}
+          {filter === 'all' && <SectionTitle title={t('search.sectionArtists')} subtitle={t('search.artistsSubtitle')} />}
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6">
             {data.artists.map((artist) => (
               <ArtistCard key={artist.id} artist={artist} />
