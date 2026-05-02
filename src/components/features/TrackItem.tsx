@@ -11,6 +11,7 @@ import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackKebabMenu } from '@/components/features/TrackKebabMenu';
+import { useT } from '@/i18n';
 
 interface TrackItemProps {
   track: Track;
@@ -29,6 +30,7 @@ function formatDuration(seconds: number): string {
 }
 
 export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: TrackItemProps) {
+  const t = useT();
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
@@ -142,7 +144,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
           size="icon"
           className={"h-7 w-7 " + (liked ? 'opacity-100 text-[var(--color-accent)]' : '')}
           onClick={(e) => { e.stopPropagation(); if (isAuthed) toggle(track); }}
-          aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+          aria-label={liked ? t('player.unlike') : t('player.like')}
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
@@ -154,8 +156,8 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
               className="h-7 w-7"
               onClick={handleDownload}
               disabled={downloading}
-              aria-label="Скачать"
-              title="Скачать"
+              aria-label={t('track.download')}
+              title={t('track.download')}
             >
               <Download size={14} />
             </Button>
@@ -164,8 +166,8 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
               size="icon"
               className="h-7 w-7"
               onClick={handleOpenOverride}
-              aria-label="Загрузить свою версию"
-              title="Загрузить свою версию"
+              aria-label={t('track.uploadOwn')}
+              title={t('track.uploadOwn')}
             >
               <Upload size={14} />
             </Button>

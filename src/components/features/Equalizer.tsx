@@ -4,21 +4,26 @@ import { Sliders, RotateCcw } from 'lucide-react';
 import { EQ_BANDS, setEqGain, isEqAvailable } from '@/hooks/useAudioPlayer';
 import { useSettingsStore } from '@/store/settings';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
+import type { TranslationKey } from '@/i18n';
 
-const PRESETS: Record<string, number[]> = {
-  'Плоский': [0, 0, 0, 0, 0, 0],
-  'Бас': [6, 4, 1, 0, -1, -2],
-  'Вокал': [-2, -1, 1, 4, 3, 1],
-  'Рок': [4, 2, -1, 1, 3, 5],
-  'Электро': [5, 3, 0, -1, 2, 4],
-  'Классика': [3, 2, 0, 0, 2, 3],
-};
+// Preset values are static EQ curves; only the display name moves
+// through i18n (keyed by `nameKey`).
+const PRESETS: { nameKey: TranslationKey; values: number[] }[] = [
+  { nameKey: 'equalizer.presetFlat', values: [0, 0, 0, 0, 0, 0] },
+  { nameKey: 'equalizer.presetBass', values: [6, 4, 1, 0, -1, -2] },
+  { nameKey: 'equalizer.presetVocal', values: [-2, -1, 1, 4, 3, 1] },
+  { nameKey: 'equalizer.presetRock', values: [4, 2, -1, 1, 3, 5] },
+  { nameKey: 'equalizer.presetElectronic', values: [5, 3, 0, -1, 2, 4] },
+  { nameKey: 'equalizer.presetClassical', values: [3, 2, 0, 0, 2, 3] },
+];
 
 function freqLabel(hz: number): string {
   return hz >= 1000 ? `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)}k` : String(hz);
 }
 
 export function Equalizer() {
+  const t = useT();
   // Settings store is the source of truth for EQ gains — they roam
   // across devices via /user/preferences. The local component only
   // mirrors the slice and forwards updates back into the store. The
@@ -79,16 +84,16 @@ export function Equalizer() {
         <div className="flex items-center gap-2">
           <Sliders size={14} className="text-muted-foreground" />
           <span className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            Эквалайзер
+            {t('equalizer.title')}
           </span>
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => applyPreset([0, 0, 0, 0, 0, 0])}
-          aria-label="Сбросить"
+          aria-label={t('equalizer.resetAria')}
         >
-          <RotateCcw size={12} /> Сброс
+          <RotateCcw size={12} /> {t('equalizer.resetShort')}
         </Button>
       </motion.div>
 
@@ -99,18 +104,18 @@ export function Equalizer() {
         // into the persisted store, so the curve is captured and
         // applied to the graph the moment a track starts.
         <motion.p {...fadeIn(0.22)} className="text-xs text-muted-foreground">
-          Запустите любой трек, чтобы регуляторы начали влиять на звук — текущие значения сохранятся и применятся автоматически.
+          {t('equalizer.hint')}
         </motion.p>
       )}
 
       <motion.div {...fadeIn(0.26)} className="flex flex-wrap gap-1.5">
-        {Object.entries(PRESETS).map(([name, values]) => (
+        {PRESETS.map(({ nameKey, values }) => (
           <button
-            key={name}
+            key={nameKey}
             onClick={() => applyPreset(values)}
             className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--color-border-strong)] hover:text-foreground"
           >
-            {name}
+            {t(nameKey)}
           </button>
         ))}
       </motion.div>
@@ -127,7 +132,7 @@ export function Equalizer() {
                 value={gains[i] ?? 0}
                 onChange={(e) => updateBand(i, Number(e.target.value))}
                 className="vertical-slider"
-                aria-label={`${freqLabel(freq)} Гц`}
+                aria-label={t('equalizer.freqHzAria', { label: freqLabel(freq) })}
                 style={{ writingMode: 'vertical-lr' as never, direction: 'rtl', appearance: 'slider-vertical' as never }}
               />
               <motion.div
