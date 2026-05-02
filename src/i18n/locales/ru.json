@@ -558,7 +558,9 @@
       "censored": "censored",
       "yourCut": "your cut",
       "aiPrompt": "«дрифт по ночному МКАД»",
-      "aiResult": "→ 24 трека • 1ч 38м"
+      "aiResult": "→ 24 трека • 1ч 38м",
+      "lineBefore": "слушай",
+      "lineWord": "оригинал"
     },
     "features": {
       "censorOverlay": {
