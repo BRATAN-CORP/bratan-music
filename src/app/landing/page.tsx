@@ -406,14 +406,14 @@ function FeatureTile({ feature, t }: { feature: Feature; t: Translate }) {
 }
 
 /**
- * Censorship-override demo: a slowly-spinning vinyl on the left
- * pairs with a one-word "redaction band" in the centre. On idle the
- * band covers the word; on hover (the parent feature card uses
- * `group`) the band retracts left-to-right with a soft motion-blur
- * and the underlying word reveals in accent colour. The "censored"
- * tag on the right slides up to expose "your cut" underneath, giving
- * the whole demo a single, legible state-flip that captures the
- * anti-censorship pitch without a fake waveform.
+ * Censorship-override demo: a single-line phrase that morphs on
+ * hover. Idle reads "Don't hear ~~the censor~~" with a strikethrough
+ * over the noun; on hover the whole line crossfades through a soft
+ * blur into "Hear it uncut", with the noun in accent colour. The
+ * spinning vinyl on the left anchors the music context so the demo
+ * doesn't read as a generic "click to reveal" pattern. No more
+ * decorative redaction bar, no more right-side badge — the phrase
+ * itself carries the entire pitch.
  */
 function CensorshipDemo({ t }: { t: Translate }) {
   const reduce = useReducedMotion();
@@ -451,62 +451,63 @@ function CensorshipDemo({ t }: { t: Translate }) {
         </div>
       </motion.div>
 
-      {/* The lyric line: plain prefix + redacted word that reveals on
-          hover. The redaction band lives on a `pointer-events-none`
-          overlay that scales-x to 0 on `group-hover` (the bento card
-          owns the `group` class). A subtle blur during the transition
-          sells the "censor coming off" feel. */}
-      <div className="absolute left-12 right-16 top-1/2 -translate-y-1/2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em]">
-        <span className="shrink-0 text-foreground">{t('landing.demos.lineBefore')}</span>
-        <span className="relative inline-flex items-center">
-          <span className="px-1 font-semibold text-[var(--color-accent)]">
-            {t('landing.demos.lineWord')}
+      {/* Crossfade phrase — both states share an invisible width-sizer
+          so the layout never reflows. Idle phrase is the "don't"
+          variant with a strikethrough on the censored noun; hover
+          phrase is the "do" variant with the alternative noun in
+          accent colour. Soft blur on the leaving / entering side of
+          the swap softens the transition into a single visual gesture. */}
+      <div className="absolute left-12 right-3 top-1/2 -translate-y-1/2 font-mono text-[12px] uppercase tracking-[0.16em]">
+        <span className="relative inline-block whitespace-nowrap">
+          {/* Width-sizer: render both phrases stacked invisibly so the
+              container always reserves enough room for the longer one. */}
+          <span className="invisible block">
+            {t('landing.demos.censorPrefix')} {t('landing.demos.censorWord')}
           </span>
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 origin-left rounded-[2px] bg-foreground transition-[transform,filter,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] group-hover:scale-x-0 group-hover:opacity-0 group-hover:[filter:blur(2px)]"
-          />
-        </span>
-      </div>
+          <span className="invisible block">
+            {t('landing.demos.revealPrefix')} {t('landing.demos.revealWord')}
+          </span>
 
-      {/* Right-side badge: idle reads "censored" in muted ink, on
-          hover the slot scrolls up by one row to expose the
-          accent-tinted "your cut" stamp below. Single column overflow
-          mask makes the swap feel like a tape-deck flip. */}
-      <div className="absolute right-2 top-1.5 h-[18px] overflow-hidden">
-        <div className="flex h-[18px] flex-col transition-transform duration-500 ease-out group-hover:-translate-y-[18px]">
-          <span className="flex h-[18px] items-center rounded-sm border border-border bg-background/80 px-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-            {t('landing.demos.censored')}
+          {/* Idle phrase. */}
+          <span className="absolute inset-0 flex items-center gap-1.5 text-foreground transition-[opacity,filter] duration-500 ease-out group-hover:opacity-0 group-hover:[filter:blur(3px)]">
+            <span>{t('landing.demos.censorPrefix')}</span>
+            <span className="line-through decoration-foreground decoration-[1.5px] underline-offset-2">
+              {t('landing.demos.censorWord')}
+            </span>
           </span>
-          <span className="flex h-[18px] items-center rounded-sm border border-[var(--color-accent)]/60 bg-[var(--color-accent)]/10 px-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--color-accent)]">
-            {t('landing.demos.yourCut')}
+
+          {/* Hover phrase — accent on the reveal noun. */}
+          <span className="absolute inset-0 flex items-center gap-1.5 opacity-0 [filter:blur(3px)] transition-[opacity,filter] duration-500 ease-out group-hover:opacity-100 group-hover:[filter:blur(0)]">
+            <span className="text-foreground">{t('landing.demos.revealPrefix')}</span>
+            <span className="font-semibold text-[var(--color-accent)]">
+              {t('landing.demos.revealWord')}
+            </span>
           </span>
-        </div>
+        </span>
       </div>
     </div>
   );
 }
 
 /**
- * Listening-rooms demo: three "user pulses" syncing to the same beat.
- * Hover speeds up the pulse so the synchronisation reads as live.
+ * Listening-rooms demo: a static stack of three real-looking
+ * `UserAvatar`s (gradient + initial via the same fixture seeds the
+ * rest of the app uses for live users) on the left, paired with a
+ * "live" `Radio` icon and a mock playback timestamp on the right.
+ *
+ * The earlier pulse animation made the gradient avatars look like
+ * bobbing heads — fine on the original A/B/C letter circles, awful
+ * on real-looking avatars. The static stack reads as "three people
+ * in a room" at a glance, and the accent ring still appears on
+ * `group-hover` so the card lift remains rewarding.
  */
 function RoomsDemo() {
-  const reduce = useReducedMotion();
   return (
     <div className="relative flex h-12 w-full items-center justify-between rounded-md border border-border bg-background px-3">
       <div className="flex items-center -space-x-1.5">
         {ROOM_DEMO_LISTENERS.map((listener, i) => (
-          <motion.div
+          <div
             key={listener.username}
-            initial={false}
-            animate={reduce ? undefined : { scale: [1, 1.08, 1] }}
-            transition={{
-              duration: 1.6,
-              repeat: Infinity,
-              ease: EASE,
-              delay: i * 0.05,
-            }}
             className="relative"
             style={{ zIndex: ROOM_DEMO_LISTENERS.length - i }}
           >
@@ -520,7 +521,7 @@ function RoomsDemo() {
               className="pointer-events-none absolute -inset-0.5 rounded-full border border-[var(--color-accent)]/40 opacity-0 transition-opacity group-hover:opacity-100"
               aria-hidden
             />
-          </motion.div>
+          </div>
         ))}
       </div>
       <div className="flex items-center gap-1.5">

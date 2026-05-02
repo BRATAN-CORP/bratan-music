@@ -555,12 +555,12 @@
     "featuresHint": "9 фич, которые делают этот плеер. Никакого маркетинга — только то, что реально работает.",
     "openLink": "Открыть",
     "demos": {
-      "censored": "censored",
-      "yourCut": "your cut",
       "aiPrompt": "«дрифт по ночному МКАД»",
       "aiResult": "→ 24 трека • 1ч 38м",
-      "lineBefore": "слушай",
-      "lineWord": "оригинал"
+      "censorPrefix": "Не слушай",
+      "censorWord": "цензуру",
+      "revealPrefix": "Слушай",
+      "revealWord": "оригинал"
     },
     "features": {
       "censorOverlay": {
