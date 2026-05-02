@@ -24,6 +24,7 @@ import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import type { Track } from '@/types';
+import { useT } from '@/i18n';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -33,6 +34,7 @@ function formatTime(seconds: number): string {
 }
 
 export function FullscreenPlayer() {
+  const t = useT();
   const {
     currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
@@ -161,7 +163,7 @@ export function FullscreenPlayer() {
       await startTrackRadio(seed);
     } catch (err) {
       console.error('[radio]', err);
-      setDownloadError(err instanceof Error ? err.message : 'Не удалось запустить волну');
+      setDownloadError(err instanceof Error ? err.message : t('fullscreenPlayer.radioFailed'));
       window.setTimeout(() => setDownloadError(null), 4000);
     } finally {
       setRadioBusy(false);
@@ -175,7 +177,7 @@ export function FullscreenPlayer() {
     try {
       await downloadTrack(currentTrack);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Не удалось скачать';
+      const message = err instanceof Error ? err.message : t('fullscreenPlayer.downloadFailed');
       console.error('[download]', err);
       setDownloadError(message);
       window.setTimeout(() => setDownloadError(null), 5000);
@@ -387,11 +389,11 @@ export function FullscreenPlayer() {
             // `onPointerDown={startSheetDrag}` and starts the drag.
             style={{ touchAction: 'pan-y' }}
           >
-            <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label="Свернуть">
+            <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label={t('fullscreenPlayer.minimize')}>
               <ChevronDown size={20} />
             </Button>
             <span className="pointer-events-none absolute inset-x-0 top-0 flex h-full items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              Сейчас играет
+              {t('fullscreenPlayer.nowPlaying')}
             </span>
             <div className="flex items-center gap-1">
               {/* Desktop: spell out the track-side actions inline. On mobile
@@ -402,9 +404,9 @@ export function FullscreenPlayer() {
                 variant="ghost"
                 size="icon"
                 onClick={handleStartRadio}
-                aria-label="Запустить волну"
+                aria-label={t('fullscreenPlayer.startRadio')}
                 disabled={radioBusy}
-                title="Запустить волну на основе этого трека"
+                title={t('fullscreenPlayer.radioTitle')}
                 className="hidden md:inline-flex"
               >
                 {radioBusy ? <Loader2 size={18} className="animate-spin" /> : <Radio size={18} />}
@@ -413,7 +415,7 @@ export function FullscreenPlayer() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setQueueOpen(true)}
-                aria-label="Очередь"
+                aria-label={t('fullscreenPlayer.queue')}
                 className="hidden md:inline-flex"
               >
                 <ListOrdered size={18} />
@@ -422,7 +424,7 @@ export function FullscreenPlayer() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setLyricsOpen((v) => !v)}
-                aria-label="Текст песни"
+                aria-label={t('fullscreenPlayer.lyricsTitle')}
                 className={(lyricsOpen ? 'text-foreground ' : '') + 'hidden md:inline-flex'}
               >
                 <Mic2 size={18} />
@@ -431,7 +433,7 @@ export function FullscreenPlayer() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setEqOpen((v) => !v)}
-                aria-label="Эквалайзер"
+                aria-label={t('fullscreenPlayer.eq')}
                 className={(eqOpen ? 'text-foreground ' : '') + 'hidden md:inline-flex'}
               >
                 <Sliders size={18} />
@@ -442,7 +444,7 @@ export function FullscreenPlayer() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setMoreOpen((v) => !v)}
-                aria-label="Действия с треком"
+                aria-label={t('track.actions')}
                 aria-haspopup="menu"
                 aria-expanded={moreOpen}
               >
@@ -465,28 +467,28 @@ export function FullscreenPlayer() {
                   disabled={radioBusy}
                   icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
                 >
-                  Запустить волну
+                  {t('fullscreenPlayer.startRadio')}
                 </MenuItem>
                 <MenuItem
                   mobileOnly
                   onClick={() => { setQueueOpen(true); setMoreOpen(false); }}
                   icon={<ListOrdered size={14} />}
                 >
-                  Очередь
+                  {t('fullscreenPlayer.queue')}
                 </MenuItem>
                 <MenuItem
                   mobileOnly
                   onClick={() => { setLyricsOpen((v) => !v); setMoreOpen(false); }}
                   icon={<Mic2 size={14} />}
                 >
-                  {lyricsOpen ? 'Скрыть текст' : 'Текст песни'}
+                  {lyricsOpen ? t('fullscreenPlayer.lyricsHide') : t('fullscreenPlayer.lyricsTitle')}
                 </MenuItem>
                 <MenuItem
                   mobileOnly
                   onClick={() => { setEqOpen((v) => !v); setMoreOpen(false); }}
                   icon={<Sliders size={14} />}
                 >
-                  {eqOpen ? 'Скрыть эквалайзер' : 'Эквалайзер'}
+                  {eqOpen ? t('fullscreenPlayer.eqHide') : t('fullscreenPlayer.eq')}
                 </MenuItem>
                 {/* Mobile-only — surface shuffle/repeat in the menu so the
                     user has a discoverable place to toggle them; the
@@ -497,14 +499,14 @@ export function FullscreenPlayer() {
                   onClick={() => { toggleShuffle(); setMoreOpen(false); }}
                   icon={<Shuffle size={14} className={shuffle ? 'text-foreground' : ''} />}
                 >
-                  Перемешать{shuffle ? ' (вкл.)' : ''}
+                  {t('fullscreenPlayer.shuffleSuffix')}{shuffle ? t('fullscreenPlayer.shuffleOn') : ''}
                 </MenuItem>
                 <MenuItem
                   mobileOnly
                   onClick={() => { cycleRepeat(); setMoreOpen(false); }}
                   icon={repeat === 'one' ? <Repeat1 size={14} className="text-foreground" /> : <Repeat size={14} className={repeat === 'all' ? 'text-foreground' : ''} />}
                 >
-                  Повтор{repeat === 'all' ? ' (всё)' : repeat === 'one' ? ' (один)' : ''}
+                  {t('fullscreenPlayer.repeatLabel')}{repeat === 'all' ? t('fullscreenPlayer.repeatAllSuffix') : repeat === 'one' ? t('fullscreenPlayer.repeatOneSuffix') : ''}
                 </MenuItem>
                 <MenuDivider mobileOnly />
 
@@ -515,14 +517,14 @@ export function FullscreenPlayer() {
                   onClick={() => { setAddToPlaylistOpen(true); setMoreOpen(false); }}
                   icon={<ListPlus size={14} />}
                 >
-                  Добавить в плейлист
+                  {t('track.addToPlaylist')}
                 </MenuItem>
                 {currentTrack.artistId && (
                   <MenuItem
                     onClick={() => { goToArtist(); setMoreOpen(false); }}
                     icon={<User size={14} />}
                   >
-                    Перейти к артисту
+                    {t('track.goToArtist')}
                   </MenuItem>
                 )}
                 {currentTrack.albumId && (
@@ -530,7 +532,7 @@ export function FullscreenPlayer() {
                     onClick={() => { goToAlbum(); setMoreOpen(false); }}
                     icon={<Disc size={14} />}
                   >
-                    Перейти к альбому
+                    {t('track.goToAlbum')}
                   </MenuItem>
                 )}
                 <MenuDivider />
@@ -538,20 +540,20 @@ export function FullscreenPlayer() {
                   onClick={handleShare}
                   icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
                 >
-                  {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                  {shareCopied ? t('track.shareCopied') : t('track.share')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { handleDownload(); setMoreOpen(false); }}
                   disabled={downloading}
                   icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                 >
-                  Скачать
+                  {t('track.download')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { setOverrideOpen(true); setMoreOpen(false); }}
                   icon={<Upload size={14} />}
                 >
-                  Загрузить свою версию
+                  {t('track.uploadOwn')}
                 </MenuItem>
               </PopoverMenu>
             </div>
@@ -879,7 +881,7 @@ export function FullscreenPlayer() {
                   />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-secondary text-muted-foreground">
-                    Без обложки
+                    {t('fullscreenPlayer.noCover')}
                   </div>
                 )}
                   </motion.div>
@@ -901,7 +903,7 @@ export function FullscreenPlayer() {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Добавить в плейлист"
+                aria-label={t('track.addToPlaylist')}
                 onClick={() => currentTrack && setAddToPlaylistOpen(true)}
                 className="shrink-0 h-10 w-10 text-muted-foreground hover:text-foreground"
               >
@@ -970,7 +972,7 @@ export function FullscreenPlayer() {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                aria-label={liked ? t('player.unlike') : t('player.like')}
                 onClick={() => currentTrack && toggle(currentTrack)}
                 className={'shrink-0 h-10 w-10 ' + (liked ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
               >
@@ -1038,21 +1040,21 @@ export function FullscreenPlayer() {
             </div>
 
             <div className="flex w-full max-w-md items-center justify-between">
-              <Button variant="ghost" size="icon" onClick={toggleShuffle} aria-label="Перемешать">
+              <Button variant="ghost" size="icon" onClick={toggleShuffle} aria-label={t('player.shuffle')}>
                 <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
-              <Button variant="ghost" size="icon" onClick={previous} aria-label="Назад" className="h-12 w-12">
+              <Button variant="ghost" size="icon" onClick={previous} aria-label={t('fullscreenPlayer.back')} className="h-12 w-12">
                 <SkipBack size={22} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
-                <Button onClick={togglePlay} className="h-16 w-16 rounded-full" aria-label={isPlaying ? 'Пауза' : 'Пуск'}>
+                <Button onClick={togglePlay} className="h-16 w-16 rounded-full" aria-label={isPlaying ? t('player.pause') : t('player.play')}>
                   {isPlaying ? <Pause size={24} fill="currentColor" strokeWidth={0} /> : <Play size={24} fill="currentColor" />}
                 </Button>
               </motion.div>
-              <Button variant="ghost" size="icon" onClick={nextManual} aria-label="Вперёд" className="h-12 w-12">
+              <Button variant="ghost" size="icon" onClick={nextManual} aria-label={t('fullscreenPlayer.forward')} className="h-12 w-12">
                 <SkipForward size={22} />
               </Button>
-              <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label="Повтор">
+              <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label={t('player.repeat')}>
                 {repeat === 'one' ? (
                   <Repeat1 size={18} className="text-foreground" />
                 ) : (
@@ -1063,7 +1065,7 @@ export function FullscreenPlayer() {
 
             {!touchOnly && (
               <div className="flex w-full max-w-md items-center gap-3">
-                <Button variant="ghost" size="icon" onClick={toggleMute} aria-label="Звук">
+                <Button variant="ghost" size="icon" onClick={toggleMute} aria-label={t('player.mute')}>
                   {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                 </Button>
                 {/* Custom volume slider — same look & thickness as the
@@ -1073,7 +1075,7 @@ export function FullscreenPlayer() {
                 <div
                   className="group/volume relative flex h-6 flex-1 cursor-pointer touch-none items-center select-none"
                   role="slider"
-                  aria-label="Громкость"
+                  aria-label={t('player.volume')}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round((muted ? 0 : volume) * 100)}
