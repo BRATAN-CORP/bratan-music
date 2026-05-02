@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { api } from '@/lib/api';
+import { useT } from '@/i18n';
 
 interface AuthUser {
   id: string;
@@ -54,6 +55,7 @@ function consumeQueryParam(name: string): string | null {
 
 export function useAuth() {
   const { user, accessToken, setAuth, logout, isAuthenticated } = useAuthStore();
+  const t = useT();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,11 +66,11 @@ export function useAuth() {
       const data = await api.post<AuthResponse>('/auth/telegram', { initData });
       setAuth({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка авторизации');
+      setError(err instanceof Error ? err.message : t('auth.error'));
     } finally {
       setLoading(false);
     }
-  }, [setAuth]);
+  }, [setAuth, t]);
 
   const loginWithDeeplink = useCallback((botUsername: string) => {
     const nonce = crypto.randomUUID().replace(/-/g, '').slice(0, 16);

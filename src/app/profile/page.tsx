@@ -10,7 +10,7 @@ import { TiltCard } from '@/components/ui/TiltCard';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
-import { useSettingsStore, TIDAL_QUALITY_LABELS, type TidalQuality } from '@/store/settings';
+import { useSettingsStore, TIDAL_QUALITY_LABEL_KEYS, type TidalQuality } from '@/store/settings';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { UserLimits } from '@/types';
@@ -141,7 +141,7 @@ export function ProfilePage() {
 
           <SettingsCard title={t('profile.tidalQualityTitle')} icon={Music2} hint={t('profile.tidalQualityHint')}>
             <div className="mt-1 grid grid-cols-2 gap-2">
-              {(Object.keys(TIDAL_QUALITY_LABELS) as TidalQuality[]).map((q) => {
+              {(Object.keys(TIDAL_QUALITY_LABEL_KEYS) as TidalQuality[]).map((q) => {
                 const active = tidalQuality === q;
                 return (
                   <button
@@ -154,7 +154,7 @@ export function ProfilePage() {
                         : 'border-border hover:bg-secondary'
                     }`}
                   >
-                    <span className="truncate">{TIDAL_QUALITY_LABELS[q]}</span>
+                    <span className="truncate">{t(TIDAL_QUALITY_LABEL_KEYS[q])}</span>
                     {active && <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" />}
                   </button>
                 );

@@ -8,6 +8,7 @@ import {
   readLegacyStoredLocale,
   clearLegacyStoredLocale,
   type Locale,
+  type TranslationKey,
 } from '@/i18n/types';
 
 /**
@@ -17,11 +18,20 @@ import {
  */
 export type TidalQuality = 'LOW' | 'HIGH' | 'LOSSLESS' | 'HI_RES_LOSSLESS';
 
-export const TIDAL_QUALITY_LABELS: Record<TidalQuality, string> = {
-  LOW: 'Low (~320 kbps AAC)',
-  HIGH: 'High (16-bit / 44.1 kHz)',
-  LOSSLESS: 'Lossless (16-bit / 44.1 kHz FLAC)',
-  HI_RES_LOSSLESS: 'Max (до 24-bit / 192 kHz)',
+/**
+ * Translation keys for the four Tidal quality labels. Components
+ * resolve them via `useT()` so the dropdown copy follows the active
+ * locale. The keys live under `settings.tidalQuality.*` in both
+ * locale files and carry the technical specs themselves (e.g.
+ * "Lossless (16-bit / 44.1 kHz FLAC)") since the audio specs are
+ * universal — only the prose framing ("Max (up to ...)" /
+ * "Max (до ...)") needs to flip between languages.
+ */
+export const TIDAL_QUALITY_LABEL_KEYS: Record<TidalQuality, TranslationKey> = {
+  LOW: 'settings.tidalQuality.low',
+  HIGH: 'settings.tidalQuality.high',
+  LOSSLESS: 'settings.tidalQuality.lossless',
+  HI_RES_LOSSLESS: 'settings.tidalQuality.hiResLossless',
 };
 
 /**

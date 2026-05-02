@@ -36,7 +36,13 @@
     "crossfadeHint": "Mixes the next track over the current one",
     "crossfadeDuration": "Duration",
     "infinitePlayback": "Endless playback",
-    "infinitePlaybackHint": "Auto-fills the queue with similar tracks when it runs low"
+    "infinitePlaybackHint": "Auto-fills the queue with similar tracks when it runs low",
+    "tidalQuality": {
+      "low": "Low (~320 kbps AAC)",
+      "high": "High (16-bit / 44.1 kHz)",
+      "lossless": "Lossless (16-bit / 44.1 kHz FLAC)",
+      "hiResLossless": "Max (up to 24-bit / 192 kHz)"
+    }
   },
   "profile": {
     "label": "Profile",
@@ -143,7 +149,9 @@
       "placeholder": "Message",
       "send": "Send",
       "guest": "Guest",
-      "failed": "not delivered"
+      "failed": "not delivered",
+      "errorChat": "Chat error",
+      "sendFailed": "Couldn't send"
     }
   },
   "subscription": {
@@ -181,7 +189,18 @@
     "volume": "Volume",
     "mute": "Mute",
     "expand": "Expand",
-    "radioFailed": "Couldn't start track radio"
+    "radioFailed": "Couldn't start track radio",
+    "dailyLimitReached": "You've used up today's free listens.",
+    "loadFailed": "Could not load this track",
+    "playFailed": "Could not start playback",
+    "errors": {
+      "aborted": "Loading was interrupted",
+      "network": "Network error while loading the track",
+      "decode": "Could not decode the audio",
+      "unsupported": "Audio format is not supported",
+      "generic": "Playback error",
+      "withMessage": "Error: {message}"
+    }
   },
   "errors": {
     "generic": "Something went wrong",
@@ -198,7 +217,8 @@
   },
   "auth": {
     "loginRequired": "Sign in again",
-    "logout": "Log out"
+    "logout": "Log out",
+    "error": "Authentication failed"
   },
   "languages": {
     "ru": "Русский",
@@ -580,7 +600,22 @@
     "playlists": "Playlists",
     "tracks": "Tracks",
     "albums": "Albums",
-    "artists": "Artists"
+    "artists": "Artists",
+    "seeAll": "See all",
+    "tile": {
+      "genre": "Genre",
+      "decade": "Decade",
+      "collection": "Collection"
+    },
+    "row": {
+      "prev": "Previous",
+      "next": "Next"
+    },
+    "playlist": {
+      "openAria": "Open playlist {title}",
+      "playAria": "Play {title}",
+      "tracksCount": "{count} tracks"
+    }
   },
   "artist": {
     "loading": "Loading artist…",
@@ -1128,7 +1163,9 @@
     "rateLimit": "Too many requests, slow down a bit",
     "serverError": "Something broke on our end",
     "tryAgain": "Try again",
-    "premiumRequired": "Premium-only"
+    "premiumRequired": "Premium-only",
+    "reLoginRequired": "Please sign in again",
+    "sessionRefreshFailed": "Couldn't refresh the session — please try again"
   },
   "toast": {
     "playFailed": "Couldn't play the track",
@@ -1320,5 +1357,40 @@
     "alreadySaved": "Already in library",
     "save": "Save to library",
     "empty": "This playlist doesn't have any tracks yet."
+  },
+  "artistPicker": {
+    "closeAria": "Close",
+    "tuneTaste": "Let's tune your taste",
+    "headingPrefix": "Which artists do you ",
+    "headingHighlight": "love",
+    "headingSuffix": "?",
+    "subheading": "One is enough — we'll build a wave from their track radio and similar artists, then keep tuning to whatever you actually play.",
+    "searchPlaceholder": "Search artists…",
+    "clearSearchAria": "Clear search",
+    "emptySearch": "Nothing matched. Try different wording.",
+    "saving": "Saving…",
+    "startWave": "Start the wave",
+    "pickRange": "Pick {min}–{max}",
+    "pickedRatio": "{picked}/{max} picked"
+  },
+  "artistReleases": {
+    "allAlbums": "All albums",
+    "allSingles": "All singles",
+    "back": "Back",
+    "totalItems": "{count} releases",
+    "loading": "Loading…",
+    "loadFailed": "Could not load",
+    "unknownError": "Unknown error",
+    "empty": "Nothing here.",
+    "showMore": "Show more"
+  },
+  "wave": {
+    "emptyHint": "Your wave is empty — pick a few genres in onboarding to seed it",
+    "empty": "Your wave is empty"
+  },
+  "image": {
+    "canvasUnavailable": "This browser can't open a 2D canvas",
+    "compressFailed": "Couldn't compress the image down to the size limit.",
+    "readFailed": "Couldn't read the image file"
   }
 }

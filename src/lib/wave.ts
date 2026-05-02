@@ -1,5 +1,6 @@
 import { fetchWave } from '@/lib/recommendations';
 import { usePlayerStore } from '@/store/player';
+import { t } from '@/i18n/runtime';
 
 /**
  * Start (or restart) the user's "Моя волна" stream. Replaces the
@@ -14,11 +15,11 @@ import { usePlayerStore } from '@/store/player';
 export async function startMyWave(): Promise<number> {
   const tracks = await fetchWave(25);
   if (tracks.length === 0) {
-    throw new Error('Волна пока пустая — выбери жанры в онбординге');
+    throw new Error(t('wave.emptyHint'));
   }
   const player = usePlayerStore.getState();
   const [first, ...rest] = tracks;
-  if (!first) throw new Error('Волна пока пустая');
+  if (!first) throw new Error(t('wave.empty'));
   player.setQueue([first, ...rest]);
   player.setTrack(first);
   return tracks.length;

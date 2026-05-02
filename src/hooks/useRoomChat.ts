@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { useT } from '@/i18n';
 import type { RoomChatPoll, RoomMessage } from '@/types/rooms';
 
 /**
@@ -96,6 +97,7 @@ interface UseRoomChatResult {
  */
 export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
   const me = useAuthStore((s) => s.user);
+  const t = useT();
   const [messages, setMessages] = useState<UiRoomMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
@@ -245,7 +247,7 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
           cancelledRef.current = true;
           return;
         }
-        setError(err instanceof Error ? err.message : 'Ошибка чата');
+        setError(err instanceof Error ? err.message : t('rooms.chat.errorChat'));
       } finally {
         inFlight = false;
         if (!cancelledRef.current) {
@@ -369,7 +371,7 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       window.removeEventListener('focus', onFocus);
       pokeRef.current = () => {};
     };
-  }, [roomId, mergeMessages]);
+  }, [roomId, mergeMessages, t]);
 
   const send = useCallback(
     async (body: string) => {
@@ -448,12 +450,12 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
             m.clientKey === clientKey ? { ...m, pending: false, failed: true } : m,
           ),
         );
-        setError(err instanceof Error ? err.message : 'Не удалось отправить');
+        setError(err instanceof Error ? err.message : t('rooms.chat.sendFailed'));
       } finally {
         setPendingCount((n) => Math.max(0, n - 1));
       }
     },
-    [roomId, me],
+    [roomId, me, t],
   );
 
   return { messages, send, sending: pendingCount > 0, error };
