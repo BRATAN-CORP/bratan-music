@@ -10,7 +10,7 @@ export function Aurora({ className = '', variant = 'hero' }: AuroraProps) {
 
   if (variant === 'subtle') {
     return (
-      <div className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`} aria-hidden>
+      <div className={`pointer-events-none absolute inset-0 ${className}`} aria-hidden>
         <div
           className="absolute -top-40 left-1/2 h-[480px] w-[680px] -translate-x-1/2 rounded-full opacity-40 blur-3xl"
           style={{
@@ -22,9 +22,14 @@ export function Aurora({ className = '', variant = 'hero' }: AuroraProps) {
     );
   }
 
+  // Wrapper has no `overflow-hidden`. The actual clip boundary is the
+  // parent section — keeping the wrapper free lets pages opt-in to a
+  // bleed (e.g. landing hero relaxes section to `overflow-x-hidden`
+  // so the bottom blob can extend into the next section without
+  // creating horizontal scrollbars).
   return (
     <div
-      className={`pointer-events-none absolute inset-0 overflow-hidden ${className} ${reduce ? '' : 'aurora'}`}
+      className={`pointer-events-none absolute inset-0 ${className} ${reduce ? '' : 'aurora'}`}
       aria-hidden
     >
       {reduce && (

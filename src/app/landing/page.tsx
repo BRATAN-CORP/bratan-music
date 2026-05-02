@@ -175,7 +175,11 @@ export function LandingPage() {
 
   return (
     <div className="relative w-full">
-      <section className="relative overflow-hidden pb-24 pt-20 sm:pt-28 lg:pb-32 lg:pt-36">
+      {/* `overflow-x-hidden` (not `overflow-hidden`) so the Aurora
+          bottom blob can bleed downward into the features grid —
+          horizontal scroll stays disabled, vertical bleed gives the
+          hero a soft transition instead of a hard clipped edge. */}
+      <section className="relative overflow-x-hidden pb-24 pt-20 sm:pt-28 lg:pb-32 lg:pt-36">
         <Aurora />
         <div className="grid-bg absolute inset-0 opacity-30" aria-hidden />
 
