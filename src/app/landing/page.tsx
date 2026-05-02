@@ -16,6 +16,9 @@ import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
+import { useT, type TranslationKey } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
 
 /**
  * Landing hook leads with the anti-censorship angle: the "перезалив"
@@ -29,9 +32,12 @@ import { cn } from '@/lib/utils';
  */
 
 interface Feature {
+  /** Stable identifier used as React key and as the i18n sub-namespace
+   *  under `landing.features.<id>` for `.title` / `.desc`. */
+  id: string;
   icon: LucideIcon;
-  title: string;
-  desc: string;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
   /** Optional internal link the card opens on click. Featured cards
    *  always show the open-arrow affordance; standard cards show it only
    *  on hover when the link is present. */
@@ -43,7 +49,7 @@ interface Feature {
   /** Mini-demo renderer for featured cards. Hover-only motion is
    *  expressed inside the demo itself via Tailwind's `group-hover:`
    *  classes — no JS hover tracking needed. */
-  demo?: () => React.ReactNode;
+  demo?: (t: Translate) => React.ReactNode;
 }
 
 /**
@@ -67,67 +73,83 @@ interface Feature {
  */
 const features: Feature[] = [
   {
+    id: 'censorOverlay',
     icon: Replace,
-    title: 'Поверх цензуры — твоя версия',
-    desc: 'Загружаешь оригинал — он подменяет вырезанный или приглушённый трек прямо в каталоге. Никто, кроме тебя, не видит подмены.',
+    titleKey: 'landing.features.censorOverlay.title',
+    descKey: 'landing.features.censorOverlay.desc',
     featured: true,
-    demo: () => <CensorshipDemo />,
+    demo: (t) => <CensorshipDemo t={t} />,
   },
   {
+    id: 'lossless24',
     icon: Headphones,
-    title: '24-bit lossless',
-    desc: 'Когда в каталоге есть мастер — слышишь мастер. Никаких mp3 на 128 и значков «HD» поверх обычного потока.',
+    titleKey: 'landing.features.lossless24.title',
+    descKey: 'landing.features.lossless24.desc',
   },
   {
+    id: 'listenTogether',
     icon: Users,
-    title: 'Слушать вместе',
-    desc: 'Создаёшь комнату — кидаешь ссылку. Плеер у всех синхронен до миллисекунд, в чате обсуждаете трек, хост рулит очередью.',
+    titleKey: 'landing.features.listenTogether.title',
+    descKey: 'landing.features.listenTogether.desc',
     href: '/rooms',
     featured: true,
     demo: () => <RoomsDemo />,
   },
   {
+    id: 'aiPlaylists',
     icon: Sparkles,
-    title: 'Плейлисты по запросу',
-    desc: 'Опиши настроение или сюжет — ИИ соберёт плейлист из реального каталога. Сохраняешь как свой и слушаешь без редактирования.',
+    titleKey: 'landing.features.aiPlaylists.title',
+    descKey: 'landing.features.aiPlaylists.desc',
     href: '/ai',
     featured: true,
-    demo: () => <AiDemo />,
+    demo: (t) => <AiDemo t={t} />,
   },
   {
+    id: 'eq10band',
     icon: Sliders,
-    title: '10-band EQ',
-    desc: 'Свои пресеты под наушники, машину, кухню. Один раз настроил — едет за тобой между устройствами.',
+    titleKey: 'landing.features.eq10band.title',
+    descKey: 'landing.features.eq10band.desc',
   },
   {
+    id: 'crossfade',
     icon: Bolt,
-    title: 'Crossfade и gapless',
-    desc: 'Альбомы играют без чёрной дыры между треками. Следующий подмешиваем сверху — щелчков и пауз нет.',
+    titleKey: 'landing.features.crossfade.title',
+    descKey: 'landing.features.crossfade.desc',
   },
   {
+    id: 'syncedLyrics',
     icon: MicVocal,
-    title: 'Синхронные лирики',
-    desc: 'Текст летит за вокалом строкой в строку. Полноэкранный режим превращает плеер в караоке без сторонних приложений.',
+    titleKey: 'landing.features.syncedLyrics.title',
+    descKey: 'landing.features.syncedLyrics.desc',
   },
   {
+    id: 'uploads',
     icon: UploadCloud,
-    title: 'Свои треки в облако',
-    desc: 'Заливаешь редкий релиз или собственный трек — он живёт в библиотеке наравне с Tidal. Лайки, плейлисты, очередь — как обычно.',
+    titleKey: 'landing.features.uploads.title',
+    descKey: 'landing.features.uploads.desc',
   },
   {
+    id: 'shareLink',
     icon: Share2,
-    title: 'Плейлист одной ссылкой',
-    desc: 'Кидаешь URL — собеседник открывает и слушает то же. Без логинов, без баннера «установите наше приложение».',
+    titleKey: 'landing.features.shareLink.title',
+    descKey: 'landing.features.shareLink.desc',
   },
 ];
 
-const stats = [
-  { value: 100, suffix: 'M+', label: 'треков в каталоге' },
-  { value: 24, suffix: '-bit', label: 'lossless audio' },
-  { value: 99, suffix: 'Stars', label: 'в месяц' },
+interface Stat {
+  value: number;
+  suffix: string;
+  labelKey: TranslationKey;
+}
+
+const stats: Stat[] = [
+  { value: 100, suffix: 'M+', labelKey: 'landing.statTracksLabel' },
+  { value: 24, suffix: '-bit', labelKey: 'landing.statBitLabel' },
+  { value: 99, suffix: 'Stars', labelKey: 'landing.statStarsLabel' },
 ];
 
 export function LandingPage() {
+  const t = useT();
   useAutoAuth();
   const user = useAuthStore((s) => s.user);
   const reduce = useReducedMotion();
@@ -146,7 +168,7 @@ export function LandingPage() {
             className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur"
           >
             <ShieldOff size={12} className="text-[var(--color-accent)]" />
-            Расцензуренный стриминг
+            {t('landing.eyebrow')}
           </motion.div>
 
           <motion.h1
@@ -155,9 +177,9 @@ export function LandingPage() {
             transition={{ duration: 0.9, delay: 0.05, ease: EASE }}
             className="max-w-4xl text-[clamp(2.4rem,6.5vw,5.6rem)] font-semibold leading-[0.98] tracking-tight"
           >
-            Цензура <span className="font-serif italic text-muted-foreground">заканчивается</span>
+            {t('landing.heroTitlePrefix')} <span className="font-serif italic text-muted-foreground">{t('landing.heroTitleEmphasis')}</span>
             <br />
-            <span className="shine-text">на твоём плеере.</span>
+            <span className="shine-text">{t('landing.heroTitleSuffix')}</span>
           </motion.h1>
 
           <motion.p
@@ -166,7 +188,7 @@ export function LandingPage() {
             transition={{ duration: 0.8, delay: 0.15, ease: EASE }}
             className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
           >
-            Любой трек, вырезанный или приглушённый на других площадках, подменяется твоей версией. Слушаешь как задумано — без затёртых слов и сокращений. Лосслесс 24-bit, crossfade, плейлисты по ссылке — в одной вкладке.
+            {t('landing.heroDescription')}
           </motion.p>
 
           <motion.div
@@ -179,7 +201,7 @@ export function LandingPage() {
               <Link to="/search">
                 <Button size="lg" className="gap-2">
                   <Search size={16} />
-                  Открыть поиск
+                  {t('landing.openSearchCta')}
                   <ArrowUpRight size={16} className="transition-transform group-hover:translate-x-0.5" />
                 </Button>
               </Link>
@@ -190,12 +212,12 @@ export function LandingPage() {
 
           <Stagger className="grid w-full max-w-3xl grid-cols-3 gap-4 pt-12 sm:gap-8" delay={0.35}>
             {stats.map((stat) => (
-              <motion.div key={stat.label} variants={staggerItem} className="flex flex-col gap-1">
+              <motion.div key={stat.labelKey} variants={staggerItem} className="flex flex-col gap-1">
                 <div className="text-2xl font-semibold tracking-tight text-foreground sm:text-4xl">
                   <AnimatedNumber value={stat.value} />
                   <span className="text-muted-foreground">{stat.suffix}</span>
                 </div>
-                <p className="text-xs text-muted-foreground sm:text-sm">{stat.label}</p>
+                <p className="text-xs text-muted-foreground sm:text-sm">{t(stat.labelKey)}</p>
               </motion.div>
             ))}
           </Stagger>
@@ -206,12 +228,12 @@ export function LandingPage() {
         <Reveal className="mb-10 flex items-end justify-between gap-6 border-b border-border pb-4">
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              Возможности
+              {t('landing.featuresEyebrow')}
             </span>
-            <h2 className="text-2xl font-semibold tracking-tight sm:text-4xl">Что внутри.</h2>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-4xl">{t('landing.featuresTitle')}</h2>
           </div>
           <p className="hidden max-w-md text-sm text-muted-foreground sm:block">
-            9 фич, которые делают этот плеер. Никакого маркетинга — только то, что реально работает.
+            {t('landing.featuresHint')}
           </p>
         </Reveal>
 
@@ -228,7 +250,7 @@ export function LandingPage() {
          */}
         <Stagger className="grid auto-rows-[minmax(220px,auto)] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:[grid-auto-flow:dense]">
           {features.map((f) => (
-            <FeatureTile key={f.title} feature={f} />
+            <FeatureTile key={f.id} feature={f} t={t} />
           ))}
         </Stagger>
       </section>
@@ -242,7 +264,7 @@ export function LandingPage() {
  * `col-span-2` so the title doesn't wrap awkwardly next to the demo.
  * Standard tiles stay 1×1 with the same visual rhythm as before.
  */
-function FeatureTile({ feature }: { feature: Feature }) {
+function FeatureTile({ feature, t }: { feature: Feature; t: Translate }) {
   const Icon = feature.icon;
   const reduce = useReducedMotion();
   const isFeatured = Boolean(feature.featured);
@@ -316,7 +338,7 @@ function FeatureTile({ feature }: { feature: Feature }) {
               className="relative inline-flex items-center gap-1 text-xs font-medium text-[var(--color-accent)]"
               style={{ transform: 'translateZ(40px)' }}
             >
-              Открыть <ArrowUpRight size={12} />
+              {t('landing.openLink')} <ArrowUpRight size={12} />
             </motion.span>
           )}
         </div>
@@ -325,13 +347,13 @@ function FeatureTile({ feature }: { feature: Feature }) {
           className="relative text-base font-semibold tracking-tight"
           style={{ transform: 'translateZ(30px)' }}
         >
-          {feature.title}
+          {t(feature.titleKey)}
         </p>
         <p
           className="relative text-sm leading-relaxed text-muted-foreground"
           style={{ transform: 'translateZ(20px)' }}
         >
-          {feature.desc}
+          {t(feature.descKey)}
         </p>
 
         {isFeatured && feature.demo && (
@@ -339,7 +361,7 @@ function FeatureTile({ feature }: { feature: Feature }) {
             className="relative mt-auto pt-3"
             style={{ transform: 'translateZ(15px)' }}
           >
-            {feature.demo()}
+            {feature.demo(t)}
           </div>
         )}
       </motion.div>
@@ -369,7 +391,7 @@ function FeatureTile({ feature }: { feature: Feature }) {
  * gets replaced on hover with the unredacted waveform. Captures the
  * product pitch in a single visual without needing copy.
  */
-function CensorshipDemo() {
+function CensorshipDemo({ t }: { t: Translate }) {
   return (
     <div className="relative h-12 w-full overflow-hidden rounded-md border border-border bg-background">
       {/* Censored row */}
@@ -382,7 +404,7 @@ function CensorshipDemo() {
           />
         ))}
         <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          censored
+          {t('landing.demos.censored')}
         </span>
       </div>
       {/* Restored row */}
@@ -400,7 +422,7 @@ function CensorshipDemo() {
           );
         })}
         <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
-          your cut
+          {t('landing.demos.yourCut')}
         </span>
       </div>
     </div>
@@ -452,16 +474,16 @@ function RoomsDemo() {
  * row count on hover. Communicates "describe → playlist" in two
  * frames.
  */
-function AiDemo() {
+function AiDemo({ t }: { t: Translate }) {
   return (
     <div className="relative flex h-12 w-full items-center justify-between gap-3 overflow-hidden rounded-md border border-border bg-background px-3">
       <div className="flex min-w-0 items-center gap-2 text-xs">
         <Sparkles size={12} className="shrink-0 text-[var(--color-accent)]" />
         <span className="truncate font-mono text-muted-foreground transition-opacity duration-500 group-hover:opacity-0">
-          «дрифт по ночному МКАД»
+          {t('landing.demos.aiPrompt')}
         </span>
         <span className="absolute left-3 right-3 truncate font-mono text-foreground opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-          → 24 трека • 1ч 38м
+          {t('landing.demos.aiResult')}
         </span>
       </div>
     </div>
