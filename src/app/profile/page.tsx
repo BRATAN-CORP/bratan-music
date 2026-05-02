@@ -17,7 +17,6 @@ import type { UserLimits } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
-import { AdminTidalPoolPanel } from '@/components/features/AdminTidalPoolPanel';
 import { AdminHealthPanel } from '@/components/features/AdminHealthPanel';
 import { LanguageSwitcher } from '@/components/features/LanguageSwitcher';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
@@ -194,9 +193,6 @@ export function ProfilePage() {
               <AdminAdminFlagPanel />
               <div className="md:col-span-2">
                 <AdminHealthPanel />
-              </div>
-              <div className="md:col-span-2">
-                <AdminTidalPoolPanel />
               </div>
               <div className="md:col-span-2">
                 <AdminTidalPanel />
