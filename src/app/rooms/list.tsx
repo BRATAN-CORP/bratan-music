@@ -39,7 +39,13 @@ function RoomsListInner() {
   const onCreate = async () => {
     setError(null);
     try {
-      const res = await createMut.mutateAsync(name.trim() || undefined);
+      // The backend used to default empty submissions to a hard-coded
+      // Russian phrase ("Комната совместного прослушивания"), which
+      // leaked into the room title for English users. We now hand it
+      // the locale-aware copy from the dictionary so the room name
+      // matches whatever language the creator was using.
+      const trimmed = name.trim();
+      const res = await createMut.mutateAsync(trimmed || t('rooms.list.defaultName'));
       navigate(`/rooms/${res.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('rooms.list.errorCreate'));

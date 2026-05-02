@@ -37,10 +37,31 @@ function trackUnitKey(count: number): TranslationKey {
   return 'home.dailyTrackUnit5plus';
 }
 
-const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; labelKey: TranslationKey; icon: typeof Sparkles }> = {
-  familiar: { hue: '#5E6AD2', labelKey: 'home.dailyVariantFamiliar', icon: Heart },
-  discover: { hue: '#c2185b', labelKey: 'home.dailyVariantDiscover', icon: Sparkles },
-  mood: { hue: '#0ea5e9', labelKey: 'home.dailyVariantMood', icon: Disc3 },
+const VARIANT_THEME: Record<
+  DailyPlaylist['variant'],
+  { hue: string; labelKey: TranslationKey; nameKey: TranslationKey; descKey: TranslationKey; icon: typeof Sparkles }
+> = {
+  familiar: {
+    hue: '#5E6AD2',
+    labelKey: 'home.dailyVariantFamiliar',
+    nameKey: 'home.dailyVariantFamiliarName',
+    descKey: 'home.dailyVariantFamiliarDescription',
+    icon: Heart,
+  },
+  discover: {
+    hue: '#c2185b',
+    labelKey: 'home.dailyVariantDiscover',
+    nameKey: 'home.dailyVariantDiscoverName',
+    descKey: 'home.dailyVariantDiscoverDescription',
+    icon: Sparkles,
+  },
+  mood: {
+    hue: '#0ea5e9',
+    labelKey: 'home.dailyVariantMood',
+    nameKey: 'home.dailyVariantMoodName',
+    descKey: 'home.dailyVariantMoodDescription',
+    icon: Disc3,
+  },
 };
 
 /**
@@ -173,7 +194,7 @@ export function DailyPlaylistPreviewPage() {
                 <div className="relative aspect-square w-32 shrink-0 overflow-hidden rounded-[var(--radius-md)] border border-border sm:w-40">
                   <CoverFallback
                     src={playlist.coverUrl}
-                    name={playlist.name}
+                    name={theme ? t(theme.nameKey) : playlist.name}
                     initialsClassName="text-2xl"
                   />
                 </div>
@@ -185,10 +206,10 @@ export function DailyPlaylistPreviewPage() {
                     {t('dailyPage.eyebrow', { variant: t(theme.labelKey) })}
                   </div>
                   <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                    {playlist.name}
+                    {theme ? t(theme.nameKey) : playlist.name}
                   </h1>
                   <p className="text-sm text-muted-foreground">
-                    {playlist.description}
+                    {theme ? t(theme.descKey) : playlist.description}
                   </p>
                   <div className="text-xs text-muted-foreground">
                     {t('dailyPage.tracksCount', { count: tracks.length, form: t(trackUnitKey(tracks.length)) })}

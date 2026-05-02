@@ -46,6 +46,12 @@ export function PlaylistPage() {
   // cover edit, reorder, per-track menu actions. Keep pin / delete
   // (those affect only the local copy and are explicitly allowed).
   const isLinked = Boolean(playlist?.sourceKind);
+  // Liked is the one auto-created server playlist with a hard-coded
+  // Russian name — swap to the locale-aware copy here so the page
+  // header, share dialog and cover-alt all read correctly.
+  const displayName = playlist
+    ? (playlist.isLiked ? t('library.likedPlaylistName') : playlist.name)
+    : '';
   const hideRemoveMenu = Boolean(playlist?.isLiked) || isLinked;
   const canRename = Boolean(playlist && !playlist.isLiked && !isLinked);
   const canShare = Boolean(playlist && !playlist.isLiked && !isLinked);
@@ -141,7 +147,7 @@ export function PlaylistPage() {
                 {playlist.coverUrl ? (
                   <img
                     src={playlist.coverUrl}
-                    alt={t('playlistPage.coverAlt', { name: playlist.name })}
+                    alt={t('playlistPage.coverAlt', { name: displayName })}
                     className="h-full w-full object-cover"
                   />
                 ) : playlist.isLiked ? (
@@ -153,7 +159,7 @@ export function PlaylistPage() {
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('playlistPage.eyebrow')}</span>
                 <div className="flex items-start gap-3">
-                  <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
+                  <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{displayName}</h1>
                   {canRename && (
                     <button
                       type="button"

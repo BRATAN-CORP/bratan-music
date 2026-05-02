@@ -95,6 +95,7 @@
       "tabCreate": "Create",
       "tabJoin": "Join by code",
       "namePlaceholder": "Name (optional)",
+      "defaultName": "Co-listening room",
       "createCta": "Create",
       "codePlaceholder": "Room code, e.g. K7QX2H",
       "joinCta": "Join",
@@ -265,6 +266,7 @@
     "removeTooltip": "Remove from queue"
   },
   "library": {
+    "likedPlaylistName": "Liked",
     "title": "Library",
     "tabPlaylists": "Playlists",
     "tabUploads": "My uploads",
@@ -519,6 +521,12 @@
     "dailyVariantFamiliar": "Familiar",
     "dailyVariantDiscover": "Discoveries",
     "dailyVariantMood": "For the mood",
+    "dailyVariantFamiliarName": "Familiar",
+    "dailyVariantFamiliarDescription": "Favourite artists and brand-new releases close to them",
+    "dailyVariantDiscoverName": "Discoveries",
+    "dailyVariantDiscoverDescription": "Tracks you haven't heard yet that fit your taste",
+    "dailyVariantMoodName": "For the mood",
+    "dailyVariantMoodDescription": "Tuned to your usual listening vibe",
     "dailyTracksCount": "{count} {form}",
     "dailyTrackUnit1": "track",
     "dailyTrackUnit2_4": "tracks",

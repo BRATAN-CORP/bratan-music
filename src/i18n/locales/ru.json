@@ -95,6 +95,7 @@
       "tabCreate": "Создать",
       "tabJoin": "По коду",
       "namePlaceholder": "Название (необязательно)",
+      "defaultName": "Комната совместного прослушивания",
       "createCta": "Создать",
       "codePlaceholder": "Код комнаты, напр. K7QX2H",
       "joinCta": "Войти",
@@ -265,6 +266,7 @@
     "removeTooltip": "Убрать из очереди"
   },
   "library": {
+    "likedPlaylistName": "Любимое",
     "title": "Библиотека",
     "tabPlaylists": "Плейлисты",
     "tabUploads": "Мои загрузки",
@@ -519,6 +521,12 @@
     "dailyVariantFamiliar": "Знакомое",
     "dailyVariantDiscover": "Открытия",
     "dailyVariantMood": "Под настроение",
+    "dailyVariantFamiliarName": "Знакомое",
+    "dailyVariantFamiliarDescription": "Любимые артисты и близкие к ним новинки",
+    "dailyVariantDiscoverName": "Открытия",
+    "dailyVariantDiscoverDescription": "То, что ты ещё не слушал, но точно зайдёт",
+    "dailyVariantMoodName": "Под настроение",
+    "dailyVariantMoodDescription": "Подобрано под твой обычный вайб",
     "dailyTracksCount": "{count} {form}",
     "dailyTrackUnit1": "трек",
     "dailyTrackUnit2_4": "трека",
