@@ -2,6 +2,7 @@ import { AlertCircle, Clock, Loader2, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ExploreModules } from '@/components/features/ExploreModules';
 import { useExplore } from '@/hooks/useExplore';
+import { useT } from '@/i18n';
 
 interface SearchEmptyStateProps {
   recent: string[];
@@ -23,6 +24,7 @@ const recentCx =
  *      tracks, top artists. Same modules ExplorePage rendered.
  */
 export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEmptyStateProps) {
+  const t = useT();
   const hasRecent = recent.length > 0;
   const { data: explore, isLoading: exploreLoading, error: exploreError } = useExplore();
 
@@ -33,14 +35,14 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
               <Clock size={14} className="text-muted-foreground" />
-              Недавние запросы
+              {t('search.recentTitle')}
             </h2>
             <button
               type="button"
               onClick={onClear}
               className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              Очистить
+              {t('search.recentClear')}
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -61,7 +63,7 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
                 </button>
                 <button
                   type="button"
-                  aria-label={`Удалить «${q}»`}
+                  aria-label={t('search.removeRecent', { query: q })}
                   onClick={() => onRemove(q)}
                   className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-background hover:text-foreground"
                 >
@@ -76,16 +78,16 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
       {exploreLoading && (
         <div className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
           <Loader2 size={14} className="animate-spin" />
-          Загружаем подборки Tidal…
+          {t('search.exploreLoading')}
         </div>
       )}
 
       {exploreError && (
         <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-12 text-center">
           <AlertCircle size={20} className="text-[var(--color-danger)]" />
-          <div className="text-sm">Не удалось загрузить подборки</div>
+          <div className="text-sm">{t('search.exploreFailed')}</div>
           <div className="text-xs text-muted-foreground">
-            {exploreError instanceof Error ? exploreError.message : 'Неизвестная ошибка'}
+            {exploreError instanceof Error ? exploreError.message : t('search.exploreUnknownError')}
           </div>
         </div>
       )}

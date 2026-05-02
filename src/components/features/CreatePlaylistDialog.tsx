@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react';
 import { useCreatePlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { useT } from '@/i18n';
 
 interface CreatePlaylistDialogProps {
   open: boolean;
@@ -10,6 +11,7 @@ interface CreatePlaylistDialogProps {
 }
 
 export function CreatePlaylistDialog({ open, onClose }: CreatePlaylistDialogProps) {
+  const t = useT();
   const [name, setName] = useState('');
   const createPlaylist = useCreatePlaylist();
 
@@ -34,8 +36,8 @@ export function CreatePlaylistDialog({ open, onClose }: CreatePlaylistDialogProp
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-semibold tracking-tight">Новый плейлист</h2>
-          <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label="Закрыть">
+          <h2 className="text-base font-semibold tracking-tight">{t('playlist.create_dialog.title')}</h2>
+          <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label={t('common.close')}>
             <X size={16} />
           </Button>
         </div>
@@ -44,12 +46,12 @@ export function CreatePlaylistDialog({ open, onClose }: CreatePlaylistDialogProp
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Название плейлиста"
+            placeholder={t('playlist.create_dialog.namePlaceholder')}
             autoFocus
           />
           <Button type="submit" disabled={!name.trim() || createPlaylist.isPending} className="w-full">
             <Plus size={14} />
-            Создать
+            {createPlaylist.isPending ? t('playlist.create_dialog.submitting') : t('playlist.create_dialog.submit')}
           </Button>
         </form>
       </div>

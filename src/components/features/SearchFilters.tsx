@@ -1,3 +1,6 @@
+import { useT } from '@/i18n';
+import type { TranslationKey } from '@/i18n';
+
 type SearchFilter = 'all' | 'tracks' | 'albums' | 'artists';
 
 interface SearchFiltersProps {
@@ -5,17 +8,18 @@ interface SearchFiltersProps {
   onChange: (filter: SearchFilter) => void;
 }
 
-const filters: { value: SearchFilter; label: string }[] = [
-  { value: 'all', label: 'Все' },
-  { value: 'tracks', label: 'Треки' },
-  { value: 'albums', label: 'Альбомы' },
-  { value: 'artists', label: 'Артисты' },
+const FILTERS: { value: SearchFilter; key: TranslationKey }[] = [
+  { value: 'all', key: 'search.filters.all' },
+  { value: 'tracks', key: 'search.filters.tracks' },
+  { value: 'albums', key: 'search.filters.albums' },
+  { value: 'artists', key: 'search.filters.artists' },
 ];
 
 export function SearchFilters({ active, onChange }: SearchFiltersProps) {
+  const t = useT();
   return (
     <div className="flex w-fit max-w-full flex-wrap gap-x-6 gap-y-1 border-b border-border">
-      {filters.map(({ value, label }) => (
+      {FILTERS.map(({ value, key }) => (
         <button
           key={value}
           onClick={() => onChange(value)}
@@ -25,7 +29,7 @@ export function SearchFilters({ active, onChange }: SearchFiltersProps) {
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          {label}
+          {t(key)}
         </button>
       ))}
     </div>

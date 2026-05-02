@@ -4,6 +4,7 @@ import { GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react'
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { useT } from '@/i18n';
 
 interface QueueDialogProps {
   open: boolean;
@@ -17,6 +18,7 @@ interface QueueDialogProps {
  * dragged item (П5) instead of just being marked with a ring.
  */
 export function QueueDialog({ open, onClose }: QueueDialogProps) {
+  const t = useT();
   const reduce = useReducedMotion();
   const queue = usePlayerStore((s) => s.queue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -52,7 +54,7 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
               key="queue-panel"
               role="dialog"
               aria-modal="true"
-              aria-label="Очередь"
+              aria-label={t('queue.title')}
               initial={{ opacity: 0, y: 32, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
@@ -63,14 +65,14 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
               <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <ListOrdered size={15} className="text-muted-foreground" />
-                  <span className="truncate text-sm font-medium">Очередь</span>
+                  <span className="truncate text-sm font-medium">{t('queue.title')}</span>
                   <span className="text-xs text-muted-foreground">· {queue.length}</span>
                 </div>
                 <button
                   type="button"
                   onClick={onClose}
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  aria-label="Закрыть"
+                  aria-label={t('common.close')}
                 >
                   <X size={14} />
                 </button>
@@ -79,7 +81,7 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
               <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
                 {queue.length === 0 ? (
                   <p className="px-3 py-10 text-center text-xs text-muted-foreground">
-                    Очередь пуста
+                    {t('queue.empty')}
                   </p>
                 ) : (
                   <Reorder.Group
@@ -148,6 +150,7 @@ function QueueRow({
   onJump,
   onRemove,
 }: RowProps) {
+  const t = useT();
   return (
     <Reorder.Item
       value={track}
@@ -182,7 +185,7 @@ function QueueRow({
         type="button"
         onClick={onJump}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
-        aria-label={`Воспроизвести ${track.title}`}
+        aria-label={t('queue.playTrack', { title: track.title })}
       >
         {track.coverUrl ? (
           <img
@@ -210,7 +213,7 @@ function QueueRow({
         </div>
         {active && (
           <span
-            aria-label={isPlaying ? 'Сейчас играет' : 'На паузе'}
+            aria-label={isPlaying ? t('queue.playing') : t('queue.paused')}
             className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]"
           >
             {isPlaying
@@ -223,9 +226,9 @@ function QueueRow({
         type="button"
         onClick={onRemove}
         className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-[var(--color-danger-muted)] hover:text-[var(--color-danger)]"
-        aria-label={`Убрать ${track.title} из очереди`}
+        aria-label={t('queue.removeTrack', { title: track.title })}
         disabled={active}
-        title={active ? 'Сейчас играет' : 'Убрать из очереди'}
+        title={active ? t('queue.playing') : t('queue.removeTooltip')}
       >
         <Trash2 size={13} />
       </button>

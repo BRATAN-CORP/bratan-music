@@ -14,6 +14,7 @@ import { usePlayerStore } from '@/store/player';
 import { useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack, buildTrackShareUrl, copyToClipboard } from '@/lib/trackActions';
+import { useT } from '@/i18n';
 
 /**
  * Single source of truth for the per-track context menu used everywhere
@@ -85,6 +86,7 @@ export function TrackKebabMenu({
   width = 224,
   onOpenChange,
 }: TrackKebabMenuProps) {
+  const t = useT();
   const navigate = useNavigate();
   const isAuthed = useAuthStore((s) => Boolean(s.user));
 
@@ -156,7 +158,7 @@ export function TrackKebabMenu({
       // Keep the menu open briefly so the confirmation is visible.
       window.setTimeout(close, 900);
     } else {
-      window.prompt('Скопируйте ссылку:', url);
+      window.prompt(t('track.copyPrompt'), url);
       close();
     }
   };
@@ -209,7 +211,7 @@ export function TrackKebabMenu({
         size="icon"
         className={[sizeClass, triggerClassName].filter(Boolean).join(' ')}
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        aria-label="Действия с треком"
+        aria-label={t('track.actions')}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -232,21 +234,21 @@ export function TrackKebabMenu({
 
         {isAuthed && (
           <MenuItem onClick={handleAddToPlaylist} icon={<ListPlus size={14} />}>
-            Добавить в плейлист
+            {t('track.addToPlaylist')}
           </MenuItem>
         )}
         <MenuItem onClick={handlePlayNext} icon={<ListOrdered size={14} />}>
-          Воспроизвести следующим
+          {t('track.playNext')}
         </MenuItem>
         <MenuItem onClick={handleAddToQueue} icon={<ListOrdered size={14} />}>
-          Добавить в очередь
+          {t('track.addToQueue')}
         </MenuItem>
         <MenuItem
           onClick={handleStartRadio}
           disabled={radioBusy}
           icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
         >
-          Запустить волну
+          {t('track.startRadio')}
         </MenuItem>
 
         <MenuDivider />
@@ -255,30 +257,30 @@ export function TrackKebabMenu({
           onClick={handleShare}
           icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
         >
-          {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+          {shareCopied ? t('track.shareCopied') : t('track.share')}
         </MenuItem>
         <MenuItem
           onClick={handleDownload}
           disabled={downloading}
           icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
         >
-          Скачать
+          {t('track.download')}
         </MenuItem>
         {isAuthed && (
           <MenuItem onClick={handleOpenOverride} icon={<Upload size={14} />}>
-            Загрузить свою версию
+            {t('track.uploadOwn')}
           </MenuItem>
         )}
 
         {(track.artistId || track.albumId) && <MenuDivider />}
         {track.artistId && (
           <MenuItem onClick={handleGoToArtist} icon={<UserIcon size={14} />}>
-            Перейти к артисту
+            {t('track.goToArtist')}
           </MenuItem>
         )}
         {track.albumId && (
           <MenuItem onClick={handleGoToAlbum} icon={<Disc size={14} />}>
-            Перейти к альбому
+            {t('track.goToAlbum')}
           </MenuItem>
         )}
 
@@ -291,7 +293,7 @@ export function TrackKebabMenu({
               icon={<Trash2 size={14} className="text-[var(--color-danger)]" />}
               className="text-[var(--color-danger)] hover:bg-[var(--color-danger-muted)]"
             >
-              Удалить из плейлиста
+              {t('track.removeFromPlaylist')}
             </MenuItem>
           </>
         )}
@@ -301,7 +303,7 @@ export function TrackKebabMenu({
         open={overrideOpen}
         onClose={() => setOverrideOpen(false)}
         trackId={track.id}
-        trackTitle={`${track.artist} — ${track.title}`}
+        trackTitle={t('track.trackTitleByArtist', { artist: track.artist, title: track.title })}
       />
 
       <AddToPlaylistDialog

@@ -8,6 +8,7 @@ import {
   usePlaylistsList,
   type LikeableTrack,
 } from '@/hooks/useLibrary';
+import { useT } from '@/i18n';
 
 interface AddToPlaylistDialogProps {
   open: boolean;
@@ -16,6 +17,7 @@ interface AddToPlaylistDialogProps {
 }
 
 export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialogProps) {
+  const t = useT();
   const { data: allPlaylists, isLoading } = usePlaylistsList();
   // Hide the system "Liked" playlist from the picker. Adding to liked is
   // already exposed everywhere as a heart button; the dialog is for real
@@ -53,7 +55,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
       setAddedId(playlistId);
       window.setTimeout(() => onClose(), 600);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Ошибка';
+      const message = err instanceof Error ? err.message : t('common.error');
       setErrorId({ id: playlistId, message });
     }
   };
@@ -109,7 +111,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
               key="atp-panel"
               role="dialog"
               aria-modal="true"
-              aria-label="Добавить в плейлист"
+              aria-label={t('playlist.add_dialog.title')}
               initial={{ opacity: 0, y: 32, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
@@ -120,9 +122,9 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
                 <ListMusic size={15} className="text-muted-foreground" />
-                <span className="truncate text-sm font-medium">Добавить в плейлист</span>
+                <span className="truncate text-sm font-medium">{t('playlist.add_dialog.title')}</span>
               </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label="Закрыть">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} aria-label={t('common.close')}>
                 <X size={14} />
               </Button>
             </div>
@@ -130,11 +132,11 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
-                  <Loader2 size={14} className="animate-spin" /> Загрузка...
+                  <Loader2 size={14} className="animate-spin" /> {t('common.loading')}
                 </div>
               ) : !playlists || playlists.length === 0 ? (
                 <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  У вас пока нет плейлистов
+                  {t('playlist.add_dialog.empty')}
                 </p>
               ) : (
                 <ul className="flex flex-col">
@@ -157,13 +159,13 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                               <span className="text-[11px] text-muted-foreground">
                                 {errorId?.id === p.id
                                   ? errorId.message
-                                  : `${p.trackCount} ${p.trackCount === 1 ? 'трек' : 'треков'}`}
+                                  : t('library.tracks', { count: p.trackCount })}
                               </span>
                             </div>
                           </div>
                           {isAdded ? (
                             <span className="inline-flex items-center gap-1 text-xs">
-                              <Check size={14} /> Добавлено
+                              <Check size={14} /> {t('playlist.add_dialog.added')}
                             </span>
                           ) : (
                             <Plus size={14} className="text-muted-foreground" />
@@ -188,7 +190,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                       if (e.key === 'Enter') handleCreate();
                       if (e.key === 'Escape') setShowCreate(false);
                     }}
-                    placeholder="Название плейлиста"
+                    placeholder={t('playlist.create_dialog.namePlaceholder')}
                     className="flex-1 rounded-[var(--radius-md)] border border-border bg-card px-3 py-2 text-sm outline-none focus:border-[var(--color-border-strong)]"
                   />
                   <Button
@@ -201,7 +203,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                     ) : (
                       <Plus size={12} />
                     )}
-                    Создать
+                    {t('playlist.create_dialog.submit')}
                   </Button>
                 </div>
               ) : (
@@ -210,7 +212,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
                   onClick={() => setShowCreate(true)}
                   className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-[var(--color-border-strong)] hover:text-foreground"
                 >
-                  <Plus size={13} /> Новый плейлист
+                  <Plus size={13} /> {t('playlist.add_dialog.createNew')}
                 </button>
               )}
             </div>
