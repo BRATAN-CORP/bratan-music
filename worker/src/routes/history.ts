@@ -111,4 +111,27 @@ history.get('/recent', async (c) => {
   return c.json({ items });
 });
 
+/**
+ * Wipe the authenticated user's play history. Self-service from the
+ * profile page — the user id is taken from the JWT, the body is
+ * ignored, so there's no way to delete somebody else's rows.
+ *
+ * Touches `play_history` only — does NOT clear taste profile,
+ * dislikes or daily playlists. Use `/user/reset-recommendations`
+ * for that. Symmetric with that endpoint's design: returns the
+ * deleted-rows count so the UI can show a meaningful receipt.
+ */
+history.delete('/', async (c) => {
+  const userId = c.get('userId');
+  const result = await c.env.DB
+    .prepare(`DELETE FROM play_history WHERE user_id = ?`)
+    .bind(userId)
+    .run();
+  // D1 returns `meta.changes` for affected-row counts. Fall back to 0
+  // on the off-chance the binding shape changes — a missing count is
+  // strictly cosmetic, the rows are gone either way.
+  const deleted = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
+  return c.json({ ok: true, deleted });
+});
+
 export { history };
