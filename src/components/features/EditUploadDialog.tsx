@@ -4,6 +4,7 @@ import { Image as ImageIcon, Loader2, Replace, X } from 'lucide-react';
 import { useReplaceUploadFile, useUpdateUpload, type UploadTrack, probeAudioDuration } from '@/hooks/useUploads';
 import { resizeImageToDataUrl } from '@/lib/imageResize';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
 
 interface Props {
   upload: UploadTrack;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function EditUploadDialog({ upload, open, onClose }: Props) {
+  const t = useT();
   const [title, setTitle] = useState(upload.title);
   const [artist, setArtist] = useState(upload.artist);
   const [album, setAlbum] = useState(upload.album ?? '');
@@ -39,14 +41,14 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
     try {
       await update.mutateAsync({
         id: upload.rawId,
-        title: title.trim() || 'Без названия',
+        title: title.trim() || t('editUpload.untitled'),
         artist: artist.trim(),
         album: album.trim(),
         cover: cover === upload.coverUrl ? undefined : cover,
       });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить');
+      setError(e instanceof Error ? e.message : t('editUpload.errorSave'));
     }
   };
 
@@ -56,7 +58,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
       const dataUrl = await resizeImageToDataUrl(file, 512);
       setCover(dataUrl);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось обработать изображение');
+      setError(e instanceof Error ? e.message : t('editUpload.errorImage'));
     }
   };
 
@@ -73,7 +75,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
       setReplaceProgress(null);
     } catch (e) {
       setReplaceProgress(null);
-      setError(e instanceof Error ? e.message : 'Ошибка перезаливки');
+      setError(e instanceof Error ? e.message : t('editUpload.errorReplace'));
     }
   };
 
@@ -88,7 +90,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
         >
           <button
             type="button"
-            aria-label="Закрыть"
+            aria-label={t('editUpload.close')}
             className="liquid-glass-scrim absolute inset-0"
             onClick={onClose}
           />
@@ -100,12 +102,12 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
             className="liquid-glass relative z-10 flex w-full max-w-md flex-col gap-4 rounded-[var(--radius-lg)] p-5 pb-[calc(20px+env(safe-area-inset-bottom))] sm:pb-5"
           >
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Редактировать трек</h2>
+              <h2 className="text-base font-semibold">{t('editUpload.title')}</h2>
               <button
                 type="button"
                 onClick={onClose}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground hover:bg-secondary"
-                aria-label="Закрыть"
+                aria-label={t('editUpload.close')}
               >
                 <X size={16} />
               </button>
@@ -116,7 +118,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
                 type="button"
                 onClick={() => coverInputRef.current?.click()}
                 className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary text-muted-foreground transition-colors hover:bg-background"
-                aria-label="Сменить обложку"
+                aria-label={t('editUpload.changeCover')}
               >
                 {cover ? (
                   <img src={cover} alt="" className="h-full w-full object-cover" />
@@ -124,7 +126,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
                   <ImageIcon size={20} />
                 )}
                 <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-[10px] font-medium uppercase tracking-[0.2em] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                  Обложка
+                  {t('editUpload.coverLabel')}
                 </span>
               </button>
               <input
@@ -140,7 +142,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
               />
               <div className="flex flex-1 flex-col gap-2">
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  Название
+                  {t('editUpload.fieldTitle')}
                   <input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -149,11 +151,11 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  Исполнители
+                  {t('editUpload.fieldArtists')}
                   <input
                     value={artist}
                     onChange={(e) => setArtist(e.target.value)}
-                    placeholder="Артист 1, Артист 2"
+                    placeholder={t('editUpload.fieldArtistsPlaceholder')}
                     className="rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm text-foreground"
                     maxLength={200}
                   />
@@ -161,7 +163,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
               </div>
             </div>
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Альбом (опционально)
+              {t('editUpload.fieldAlbum')}
               <input
                 value={album}
                 onChange={(e) => setAlbum(e.target.value)}
@@ -172,9 +174,12 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
 
             <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-background/40 px-3 py-2 text-xs">
               <div className="flex flex-col gap-0.5">
-                <span className="font-medium text-foreground">Аудио файл</span>
+                <span className="font-medium text-foreground">{t('editUpload.audioFile')}</span>
                 <span className="text-muted-foreground">
-                  {(upload.sizeBytes / 1024 / 1024).toFixed(1)} МБ · {upload.mimeType}
+                  {t('editUpload.audioMeta', {
+                    size: (upload.sizeBytes / 1024 / 1024).toFixed(1),
+                    mime: upload.mimeType,
+                  })}
                 </span>
               </div>
               <Button
@@ -191,7 +196,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
                 ) : (
                   <>
                     <Replace size={12} />
-                    Перезалить
+                    {t('editUpload.replace')}
                   </>
                 )}
               </Button>
@@ -211,10 +216,10 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
             {error && <p className="text-xs text-red-400">{error}</p>}
 
             <div className="flex items-center justify-end gap-2">
-              <Button variant="ghost" onClick={onClose}>Отмена</Button>
+              <Button variant="ghost" onClick={onClose}>{t('editUpload.cancel')}</Button>
               <Button onClick={handleSave} disabled={update.isPending}>
                 {update.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
-                Сохранить
+                {t('editUpload.save')}
               </Button>
             </div>
           </motion.div>

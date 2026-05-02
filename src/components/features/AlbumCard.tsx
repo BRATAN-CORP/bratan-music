@@ -2,12 +2,14 @@ import { Link } from 'react-router-dom';
 import { Disc3, Play } from 'lucide-react';
 import type { Album } from '@/types';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { useT } from '@/i18n';
 
 interface AlbumCardProps {
   album: Album;
 }
 
 export function AlbumCard({ album }: AlbumCardProps) {
+  const t = useT();
   return (
     <Link to={`/album/${album.id}`} className="group flex flex-col gap-2.5">
       <TiltCard intensity={6} className="aspect-square w-full rounded-[var(--radius-md)]">
@@ -38,7 +40,7 @@ export function AlbumCard({ album }: AlbumCardProps) {
         <p className="truncate text-xs text-muted-foreground">
           {album.releaseType && album.releaseType !== 'ALBUM' && album.releaseType !== 'SINGLE' ? (
             <span className="mr-1.5 rounded border border-border px-1 py-px text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/90">
-              {album.releaseType === 'COMPILATION' ? 'Сборник' : album.releaseType}
+              {album.releaseType === 'COMPILATION' ? t('album.compilation') : album.releaseType}
             </span>
           ) : null}
           {album.artist}

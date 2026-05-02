@@ -9,16 +9,28 @@ import { CreatePlaylistDialog } from '@/components/features/CreatePlaylistDialog
 import { usePlaylists, useLikedAlbums, useLikedArtists } from '@/hooks/useLibrary';
 import { useUploads } from '@/hooks/useUploads';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
+import type { TranslationKey } from '@/i18n';
 
 type Tab = 'playlists' | 'albums' | 'artists';
 
-const tabs: { key: Tab; label: string }[] = [
-  { key: 'playlists', label: 'Плейлисты' },
-  { key: 'albums', label: 'Альбомы' },
-  { key: 'artists', label: 'Артисты' },
+const tabs: { key: Tab; labelKey: TranslationKey }[] = [
+  { key: 'playlists', labelKey: 'library.tabPlaylists' },
+  { key: 'albums', labelKey: 'library.tabAlbums' },
+  { key: 'artists', labelKey: 'library.tabArtists' },
 ];
 
+// Picks the right Russian/English plural form for the "N tracks" label.
+function tracksFormKey(count: number): TranslationKey {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'library.trackUnit1';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'library.trackUnit2_4';
+  return 'library.trackUnit5plus';
+}
+
 export function LibraryPage() {
+  const t = useT();
   const { data: playlists, isLoading } = usePlaylists();
   const { data: uploads } = useUploads();
   const { data: albumsData } = useLikedAlbums();
@@ -35,31 +47,31 @@ export function LibraryPage() {
         >
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              Коллекция
+              {t('library.collectionLabel')}
             </span>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Библиотека</h1>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('library.title')}</h1>
           </div>
           {tab === 'playlists' && (
             <Button onClick={() => setShowCreate(true)} variant="outline">
               <Plus size={14} />
-              Плейлист
+              {t('library.newPlaylistShort')}
             </Button>
           )}
         </div>
 
         <div className="flex gap-2 border-b border-border pb-3">
-          {tabs.map((t) => (
+          {tabs.map((tt) => (
             <button
-              key={t.key}
+              key={tt.key}
               type="button"
-              onClick={() => setTab(t.key)}
+              onClick={() => setTab(tt.key)}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.key
+                tab === tt.key
                   ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
             >
-              {t.label}
+              {t(tt.labelKey)}
             </button>
           ))}
         </div>
@@ -74,15 +86,18 @@ export function LibraryPage() {
                 <UploadIcon size={18} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">Загруженные</p>
+                <p className="truncate text-sm font-medium">{t('library.uploadsEntry')}</p>
                 <p className="text-xs text-muted-foreground">
-                  {uploads?.length ?? 0} {(uploads?.length ?? 0) === 1 ? 'трек' : 'треков'} · ваши файлы
+                  {t('library.uploadsEntrySubtitle', {
+                    count: uploads?.length ?? 0,
+                    form: t(tracksFormKey(uploads?.length ?? 0)),
+                  })}
                 </p>
               </div>
             </Link>
 
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Загрузка...</p>
+              <p className="text-sm text-muted-foreground">{t('library.loadingShort')}</p>
             ) : playlists?.length ? (
               <div className="flex flex-col gap-2">
                 {playlists.map((pl) => (
@@ -91,7 +106,7 @@ export function LibraryPage() {
               </div>
             ) : (
               <div className="rounded-[var(--radius-md)] border border-border bg-card py-12 text-center text-sm text-muted-foreground">
-                У вас пока нет плейлистов
+                {t('library.noPlaylists')}
               </div>
             )}
           </>
@@ -118,10 +133,10 @@ export function LibraryPage() {
               <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-16 text-center">
                 <Disc3 size={32} className="text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  Нет сохранённых альбомов
+                  {t('library.noAlbumsTitle')}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Нажмите <Heart size={12} className="mb-0.5 inline" /> на странице альбома
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Heart size={12} /> {t('library.noAlbumsHint')}
                 </p>
               </div>
             )}
@@ -147,10 +162,10 @@ export function LibraryPage() {
               <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-16 text-center">
                 <User size={32} className="text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  Нет сохранённых артистов
+                  {t('library.noArtistsTitle')}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Нажмите <Heart size={12} className="mb-0.5 inline" /> на странице артиста
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Heart size={12} /> {t('library.noArtistsHint')}
                 </p>
               </div>
             )}

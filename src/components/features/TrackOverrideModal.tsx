@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import { useT } from '@/i18n';
 
 interface TrackOverrideModalProps {
   open: boolean;
@@ -20,6 +21,7 @@ interface OverrideStatus {
 }
 
 export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: TrackOverrideModalProps) {
+  const t = useT();
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,9 +39,12 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
     setStatusLoading(true);
     api.get<OverrideStatus>(`/tracks/${trackId}/override`)
       .then((data) => { if (!cancelled) setStatus(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Ошибка'); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : t('override.errorGeneric')); })
       .finally(() => { if (!cancelled) setStatusLoading(false); });
     return () => { cancelled = true; };
+    // `t` is intentionally omitted: re-running the effect on locale change
+    // would refetch the override status and reset the dialog mid-flight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, trackId]);
 
   if (!open) return null;
@@ -65,13 +70,13 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
 
       if (!res.ok) {
         const data = await res.json() as { error?: string };
-        throw new Error(data.error ?? 'Ошибка загрузки');
+        throw new Error(data.error ?? t('override.errorUpload'));
       }
 
       setStatus({ exists: true, override: { mime_type: file.type, size_bytes: file.size } });
       refreshStream();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(err instanceof Error ? err.message : t('override.errorGeneric'));
     } finally {
       setUploading(false);
     }
@@ -85,7 +90,7 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
       setStatus({ exists: false });
       refreshStream();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(err instanceof Error ? err.message : t('override.errorGeneric'));
     } finally {
       setDeleting(false);
     }
@@ -104,8 +109,8 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold tracking-tight">Перезалив</h2>
-          <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label="Закрыть">
+          <h2 className="text-base font-semibold tracking-tight">{t('override.title')}</h2>
+          <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label={t('override.close')}>
             <X size={16} />
           </Button>
         </div>
@@ -115,7 +120,7 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
         {statusLoading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
             <Loader2 size={14} className="animate-spin" />
-            Проверка...
+            {t('override.checking')}
           </div>
         ) : (
           <>
@@ -132,7 +137,7 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
 
             {hasOverride && (
               <p className="mb-3 rounded-[var(--radius-sm)] border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                Сейчас играет ваша версия. Можно заменить новым файлом или удалить, чтобы вернуть оригинал.
+                {t('override.currentVersion')}
               </p>
             )}
 
@@ -146,12 +151,12 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
                 {uploading ? (
                   <>
                     <Loader2 size={14} className="animate-spin" />
-                    Загрузка...
+                    {t('override.uploading')}
                   </>
                 ) : (
                   <>
                     <Upload size={14} />
-                    {hasOverride ? 'Заменить файл' : 'Выбрать файл'}
+                    {hasOverride ? t('override.replaceFile') : t('override.pickFile')}
                   </>
                 )}
               </Button>
@@ -166,12 +171,12 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
                   {deleting ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      Удаление...
+                      {t('override.deleting')}
                     </>
                   ) : (
                     <>
                       <Trash2 size={14} />
-                      Удалить мою версию
+                      {t('override.deleteMy')}
                     </>
                   )}
                 </Button>

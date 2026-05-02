@@ -7,12 +7,23 @@ import { useDeletePlaylist, usePinPlaylist } from '@/hooks/useLibrary';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { RenamePlaylistDialog } from './RenamePlaylistDialog';
+import { useT } from '@/i18n';
+import type { TranslationKey } from '@/i18n';
+
+function tracksFormKey(count: number): TranslationKey {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'library.trackUnit1';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'library.trackUnit2_4';
+  return 'library.trackUnit5plus';
+}
 
 interface PlaylistCardProps {
   playlist: Playlist;
 }
 
 export function PlaylistCard({ playlist }: PlaylistCardProps) {
+  const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -29,12 +40,13 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const isLinked = Boolean(playlist.sourceKind);
   const canEdit = !playlist.isLiked;
   const canRename = canEdit && !isLinked;
-  const removeLabel = isLinked ? 'Убрать из библиотеки' : 'Удалить плейлист';
-  const confirmTitle = isLinked ? 'Убрать из библиотеки?' : 'Удалить плейлист?';
-  const confirmDescription = isLinked
-    ? `«${playlist.name}» больше не будет появляться в вашей библиотеке. Оригинал останется доступен и вы сможете сохранить его снова.`
-    : `«${playlist.name}» будет удалён вместе со всеми треками. Это действие необратимо.`;
-  const confirmButtonLabel = isLinked ? 'Убрать' : 'Удалить';
+  const removeLabel = t(isLinked ? 'playlistCard.removeLinked' : 'playlistCard.remove');
+  const confirmTitle = t(isLinked ? 'playlistCard.confirmTitleLinked' : 'playlistCard.confirmTitle');
+  const confirmDescription = t(
+    isLinked ? 'playlistCard.confirmDescriptionLinked' : 'playlistCard.confirmDescription',
+    { name: playlist.name },
+  );
+  const confirmButtonLabel = t(isLinked ? 'playlistCard.confirmButtonLinked' : 'playlistCard.confirmButton');
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -71,7 +83,10 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{playlist.name}</p>
             <p className="text-xs text-muted-foreground">
-              {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
+              {t('playlistCard.tracksCount', {
+                count: playlist.trackCount,
+                form: t(tracksFormKey(playlist.trackCount)),
+              })}
             </p>
           </div>
           {canEdit && (
@@ -85,7 +100,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                   setMenuOpen((v) => !v);
                 }}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                aria-label="Действия"
+                aria-label={t('playlistCard.actions')}
               >
                 <MoreHorizontal size={16} />
               </button>
@@ -109,7 +124,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-secondary"
                       >
                         <Pencil size={14} />
-                        Переименовать
+                        {t('playlistCard.rename')}
                       </button>
                     )}
                     <button
@@ -124,7 +139,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-all hover:bg-secondary active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
-                      {isPinned ? 'Открепить' : 'Закрепить на панели'}
+                      {t(isPinned ? 'playlistCard.unpin' : 'playlistCard.pin')}
                     </button>
                     <button
                       type="button"
@@ -176,7 +191,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
               <p className="mt-2 text-sm text-muted-foreground">{confirmDescription}</p>
               {deletePlaylist.isError && (
                 <p className="mt-3 rounded-[var(--radius-sm)] bg-[var(--color-danger-muted)] px-3 py-2 text-xs text-[var(--color-danger)]">
-                  {deletePlaylist.error instanceof Error ? deletePlaylist.error.message : 'Ошибка'}
+                  {deletePlaylist.error instanceof Error ? deletePlaylist.error.message : t('common.error')}
                 </p>
               )}
               <div className="mt-5 flex items-center justify-end gap-2">
@@ -185,7 +200,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
                   onClick={() => setConfirmOpen(false)}
                   disabled={deletePlaylist.isPending}
                 >
-                  Отмена
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   variant="danger"

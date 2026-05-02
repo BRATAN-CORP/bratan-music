@@ -15,8 +15,10 @@ import { usePlayerStore } from '@/store/player';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { EditUploadDialog } from '@/components/features/EditUploadDialog';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
+import { useT } from '@/i18n';
 
 export function UploadsPage() {
+  const t = useT();
   const navigate = useNavigate();
   const { data, isLoading } = useUploads();
   const create = useCreateUpload();
@@ -44,7 +46,7 @@ export function UploadsPage() {
           onProgress: setProgress,
         });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось загрузить файл');
+        setError(e instanceof Error ? e.message : t('uploads.errorUpload'));
       }
     }
     setProgress(null);
@@ -69,14 +71,14 @@ export function UploadsPage() {
           className="flex w-fit items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft size={14} />
-          Назад
+          {t('uploads.back')}
         </button>
         <div className="flex items-end justify-between gap-4 border-b border-border pb-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Библиотека</span>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Загруженные</h1>
+            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('uploads.libraryLabel')}</span>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('uploads.pageTitle')}</h1>
             <p className="text-xs text-muted-foreground">
-              Свои аудио файлы. До 50 МБ каждый. MP3, FLAC, AAC, WAV.
+              {t('uploads.pageHint')}
             </p>
           </div>
           <Button onClick={() => fileInputRef.current?.click()} disabled={progress != null}>
@@ -88,7 +90,7 @@ export function UploadsPage() {
             ) : (
               <>
                 <UploadIcon size={14} />
-                Загрузить
+                {t('uploads.upload')}
               </>
             )}
           </Button>
@@ -112,7 +114,7 @@ export function UploadsPage() {
         )}
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Загрузка...</p>
+          <p className="text-sm text-muted-foreground">{t('uploads.loading')}</p>
         ) : data && data.length > 0 ? (
           <div className="flex flex-col gap-1">
             {data.map((u) => (
@@ -123,7 +125,7 @@ export function UploadsPage() {
                 onEdit={() => setEditing(u)}
                 onAddToPlaylist={() => setAddingToPlaylist(u)}
                 onDelete={async () => {
-                  if (confirm(`Удалить трек «${u.title}»?`)) {
+                  if (confirm(t('uploads.deleteConfirm', { title: u.title }))) {
                     await remove.mutateAsync(u.rawId);
                   }
                 }}
@@ -133,10 +135,10 @@ export function UploadsPage() {
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-dashed border-border bg-card py-16 text-center">
             <Music size={28} className="text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">У вас пока нет загруженных треков</p>
+            <p className="text-sm text-muted-foreground">{t('uploads.empty')}</p>
             <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
               <UploadIcon size={14} />
-              Загрузить первый файл
+              {t('uploads.emptyCta')}
             </Button>
           </div>
         )}
@@ -169,6 +171,7 @@ interface RowProps {
 }
 
 function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowProps) {
+  const t = useT();
   const { isActive, isActivePlaying } = useTrackPlayback(upload.id);
   return (
     <div className="group flex items-center gap-3 rounded-[var(--radius-md)] border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-secondary">
@@ -176,7 +179,7 @@ function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowPro
         type="button"
         onClick={onPlay}
         className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground"
-        aria-label={isActivePlaying ? 'Пауза' : 'Воспроизвести'}
+        aria-label={isActivePlaying ? t('uploads.pause') : t('uploads.play')}
       >
         <CoverFallback
           src={upload.coverUrl}
@@ -211,8 +214,8 @@ function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowPro
         type="button"
         onClick={onAddToPlaylist}
         className="hidden h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-background hover:text-foreground sm:inline-flex"
-        aria-label="В плейлист"
-        title="Добавить в плейлист"
+        aria-label={t('uploads.addToPlaylistShort')}
+        title={t('uploads.addToPlaylist')}
       >
         <Plus size={14} />
       </button>
@@ -220,8 +223,8 @@ function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowPro
         type="button"
         onClick={onEdit}
         className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-        aria-label="Редактировать"
-        title="Редактировать"
+        aria-label={t('uploads.edit')}
+        title={t('uploads.edit')}
       >
         <Pencil size={14} />
       </button>
@@ -229,8 +232,8 @@ function UploadRow({ upload, onPlay, onEdit, onDelete, onAddToPlaylist }: RowPro
         type="button"
         onClick={onDelete}
         className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-background hover:text-red-300"
-        aria-label="Удалить"
-        title="Удалить"
+        aria-label={t('uploads.delete')}
+        title={t('uploads.delete')}
       >
         <Trash2 size={14} />
       </button>
