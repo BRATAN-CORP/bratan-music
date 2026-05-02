@@ -40,11 +40,16 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const isLinked = Boolean(playlist.sourceKind);
   const canEdit = !playlist.isLiked;
   const canRename = canEdit && !isLinked;
+  // The "liked" playlist is owned by the server (one auto-row per user)
+  // and ships with a hard-coded Russian name. We swap it out for the
+  // localized version so the row reads correctly under both locales —
+  // user-named playlists keep their custom name as authored.
+  const displayName = playlist.isLiked ? t('library.likedPlaylistName') : playlist.name;
   const removeLabel = t(isLinked ? 'playlistCard.removeLinked' : 'playlistCard.remove');
   const confirmTitle = t(isLinked ? 'playlistCard.confirmTitleLinked' : 'playlistCard.confirmTitle');
   const confirmDescription = t(
     isLinked ? 'playlistCard.confirmDescriptionLinked' : 'playlistCard.confirmDescription',
-    { name: playlist.name },
+    { name: displayName },
   );
   const confirmButtonLabel = t(isLinked ? 'playlistCard.confirmButtonLinked' : 'playlistCard.confirmButton');
 
@@ -81,7 +86,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{playlist.name}</p>
+            <p className="truncate text-sm font-medium">{displayName}</p>
             <p className="text-xs text-muted-foreground">
               {t('playlistCard.tracksCount', {
                 count: playlist.trackCount,

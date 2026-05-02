@@ -533,10 +533,31 @@ function DailyPlaylistsSection() {
   );
 }
 
-const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; labelKey: TranslationKey; icon: typeof Sparkles }> = {
-  familiar: { hue: '#5E6AD2', labelKey: 'home.dailyVariantFamiliar', icon: Heart },
-  discover: { hue: '#c2185b', labelKey: 'home.dailyVariantDiscover', icon: Sparkles },
-  mood: { hue: '#0ea5e9', labelKey: 'home.dailyVariantMood', icon: Disc3 },
+const VARIANT_THEME: Record<
+  DailyPlaylist['variant'],
+  { hue: string; labelKey: TranslationKey; nameKey: TranslationKey; descKey: TranslationKey; icon: typeof Sparkles }
+> = {
+  familiar: {
+    hue: '#5E6AD2',
+    labelKey: 'home.dailyVariantFamiliar',
+    nameKey: 'home.dailyVariantFamiliarName',
+    descKey: 'home.dailyVariantFamiliarDescription',
+    icon: Heart,
+  },
+  discover: {
+    hue: '#c2185b',
+    labelKey: 'home.dailyVariantDiscover',
+    nameKey: 'home.dailyVariantDiscoverName',
+    descKey: 'home.dailyVariantDiscoverDescription',
+    icon: Sparkles,
+  },
+  mood: {
+    hue: '#0ea5e9',
+    labelKey: 'home.dailyVariantMood',
+    nameKey: 'home.dailyVariantMoodName',
+    descKey: 'home.dailyVariantMoodDescription',
+    icon: Disc3,
+  },
 };
 
 function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
@@ -635,8 +656,8 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
 
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div>
-          <h3 className="text-lg font-semibold tracking-tight">{playlist.name}</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">{playlist.description}</p>
+          <h3 className="text-lg font-semibold tracking-tight">{t(theme.nameKey)}</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">{t(theme.descKey)}</p>
         </div>
 
         <div className="text-xs text-muted-foreground">
