@@ -59,7 +59,13 @@
       "lossless": "Без лимитов на прослушивания",
       "hifi": "Lossless и HiFi-качество",
       "noads": "Никакой рекламы и троттлинга"
-    }
+    },
+    "fallbackName": "Пользователь",
+    "themeToggleAria": "Переключить тему",
+    "tidalQualityTitle": "Качество (Tidal)",
+    "tidalQualityHint": "Зависит от прокси-аккаунта Tidal — недоступные качества будут урезаны до доступного уровня.",
+    "languageTitle": "Язык",
+    "crossfadeSeconds": "{value} с"
   },
   "rooms": {
     "shortcutLabel": "Комнаты",
@@ -604,7 +610,11 @@
     "presetVocal": "Вокал",
     "presetRock": "Рок",
     "presetElectronic": "Электроника",
-    "presetClassical": "Классика"
+    "presetClassical": "Классика",
+    "resetShort": "Сброс",
+    "resetAria": "Сбросить",
+    "hint": "Запустите любой трек, чтобы регуляторы начали влиять на звук — текущие значения сохранятся и применятся автоматически.",
+    "freqHzAria": "{label} Гц"
   },
   "onboarding": {
     "skip": "Пропустить",
@@ -626,13 +636,19 @@
     "tourCta": "Запустить тур",
     "tourReset": "Тур сброшен",
     "recommendationsTitle": "Сбросить рекомендации",
-    "recommendationsHint": "Удалит историю прослушиваний для алгоритма. Вкус соберётся заново.",
-    "recommendationsCta": "Сбросить",
-    "recommendationsConfirm": "Сбросить рекомендации?",
+    "recommendationsHint": "Очистит вкус-профиль, дизлайки и уже сгенерированные дневные плейлисты. История прослушиваний останется. После сброса главная пересоберётся с нуля.",
+    "recommendationsCta": "Сбросить рекомендации",
+    "recommendationsConfirm": "Подтвердить сброс",
     "recommendationsConfirmHint": "Эту операцию нельзя отменить.",
     "recommendationsResetting": "Сбрасываем…",
     "recommendationsDone": "Готово",
-    "recommendationsFailed": "Не удалось сбросить"
+    "recommendationsFailed": "Не удалось сбросить",
+    "recommendationsCancel": "Отмена",
+    "recommendationsResultLine": "Готово. Удалено записей: {count}.",
+    "tourTitleLong": "Пройти онбординг заново",
+    "tourHintLong": "Запустит четырёхшаговый тур по продукту (волна, поиск, библиотека, профиль) при следующей загрузке страницы.",
+    "tourCtaLong": "Пройти тур заново",
+    "tourDoneLine": "Готово. Тур запустится через секунду."
   },
   "admin_panels": {
     "tidal": {
@@ -660,7 +676,16 @@
       "revoke": "Снять права",
       "loading": "Загружаем…",
       "loadFailed": "Не удалось загрузить",
-      "self": "вы"
+      "self": "вы",
+      "hint": "Выдать или снять админку. Принимает TG user id или @username.",
+      "targetPlaceholder": "user id или @username",
+      "applying": "Применяем…",
+      "promote": "Назначить админом",
+      "demote": "Снять админку",
+      "promoted": "{user} теперь админ",
+      "demoted": "{user} больше не админ",
+      "failed": "Не удалось обновить роль",
+      "genericError": "Ошибка"
     },
     "userPurge": {
       "title": "Удаление пользователя",
@@ -671,7 +696,20 @@
       "confirmTitle": "Удалить {target}?",
       "confirmHint": "Действие нельзя отменить.",
       "success": "Удалено",
-      "failed": "Не удалось удалить"
+      "failed": "Не удалось удалить",
+      "titleLong": "Опасно: очистка данных пользователя",
+      "hintLong": "Удаляет загрузки, плейлисты, историю и любые другие данные выбранного пользователя. Действие нельзя отменить.",
+      "searchPlaceholder": "ID, @username или имя",
+      "searchEmpty": "Ничего не найдено.",
+      "selectedTag": "выбран",
+      "clearSelectionAria": "Снять выбор",
+      "confirmPhrase": "УДАЛИТЬ",
+      "submitDestructive": "Удалить все данные",
+      "genericError": "Ошибка",
+      "receiptTitle": "Готово",
+      "receiptUserRow": "Удалена запись пользователя: {n}",
+      "receiptR2Ok": "Удалено файлов из R2: {n}",
+      "receiptR2Failed": "Не удалось удалить файлов: {n}"
     },
     "health": {
       "title": "Состояние сервиса",
@@ -683,6 +721,17 @@
       "refresh": "Обновить",
       "loading": "Загружаем…",
       "loadFailed": "Не удалось загрузить"
+    },
+    "grant": {
+      "title": "Выдача подписки",
+      "hint": "ID или @username и количество дней.",
+      "targetPlaceholder": "user id или @username",
+      "daysPlaceholder": "дней",
+      "submitting": "Выдаём…",
+      "submit": "Выдать доступ",
+      "success": "Выдано {user} на {days} дн. (до {date})",
+      "failed": "Не удалось выдать доступ",
+      "genericError": "Ошибка"
     }
   },
   "admin_page": {

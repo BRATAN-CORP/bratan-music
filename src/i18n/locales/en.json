@@ -59,7 +59,13 @@
       "lossless": "No play limits, ever",
       "hifi": "Lossless and HiFi quality",
       "noads": "No ads, no throttling"
-    }
+    },
+    "fallbackName": "User",
+    "themeToggleAria": "Toggle theme",
+    "tidalQualityTitle": "Quality (Tidal)",
+    "tidalQualityHint": "Depends on the Tidal proxy account — unavailable qualities are downgraded to whatever the account can stream.",
+    "languageTitle": "Language",
+    "crossfadeSeconds": "{value}s"
   },
   "rooms": {
     "shortcutLabel": "Rooms",
@@ -604,7 +610,11 @@
     "presetVocal": "Vocal",
     "presetRock": "Rock",
     "presetElectronic": "Electronic",
-    "presetClassical": "Classical"
+    "presetClassical": "Classical",
+    "resetShort": "Reset",
+    "resetAria": "Reset",
+    "hint": "Start any track and the sliders will start shaping the sound — current values are saved and applied automatically.",
+    "freqHzAria": "{label} Hz"
   },
   "onboarding": {
     "skip": "Skip",
@@ -626,13 +636,19 @@
     "tourCta": "Start the tour",
     "tourReset": "Tour reset",
     "recommendationsTitle": "Reset recommendations",
-    "recommendationsHint": "Wipes your listening history for the algorithm. Taste rebuilds from scratch.",
-    "recommendationsCta": "Reset",
-    "recommendationsConfirm": "Reset recommendations?",
+    "recommendationsHint": "Wipes your taste profile, dislikes and any already-generated daily playlists. Listening history stays put. The home feed rebuilds from scratch after the reset.",
+    "recommendationsCta": "Reset recommendations",
+    "recommendationsConfirm": "Confirm reset",
     "recommendationsConfirmHint": "This can't be undone.",
     "recommendationsResetting": "Resetting…",
     "recommendationsDone": "Done",
-    "recommendationsFailed": "Couldn't reset"
+    "recommendationsFailed": "Couldn't reset",
+    "recommendationsCancel": "Cancel",
+    "recommendationsResultLine": "Done. {count} entries removed.",
+    "tourTitleLong": "Replay the onboarding tour",
+    "tourHintLong": "Replays the four-step product tour (wave, search, library, profile) on the next page load.",
+    "tourCtaLong": "Replay the tour",
+    "tourDoneLine": "Done — the tour will start in a second."
   },
   "admin_panels": {
     "tidal": {
@@ -660,7 +676,16 @@
       "revoke": "Revoke admin",
       "loading": "Loading…",
       "loadFailed": "Couldn't load",
-      "self": "you"
+      "self": "you",
+      "hint": "Grant or revoke admin rights. Accepts a TG user id or @username.",
+      "targetPlaceholder": "user id or @username",
+      "applying": "Applying…",
+      "promote": "Make admin",
+      "demote": "Revoke admin",
+      "promoted": "{user} is now admin",
+      "demoted": "{user} is no longer admin",
+      "failed": "Couldn't update the role",
+      "genericError": "Error"
     },
     "userPurge": {
       "title": "Purge user",
@@ -671,7 +696,20 @@
       "confirmTitle": "Purge {target}?",
       "confirmHint": "This can't be undone.",
       "success": "Purged",
-      "failed": "Couldn't purge"
+      "failed": "Couldn't purge",
+      "titleLong": "Danger zone: purge a user",
+      "hintLong": "Deletes uploads, playlists, listening history and every other piece of data tied to the selected user. This can't be undone.",
+      "searchPlaceholder": "ID, @username or name",
+      "searchEmpty": "No matches.",
+      "selectedTag": "selected",
+      "clearSelectionAria": "Clear selection",
+      "confirmPhrase": "DELETE",
+      "submitDestructive": "Purge all data",
+      "genericError": "Error",
+      "receiptTitle": "Done",
+      "receiptUserRow": "User row deleted: {n}",
+      "receiptR2Ok": "R2 objects deleted: {n}",
+      "receiptR2Failed": "Couldn't delete: {n} files"
     },
     "health": {
       "title": "Service health",
@@ -683,6 +721,17 @@
       "refresh": "Refresh",
       "loading": "Loading…",
       "loadFailed": "Couldn't load"
+    },
+    "grant": {
+      "title": "Grant subscription",
+      "hint": "User ID or @username plus the number of days.",
+      "targetPlaceholder": "user id or @username",
+      "daysPlaceholder": "days",
+      "submitting": "Granting…",
+      "submit": "Grant access",
+      "success": "Granted {user} for {days} days (until {date})",
+      "failed": "Couldn't grant access",
+      "genericError": "Error"
     }
   },
   "admin_page": {

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
 
 interface ResetResponse {
   ok: boolean;
@@ -21,6 +22,7 @@ interface ResetResponse {
  * it's a separate user-facing log.
  */
 export function ResetRecommendationsPanel() {
+  const t = useT();
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const [receipt, setReceipt] = useState<ResetResponse | null>(null);
@@ -46,11 +48,10 @@ export function ResetRecommendationsPanel() {
     <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
       <h2 className="flex items-center gap-2 text-sm font-medium">
         <Sparkles size={14} className="text-muted-foreground" />
-        Сбросить мои рекомендации
+        {t('reset.recommendationsTitle')}
       </h2>
       <p className="mt-2 text-xs text-muted-foreground">
-        Очистит вкус-профиль, дизлайки и уже сгенерированные дневные плейлисты.
-        История прослушиваний останется. После сброса главная пересоберётся с нуля.
+        {t('reset.recommendationsHint')}
       </p>
 
       <div className="mt-3 flex flex-col gap-2">
@@ -62,7 +63,7 @@ export function ResetRecommendationsPanel() {
               setReceipt(null);
             }}
           >
-            Сбросить рекомендации
+            {t('reset.recommendationsCta')}
           </Button>
         ) : (
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -74,10 +75,10 @@ export function ResetRecommendationsPanel() {
             >
               {reset.isPending ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" /> Сбрасываем…
+                  <Loader2 size={14} className="animate-spin" /> {t('reset.recommendationsResetting')}
                 </>
               ) : (
-                <>Подтвердить сброс</>
+                <>{t('reset.recommendationsConfirm')}</>
               )}
             </Button>
             <Button
@@ -86,20 +87,20 @@ export function ResetRecommendationsPanel() {
               onClick={() => setConfirm(false)}
               disabled={reset.isPending}
             >
-              Отмена
+              {t('reset.recommendationsCancel')}
             </Button>
           </div>
         )}
 
         {reset.error && (
           <p className="text-xs text-[var(--color-danger)]">
-            {reset.error instanceof Error ? reset.error.message : 'Ошибка'}
+            {reset.error instanceof Error ? reset.error.message : t('reset.recommendationsFailed')}
           </p>
         )}
 
         {receipt?.ok && (
           <p className="text-xs text-[var(--color-accent)]">
-            Готово. Удалено записей: {totalDeleted}.
+            {t('reset.recommendationsResultLine', { count: totalDeleted })}
           </p>
         )}
       </div>

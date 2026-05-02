@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, Search, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
 
 interface AdminUser {
   id: string;
@@ -23,7 +24,11 @@ interface PurgeResponse {
   error?: string;
 }
 
-const CONFIRM_PHRASE = 'УДАЛИТЬ';
+// Accepts both the Russian and English confirm phrases regardless of
+// the active locale so the user doesn't have to retype if they switch
+// languages mid-flow. The localized phrase is used for the
+// placeholder/help copy via i18n.
+const CONFIRM_PHRASES = ['УДАЛИТЬ', 'DELETE'];
 
 /**
  * Dangerous admin tool: search for any user of the service and purge
@@ -36,6 +41,7 @@ const CONFIRM_PHRASE = 'УДАЛИТЬ';
  * server responds, we render a short receipt of what was deleted.
  */
 export function AdminUserPurgePanel() {
+  const t = useT();
   const qc = useQueryClient();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -65,21 +71,24 @@ export function AdminUserPurgePanel() {
       qc.invalidateQueries({ queryKey: ['admin-user-search'] });
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Ошибка');
+      setError(err instanceof Error ? err.message : t('admin_panels.userPurge.genericError'));
     },
   });
 
-  const canSubmit = Boolean(selected) && confirmInput.trim() === CONFIRM_PHRASE && !purge.isPending;
+  const canSubmit =
+    Boolean(selected) &&
+    CONFIRM_PHRASES.includes(confirmInput.trim().toUpperCase()) &&
+    !purge.isPending;
+  const localizedConfirmPhrase = t('admin_panels.userPurge.confirmPhrase');
 
   return (
     <section className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 p-5 md:col-span-2">
       <h2 className="flex items-center gap-2 text-sm font-medium text-[var(--color-danger)]">
         <AlertTriangle size={14} />
-        Опасно: очистка данных пользователя
+        {t('admin_panels.userPurge.titleLong')}
       </h2>
       <p className="mt-2 text-xs text-muted-foreground">
-        Удаляет загрузки, плейлисты, историю и любые другие данные выбранного пользователя.
-        Действие нельзя отменить.
+        {t('admin_panels.userPurge.hintLong')}
       </p>
 
       <div className="mt-4 flex flex-col gap-3">
@@ -88,7 +97,7 @@ export function AdminUserPurgePanel() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ID, @username или имя"
+            placeholder={t('admin_panels.userPurge.searchPlaceholder')}
             className="w-full rounded-[var(--radius-sm)] border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-accent)]"
           />
         </div>
@@ -120,7 +129,7 @@ export function AdminUserPurgePanel() {
                       {u.is_admin ? ' • admin' : ''}
                     </span>
                   </span>
-                  {isSelected && <span className="text-[var(--color-accent)]">выбран</span>}
+                  {isSelected && <span className="text-[var(--color-accent)]">{t('admin_panels.userPurge.selectedTag')}</span>}
                 </button>
               );
             })}
@@ -128,7 +137,7 @@ export function AdminUserPurgePanel() {
         ) : null}
 
         {debounced && !search.isFetching && (search.data?.items?.length ?? 0) === 0 && (
-          <p className="text-xs text-muted-foreground">Ничего не найдено.</p>
+          <p className="text-xs text-muted-foreground">{t('admin_panels.userPurge.searchEmpty')}</p>
         )}
 
         {selected && (
@@ -147,19 +156,19 @@ export function AdminUserPurgePanel() {
                   setConfirmInput('');
                 }}
                 className="text-muted-foreground hover:text-foreground"
-                aria-label="Снять выбор"
+                aria-label={t('admin_panels.userPurge.clearSelectionAria')}
               >
                 <X size={14} />
               </button>
             </div>
             <p className="mt-3 text-muted-foreground">
-              Чтобы подтвердить удаление, введите слово{' '}
-              <code className="rounded bg-secondary px-1">{CONFIRM_PHRASE}</code>:
+              {t('admin_panels.userPurge.confirmHint')}{' '}
+              <code className="rounded bg-secondary px-1">{localizedConfirmPhrase}</code>:
             </p>
             <input
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value)}
-              placeholder={CONFIRM_PHRASE}
+              placeholder={localizedConfirmPhrase}
               className="mt-2 w-full rounded-[var(--radius-sm)] border border-border bg-background px-3 py-2 text-sm outline-none focus:border-[var(--color-danger)]"
               autoComplete="off"
             />
@@ -171,11 +180,11 @@ export function AdminUserPurgePanel() {
             >
               {purge.isPending ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" /> Удаляем…
+                  <Loader2 size={14} className="animate-spin" /> {t('admin_panels.userPurge.submitting')}
                 </>
               ) : (
                 <>
-                  <Trash2 size={14} /> Удалить все данные
+                  <Trash2 size={14} /> {t('admin_panels.userPurge.submitDestructive')}
                 </>
               )}
             </Button>
@@ -186,13 +195,13 @@ export function AdminUserPurgePanel() {
 
         {receipt?.ok && receipt.deleted && (
           <div className="rounded-[var(--radius-sm)] border border-border bg-card p-3 text-xs">
-            <div className="font-medium">Готово</div>
+            <div className="font-medium">{t('admin_panels.userPurge.receiptTitle')}</div>
             <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
-              <li>Удалена запись пользователя: {receipt.deleted.userRow}</li>
-              <li>Удалено файлов из R2: {receipt.deleted.r2Objects}</li>
+              <li>{t('admin_panels.userPurge.receiptUserRow', { n: receipt.deleted.userRow })}</li>
+              <li>{t('admin_panels.userPurge.receiptR2Ok', { n: receipt.deleted.r2Objects })}</li>
               {receipt.deleted.r2Failed > 0 && (
                 <li className="text-[var(--color-danger)]">
-                  Не удалось удалить файлов: {receipt.deleted.r2Failed}
+                  {t('admin_panels.userPurge.receiptR2Failed', { n: receipt.deleted.r2Failed })}
                 </li>
               )}
             </ul>
