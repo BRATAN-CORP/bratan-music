@@ -1,15 +1,22 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Sun, Moon } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
+import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { LOCALES, useI18n } from '@/i18n';
 
 /**
  * Small floating preferences bar — pinned to the top-right of the
- * viewport on every route. Carries the theme toggle and language
- * picker so unauthenticated visitors can flip between Russian /
- * English and dark / light without ever touching the auth-gated
- * profile page.
+ * viewport for ANONYMOUS visitors only. Carries the theme toggle and
+ * language picker so people landing on the marketing page can flip
+ * between Russian / English and dark / light before signing in.
+ *
+ * Why hidden when authenticated: signed-in users get the same two
+ * controls in the profile page (theme button in the IdentityHero,
+ * `<LanguageSwitcher />` in its own SettingsCard). Showing the bar
+ * on top of that creates two separate places to change the same
+ * setting, which the user flagged as visual noise. The bar is for
+ * unauth users who otherwise wouldn't have any access at all.
  *
  * Why a separate component instead of dropping it into the sidebar:
  *   - The sidebar is `lg:flex` only, so on phones the toggles would
@@ -33,10 +40,16 @@ import { LOCALES, useI18n } from '@/i18n';
  */
 export function QuickPrefsBar() {
   const { theme, toggleTheme } = useUiStore();
+  const isAuthed = useAuthStore((s) => Boolean(s.accessToken));
   const fullscreen = usePlayerStore((s) => s.fullscreen);
   const { locale, setLocale, t } = useI18n();
   const reduce = useReducedMotion();
 
+  // Authed users have these controls in /profile; the floating bar is
+  // strictly the unauth-fallback. The check happens after the hook
+  // calls so re-orderings of the auth state don't trip the rules-of-
+  // hooks linter.
+  if (isAuthed) return null;
   if (fullscreen) return null;
 
   return (
@@ -71,9 +84,13 @@ export function QuickPrefsBar() {
         </AnimatePresence>
       </motion.button>
 
-      {/* Locale segmented pill — two flag buttons sharing a frame.
+      {/* Locale segmented pill — two text-only buttons sharing a
+          frame ("RU" / "EN"). Flags were tried and pulled: emoji
+          flag rendering is wildly inconsistent across Linux / Win
+          (often rendered as fallback boxes) and they don't carry
+          meaningful information beyond the two-letter code anyway.
           The active option carries the accent gradient, the other
-          stays a plain ghost. Tapping the inactive flag flips the
+          stays a plain ghost. Tapping the inactive code flips the
           locale immediately; there's no menu to traverse. */}
       <div
         role="radiogroup"
@@ -110,9 +127,8 @@ export function QuickPrefsBar() {
                   aria-hidden
                 />
               )}
-              <span className="relative z-10 inline-flex items-center gap-1">
-                <span aria-hidden className="text-[12px] leading-none">{option.flag}</span>
-                <span>{option.code}</span>
+              <span className="relative z-10 inline-flex items-center">
+                {option.code}
               </span>
             </motion.button>
           );

@@ -42,7 +42,6 @@ export function LanguageSwitcher() {
           <LocaleButton
             key={option.code}
             code={option.code}
-            flag={option.flag}
             label={t(option.nameKey)}
             active={locale === option.code}
             onSelect={() => setLocale(option.code)}
@@ -55,13 +54,12 @@ export function LanguageSwitcher() {
 
 interface LocaleButtonProps {
   code: Locale;
-  flag: string;
   label: string;
   active: boolean;
   onSelect: () => void;
 }
 
-function LocaleButton({ code, flag, label, active, onSelect }: LocaleButtonProps) {
+function LocaleButton({ code, label, active, onSelect }: LocaleButtonProps) {
   return (
     <motion.button
       type="button"
@@ -92,7 +90,6 @@ function LocaleButton({ code, flag, label, active, onSelect }: LocaleButtonProps
           active ? 'text-[var(--color-on-accent,_white)]' : 'text-foreground'
         }`}
       >
-        <span aria-hidden className="text-[13px] leading-none">{flag}</span>
         {label}
         {active && (
           <motion.span
