@@ -4,6 +4,7 @@ import { jwtAuth, adminOnly } from '../middleware/auth';
 import { UserService } from '../services/UserService';
 import { SubscriptionService } from '../services/SubscriptionService';
 import { TidalAuth } from '../services/tidal/TidalAuth';
+import { TidalPool } from '../services/tidal/TidalPool';
 
 const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -321,6 +322,80 @@ admin.post('/tidal/logout', async (c) => {
   const auth = new TidalAuth(c.env);
   await auth.clearSession();
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Tidal account POOL management — multi-account horizontal scaling.
+//
+// The legacy /admin/tidal/refresh-token endpoint above adds (or upserts) a
+// new pool account in addition to its original behaviour, so existing
+// clients keep working. The endpoints below let admins enumerate, label,
+// disable/enable, or remove individual accounts without affecting the
+// rest of the pool.
+// ---------------------------------------------------------------------------
+
+admin.get('/tidal/accounts', async (c) => {
+  const pool = new TidalPool(c.env);
+  const items = await pool.list();
+  return c.json({ items });
+});
+
+interface AddAccountBody {
+  refreshToken?: string;
+  label?: string;
+}
+
+admin.post('/tidal/accounts', async (c) => {
+  const body = await c.req.json<AddAccountBody>().catch(() => ({} as AddAccountBody));
+  const refreshToken = body.refreshToken?.trim();
+  if (!refreshToken) {
+    return c.json({ error: 'refreshToken обязателен' }, 400);
+  }
+  try {
+    const auth = new TidalAuth(c.env);
+    const tokens = await auth.installRefreshToken(refreshToken, body.label?.trim() || undefined);
+    return c.json({
+      ok: true,
+      userId: tokens.userId,
+      countryCode: tokens.countryCode,
+      expiresAt: tokens.expiresAt,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Ошибка установки токена';
+    return c.json({ error: message }, 400);
+  }
+});
+
+admin.patch('/tidal/accounts/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isFinite(id) || id <= 0) return c.json({ error: 'invalid id' }, 400);
+  interface PatchBody { label?: string | null; enabled?: boolean }
+  const body = await c.req.json<PatchBody>().catch(() => ({} as PatchBody));
+  const pool = new TidalPool(c.env);
+  if (body.label !== undefined) {
+    await pool.setLabel(id, body.label === null ? null : body.label.trim());
+  }
+  if (typeof body.enabled === 'boolean') {
+    await pool.setEnabled(id, body.enabled);
+  }
+  return c.json({ ok: true });
+});
+
+admin.delete('/tidal/accounts/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isFinite(id) || id <= 0) return c.json({ error: 'invalid id' }, 400);
+  const pool = new TidalPool(c.env);
+  await pool.remove(id);
+  return c.json({ ok: true });
+});
+
+admin.post('/tidal/accounts/:id/refresh', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isFinite(id) || id <= 0) return c.json({ error: 'invalid id' }, 400);
+  const auth = new TidalAuth(c.env);
+  const sub = await auth.refreshSubscriptionInfo(id);
+  if (!sub) return c.json({ error: 'Не удалось обновить подписку' }, 502);
+  return c.json({ ok: true, ...sub });
 });
 
 // ---------------------------------------------------------------------------
