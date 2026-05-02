@@ -141,9 +141,9 @@ function Inner() {
             className="rounded-[var(--radius-xl)]"
           >
           <motion.div
-            initial={reduce ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE_SPRING, delay: 0.05 }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.45, ease: EASE_SPRING, delay: 0.05 }}
             className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-6"
           >
             {/* Static idle gradient — same two-corner signature as the
