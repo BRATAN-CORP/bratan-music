@@ -2,19 +2,21 @@ import { Link, NavLink } from 'react-router-dom';
 import { Search, Library, User, Home, Heart, ListMusic, Pin, Headphones, Sparkles } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
 import { usePlaylistsList } from '@/hooks/useLibrary';
+import { useT, type TranslationKey } from '@/i18n';
 
-const navItems = [
-  { to: '/', icon: Home, label: 'Главная' },
-  { to: '/search', icon: Search, label: 'Поиск' },
-  { to: '/library', icon: Library, label: 'Библиотека' },
-  { to: '/ai', icon: Sparkles, label: 'AI плейлист' },
-  { to: '/rooms', icon: Headphones, label: 'Комнаты' },
-  { to: '/profile', icon: User, label: 'Профиль' },
+const navItems: { to: string; icon: typeof Home; labelKey: TranslationKey; fallback: string }[] = [
+  { to: '/', icon: Home, labelKey: 'nav.home', fallback: 'Главная' },
+  { to: '/search', icon: Search, labelKey: 'nav.search', fallback: 'Поиск' },
+  { to: '/library', icon: Library, labelKey: 'nav.library', fallback: 'Библиотека' },
+  { to: '/ai', icon: Sparkles, labelKey: 'nav.aiPlaylist', fallback: 'AI плейлист' },
+  { to: '/rooms', icon: Headphones, labelKey: 'nav.rooms', fallback: 'Комнаты' },
+  { to: '/profile', icon: User, labelKey: 'nav.profile', fallback: 'Профиль' },
 ];
 
 export function Sidebar() {
   const { sidebarOpen } = useUiStore();
   const { data: playlists } = usePlaylistsList();
+  const t = useT();
 
   if (!sidebarOpen) return null;
 
@@ -42,7 +44,7 @@ export function Sidebar() {
         Bratan&nbsp;Music
       </Link>
       <nav className="flex flex-col gap-0.5 px-3">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, labelKey, fallback }) => (
           <NavLink
             key={to}
             to={to}
@@ -56,7 +58,7 @@ export function Sidebar() {
             }
           >
             <Icon size={16} />
-            {label}
+            {t(labelKey) || fallback}
           </NavLink>
         ))}
       </nav>

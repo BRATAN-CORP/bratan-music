@@ -1,0 +1,49 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "close": "Close",
+    "remove": "Remove",
+    "apply": "Apply",
+    "loading": "Loading…",
+    "error": "Error",
+    "retry": "Try again",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "library": "Library",
+    "aiPlaylist": "AI playlist",
+    "rooms": "Rooms",
+    "profile": "Profile",
+    "explore": "Discover",
+    "history": "History"
+  },
+  "settings": {
+    "title": "Settings",
+    "playback": "Playback",
+    "quality": "Quality",
+    "appearance": "Appearance",
+    "language": "Interface language",
+    "languageHint": "Changes the language across the entire app.",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "crossfade": "Crossfade",
+    "crossfadeHint": "Mixes the next track over the current one",
+    "crossfadeDuration": "Duration",
+    "infinitePlayback": "Endless playback",
+    "infinitePlaybackHint": "Auto-fills the queue with similar tracks when it runs low"
+  },
+  "auth": {
+    "loginRequired": "Sign in again",
+    "logout": "Log out"
+  },
+  "languages": {
+    "ru": "Русский",
+    "en": "English"
+  }
+}

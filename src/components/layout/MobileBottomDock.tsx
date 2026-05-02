@@ -9,6 +9,7 @@ import { Marquee } from '@/components/ui/Marquee';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { useT, type TranslationKey } from '@/i18n';
 
 /**
  * Horizontal inset (px) applied to the timeline thumb so it never
@@ -21,12 +22,12 @@ import { ArtistLinks } from '@/components/features/ArtistLinks';
  */
 const RAIL_INSET_PX = 12;
 
-const navItems = [
-  { to: '/', icon: Home, label: 'Главная' },
-  { to: '/search', icon: Search, label: 'Поиск' },
-  { to: '/library', icon: Library, label: 'Библиотека' },
-  { to: '/profile', icon: UserIcon, label: 'Профиль' },
-] as const;
+const navItems: { to: string; icon: typeof Home; labelKey: TranslationKey; fallback: string }[] = [
+  { to: '/', icon: Home, labelKey: 'nav.home', fallback: 'Главная' },
+  { to: '/search', icon: Search, labelKey: 'nav.search', fallback: 'Поиск' },
+  { to: '/library', icon: Library, labelKey: 'nav.library', fallback: 'Библиотека' },
+  { to: '/profile', icon: UserIcon, labelKey: 'nav.profile', fallback: 'Профиль' },
+];
 
 /**
  * Unified mobile bottom dock — a SINGLE liquid-glass surface that
@@ -55,6 +56,7 @@ export function MobileBottomDock() {
   const reduce = useReducedMotion();
   const navigate = useNavigate();
   const { isLiked, toggle } = useToggleLike();
+  const t = useT();
 
   // Bar coordinate system matches the thumb: both inset by RAIL_INSET_PX
   // on each side so the bar's right edge lands exactly under the thumb's
@@ -310,7 +312,9 @@ export function MobileBottomDock() {
       </AnimatePresence>
 
       <nav className="flex h-14 items-center justify-around">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, labelKey, fallback }) => (
+          // Inline binding so the closure captures the localized label.
+          // Keeping the loop variable name short keeps the JSX one-liner.
           <NavLink
             key={to}
             to={to}
@@ -322,7 +326,7 @@ export function MobileBottomDock() {
             }
           >
             <Icon size={18} />
-            {label}
+            {t(labelKey) || fallback}
           </NavLink>
         ))}
       </nav>
