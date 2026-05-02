@@ -67,6 +67,10 @@ export interface RoomStatePoll {
   version?: number;
   state?: RoomState;
   members?: RoomMember[];
+  /** Live-mirrored from the server so non-host members observe the
+   *  host-only-control toggle within one poll tick instead of needing
+   *  to re-fetch the full room detail. */
+  hostOnlyControl?: boolean;
   serverNowMs: number;
 }
 

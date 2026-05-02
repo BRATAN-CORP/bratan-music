@@ -341,6 +341,16 @@ export function useRoomBridge(): void {
         if (cancelled) return;
         refs.current.serverClockOffsetMs = res.serverNowMs - Date.now();
         setLive(true);
+        // Mirror the server-pushed hostOnlyControl flag into the
+        // connection store regardless of whether the version bumped —
+        // members must observe the host's toggle within one poll
+        // window without needing to re-fetch the full room detail.
+        if (typeof res.hostOnlyControl === 'boolean') {
+          const cs = useRoomConnectionStore.getState();
+          if (cs.hostOnlyControl !== res.hostOnlyControl) {
+            cs.setHostOnlyControl(res.hostOnlyControl);
+          }
+        }
         if (!res.unchanged && res.state) {
           await applyRoomState(res.state, res.members ?? [], res.serverNowMs);
         } else if (res.unchanged) {

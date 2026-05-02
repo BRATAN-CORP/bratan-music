@@ -101,15 +101,17 @@ rooms.get('/:id/state', async (c) => {
   await svc.heartbeat(id, userId);
   const stateRow = await svc.getState(id);
   if (!stateRow) return c.json({ error: 'Нет состояния' }, 404);
+  const room = await svc.findById(id);
+  const hostOnlyControl = room?.host_only_control === 1;
   const sinceRaw = c.req.query('since');
   const since = sinceRaw ? parseInt(sinceRaw, 10) : NaN;
   const serverNowMs = Date.now();
   if (Number.isFinite(since) && stateRow.version <= since) {
-    return c.json({ unchanged: true, version: stateRow.version, serverNowMs });
+    return c.json({ unchanged: true, version: stateRow.version, hostOnlyControl, serverNowMs });
   }
   const state = svc.toRoomState(stateRow);
   const members = await svc.listMembers(id);
-  return c.json({ unchanged: false, state, members, serverNowMs });
+  return c.json({ unchanged: false, state, members, hostOnlyControl, serverNowMs });
 });
 
 rooms.post('/:id/heartbeat', async (c) => {
