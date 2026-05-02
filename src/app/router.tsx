@@ -6,6 +6,7 @@ import { useRoomBridge } from '@/hooks/useRoomBridge';
 import { usePlayerStore } from '@/store/player';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileBottomDock } from '@/components/layout/MobileBottomDock';
+import { QuickPrefsBar } from '@/components/layout/QuickPrefsBar';
 import { Player } from '@/components/layout/Player';
 import { FullscreenPlayer } from '@/components/layout/FullscreenPlayer';
 import { PageTransition } from '@/components/ui/PageTransition';
@@ -128,6 +129,7 @@ function AppLayout() {
       <SubscriptionDialog />
       <OnboardingTour />
       <RoomConnectedBadge />
+      <QuickPrefsBar />
       <GlassFilter />
     </div>
   );

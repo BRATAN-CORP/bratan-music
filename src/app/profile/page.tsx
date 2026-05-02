@@ -22,6 +22,7 @@ import { LanguageSwitcher } from '@/components/features/LanguageSwitcher';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
+import { ClearHistoryPanel } from '@/components/features/ClearHistoryPanel';
 import { ResetTourPanel } from '@/components/features/ResetTourPanel';
 import { AdminDashboard } from '@/app/admin/page';
 import { useT, useI18n } from '@/i18n';
@@ -163,12 +164,17 @@ export function ProfilePage() {
           </SettingsCard>
         </div>
 
-        <SettingsCard title={t('profile.languageTitle')} icon={Languages}>
+        <SettingsCard
+          title={t('profile.languageTitle')}
+          icon={Languages}
+          hint={t('settings.languageHint')}
+        >
           <LanguageSwitcher />
         </SettingsCard>
 
         <div className="grid gap-4 md:grid-cols-2">
           <ResetRecommendationsPanel />
+          <ClearHistoryPanel />
           <ResetTourPanel />
         </div>
 
