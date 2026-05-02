@@ -1,5 +1,6 @@
 import type { Env } from '../../types/env';
 import { encryptSecret, decryptSecret } from './sessionCrypto';
+import { TidalPool, fetchSubscriptionInfo } from './TidalPool';
 
 interface TidalTokens {
   accessToken: string;
@@ -52,14 +53,30 @@ export class TidalAuth {
    * ~50-100 ms per repeat.
    */
   private sessionPromise: Promise<TidalTokens | null> | null = null;
+  /** Once set, every subsequent read/write on this instance is
+   *  scoped to this pool account. `null` means "legacy singleton row".
+   *  We pin the picked account on first load so a single request
+   *  doesn't fan out to multiple Tidal accounts mid-search. */
+  private boundAccountId: number | null = null;
+  private pool: TidalPool;
 
-  constructor(private env: Env) {}
+  constructor(private env: Env) {
+    this.pool = new TidalPool(env);
+  }
 
   /** Drop the per-instance session memo. Call after writes
    *  (`cacheSession`, `clearCachedSession`) so the next reader sees the
    *  fresh row instead of the cached one. */
   private invalidateSessionCache(): void {
     this.sessionPromise = null;
+  }
+
+  /** Pin this instance to a specific pool account. Used by admin
+   *  endpoints that target a single account (e.g. swap tokens for
+   *  account #3). Default is the picker. */
+  bindAccount(id: number | null): void {
+    this.boundAccountId = id;
+    this.invalidateSessionCache();
   }
 
   private clientId(): string {
@@ -157,12 +174,18 @@ export class TidalAuth {
 
   /** Tries the given refresh token against every candidate client. Returns
    * the freshly minted tokens (with clientId/secret stamped on them) on the
-   * first success. */
+   * first success. Records failure on the bound pool account so it can be
+   * auto-disabled after enough strikes. */
   private async refreshSession(refreshToken: string): Promise<TidalTokens | null> {
     const candidates = await this.candidateClients();
+    let lastError: string | null = null;
     for (const c of candidates) {
       const tokens = await this.refreshWithClient(refreshToken, c);
       if (tokens) return tokens;
+      lastError = `refresh failed for client ${c.id}`;
+    }
+    if (this.boundAccountId !== null && lastError) {
+      await this.pool.markError(this.boundAccountId, lastError).catch(() => null);
     }
     return null;
   }
@@ -377,29 +400,80 @@ export class TidalAuth {
     }
   }
 
-  /** Public wrapper around the cached KV session, used by the admin UI. */
+  /** Public wrapper around the cached session, used by the legacy
+   *  admin UI. Reads from whichever pool account this instance is
+   *  pinned to (or the picker default). */
   async readSession(): Promise<TidalTokens | null> {
     return this.getCachedSession();
   }
 
-  /** Wipes the cached Tidal session (admin "logout"). */
+  /** Wipes the bound pool account (admin "logout"). When no account is
+   *  pinned this clears the entire pool plus the legacy singleton row,
+   *  preserving the existing one-shot semantics that callers rely on. */
   async clearSession(): Promise<void> {
-    await this.env.DB.prepare('DELETE FROM tidal_session WHERE id = 1').run().catch(() => null);
-    // Best-effort KV cleanup so legacy data doesn't shadow D1.
-    await this.env.SESSIONS.delete(KV_KEY).catch(() => {});
+    if (this.boundAccountId !== null) {
+      await this.pool.remove(this.boundAccountId);
+      this.boundAccountId = null;
+    } else {
+      // Legacy "logout everything" path. Wipe the singleton row and the
+      // KV blob; the pool stays untouched so admins manage it through
+      // the dedicated /admin/tidal/accounts endpoints.
+      await this.env.DB.prepare('DELETE FROM tidal_session WHERE id = 1').run().catch(() => null);
+      await this.env.SESSIONS.delete(KV_KEY).catch(() => {});
+    }
     this.invalidateSessionCache();
   }
 
   /**
    * Stores a refresh token (and optional access token) and validates by
-   * refreshing immediately. Used by the admin "swap account" form.
+   * refreshing immediately. The freshly minted tokens are persisted as a
+   * pool account (UNIQUE on Tidal user id — duplicate logins update in
+   * place). Subscription metadata is fetched best-effort and stored on
+   * the same row.
    */
-  async installRefreshToken(refreshToken: string): Promise<TidalTokens> {
+  async installRefreshToken(refreshToken: string, label?: string): Promise<TidalTokens> {
     const refreshed = await this.refreshSession(refreshToken);
     if (!refreshed) {
       throw new Error('Tidal отверг refresh token. Проверьте корректность или client_id/secret.');
     }
+    // refreshSession already cached the tokens via cacheSession → upsert.
+    // Now decorate the row with label + subscription info so the admin
+    // UI can show them. Best effort — we don't want to fail the install
+    // if Tidal is grumpy about /v1/users/.../subscription.
+    const targetId = await this.findAccountIdByUserId(refreshed.userId);
+    if (targetId !== null) {
+      if (label) await this.pool.setLabel(targetId, label);
+      const sub = await fetchSubscriptionInfo(refreshed.accessToken, refreshed.userId, refreshed.countryCode);
+      await this.pool.setSubscription(targetId, sub.subscriptionType, sub.validUntil);
+    }
     return refreshed;
+  }
+
+  /** Refresh subscription metadata for one account (admin "Проверить
+   *  подписку" button). Returns the freshly-fetched info or null on
+   *  failure. */
+  async refreshSubscriptionInfo(accountId: number): Promise<{ subscriptionType: string | null; validUntil: number | null } | null> {
+    const acc = await this.pool.getById(accountId);
+    if (!acc) return null;
+    this.bindAccount(accountId);
+    let token: string;
+    try {
+      token = await this.getAccessToken();
+    } catch {
+      return null;
+    }
+    const sub = await fetchSubscriptionInfo(token, acc.userId, acc.countryCode);
+    await this.pool.setSubscription(accountId, sub.subscriptionType, sub.validUntil);
+    return sub;
+  }
+
+  private async findAccountIdByUserId(userId: number): Promise<number | null> {
+    const row = await this.env.DB
+      .prepare('SELECT id FROM tidal_accounts WHERE user_id = ?')
+      .bind(userId)
+      .first<{ id: number }>()
+      .catch(() => null);
+    return row?.id ?? null;
   }
 
   private async getCachedSession(): Promise<TidalTokens | null> {
@@ -409,7 +483,31 @@ export class TidalAuth {
   }
 
   private async loadSessionFromStorage(): Promise<TidalTokens | null> {
-    // Primary: D1. Fallback: legacy KV blob from before the migration.
+    // Primary: pool account. The picker pins itself on first read so
+    // every subsequent call on this instance hits the same account.
+    if (this.boundAccountId !== null) {
+      const acc = await this.pool.getById(this.boundAccountId).catch(() => null);
+      if (acc) return this.tokensFromAccount(acc);
+    }
+    const picked = await this.pool.pickAccount().catch(() => null);
+    if (picked) {
+      this.boundAccountId = picked.id;
+      // Fire-and-forget: bump the LRU pointer so the next request
+      // picks a different account in the pool. We don't await — a D1
+      // round trip on every request would defeat the per-instance
+      // memo. The error-tracking path (markError) is sync because
+      // wrong-pick consequences matter more than perfect LRU.
+      this.env.DB
+        .prepare('UPDATE tidal_accounts SET last_used_at = ? WHERE id = ?')
+        .bind(Math.floor(Date.now() / 1000), picked.id)
+        .run()
+        .catch(() => null);
+      return this.tokensFromAccount(picked);
+    }
+
+    // Legacy fallback: singleton `tidal_session` row + ancient KV blob.
+    // Kept so a fresh deploy without any pool accounts still works
+    // off the env-configured TIDAL_REFRESH_TOKEN.
     const row = await this.env.DB
       .prepare(
         `SELECT access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret
@@ -435,18 +533,11 @@ export class TidalAuth {
           userId: row.user_id,
           countryCode: row.country_code,
           clientId: row.client_id ?? undefined,
-          // client_secret stays plaintext-or-encrypted via the same path —
-          // it's not as sensitive as the access/refresh pair (you also
-          // need the matching client_id and a *valid* refresh to use it),
-          // but the data is in the same row so we treat it the same way.
           clientSecret: row.client_secret
             ? await decryptSecret(row.client_secret, key)
             : undefined,
         };
       } catch (err) {
-        // If decryption fails the row is unusable. Log and fall through
-        // to KV so a stale-but-valid legacy session can still rescue us;
-        // the next refresh will overwrite the bad row.
         console.error('[TidalAuth] decrypt failed:', err instanceof Error ? err.message : err);
       }
     }
@@ -459,11 +550,38 @@ export class TidalAuth {
     }
   }
 
+  private tokensFromAccount(acc: { accessToken: string; refreshToken: string; expiresAt: number; userId: number; countryCode: string; clientId?: string; clientSecret?: string }): TidalTokens {
+    return {
+      accessToken: acc.accessToken,
+      refreshToken: acc.refreshToken,
+      expiresAt: acc.expiresAt,
+      userId: acc.userId,
+      countryCode: acc.countryCode,
+      clientId: acc.clientId,
+      clientSecret: acc.clientSecret,
+    };
+  }
+
   private async cacheSession(tokens: TidalTokens): Promise<void> {
     // Drop the per-instance memo — the row is about to change and the
     // next reader needs the fresh data, not the version we loaded
     // earlier in the request.
     this.invalidateSessionCache();
+
+    // Pool path: write to the bound account (or upsert by Tidal user id
+    // if no account is bound, which happens during installRefreshToken).
+    if (this.boundAccountId !== null) {
+      await this.pool.updateTokens(this.boundAccountId, tokens);
+      return;
+    }
+    const upserted = await this.pool.upsert(tokens);
+    this.boundAccountId = upserted.id;
+
+    // Also keep the legacy singleton row in sync IFF it already exists —
+    // this is the safety net for the rare case where a fresh worker boots
+    // with an empty pool (no rows in tidal_accounts) but the legacy row
+    // is still around from before the migration. We don't create the
+    // legacy row here; the migration is one-way.
     const updatedAt = Math.floor(Date.now() / 1000);
     const key = this.env.SESSION_ENCRYPTION_KEY;
     const [accessToken, refreshToken, clientSecret] = await Promise.all([
@@ -473,17 +591,11 @@ export class TidalAuth {
     ]);
     await this.env.DB
       .prepare(
-        `INSERT INTO tidal_session (id, access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret, updated_at)
-         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           access_token = excluded.access_token,
-           refresh_token = excluded.refresh_token,
-           expires_at = excluded.expires_at,
-           user_id = excluded.user_id,
-           country_code = excluded.country_code,
-           client_id = excluded.client_id,
-           client_secret = excluded.client_secret,
-           updated_at = excluded.updated_at`
+        `UPDATE tidal_session SET
+           access_token = ?, refresh_token = ?, expires_at = ?,
+           user_id = ?, country_code = ?,
+           client_id = ?, client_secret = ?, updated_at = ?
+         WHERE id = 1`
       )
       .bind(
         accessToken,
@@ -495,6 +607,7 @@ export class TidalAuth {
         clientSecret,
         updatedAt
       )
-      .run();
+      .run()
+      .catch(() => null);
   }
 }
