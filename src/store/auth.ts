@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { usePlayerStore } from '@/store/player';
+import { queryClient } from '@/lib/queryClient';
 
 interface User {
   id: string;
@@ -61,6 +62,14 @@ export const useAuthStore = create<AuthState>()(
         // Done before the auth state flip so any subscribers that react to
         // `user === null` see a clean player.
         usePlayerStore.getState().reset();
+        // Wipe React-Query cache so per-user data (pinned playlists,
+        // library, daily playlists, profile, limits, room state) doesn't
+        // bleed into the next session. Without this the sidebar keeps
+        // showing the previous account's pinned items until the user
+        // hard-refreshes the page — exactly the symptom reported by
+        // the user. `clear()` removes all queries and aborts in-flight
+        // requests, which is what we want at sign-out.
+        queryClient.clear();
         set({ user: null, accessToken: null, refreshToken: null });
       },
       isAuthenticated: () => get().accessToken !== null,
