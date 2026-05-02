@@ -179,7 +179,22 @@
     "uploadsCount": "{count} uploads",
     "deleteUpload": "Delete track",
     "editUpload": "Edit",
-    "play": "Play"
+    "play": "Play",
+    "collectionLabel": "Collection",
+    "tabAlbums": "Albums",
+    "tabArtists": "Artists",
+    "newPlaylistShort": "Playlist",
+    "uploadsEntry": "Uploads",
+    "uploadsEntrySubtitle": "{count} {form} · your files",
+    "trackUnit1": "track",
+    "trackUnit2_4": "tracks",
+    "trackUnit5plus": "tracks",
+    "loadingShort": "Loading…",
+    "noPlaylists": "No playlists yet",
+    "noAlbumsTitle": "No saved albums yet",
+    "noAlbumsHint": "Tap the heart on an album page",
+    "noArtistsTitle": "No saved artists yet",
+    "noArtistsHint": "Tap the heart on an artist page"
   },
   "playlist": {
     "loading": "Loading playlist…",
@@ -470,7 +485,8 @@
     "removeFromLibrary": "Remove from library",
     "tracks": "{count} tracks",
     "duration": "{duration}",
-    "releaseYear": "{year}"
+    "releaseYear": "{year}",
+    "compilation": "Compilation"
   },
   "daily": {
     "title": "Bratan Daily",
@@ -511,7 +527,7 @@
     "uploadFailed": "Couldn't upload {name}",
     "uploadSuccess": "Uploaded {name}",
     "delete": "Delete",
-    "deleteConfirm": "Delete this track?",
+    "deleteConfirm": "Delete the track “{title}”?",
     "deleteHint": "The file will be gone forever.",
     "edit": "Edit",
     "editTitle": "Edit track",
@@ -522,7 +538,20 @@
     "saving": "Saving…",
     "saveFailed": "Couldn't save",
     "size": "{size}",
-    "uploadedAt": "Uploaded {date}"
+    "uploadedAt": "Uploaded {date}",
+    "pageTitle": "Uploads",
+    "pageHint": "Your own audio files. Up to 50 MB each. MP3, FLAC, AAC, WAV.",
+    "back": "Back",
+    "upload": "Upload",
+    "loading": "Loading…",
+    "empty": "No uploads yet",
+    "emptyCta": "Upload your first file",
+    "errorUpload": "Couldn't upload the file",
+    "play": "Play",
+    "pause": "Pause",
+    "addToPlaylist": "Add to a playlist",
+    "addToPlaylistShort": "To playlist",
+    "libraryLabel": "Library"
   },
   "auth_more": {
     "loginRequired": "Sign in required",
@@ -795,5 +824,63 @@
     "uploadDone": "Uploaded",
     "uploadFailed": "Upload failed",
     "shared": "Shared"
+  },
+  "playlistCard": {
+    "tracksCount": "{count} {form}",
+    "actions": "Actions",
+    "rename": "Rename",
+    "pin": "Pin to panel",
+    "unpin": "Unpin",
+    "remove": "Delete playlist",
+    "removeLinked": "Remove from library",
+    "confirmTitle": "Delete playlist?",
+    "confirmTitleLinked": "Remove from library?",
+    "confirmDescription": "“{name}” will be deleted along with all of its tracks. This cannot be undone.",
+    "confirmDescriptionLinked": "“{name}” will stop showing up in your library. The original stays put — you can save it again later.",
+    "confirmButton": "Delete",
+    "confirmButtonLinked": "Remove"
+  },
+  "playlistTrackItem": {
+    "drag": "Drag to reorder"
+  },
+  "cover": {
+    "change": "Change cover",
+    "upload": "Upload cover",
+    "remove": "Remove cover",
+    "removeShort": "Remove",
+    "errorGeneric": "Something went wrong",
+    "errorUpload": "Upload failed"
+  },
+  "override": {
+    "title": "Override file",
+    "close": "Close",
+    "checking": "Checking…",
+    "currentVersion": "Your file is what plays right now. Replace it with a new upload or remove it to fall back to the original.",
+    "uploading": "Uploading…",
+    "replaceFile": "Replace file",
+    "pickFile": "Pick a file",
+    "deleting": "Removing…",
+    "deleteMy": "Remove my version",
+    "errorGeneric": "Something went wrong",
+    "errorUpload": "Upload failed"
+  },
+  "editUpload": {
+    "title": "Edit track",
+    "untitled": "Untitled",
+    "errorSave": "Couldn't save",
+    "errorImage": "Couldn't process the image",
+    "errorReplace": "Re-upload failed",
+    "close": "Close",
+    "changeCover": "Change cover",
+    "coverLabel": "Cover",
+    "fieldTitle": "Title",
+    "fieldArtists": "Artists",
+    "fieldArtistsPlaceholder": "Artist 1, Artist 2",
+    "fieldAlbum": "Album (optional)",
+    "audioFile": "Audio file",
+    "audioMeta": "{size} MB · {mime}",
+    "replace": "Re-upload",
+    "cancel": "Cancel",
+    "save": "Save"
   }
 }

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useRemovePlaylistCover, useSetPlaylistCover } from '@/hooks/useLibrary';
 import { resizeImageToDataUrl } from '@/lib/imageResize';
+import { useT } from '@/i18n';
 
 interface PlaylistCoverButtonProps {
   playlistId: string;
@@ -14,6 +15,7 @@ interface PlaylistCoverButtonProps {
 export function PlaylistCoverButton({
   playlistId, hasCover, className, label,
 }: PlaylistCoverButtonProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const setCover = useSetPlaylistCover();
   const removeCover = useRemovePlaylistCover();
@@ -27,7 +29,7 @@ export function PlaylistCoverButton({
       const dataUrl = await resizeImageToDataUrl(file);
       await setCover.mutateAsync({ id: playlistId, dataUrl });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки');
+      setError(e instanceof Error ? e.message : t('cover.errorUpload'));
     }
   };
 
@@ -37,7 +39,7 @@ export function PlaylistCoverButton({
     try {
       await removeCover.mutateAsync(playlistId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка');
+      setError(e instanceof Error ? e.message : t('cover.errorGeneric'));
     }
   };
 
@@ -63,7 +65,7 @@ export function PlaylistCoverButton({
           className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
         >
           {setCover.isPending ? <Loader2 size={12} className="animate-spin" /> : <ImagePlus size={12} />}
-          {label ?? (hasCover ? 'Сменить обложку' : 'Загрузить обложку')}
+          {label ?? (hasCover ? t('cover.change') : t('cover.upload'))}
         </button>
         {hasCover && (
           <button
@@ -71,10 +73,10 @@ export function PlaylistCoverButton({
             disabled={busy}
             onClick={handleRemove}
             className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-transparent px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-60"
-            aria-label="Удалить обложку"
+            aria-label={t('cover.remove')}
           >
             {removeCover.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-            Убрать
+            {t('cover.removeShort')}
           </button>
         )}
       </div>

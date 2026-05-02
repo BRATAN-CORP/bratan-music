@@ -11,6 +11,7 @@ import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackKebabMenu } from '@/components/features/TrackKebabMenu';
+import { useT } from '@/i18n';
 
 interface PlaylistTrackItemProps {
   track: Track;
@@ -42,6 +43,7 @@ export function PlaylistTrackItem({
   onReorderEnd,
   hideRemoveMenu,
 }: PlaylistTrackItemProps) {
+  const t = useT();
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const { isLiked, toggle } = useToggleLike();
   const liked = isAuthed && isLiked(track.id);
@@ -84,7 +86,7 @@ export function PlaylistTrackItem({
           onPointerDown={handleDragStart}
           onClick={(e) => e.stopPropagation()}
           className="-ml-1 flex h-8 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground transition-colors hover:text-foreground active:cursor-grabbing"
-          aria-label="Перетащить"
+          aria-label={t('playlistTrackItem.drag')}
           tabIndex={-1}
         >
           <GripVertical size={14} />
@@ -145,7 +147,7 @@ export function PlaylistTrackItem({
             if (!isAuthed) return;
             toggle(track);
           }}
-          aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+          aria-label={liked ? t('player.unlike') : t('player.like')}
         >
           <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
         </Button>
@@ -157,8 +159,8 @@ export function PlaylistTrackItem({
               className="h-7 w-7"
               onClick={handleDownload}
               disabled={downloading}
-              aria-label="Скачать"
-              title="Скачать"
+              aria-label={t('track.download')}
+              title={t('track.download')}
             >
               <Download size={14} />
             </Button>
@@ -167,8 +169,8 @@ export function PlaylistTrackItem({
               size="icon"
               className="h-7 w-7"
               onClick={(e) => { e.stopPropagation(); setOverrideOpen(true); }}
-              aria-label="Загрузить свою версию"
-              title="Загрузить свою версию"
+              aria-label={t('track.uploadOwn')}
+              title={t('track.uploadOwn')}
             >
               <Upload size={14} />
             </Button>

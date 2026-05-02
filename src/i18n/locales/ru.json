@@ -179,7 +179,22 @@
     "uploadsCount": "{count} загрузок",
     "deleteUpload": "Удалить трек",
     "editUpload": "Изменить",
-    "play": "Воспроизвести"
+    "play": "Воспроизвести",
+    "collectionLabel": "Коллекция",
+    "tabAlbums": "Альбомы",
+    "tabArtists": "Артисты",
+    "newPlaylistShort": "Плейлист",
+    "uploadsEntry": "Загруженные",
+    "uploadsEntrySubtitle": "{count} {form} · ваши файлы",
+    "trackUnit1": "трек",
+    "trackUnit2_4": "трека",
+    "trackUnit5plus": "треков",
+    "loadingShort": "Загрузка…",
+    "noPlaylists": "У вас пока нет плейлистов",
+    "noAlbumsTitle": "Нет сохранённых альбомов",
+    "noAlbumsHint": "Нажмите сердечко на странице альбома",
+    "noArtistsTitle": "Нет сохранённых артистов",
+    "noArtistsHint": "Нажмите сердечко на странице артиста"
   },
   "playlist": {
     "loading": "Загружаем плейлист…",
@@ -470,7 +485,8 @@
     "removeFromLibrary": "Убрать из библиотеки",
     "tracks": "{count} треков",
     "duration": "{duration}",
-    "releaseYear": "{year}"
+    "releaseYear": "{year}",
+    "compilation": "Сборник"
   },
   "daily": {
     "title": "Bratan Daily",
@@ -511,9 +527,9 @@
     "uploadFailed": "Не удалось загрузить {name}",
     "uploadSuccess": "Загружено {name}",
     "delete": "Удалить",
-    "deleteConfirm": "Удалить трек?",
+    "deleteConfirm": "Удалить трек «{title}»?",
     "deleteHint": "Файл будет безвозвратно удалён.",
-    "edit": "Изменить",
+    "edit": "Редактировать",
     "editTitle": "Изменить трек",
     "editTrackName": "Название",
     "editArtist": "Артист",
@@ -522,7 +538,20 @@
     "saving": "Сохраняем…",
     "saveFailed": "Не удалось сохранить",
     "size": "{size}",
-    "uploadedAt": "Загружено {date}"
+    "uploadedAt": "Загружено {date}",
+    "pageTitle": "Загруженные",
+    "pageHint": "Свои аудиофайлы. До 50 МБ каждый. MP3, FLAC, AAC, WAV.",
+    "back": "Назад",
+    "upload": "Загрузить",
+    "loading": "Загрузка…",
+    "empty": "У вас пока нет загруженных треков",
+    "emptyCta": "Загрузить первый файл",
+    "errorUpload": "Не удалось загрузить файл",
+    "play": "Воспроизвести",
+    "pause": "Пауза",
+    "addToPlaylist": "Добавить в плейлист",
+    "addToPlaylistShort": "В плейлист",
+    "libraryLabel": "Библиотека"
   },
   "auth_more": {
     "loginRequired": "Требуется вход",
@@ -795,5 +824,63 @@
     "uploadDone": "Загружено",
     "uploadFailed": "Не удалось загрузить",
     "shared": "Поделились"
+  },
+  "playlistCard": {
+    "tracksCount": "{count} {form}",
+    "actions": "Действия",
+    "rename": "Переименовать",
+    "pin": "Закрепить на панели",
+    "unpin": "Открепить",
+    "remove": "Удалить плейлист",
+    "removeLinked": "Убрать из библиотеки",
+    "confirmTitle": "Удалить плейлист?",
+    "confirmTitleLinked": "Убрать из библиотеки?",
+    "confirmDescription": "«{name}» будет удалён вместе со всеми треками. Это действие необратимо.",
+    "confirmDescriptionLinked": "«{name}» больше не будет появляться в вашей библиотеке. Оригинал останется доступен и вы сможете сохранить его снова.",
+    "confirmButton": "Удалить",
+    "confirmButtonLinked": "Убрать"
+  },
+  "playlistTrackItem": {
+    "drag": "Перетащить"
+  },
+  "cover": {
+    "change": "Сменить обложку",
+    "upload": "Загрузить обложку",
+    "remove": "Удалить обложку",
+    "removeShort": "Убрать",
+    "errorGeneric": "Ошибка",
+    "errorUpload": "Ошибка загрузки"
+  },
+  "override": {
+    "title": "Перезалив",
+    "close": "Закрыть",
+    "checking": "Проверка…",
+    "currentVersion": "Сейчас играет ваша версия. Можно заменить новым файлом или удалить, чтобы вернуть оригинал.",
+    "uploading": "Загрузка…",
+    "replaceFile": "Заменить файл",
+    "pickFile": "Выбрать файл",
+    "deleting": "Удаление…",
+    "deleteMy": "Удалить мою версию",
+    "errorGeneric": "Ошибка",
+    "errorUpload": "Ошибка загрузки"
+  },
+  "editUpload": {
+    "title": "Редактировать трек",
+    "untitled": "Без названия",
+    "errorSave": "Не удалось сохранить",
+    "errorImage": "Не удалось обработать изображение",
+    "errorReplace": "Ошибка перезаливки",
+    "close": "Закрыть",
+    "changeCover": "Сменить обложку",
+    "coverLabel": "Обложка",
+    "fieldTitle": "Название",
+    "fieldArtists": "Исполнители",
+    "fieldArtistsPlaceholder": "Артист 1, Артист 2",
+    "fieldAlbum": "Альбом (опционально)",
+    "audioFile": "Аудио файл",
+    "audioMeta": "{size} МБ · {mime}",
+    "replace": "Перезалить",
+    "cancel": "Отмена",
+    "save": "Сохранить"
   }
 }
