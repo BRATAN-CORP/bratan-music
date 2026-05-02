@@ -52,15 +52,26 @@ export function TiltCard({
       `radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,${glareStrength}) 0%, rgba(255,255,255,${glareStrength * 0.4}) 25%, transparent 60%)`,
   );
 
-  // When the user presses inside the card we freeze tilt updates
-  // until pointerup. CSS 3D transforms move children by a few pixels
-  // between mousedown and mouseup at any non-zero intensity, and the
-  // browser hit-tests pointerup against whatever element the cursor
-  // is over at release time. With the spring still animating, the
-  // button can drift out from under the cursor and the click is lost.
-  // Freezing during press keeps the visual identical (no visible
-  // jump — we don't snap to neutral, we just stop chasing the cursor)
-  // and guarantees mousedown/mouseup land on the same element.
+  // Freeze tilt updates while the pointer is pressed. CSS 3D
+  // transforms move children by a few pixels between mousedown and
+  // mouseup at any non-zero intensity, and the browser hit-tests
+  // pointerup against whatever element the cursor is over at release
+  // time. With the spring still in flight the button can drift out
+  // from under the cursor and the click is lost.
+  //
+  // We do two things on press to guarantee the click lands:
+  //   1. `pressed.current = true` so onMove stops feeding new targets
+  //      to the springs.
+  //   2. If the press lands on an interactive descendant (button,
+  //      link, input, textarea, [role="button"], or any element
+  //      opting in via `data-tilt-snap`), we *jump* the tilt springs
+  //      to neutral. The card straightens instantly so mouseup hits
+  //      the exact pixel mousedown started on. Visual cost is a brief
+  //      flatten that reads as the card "responding" to the click.
+  //
+  // For non-interactive presses (e.g. user drags from the empty card
+  // background) we just freeze without snapping — the card stays
+  // tilted and gives a more tactile press feel.
   const pressed = useRef(false);
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -82,7 +93,22 @@ export function TiltCard({
     pressed.current = false;
   };
 
-  const onDown = () => { pressed.current = true; };
+  const onDown = (e: PointerEvent<HTMLDivElement>) => {
+    pressed.current = true;
+    const target = e.target as Element | null;
+    if (
+      target?.closest(
+        'button, a, input, textarea, select, label, [role="button"], [role="link"], [data-tilt-snap]',
+      )
+    ) {
+      // Jump the springs straight to neutral so the button hit-box
+      // doesn't drift between mousedown and mouseup.
+      x.set(0);
+      y.set(0);
+      sx.jump(0);
+      sy.jump(0);
+    }
+  };
   const onUp = () => { pressed.current = false; };
 
   if (reduce) {
