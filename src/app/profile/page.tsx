@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  LogOut, Crown, Shield, Moon, Sun, Sliders, Music2,
+  LogOut, Crown, Shield, Moon, Sun, Sliders, Music2, Languages,
   Sparkles, Check, Lock, Wand2, Headphones, ArrowRight,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/Switch';
 import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
 import { AdminTidalPoolPanel } from '@/components/features/AdminTidalPoolPanel';
 import { AdminHealthPanel } from '@/components/features/AdminHealthPanel';
+import { LanguageSwitcher } from '@/components/features/LanguageSwitcher';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
@@ -160,6 +161,10 @@ export function ProfilePage() {
             </div>
           </SettingsCard>
         </div>
+
+        <SettingsCard title="Язык" icon={Languages}>
+          <LanguageSwitcher />
+        </SettingsCard>
 
         <div className="grid gap-4 md:grid-cols-2">
           <ResetRecommendationsPanel />
