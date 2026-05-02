@@ -179,6 +179,16 @@ user.post('/reset-recommendations', async (c) => {
       .run();
     deleted[table] = result.meta?.changes ?? 0;
   }
+  // Stamp a reset checkpoint so the next TasteService.recompute() ignores
+  // play_history rows from before this moment. Without this, the wave
+  // would still feel unchanged immediately after reset because recompute
+  // rebuilds the taste vector from preserved play_history. With it, the
+  // wave / continue / daily playlists all start from a genuinely fresh
+  // signal until the user listens to new things post-reset.
+  await c.env.DB
+    .prepare(`UPDATE users SET recommendations_reset_at = ?, updated_at = ? WHERE id = ?`)
+    .bind(Date.now(), Math.floor(Date.now() / 1000), userId)
+    .run();
   return c.json({ ok: true, deleted });
 });
 

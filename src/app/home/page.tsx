@@ -550,12 +550,16 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   const trackIds = useMemo(() => playlist.tracks.map((t) => t.id), [playlist.tracks]);
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
-  const play = () => {
+  const play = (e?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     if (playlist.tracks.length === 0) return;
     playCollection(playlist.tracks);
   };
 
-  const save = async () => {
+  const save = async (e?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
     if (isSaved) return;
     setSaving(true);
     try {
@@ -572,7 +576,12 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   };
 
   return (
-    <div
+    <Link
+      to={`/daily/${playlist.id}`}
+      // The whole card navigates to /daily/:id where the user can preview
+      // the full tracklist without committing to the library. Inner Play
+      // and "В библиотеку" buttons swallow the click via preventDefault +
+      // stopPropagation so their actions still work in place.
       className="group relative flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]"
     >
       {/* Cover header: gradient + cover image overlay. */}
@@ -598,7 +607,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
         </div>
 
         <button
-          onClick={play}
+          onClick={(e) => play(e)}
           aria-label={isCollectionPlaying ? 'Пауза' : 'Запустить плейлист'}
           className={cn(
             'absolute bottom-4 right-4 inline-flex h-12 w-12 items-center justify-center rounded-full shadow-[var(--shadow-lg)]',
@@ -627,7 +636,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
         </div>
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
-          <Button onClick={play} size="sm" className="gap-1.5" disabled={playlist.tracks.length === 0}>
+          <Button onClick={(e) => play(e)} size="sm" className="gap-1.5" disabled={playlist.tracks.length === 0}>
             {isCollectionPlaying ? (
               <>
                 <Pause size={14} fill="currentColor" />
@@ -641,7 +650,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
             )}
           </Button>
           <Button
-            onClick={save}
+            onClick={(e) => save(e)}
             size="sm"
             variant="outline"
             className="gap-1.5"
@@ -652,7 +661,7 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
           </Button>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

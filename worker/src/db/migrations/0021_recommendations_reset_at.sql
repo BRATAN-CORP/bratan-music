@@ -1,0 +1,18 @@
+-- Reset checkpoint for the recommendation engine.
+--
+-- Before this migration, "Сбросить рекомендации" wiped user_taste_profile,
+-- recommendation_seen, user_dislikes and daily_playlists. The wave still
+-- felt unchanged afterwards because TasteService.recompute() rebuilds the
+-- taste vector from `play_history` (which is intentionally preserved as a
+-- user-facing log). The wave then seeded from the same completedTrackIds
+-- as before, returning near-identical recommendations.
+--
+-- Adding a per-user "recommendations baseline" timestamp:
+--   - The reset endpoint sets it to "now" alongside the table wipes.
+--   - TasteService.recompute() ignores play_history rows older than this
+--     timestamp, so the wave / continue / daily playlists all start from
+--     a fresh signal until the user listens to new things.
+--
+-- Listening history pages are unaffected — they read play_history directly
+-- without applying this filter.
+ALTER TABLE users ADD COLUMN recommendations_reset_at INTEGER NOT NULL DEFAULT 0;
