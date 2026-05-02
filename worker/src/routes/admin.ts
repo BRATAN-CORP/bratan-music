@@ -5,6 +5,7 @@ import { UserService } from '../services/UserService';
 import { SubscriptionService } from '../services/SubscriptionService';
 import { TidalAuth } from '../services/tidal/TidalAuth';
 import { TidalPool } from '../services/tidal/TidalPool';
+import { HealthService } from '../services/HealthService';
 
 const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -387,6 +388,40 @@ admin.delete('/tidal/accounts/:id', async (c) => {
   const pool = new TidalPool(c.env);
   await pool.remove(id);
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Health + service logs.
+//
+// /admin/health bundles the "is everything fine?" checkboxes into one
+// payload — Tidal pool, D1 write probe, R2 reachability, last cron run,
+// and the recent-error counter.
+// /admin/logs returns the bounded service log ring with optional level
+// + source filters so admins can pinpoint user-visible errors.
+// ---------------------------------------------------------------------------
+
+admin.get('/health', async (c) => {
+  const svc = new HealthService(c.env);
+  const overview = await svc.getOverview();
+  return c.json(overview);
+});
+
+admin.get('/logs', async (c) => {
+  const svc = new HealthService(c.env);
+  const limit = Number(c.req.query('limit') ?? 100);
+  const offset = Number(c.req.query('offset') ?? 0);
+  const level = c.req.query('level') || undefined;
+  const source = c.req.query('source') || undefined;
+  const [items, sources] = await Promise.all([
+    svc.listLogs({
+      level,
+      source,
+      limit: Number.isFinite(limit) ? limit : 100,
+      offset: Number.isFinite(offset) ? offset : 0,
+    }),
+    svc.listSources(),
+  ]);
+  return c.json({ items, sources });
 });
 
 admin.post('/tidal/accounts/:id/refresh', async (c) => {
