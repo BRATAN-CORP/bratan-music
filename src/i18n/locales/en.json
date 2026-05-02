@@ -30,6 +30,8 @@
     "appearance": "Appearance",
     "language": "Interface language",
     "languageHint": "Changes the language across the entire app.",
+    "languageDeviceBadge": "From device",
+    "languageDeviceBadgeAria": "Matches the device language",
     "themeLight": "Light",
     "themeDark": "Dark",
     "crossfade": "Crossfade",
