@@ -14,9 +14,28 @@ import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useT, type TranslationKey } from '@/i18n';
+
+/**
+ * Stable, made-up listener identities for the listening-rooms demo
+ * on the landing. Real listeners aren't visible to unauthed visitors,
+ * so we synthesise a plausible 3-person room: distinct first names
+ * + Telegram-style usernames seed `UserAvatar` to produce the same
+ * gradient + initial render the rest of the app uses for real users
+ * (members list in /rooms, chat avatars, profile hero).
+ *
+ * Seeds picked so the three gradients land on visually distinct hue
+ * buckets in `fallbackGradient`'s palette \u2014 reads as "different
+ * people listening together", not three copies of the same colour.
+ */
+const ROOM_DEMO_LISTENERS: ReadonlyArray<{ name: string; username: string }> = [
+  { name: 'Alina',  username: 'alinka_synth' },
+  { name: 'Marat',  username: 'marat.bass'   },
+  { name: 'Sasha',  username: 'sashka.fm'    },
+];
 
 type Translate = ReturnType<typeof useT>;
 
@@ -437,10 +456,10 @@ function RoomsDemo() {
   const reduce = useReducedMotion();
   return (
     <div className="relative flex h-12 w-full items-center justify-between rounded-md border border-border bg-background px-3">
-      <div className="flex items-center gap-2">
-        {[0, 1, 2].map((i) => (
+      <div className="flex items-center -space-x-1.5">
+        {ROOM_DEMO_LISTENERS.map((listener, i) => (
           <motion.div
-            key={i}
+            key={listener.username}
             initial={false}
             animate={reduce ? undefined : { scale: [1, 1.08, 1] }}
             transition={{
@@ -449,11 +468,17 @@ function RoomsDemo() {
               ease: EASE,
               delay: i * 0.05,
             }}
-            className="relative flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-[10px] font-semibold uppercase text-muted-foreground"
+            className="relative"
+            style={{ zIndex: ROOM_DEMO_LISTENERS.length - i }}
           >
-            {String.fromCharCode(65 + i)}
+            <UserAvatar
+              name={listener.name}
+              username={listener.username}
+              className="h-7 w-7 rounded-full ring-2 ring-background"
+              initialsClassName="text-[10px]"
+            />
             <span
-              className="absolute -inset-0.5 rounded-full border border-[var(--color-accent)]/40 opacity-0 transition-opacity group-hover:opacity-100"
+              className="pointer-events-none absolute -inset-0.5 rounded-full border border-[var(--color-accent)]/40 opacity-0 transition-opacity group-hover:opacity-100"
               aria-hidden
             />
           </motion.div>
