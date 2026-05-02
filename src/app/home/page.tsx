@@ -81,7 +81,15 @@ export function HomePage() {
 
   return (
     <div className="relative w-full">
-      <section className="relative overflow-hidden pb-10 pt-12 sm:pt-16 lg:pb-14">
+      {/*
+       * Hero clipping. Same reasoning as the landing hero — see
+       * comment in `src/app/landing/page.tsx`. `clip-path: inset(0 0
+       * -240px 0)` keeps horizontal clipping while letting the bottom
+       * Aurora blob bleed 240px below the section, so the hero
+       * transitions softly into the daily-playlists grid instead of
+       * ending with a hard horizontal cut.
+       */}
+      <section className="relative pb-10 pt-12 sm:pt-16 lg:pb-14 [clip-path:inset(0_0_-240px_0)]">
         <Aurora variant="hero" />
         <div className="grid-bg absolute inset-0 opacity-20" aria-hidden />
 

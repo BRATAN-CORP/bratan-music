@@ -175,11 +175,18 @@ export function LandingPage() {
 
   return (
     <div className="relative w-full">
-      {/* `overflow-x-hidden` (not `overflow-hidden`) so the Aurora
-          bottom blob can bleed downward into the features grid —
-          horizontal scroll stays disabled, vertical bleed gives the
-          hero a soft transition instead of a hard clipped edge. */}
-      <section className="relative overflow-x-hidden pb-24 pt-20 sm:pt-28 lg:pb-32 lg:pt-36">
+      {/*
+       * Hero clipping. We don't use `overflow-hidden` because the bottom
+       * Aurora blob is supposed to bleed downward into the features
+       * grid (no hard horizontal cut line at the section edge). We
+       * also can't use `overflow-x-hidden` — per CSS spec, setting
+       * one axis to a non-`visible` value implicitly turns the other
+       * axis to `auto`, which clips both. Instead we use a clip-path
+       * inset with a NEGATIVE bottom: it keeps horizontal clipping
+       * (no scrollbars from extra-wide blobs) while extending the
+       * visible area 240px below the section so the blob can bleed.
+       */}
+      <section className="relative pb-24 pt-20 sm:pt-28 lg:pb-32 lg:pt-36 [clip-path:inset(0_0_-240px_0)]">
         <Aurora />
         <div className="grid-bg absolute inset-0 opacity-30" aria-hidden />
 

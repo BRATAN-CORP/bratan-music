@@ -98,12 +98,12 @@ img {
   pointer-events: none;
   // No `overflow: hidden` here. Whether the aurora blobs clip at the
   // section edge or bleed into the next section is controlled by the
-  // *parent* section's overflow rule — most pages use
-  // `overflow-hidden` and clip the aurora exactly at their edge, but
-  // the landing hero relaxes its section to `overflow-x-hidden` so
-  // the bottom blob spills downward into the features grid for a
-  // seamless visual transition (no hard horizontal seam between
-  // hero and the rest of the page).
+  // *parent* section. Most pages use `overflow-hidden` and clip the
+  // aurora exactly at their edge; the landing & home heroes use
+  // `[clip-path:inset(0_0_-240px_0)]` instead, which preserves
+  // horizontal clipping (no scrollbars from extra-wide blobs) while
+  // letting the bottom blob bleed ~240px past the section edge for a
+  // seamless transition into the next section.
   z-index: 0;
 
   &::before,
