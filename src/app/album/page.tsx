@@ -10,8 +10,10 @@ import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { toPlayerTrack } from '@/lib/playerTrack';
+import { useT } from '@/i18n';
 
 export function AlbumPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const { data: album, isLoading } = useAlbum(id ?? '');
   const setTrack = usePlayerStore((s) => s.setTrack);
@@ -22,7 +24,7 @@ export function AlbumPage() {
 
   // Hero "Play" button: shows Pause when any track from this album is the
   // current player track, and clicking toggles instead of restarting.
-  const trackIds = album?.tracks?.map((t) => t.id) ?? [];
+  const trackIds = album?.tracks?.map((tr) => tr.id) ?? [];
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
   const handlePlayTrack = (track: Track) => {
@@ -46,7 +48,7 @@ export function AlbumPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Загрузка...</p>
+          <p className="text-sm text-muted-foreground">{t('albumPage.loading')}</p>
         ) : album ? (
           <>
             {/* Hero, mirrored from the artist page: the cover doubles
@@ -90,7 +92,7 @@ export function AlbumPage() {
                 </div>
               )}
               <div className="flex flex-col justify-end gap-3">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Альбом</span>
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('albumPage.eyebrow')}</span>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{album.title}</h1>
                 {album.artists && album.artists.length > 1 ? (
                   <div className="text-sm text-muted-foreground">
@@ -118,11 +120,11 @@ export function AlbumPage() {
                   <Button onClick={handlePlayAll}>
                     {isCollectionPlaying ? (
                       <>
-                        <Pause size={14} fill="currentColor" /> Пауза
+                        <Pause size={14} fill="currentColor" /> {t('albumPage.pause')}
                       </>
                     ) : (
                       <>
-                        <Play size={14} fill="currentColor" /> {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                        <Play size={14} fill="currentColor" /> {isCollectionActive ? t('albumPage.continue') : t('albumPage.listen')}
                       </>
                     )}
                   </Button>
@@ -134,7 +136,7 @@ export function AlbumPage() {
                         ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
                         : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
                     }`}
-                    aria-label={liked ? 'Убрать из библиотеки' : 'Добавить в библиотеку'}
+                    aria-label={liked ? t('albumPage.unlike') : t('albumPage.like')}
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </button>
@@ -142,7 +144,7 @@ export function AlbumPage() {
                     path={`/album/${album.id}`}
                     shareTitle={album.title}
                     shareText={`${album.title} — ${album.artist}`}
-                    ariaLabel="Поделиться альбомом"
+                    ariaLabel={t('albumPage.shareAria')}
                   />
                 </div>
               </div>
@@ -156,7 +158,7 @@ export function AlbumPage() {
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Альбом не найден</p>
+          <p className="text-sm text-muted-foreground">{t('albumPage.notFound')}</p>
         )}
       </div>
     </AuthGuard>

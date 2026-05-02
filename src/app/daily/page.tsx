@@ -23,22 +23,24 @@ import type { DailyPlaylist } from '@/lib/recommendations';
 import type { Track } from '@/types';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import { usePlayerStore } from '@/store/player';
+import { useT, type TranslationKey } from '@/i18n';
 
-// Inline copy of HomePage's pluralRu — keeps this preview page free
-// of cross-page imports while sharing the same noun-form rules.
-function pluralRu(n: number, forms: [string, string, string]): string {
-  const m100 = n % 100;
-  if (m100 >= 11 && m100 <= 14) return forms[2];
-  const m10 = n % 10;
-  if (m10 === 1) return forms[0];
-  if (m10 >= 2 && m10 <= 4) return forms[1];
-  return forms[2];
+// Plural unit key for daily-playlist track counts. Mirrors the rules
+// inlined on /home but routes through the shared i18n dictionary so
+// English and Russian noun forms come from the same source of truth.
+function trackUnitKey(count: number): TranslationKey {
+  const m100 = count % 100;
+  if (m100 >= 11 && m100 <= 14) return 'home.dailyTrackUnit5plus';
+  const m10 = count % 10;
+  if (m10 === 1) return 'home.dailyTrackUnit1';
+  if (m10 >= 2 && m10 <= 4) return 'home.dailyTrackUnit2_4';
+  return 'home.dailyTrackUnit5plus';
 }
 
-const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; label: string; icon: typeof Sparkles }> = {
-  familiar: { hue: '#5E6AD2', label: 'Знакомое', icon: Heart },
-  discover: { hue: '#c2185b', label: 'Открытия', icon: Sparkles },
-  mood: { hue: '#0ea5e9', label: 'Под настроение', icon: Disc3 },
+const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; labelKey: TranslationKey; icon: typeof Sparkles }> = {
+  familiar: { hue: '#5E6AD2', labelKey: 'home.dailyVariantFamiliar', icon: Heart },
+  discover: { hue: '#c2185b', labelKey: 'home.dailyVariantDiscover', icon: Sparkles },
+  mood: { hue: '#0ea5e9', labelKey: 'home.dailyVariantMood', icon: Disc3 },
 };
 
 /**
@@ -57,6 +59,7 @@ const VARIANT_THEME: Record<DailyPlaylist['variant'], { hue: string; label: stri
  * pluck "this id" out of the today list (cached or freshly fetched).
  */
 export function DailyPlaylistPreviewPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const reduce = useReducedMotion();
@@ -74,7 +77,7 @@ export function DailyPlaylistPreviewPage() {
   );
 
   const tracks: Track[] = useMemo(() => playlist?.tracks ?? [], [playlist?.tracks]);
-  const trackIds = useMemo(() => tracks.map((t) => t.id), [tracks]);
+  const trackIds = useMemo(() => tracks.map((tr) => tr.id), [tracks]);
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
@@ -127,10 +130,10 @@ export function DailyPlaylistPreviewPage() {
           type="button"
           onClick={handleBack}
           className="mb-4 inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] px-2 -ml-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-[0.98]"
-          aria-label="Назад"
+          aria-label={t('dailyPage.back')}
         >
           <ChevronLeft size={18} />
-          <span>Назад</span>
+          <span>{t('dailyPage.back')}</span>
         </button>
 
         {showLoading ? (
@@ -142,13 +145,13 @@ export function DailyPlaylistPreviewPage() {
         ) : !playlist || !theme ? (
           <div className="flex flex-col items-center gap-4 rounded-[var(--radius-lg)] border border-border bg-card py-16 text-center">
             <p className="text-sm text-muted-foreground">
-              Плейлист дня не найден. Возможно, он истёк — обновлённые подборки приходят утром.
+              {t('dailyPage.notFound')}
             </p>
             <Link
               to="/"
               className="inline-flex items-center gap-1 text-sm text-foreground underline-offset-4 hover:underline"
             >
-              Вернуться на главную
+              {t('dailyPage.goHome')}
             </Link>
           </div>
         ) : (
@@ -179,7 +182,7 @@ export function DailyPlaylistPreviewPage() {
                     className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur"
                   >
                     <VariantIcon size={12} style={{ color: theme.hue }} />
-                    Плейлист дня · {theme.label}
+                    {t('dailyPage.eyebrow', { variant: t(theme.labelKey) })}
                   </div>
                   <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                     {playlist.name}
@@ -188,7 +191,7 @@ export function DailyPlaylistPreviewPage() {
                     {playlist.description}
                   </p>
                   <div className="text-xs text-muted-foreground">
-                    {tracks.length} {pluralRu(tracks.length, ['трек', 'трека', 'треков'])}
+                    {t('dailyPage.tracksCount', { count: tracks.length, form: t(trackUnitKey(tracks.length)) })}
                   </div>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -201,12 +204,12 @@ export function DailyPlaylistPreviewPage() {
                       {isCollectionPlaying ? (
                         <>
                           <Pause size={14} fill="currentColor" />
-                          Пауза
+                          {t('dailyPage.pause')}
                         </>
                       ) : (
                         <>
                           <Play size={14} fill="currentColor" />
-                          {isCollectionActive ? 'Продолжить' : 'Слушать'}
+                          {isCollectionActive ? t('dailyPage.continue') : t('dailyPage.listen')}
                         </>
                       )}
                     </Button>
@@ -220,17 +223,17 @@ export function DailyPlaylistPreviewPage() {
                       {isSaved ? (
                         <>
                           <Check size={14} />
-                          Сохранено
+                          {t('dailyPage.saved')}
                         </>
                       ) : saving ? (
                         <>
                           <Loader2 size={14} className="animate-spin" />
-                          Сохраняем…
+                          {t('dailyPage.saving')}
                         </>
                       ) : (
                         <>
                           <Library size={14} />
-                          В библиотеку
+                          {t('dailyPage.save')}
                         </>
                       )}
                     </Button>
@@ -247,13 +250,13 @@ export function DailyPlaylistPreviewPage() {
             <section className="mt-6 rounded-[var(--radius-lg)] border border-border bg-background">
               {tracks.length === 0 ? (
                 <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-                  В этом плейлисте пока нет треков.
+                  {t('dailyPage.empty')}
                 </p>
               ) : (
-                tracks.map((t, i) => (
+                tracks.map((tr, i) => (
                   <TrackItem
-                    key={`${t.id}:${i}`}
-                    track={t}
+                    key={`${tr.id}:${i}`}
+                    track={tr}
                     index={i}
                     onPlay={() => playFromIndex(i)}
                   />

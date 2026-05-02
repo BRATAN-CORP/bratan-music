@@ -7,6 +7,7 @@ import { ArtistCard } from '@/components/features/ArtistCard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useExplorePage, useExploreList } from '@/hooks/useExplore';
 import { usePlayerStore } from '@/store/player';
+import { useT } from '@/i18n';
 import type {
   Album,
   Artist,
@@ -25,6 +26,7 @@ import type {
  * handle without forcing the user to pass them through the URL.
  */
 export function ExploreListPage() {
+  const t = useT();
   const { slug, moduleIndex } = useParams<{ slug: string; moduleIndex: string }>();
   const idx = moduleIndex ? Number.parseInt(moduleIndex, 10) : NaN;
   const {
@@ -113,14 +115,14 @@ export function ExploreListPage() {
             className="inline-flex w-fit items-center gap-1 text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground transition-colors hover:text-foreground"
           >
             <ChevronLeft size={12} />
-            {page?.title ?? 'Назад'}
+            {page?.title ?? t('exploreList.back')}
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {module?.title ?? 'Смотреть все'}
+            {module?.title ?? t('exploreList.fallbackAll')}
           </h1>
           {typeof module?.totalItems === 'number' && module.totalItems > 0 && (
             <p className="text-xs text-muted-foreground">
-              {module.totalItems} элементов
+              {t('exploreList.itemsCount', { count: module.totalItems })}
             </p>
           )}
         </div>
@@ -128,25 +130,25 @@ export function ExploreListPage() {
         {pageLoading && (
           <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted-foreground">
             <Loader2 size={14} className="animate-spin" />
-            Загружаем…
+            {t('exploreList.loading')}
           </div>
         )}
 
         {(pageError || listError) && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
             <AlertCircle size={24} className="text-[var(--color-danger)]" />
-            <div className="text-sm">Не удалось загрузить список</div>
+            <div className="text-sm">{t('exploreList.failedTitle')}</div>
             <div className="text-xs text-muted-foreground">
               {(pageError || listError) instanceof Error
                 ? ((pageError || listError) as Error).message
-                : 'Неизвестная ошибка'}
+                : t('exploreList.unknownError')}
             </div>
           </div>
         )}
 
         {module && module.type === 'pageLinks' && (
           <div className="rounded-[var(--radius-md)] border border-border bg-card p-6 text-sm text-muted-foreground">
-            Этот раздел не поддерживает постраничный просмотр.
+            {t('exploreList.pageless')}
           </div>
         )}
 
@@ -162,7 +164,7 @@ export function ExploreListPage() {
             {(isFetchingNextPage || listLoading) && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 size={14} className="animate-spin" />
-                Загружаем ещё…
+                {t('exploreList.loadingMore')}
               </div>
             )}
           </div>
@@ -186,6 +188,7 @@ function ListView({
   type: Exclude<ExploreModuleType, 'pageLinks'>;
   items: (Track | Album | Artist | ExplorePlaylist)[];
 }) {
+  const t = useT();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
 
@@ -206,8 +209,8 @@ function ListView({
     };
     return (
       <div className="rounded-[var(--radius-md)] border border-border bg-background">
-        {tracks.map((t, i) => (
-          <TrackItem key={t.id} track={t} index={i} onPlay={handlePlay} />
+        {tracks.map((tr, i) => (
+          <TrackItem key={tr.id} track={tr} index={i} onPlay={handlePlay} />
         ))}
       </div>
     );
@@ -243,7 +246,7 @@ function ListView({
           key={p.id}
           to={`/explore/playlist/${p.id}`}
           className="group flex flex-col gap-2.5 focus:outline-none"
-          aria-label={`Открыть плейлист ${p.title}`}
+          aria-label={t('exploreList.openPlaylist', { title: p.title })}
         >
           <div className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary shadow-sm transition-shadow duration-300 group-hover:shadow-xl">
             {p.coverUrl ? (

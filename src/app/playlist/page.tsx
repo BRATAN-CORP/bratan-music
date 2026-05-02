@@ -10,8 +10,10 @@ import { PlaylistCoverButton } from '@/components/features/PlaylistCoverButton';
 import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
+import { useT } from '@/i18n';
 
 export function PlaylistPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: playlist, isLoading, isFetching, isError, refetch } = usePlaylist(id ?? '');
@@ -71,25 +73,25 @@ export function PlaylistPage() {
       duration: track.duration,
     });
     setQueue(
-      localTracks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        artist: t.artist,
-        artistId: t.artistId,
-        artists: t.artists,
-        coverUrl: t.coverUrl,
-        coverVideoUrl: t.coverVideoUrl,
-        duration: t.duration,
+      localTracks.map((tr) => ({
+        id: tr.id,
+        title: tr.title,
+        artist: tr.artist,
+        artistId: tr.artistId,
+        artists: tr.artists,
+        coverUrl: tr.coverUrl,
+        coverVideoUrl: tr.coverVideoUrl,
+        duration: tr.duration,
       }))
     );
   };
 
   const handleReorderEnd = () => {
     if (!id) return;
-    const originalOrder = tracks.map((t) => t.id).join(',');
-    const newOrder = localTracks.map((t) => t.id).join(',');
+    const originalOrder = tracks.map((tr) => tr.id).join(',');
+    const newOrder = localTracks.map((tr) => tr.id).join(',');
     if (originalOrder === newOrder) return;
-    reorderMutation.mutate({ playlistId: id, trackIds: localTracks.map((t) => t.id) });
+    reorderMutation.mutate({ playlistId: id, trackIds: localTracks.map((tr) => tr.id) });
   };
 
   return (
@@ -99,10 +101,10 @@ export function PlaylistPage() {
           type="button"
           onClick={handleBack}
           className="mb-4 inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] px-2 -ml-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground active:scale-[0.98] lg:hidden"
-          aria-label="Назад"
+          aria-label={t('playlistPage.back')}
         >
           <ChevronLeft size={18} />
-          <span>Назад</span>
+          <span>{t('playlistPage.back')}</span>
         </button>
 
         {showLoading ? (
@@ -123,13 +125,13 @@ export function PlaylistPage() {
           </div>
         ) : isError ? (
           <div className="flex flex-col items-start gap-3 py-12">
-            <p className="text-sm text-muted-foreground">Не удалось загрузить плейлист.</p>
+            <p className="text-sm text-muted-foreground">{t('playlistPage.failedLoad')}</p>
             <button
               type="button"
               onClick={() => refetch()}
               className="inline-flex h-9 items-center gap-1 rounded-[var(--radius-md)] bg-secondary px-3 text-sm font-medium transition-colors hover:bg-secondary/80"
             >
-              Повторить
+              {t('playlistPage.retry')}
             </button>
           </div>
         ) : playlist ? (
@@ -139,7 +141,7 @@ export function PlaylistPage() {
                 {playlist.coverUrl ? (
                   <img
                     src={playlist.coverUrl}
-                    alt={`Обложка плейлиста ${playlist.name}`}
+                    alt={t('playlistPage.coverAlt', { name: playlist.name })}
                     className="h-full w-full object-cover"
                   />
                 ) : playlist.isLiked ? (
@@ -149,7 +151,7 @@ export function PlaylistPage() {
                 )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">Плейлист</span>
+                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('playlistPage.eyebrow')}</span>
                 <div className="flex items-start gap-3">
                   <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{playlist.name}</h1>
                   {canRename && (
@@ -157,8 +159,8 @@ export function PlaylistPage() {
                       type="button"
                       onClick={() => setRenameOpen(true)}
                       className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                      aria-label="Переименовать плейлист"
-                      title="Переименовать"
+                      aria-label={t('playlistPage.renameAria')}
+                      title={t('playlistPage.renameTitle')}
                     >
                       <Pencil size={16} />
                     </button>
@@ -174,8 +176,8 @@ export function PlaylistPage() {
                           ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
-                      aria-label={playlist?.isPublic ? 'Управлять публикацией' : 'Поделиться'}
-                      title={playlist?.isPublic ? 'Доступен по ссылке' : 'Поделиться'}
+                      aria-label={playlist?.isPublic ? t('playlistPage.shareAriaPublic') : t('playlistPage.shareAriaPrivate')}
+                      title={playlist?.isPublic ? t('playlistPage.shareTitlePublic') : t('playlistPage.shareTitlePrivate')}
                     >
                       {playlist?.isPublic ? <Globe size={16} /> : <Share2 size={16} />}
                     </motion.button>
@@ -191,18 +193,18 @@ export function PlaylistPage() {
                           ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
                           : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                       }`}
-                      aria-label={isPinned ? 'Открепить' : 'Закрепить на панели'}
-                      title={isPinned ? 'Открепить с панели' : 'Закрепить на панели'}
+                      aria-label={isPinned ? t('playlistPage.unpinAria') : t('playlistPage.pinAria')}
+                      title={isPinned ? t('playlistPage.unpinTitle') : t('playlistPage.pinTitle')}
                     >
                       {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
                     </motion.button>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {playlist.trackCount} {playlist.trackCount === 1 ? 'трек' : 'треков'}
+                  {playlist.trackCount} {playlist.trackCount === 1 ? t('playlistPage.trackOne') : t('playlistPage.trackMany')}
                   {isLinked && (
                     <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                      Ссылка · {playlist.sourceKind === 'tidal' ? 'Tidal' : 'Пользователь'}
+                      {t('playlistPage.linkBadge')} · {playlist.sourceKind === 'tidal' ? 'Tidal' : t('playlistPage.linkUser')}
                     </span>
                   )}
                 </p>
@@ -266,7 +268,7 @@ export function PlaylistPage() {
             )}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Плейлист не найден</p>
+          <p className="text-sm text-muted-foreground">{t('playlistPage.notFound')}</p>
         )}
       </div>
     </AuthGuard>
