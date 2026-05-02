@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { useCreateRoom, useDeleteRoom, useJoinRoom, useRoomsList } from '@/hooks/useRooms';
 import { ApiError } from '@/lib/api';
 import { EASE_SPRING } from '@/lib/motion';
+import { useT } from '@/i18n';
 
 export function RoomsListPage() {
   return (
@@ -18,6 +19,7 @@ export function RoomsListPage() {
 }
 
 function RoomsListInner() {
+  const t = useT();
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const { data: rooms, isLoading } = useRoomsList();
@@ -40,7 +42,7 @@ function RoomsListInner() {
       const res = await createMut.mutateAsync(name.trim() || undefined);
       navigate(`/rooms/${res.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось создать');
+      setError(err instanceof Error ? err.message : t('rooms.list.errorCreate'));
     }
   };
   const onJoin = async (codeOverride?: string) => {
@@ -53,7 +55,7 @@ function RoomsListInner() {
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message :
-        err instanceof Error ? err.message : 'Не удалось войти',
+        err instanceof Error ? err.message : t('rooms.list.errorJoin'),
       );
     }
   };
@@ -61,12 +63,12 @@ function RoomsListInner() {
   const onDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm('Удалить комнату? Это действие нельзя отменить — все участники потеряют доступ.')) return;
+    if (!window.confirm(t('rooms.list.confirmDelete'))) return;
     setError(null);
     try {
       await deleteMut.mutateAsync(id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось удалить');
+      setError(err instanceof Error ? err.message : t('rooms.list.errorDelete'));
     }
   };
 
@@ -117,21 +119,21 @@ function RoomsListInner() {
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
               <Headphones size={14} />
             </span>
-            Совместное прослушивание
+            {t('rooms.list.eyebrow')}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Комнаты на двоих и больше
+            {t('rooms.list.heroTitle')}
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Создай комнату и слушай в одном такте с друзьями. Любой участник может ставить треки и управлять плеером, кроссфейд и шафл здесь не работают — это страхует от рассинхрона.
+            {t('rooms.list.heroDescription')}
           </p>
 
           <div className="mt-6 inline-flex rounded-full border border-border bg-background/60 p-0.5 backdrop-blur">
             <SegButton active={tab === 'create'} onClick={() => setTab('create')}>
-              <Sparkles size={14} /> Создать
+              <Sparkles size={14} /> {t('rooms.list.tabCreate')}
             </SegButton>
             <SegButton active={tab === 'join'} onClick={() => setTab('join')}>
-              <KeyRound size={14} /> По коду
+              <KeyRound size={14} /> {t('rooms.list.tabJoin')}
             </SegButton>
           </div>
 
@@ -149,12 +151,12 @@ function RoomsListInner() {
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Название (необязательно)"
+                    placeholder={t('rooms.list.namePlaceholder')}
                     onKeyDown={(e) => e.key === 'Enter' && void onCreate()}
                   />
                   <Button onClick={() => void onCreate()} disabled={createMut.isPending}>
                     {createMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                    Создать
+                    {t('rooms.list.createCta')}
                   </Button>
                 </motion.div>
               ) : (
@@ -169,13 +171,13 @@ function RoomsListInner() {
                   <Input
                     value={code}
                     onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    placeholder="Код комнаты, напр. K7QX2H"
+                    placeholder={t('rooms.list.codePlaceholder')}
                     maxLength={12}
                     onKeyDown={(e) => e.key === 'Enter' && void onJoin()}
                   />
                   <Button onClick={() => void onJoin()} disabled={joinMut.isPending || !code.trim()}>
                     {joinMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-                    Войти
+                    {t('rooms.list.joinCta')}
                   </Button>
                 </motion.div>
               )}
@@ -191,7 +193,7 @@ function RoomsListInner() {
 
       <section className="mt-10">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          <Users size={14} /> Мои комнаты
+          <Users size={14} /> {t('rooms.list.myRooms')}
         </div>
 
         {isLoading ? (
@@ -225,24 +227,24 @@ function RoomsListInner() {
                       <span className="truncate text-sm font-medium">{r.name}</span>
                       {r.isHost && (
                         <span className="shrink-0 rounded-full bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
-                          Хост
+                          {t('rooms.list.hostBadge')}
                         </span>
                       )}
                     </div>
                     <div className="mt-2 font-mono text-xs text-muted-foreground">
-                      Код · {r.code}
+                      {t('rooms.list.codeLabel', { code: r.code })}
                     </div>
                   </div>
                   <div className="mt-4 flex items-center justify-end text-xs text-muted-foreground transition-colors group-hover:text-foreground">
-                    Открыть <ArrowRight size={12} className="ml-1" />
+                    {t('rooms.list.openCta')} <ArrowRight size={12} className="ml-1" />
                   </div>
                 </Link>
                 {r.isHost && (
                   <button
                     type="button"
                     onClick={(e) => void onDelete(e, r.id)}
-                    aria-label="Удалить комнату"
-                    title="Удалить комнату"
+                    aria-label={t('rooms.list.deleteAria')}
+                    title={t('rooms.list.deleteAria')}
                     disabled={deleteMut.isPending}
                     className="absolute bottom-3 left-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground opacity-0 transition-all hover:border-destructive hover:text-destructive focus:opacity-100 group-hover:opacity-100"
                   >
@@ -258,7 +260,7 @@ function RoomsListInner() {
           </motion.ul>
         ) : (
           <div className="rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 px-6 py-10 text-center text-sm text-muted-foreground">
-            Пока нет ни одной комнаты. Создай новую или войди по коду от друга.
+            {t('rooms.list.empty')}
           </div>
         )}
       </section>
