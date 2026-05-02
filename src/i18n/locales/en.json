@@ -147,11 +147,13 @@
     }
   },
   "subscription": {
-    "tag": "Subscription",
+    "tag": "Premium",
+    "closeAria": "Close",
     "headline": "Music, no compromises",
     "tagline": "99 Telegram Stars a month. Charged inside the bot — no cards, no sketchy redirects.",
     "subscribeCta": "Get Premium for 99 ⭐",
     "openingBot": "Opening the bot…",
+    "paymentNote": "The bot DMs you an invoice — one tap to pay. Premium switches on the moment payment lands.",
     "benefits": {
       "lossless": "Unlimited plays in lossless quality",
       "noads": "No ads, no queue caps",
@@ -184,6 +186,15 @@
   "errors": {
     "generic": "Something went wrong",
     "tryAgain": "Try again"
+  },
+  "telegramLogin": {
+    "loginCta": "Sign in with Telegram",
+    "waiting": "Waiting for sign-in..."
+  },
+  "authGuard": {
+    "eyebrow": "Sign in",
+    "title": "Sign in to keep going",
+    "body": "Hop in with Telegram to unlock search, your library and the player."
   },
   "auth": {
     "loginRequired": "Sign in again",
@@ -502,32 +513,63 @@
     "recentLibraryLink": "Library"
   },
   "landing": {
-    "tagline": "Music born inside Telegram",
-    "subtitle": "Lossless streaming, right in your chats. No cards, no sites, no caps.",
-    "loginCta": "Sign in with Telegram",
-    "openInTelegram": "Open in Telegram",
-    "featuresTitle": "Everything a listener needs",
-    "feature1Title": "Lossless quality",
-    "feature1Hint": "The full Tidal catalogue in HiFi and Hi-Res — no downgrades.",
-    "feature2Title": "Listening together",
-    "feature2Hint": "Rooms with synced playback and chat.",
-    "feature3Title": "AI playlists",
-    "feature3Hint": "Describe a mood — get a ready mix.",
-    "feature4Title": "Your own tracks",
-    "feature4Hint": "Upload rarities, mixes and demos.",
-    "feature5Title": "Bratan Daily",
-    "feature5Hint": "A fresh mix every day, tuned to you.",
-    "feature6Title": "Endless queue",
-    "feature6Hint": "Thousands of tracks back-to-back, no ads.",
-    "feature7Title": "Equalizer",
-    "feature7Hint": "Fine-tune the sound for headphones and speakers.",
-    "feature8Title": "Cross-device",
-    "feature8Hint": "Settings and playlists roam between devices.",
-    "feature9Title": "Telegram Stars",
-    "feature9Hint": "Pay safely inside the bot — no cards.",
-    "ctaTitle": "Ready to try?",
-    "ctaHint": "Open the bot and start listening right now.",
-    "footer": "Made with ♥ by the BRATAN-CORP team"
+    "eyebrow": "Uncensored streaming",
+    "heroTitlePrefix": "Censorship",
+    "heroTitleEmphasis": "ends",
+    "heroTitleSuffix": "at your player.",
+    "heroDescription": "Any track that's been muted, cropped or watered down on other platforms gets replaced by your own version. Hear it the way it was meant — no bleeps, no edits. Lossless 24-bit, crossfade, share-by-link playlists — in one tab.",
+    "openSearchCta": "Open search",
+    "statTracksLabel": "tracks in catalogue",
+    "statBitLabel": "lossless audio",
+    "statStarsLabel": "a month",
+    "featuresEyebrow": "What's inside",
+    "featuresTitle": "What you actually get.",
+    "featuresHint": "Nine features that make this player worth opening. No marketing fluff — only what actually works.",
+    "openLink": "Open",
+    "demos": {
+      "censored": "censored",
+      "yourCut": "your cut",
+      "aiPrompt": "«drifting down empty highways at 3am»",
+      "aiResult": "→ 24 tracks • 1h 38m"
+    },
+    "features": {
+      "censorOverlay": {
+        "title": "Lift the censor — your cut",
+        "desc": "Drop in the original — it overrides the muted or cropped catalogue track for you. No one else sees the swap."
+      },
+      "lossless24": {
+        "title": "24-bit lossless",
+        "desc": "If a master exists, you hear the master. No 128 kbps mp3s with HD badges painted on top."
+      },
+      "listenTogether": {
+        "title": "Listen together",
+        "desc": "Spin up a room, share the link. Everyone's player stays synced to the millisecond, the chat reacts live, the host runs the queue."
+      },
+      "aiPlaylists": {
+        "title": "Playlists on demand",
+        "desc": "Describe a mood or a scene — the AI builds a playlist out of the real catalogue. Save it, play it, no editing needed."
+      },
+      "eq10band": {
+        "title": "10-band EQ",
+        "desc": "Your own presets for headphones, the car, the kitchen. Set it once — it follows you across devices."
+      },
+      "crossfade": {
+        "title": "Crossfade & gapless",
+        "desc": "Albums play without the black hole between tracks. The next song slides over the top — no clicks, no pause."
+      },
+      "syncedLyrics": {
+        "title": "Synced lyrics",
+        "desc": "Lyrics travel line-by-line with the vocal. Fullscreen mode turns the player into karaoke without a third app."
+      },
+      "uploads": {
+        "title": "Your tracks in the cloud",
+        "desc": "Upload a rare release or your own track — it lives next to Tidal in your library. Likes, playlists, queue — same as ever."
+      },
+      "shareLink": {
+        "title": "Playlist by one link",
+        "desc": "Send a URL — the other person opens it and hears exactly the same. No sign-up, no «install our app» banner."
+      }
+    }
   },
   "explore": {
     "title": "Discover",
@@ -864,9 +906,10 @@
     "section": "Section"
   },
   "not_found": {
-    "title": "Not found",
-    "hint": "This page doesn't exist or was removed.",
-    "goHome": "Go home"
+    "code": "404",
+    "title": "Page not found",
+    "hint": "It may have been deleted, or the URL is wrong.",
+    "goHome": "Back home"
   },
   "shared_page": {
     "loading": "Loading…",
