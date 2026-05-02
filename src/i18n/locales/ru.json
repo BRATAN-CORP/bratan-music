@@ -6,12 +6,16 @@
     "close": "Закрыть",
     "remove": "Удалить",
     "apply": "Применить",
+    "open": "Открыть",
     "loading": "Загрузка…",
     "error": "Ошибка",
     "retry": "Попробовать ещё раз",
     "confirm": "Подтвердить",
     "yes": "Да",
-    "no": "Нет"
+    "no": "Нет",
+    "more": "Ещё",
+    "track": "Трек",
+    "anonymous": "Пользователь"
   },
   "nav": {
     "home": "Главная",
@@ -23,24 +27,106 @@
     "explore": "Открытия",
     "history": "История"
   },
+  "sidebar": {
+    "pinned": "Закреплённые",
+    "liked": "Любимое"
+  },
   "settings": {
     "title": "Настройки",
     "playback": "Воспроизведение",
     "quality": "Качество",
+    "qualityHint": "Зависит от прокси-аккаунта Tidal — недоступные качества будут урезаны до доступного уровня.",
+    "qualityProvider": "Качество (Tidal)",
     "appearance": "Внешний вид",
     "language": "Язык интерфейса",
     "languageHint": "Меняет язык всех текстов в приложении.",
+    "languageCard": "Язык",
     "themeLight": "Светлая",
     "themeDark": "Тёмная",
+    "themeToggle": "Переключить тему",
     "crossfade": "Плавное переключение",
     "crossfadeHint": "Микширует следующий трек поверх текущего",
     "crossfadeDuration": "Длительность",
+    "crossfadeDurationUnit": "{value} с",
     "infinitePlayback": "Бесконечное воспроизведение",
-    "infinitePlaybackHint": "Когда очередь почти пуста, плеер сам подтягивает похожие треки"
+    "infinitePlaybackHint": "Когда очередь почти пуста, добавляем рекомендации на основе того, что играет."
+  },
+  "profile": {
+    "label": "Профиль",
+    "logout": "Выйти",
+    "adminBadge": "Admin",
+    "adminGate": "Только для администраторов",
+    "subscriptionActive": "Подписка активна",
+    "subscriptionRenewsBy": "Продлится до {date}",
+    "subscriptionUnlimited": "Без лимитов",
+    "premiumTag": "Premium",
+    "premiumHeadline": "Сними потолок 3-х треков в день.",
+    "premiumHeadlineEmphasis": "3-х треков",
+    "premiumTagline": "Безлимитный lossless-стриминг и full HiFi за 99 ⭐ в месяц. Оплата прямо в Telegram, без карт и сайтов.",
+    "perMonth": "⭐ / мес",
+    "subscribeCta": "Оформить подписку",
+    "cancelHint": "Можно отменить в любой момент в Telegram.",
+    "playedToday": "Сегодня прослушано",
+    "playedRatio": "{used} / {limit}",
+    "benefits": {
+      "lossless": "Без лимитов на прослушивания",
+      "hifi": "Lossless и HiFi-качество",
+      "noads": "Никакой рекламы и троттлинга"
+    }
+  },
+  "rooms": {
+    "shortcutLabel": "Комнаты",
+    "shortcutTitle": "Слушать вместе с друзьями",
+    "shortcutHint": "Создай свою комнату или подключись по приглашению.",
+    "shortcutCta": "Открыть",
+    "connectedFallback": "Комната",
+    "connectedAriaLabel": "Вернуться в комнату {name}",
+    "connectedTooltip": "Ты в комнате · {name}",
+    "connectedPrefix": "в комнате · "
+  },
+  "subscription": {
+    "tag": "Подписка",
+    "headline": "Музыка без компромиссов",
+    "tagline": "99 Telegram Stars в месяц. Оплата прямо в боте — без карт и сторонних сайтов.",
+    "subscribeCta": "Оформить за 99 ⭐",
+    "openingBot": "Открываем бота…",
+    "benefits": {
+      "lossless": "Безлимитные прослушивания и lossless-стриминг",
+      "noads": "Без рекламы и ограничений в очереди",
+      "fullCatalog": "Полный каталог Tidal внутри Telegram"
+    }
+  },
+  "player": {
+    "openPlayer": "Открыть плеер",
+    "play": "Пуск",
+    "pause": "Пауза",
+    "next": "Следующий",
+    "previous": "Предыдущий",
+    "seek": "Перемотка",
+    "like": "Лайк",
+    "unlike": "Убрать лайк",
+    "openArtist": "Открыть артиста {name}"
+  },
+  "errors": {
+    "generic": "Произошла ошибка",
+    "tryAgain": "Попробовать ещё"
   },
   "auth": {
     "loginRequired": "Требуется повторный вход",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "loginViaTelegram": "Войти через Telegram",
+    "waitingForTelegram": "Ожидание входа..."
+  },
+  "admin": {
+    "grantTitle": "Выдача подписки",
+    "grantHint": "ID или @username и количество дней.",
+    "grantTargetPlaceholder": "user id или @username",
+    "grantDaysPlaceholder": "дней",
+    "grantSubmit": "Выдать доступ",
+    "grantSubmitting": "Выдаём…",
+    "grantSuccess": "Выдано {target} на {days} дн. (до {expiresAt})",
+    "grantFailed": "Не удалось выдать доступ",
+    "errorFallback": "Ошибка"
   },
   "languages": {
     "ru": "Русский",

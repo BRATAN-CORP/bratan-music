@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
+import { useT } from '@/i18n';
 
 /**
  * Telegram brand mark — solid paper-plane glyph (no outline). Tracks
@@ -29,6 +30,7 @@ export function TelegramLoginButton() {
   const { loginWithDeeplink, pollNonce } = useAuth();
   const [polling, setPolling] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const t = useT();
 
   const handleLogin = async () => {
     const nonce = loginWithDeeplink(BOT_USERNAME);
@@ -53,12 +55,12 @@ export function TelegramLoginButton() {
       {polling ? (
         <>
           <Loader2 size={16} className="animate-spin" />
-          Ожидание входа...
+          {t('auth.waitingForTelegram')}
         </>
       ) : (
         <>
           <TelegramIcon size={16} />
-          Войти через Telegram
+          {t('auth.loginViaTelegram')}
         </>
       )}
     </Button>

@@ -4,6 +4,7 @@ import { Headphones } from 'lucide-react';
 import { useState } from 'react';
 import { useRoomConnectionStore } from '@/store/roomConnection';
 import { EASE_SPRING } from '@/lib/motion';
+import { useT } from '@/i18n';
 
 /**
  * Floating "you're connected to a room" pill, anchored to the
@@ -27,10 +28,11 @@ export function RoomConnectedBadge() {
   const { roomId, roomCode, roomName, isLive } = useRoomConnectionStore();
   const location = useLocation();
   const [hovered, setHovered] = useState(false);
+  const t = useT();
 
   const onRoomPage = !!roomId && location.pathname.startsWith(`/rooms/${roomId}`);
   const visible = !!roomId && !onRoomPage;
-  const label = roomName?.trim() || roomCode || 'Комната';
+  const label = roomName?.trim() || roomCode || t('rooms.connectedFallback');
 
   return (
     <AnimatePresence>
@@ -48,8 +50,8 @@ export function RoomConnectedBadge() {
         >
           <Link
             to={`/rooms/${roomId}`}
-            aria-label={`Вернуться в комнату ${label}`}
-            title={`Ты в комнате · ${label}`}
+            aria-label={t('rooms.connectedAriaLabel', { name: label })}
+            title={t('rooms.connectedTooltip', { name: label })}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
             onFocus={() => setHovered(true)}
@@ -87,7 +89,7 @@ export function RoomConnectedBadge() {
               className="hidden whitespace-nowrap text-xs font-medium text-foreground sm:inline-block"
               style={{ overflow: 'hidden' }}
             >
-              <span className="text-muted-foreground">в комнате · </span>
+              <span className="text-muted-foreground">{t('rooms.connectedPrefix')}</span>
               <span className="text-foreground">{label}</span>
             </motion.span>
           </Link>

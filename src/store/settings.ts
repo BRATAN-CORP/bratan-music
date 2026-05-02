@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import {
+  detectDeviceLocale, readLegacyStoredLocale, clearLegacyStoredLocale,
+  type Locale,
+} from '@/i18n/types';
 
 /**
  * Tidal stream qualities that the proxy account can request. We expose a
@@ -46,6 +50,13 @@ interface SettingsState {
    */
   eqGains: number[];
   /**
+   * UI locale (`ru` | `en`). Owned here — and only here — so it
+   * persists locally, roams across devices through `useSettingsSync`
+   * (`prefs.locale` on the server), and stays in sync with the
+   * I18nProvider which reads from this store directly.
+   */
+  locale: Locale;
+  /**
    * Server-side hydration marker. `true` once we've successfully
    * pulled prefs from /user/preferences (or confirmed there were
    * none). Used by `useSettingsSync` to suppress an immediate echo
@@ -59,6 +70,7 @@ interface SettingsState {
   setInfinitePlayback: (on: boolean) => void;
   setEqGain: (index: number, value: number) => void;
   setEqGains: (gains: number[]) => void;
+  setLocale: (locale: Locale) => void;
   /**
    * Merge server-returned preferences over the current state. Only
    * keys we recognise are applied; extras are ignored. Marks the
@@ -84,6 +96,23 @@ function normaliseGains(input: unknown): number[] {
   return out;
 }
 
+/**
+ * Decide which locale a fresh session should start with.
+ *   - If the legacy `bratan-locale` key is present (it was where the
+ *     pre-DB-roaming I18nProvider stored the user's choice), respect
+ *     it once and then drop the key so the server stays the source
+ *     of truth from this point on.
+ *   - Otherwise, pick from the device (Telegram WebApp / browser).
+ */
+function pickInitialLocale(): Locale {
+  const legacy = readLegacyStoredLocale();
+  if (legacy) {
+    clearLegacyStoredLocale();
+    return legacy;
+  }
+  return detectDeviceLocale();
+}
+
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
@@ -95,6 +124,7 @@ export const useSettingsStore = create<SettingsState>()(
       // ровно там, где положил.
       infinitePlayback: true,
       eqGains: defaultGains(),
+      locale: pickInitialLocale(),
       hydrated: false,
       setCrossfade: (on) => set({ crossfade: on }),
       setCrossfadeDuration: (s) => set({ crossfadeDuration: Math.max(1, Math.min(12, s)) }),
@@ -108,6 +138,7 @@ export const useSettingsStore = create<SettingsState>()(
         set({ eqGains: next });
       },
       setEqGains: (gains) => set({ eqGains: normaliseGains(gains) }),
+      setLocale: (locale) => set({ locale }),
       hydrateFromServer: (prefs) => {
         const patch: Partial<SettingsState> = { hydrated: true };
         if (typeof prefs.crossfade === 'boolean') patch.crossfade = prefs.crossfade;
@@ -124,6 +155,7 @@ export const useSettingsStore = create<SettingsState>()(
         }
         if (typeof prefs.infinitePlayback === 'boolean') patch.infinitePlayback = prefs.infinitePlayback;
         if (Array.isArray(prefs.eqGains)) patch.eqGains = normaliseGains(prefs.eqGains);
+        if (prefs.locale === 'ru' || prefs.locale === 'en') patch.locale = prefs.locale;
         set(patch);
       },
       markHydrated: () => set({ hydrated: true }),
@@ -140,6 +172,7 @@ export const useSettingsStore = create<SettingsState>()(
         tidalQuality: s.tidalQuality,
         infinitePlayback: s.infinitePlayback,
         eqGains: s.eqGains,
+        locale: s.locale,
       }),
     },
   ),

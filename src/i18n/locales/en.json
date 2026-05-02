@@ -6,12 +6,16 @@
     "close": "Close",
     "remove": "Remove",
     "apply": "Apply",
+    "open": "Open",
     "loading": "Loading…",
     "error": "Error",
     "retry": "Try again",
     "confirm": "Confirm",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "more": "More",
+    "track": "Track",
+    "anonymous": "Listener"
   },
   "nav": {
     "home": "Home",
@@ -23,27 +27,109 @@
     "explore": "Discover",
     "history": "History"
   },
+  "sidebar": {
+    "pinned": "Pinned",
+    "liked": "Liked songs"
+  },
   "settings": {
     "title": "Settings",
     "playback": "Playback",
     "quality": "Quality",
+    "qualityHint": "Capped by your Tidal proxy account — anything above its tier will be transparently downgraded.",
+    "qualityProvider": "Quality (Tidal)",
     "appearance": "Appearance",
     "language": "Interface language",
-    "languageHint": "Changes the language across the entire app.",
+    "languageHint": "Switches every label across the app instantly.",
+    "languageCard": "Language",
     "themeLight": "Light",
     "themeDark": "Dark",
+    "themeToggle": "Toggle theme",
     "crossfade": "Crossfade",
-    "crossfadeHint": "Mixes the next track over the current one",
+    "crossfadeHint": "Eases the next track over the current one as it ends.",
     "crossfadeDuration": "Duration",
-    "infinitePlayback": "Endless playback",
-    "infinitePlaybackHint": "Auto-fills the queue with similar tracks when it runs low"
+    "crossfadeDurationUnit": "{value}s",
+    "infinitePlayback": "Infinite playback",
+    "infinitePlaybackHint": "When the queue runs low, we keep the vibe going with related tracks."
+  },
+  "profile": {
+    "label": "Profile",
+    "logout": "Sign out",
+    "adminBadge": "Admin",
+    "adminGate": "Admins only",
+    "subscriptionActive": "Subscription active",
+    "subscriptionRenewsBy": "Active until {date}",
+    "subscriptionUnlimited": "Unlimited",
+    "premiumTag": "Premium",
+    "premiumHeadline": "Lift the 3-track daily ceiling.",
+    "premiumHeadlineEmphasis": "3-track",
+    "premiumTagline": "Lossless streaming and full HiFi for 99 ⭐ a month. Pay right inside Telegram — no cards, no sites.",
+    "perMonth": "⭐ / month",
+    "subscribeCta": "Get Premium",
+    "cancelHint": "Cancel anytime from Telegram.",
+    "playedToday": "Played today",
+    "playedRatio": "{used} / {limit}",
+    "benefits": {
+      "lossless": "No play limits, ever",
+      "hifi": "Lossless and HiFi quality",
+      "noads": "No ads, no throttling"
+    }
+  },
+  "rooms": {
+    "shortcutLabel": "Rooms",
+    "shortcutTitle": "Listen together with friends",
+    "shortcutHint": "Spin up your own room or hop in by invite link.",
+    "shortcutCta": "Open",
+    "connectedFallback": "Room",
+    "connectedAriaLabel": "Return to room {name}",
+    "connectedTooltip": "You're in room · {name}",
+    "connectedPrefix": "in room · "
+  },
+  "subscription": {
+    "tag": "Subscription",
+    "headline": "Music, no compromises",
+    "tagline": "99 Telegram Stars a month. Charged inside the bot — no cards, no sketchy redirects.",
+    "subscribeCta": "Get Premium for 99 ⭐",
+    "openingBot": "Opening the bot…",
+    "benefits": {
+      "lossless": "Unlimited plays in lossless quality",
+      "noads": "No ads, no queue caps",
+      "fullCatalog": "Full Tidal catalogue, right inside Telegram"
+    }
+  },
+  "player": {
+    "openPlayer": "Open player",
+    "play": "Play",
+    "pause": "Pause",
+    "next": "Next",
+    "previous": "Previous",
+    "seek": "Seek",
+    "like": "Like",
+    "unlike": "Unlike",
+    "openArtist": "Open artist {name}"
+  },
+  "errors": {
+    "generic": "Something went wrong",
+    "tryAgain": "Try again"
   },
   "auth": {
-    "loginRequired": "Sign in again",
-    "logout": "Log out"
+    "loginRequired": "Please sign in again",
+    "logout": "Sign out",
+    "loginViaTelegram": "Sign in with Telegram",
+    "waitingForTelegram": "Waiting for sign-in..."
+  },
+  "admin": {
+    "grantTitle": "Grant subscription",
+    "grantHint": "User ID or @username and number of days.",
+    "grantTargetPlaceholder": "user id or @username",
+    "grantDaysPlaceholder": "days",
+    "grantSubmit": "Grant access",
+    "grantSubmitting": "Granting…",
+    "grantSuccess": "Granted to {target} for {days}d (until {expiresAt})",
+    "grantFailed": "Couldn't grant access",
+    "errorFallback": "Error"
   },
   "languages": {
-    "ru": "Русский",
+    "ru": "Russian",
     "en": "English"
   }
 }

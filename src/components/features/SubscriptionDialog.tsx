@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Crown, Sparkles, X, ExternalLink, Check } from 'lucide-react';
 import { useUiStore } from '@/store/ui';
 import { Button } from '@/components/ui/Button';
+import { useT, type TranslationKey } from '@/i18n';
 
 const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'bratan_music_bot';
 
-const BENEFITS: { icon: typeof Check; text: string }[] = [
-  { icon: Sparkles, text: 'Безлимитные прослушивания и lossless-стриминг' },
-  { icon: Sparkles, text: 'Без рекламы и ограничений в очереди' },
-  { icon: Sparkles, text: 'Полный каталог Tidal внутри Telegram' },
+const BENEFITS: { icon: typeof Check; key: TranslationKey }[] = [
+  { icon: Sparkles, key: 'subscription.benefits.lossless' },
+  { icon: Sparkles, key: 'subscription.benefits.noads' },
+  { icon: Sparkles, key: 'subscription.benefits.fullCatalog' },
 ];
 
 /**
@@ -26,6 +27,7 @@ const BENEFITS: { icon: typeof Check; text: string }[] = [
 export function SubscriptionDialog() {
   const { subscriptionPromptOpen, subscriptionPromptReason, closeSubscriptionPrompt } = useUiStore();
   const [redirecting, setRedirecting] = useState(false);
+  const t = useT();
 
   const handleSubscribe = () => {
     setRedirecting(true);
@@ -67,9 +69,9 @@ export function SubscriptionDialog() {
 
             <div className="mb-1 flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)]/12 px-2.5 py-1 text-xs font-medium text-[var(--color-accent)]">
-                <Crown size={12} /> Подписка
+                <Crown size={12} /> {t('subscription.tag')}
               </span>
-              <Button onClick={closeSubscriptionPrompt} variant="ghost" size="icon" className="h-8 w-8" aria-label="Закрыть">
+              <Button onClick={closeSubscriptionPrompt} variant="ghost" size="icon" className="h-8 w-8" aria-label={t('common.close')}>
                 <X size={16} />
               </Button>
             </div>
@@ -81,19 +83,19 @@ export function SubscriptionDialog() {
             )}
 
             <h2 className="mt-3 text-xl font-semibold tracking-tight">
-              Музыка без компромиссов
+              {t('subscription.headline')}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              99 Telegram Stars в месяц. Оплата прямо в боте — без карт и сторонних сайтов.
+              {t('subscription.tagline')}
             </p>
 
             <ul className="mt-5 flex flex-col gap-2.5">
-              {BENEFITS.map(({ icon: Icon, text }, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm">
+              {BENEFITS.map(({ icon: Icon, key }) => (
+                <li key={key} className="flex items-start gap-2.5 text-sm">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
                     <Icon size={12} />
                   </span>
-                  <span className="text-foreground/90">{text}</span>
+                  <span className="text-foreground/90">{t(key)}</span>
                 </li>
               ))}
             </ul>
@@ -105,7 +107,7 @@ export function SubscriptionDialog() {
               disabled={redirecting}
             >
               <ExternalLink size={14} />
-              {redirecting ? 'Открываем бота…' : 'Оформить за 99 ⭐'}
+              {redirecting ? t('subscription.openingBot') : t('subscription.subscribeCta')}
             </Button>
 
             <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-foreground">

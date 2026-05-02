@@ -67,7 +67,7 @@ export function Sidebar() {
         <div className="mt-4 flex flex-col gap-1 px-3">
           <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
             <Pin size={10} />
-            Закреплённые
+            {t('sidebar.pinned')}
           </div>
           {pinned.map((p) => (
             <NavLink
@@ -90,7 +90,7 @@ export function Sidebar() {
                   <ListMusic size={12} className="text-muted-foreground" />
                 )}
               </span>
-              <span className="min-w-0 flex-1 truncate">{p.isLiked ? 'Любимое' : p.name}</span>
+              <span className="min-w-0 flex-1 truncate">{p.isLiked ? t('sidebar.liked') : p.name}</span>
             </NavLink>
           ))}
         </div>

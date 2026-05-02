@@ -137,7 +137,7 @@ export function MobileBottomDock() {
             <div
               className="relative h-[3px] w-full shrink-0 cursor-pointer touch-none select-none overflow-hidden bg-white/[0.08]"
               role="slider"
-              aria-label="Перемотка"
+              aria-label={t('player.seek')}
               aria-valuemin={0}
               aria-valuemax={Math.max(1, Math.round(duration))}
               aria-valuenow={Math.round(progress)}
@@ -182,14 +182,14 @@ export function MobileBottomDock() {
               className="flex cursor-pointer items-center gap-3 px-3 py-2.5"
               role="button"
               tabIndex={0}
-              aria-label="Открыть плеер"
+              aria-label={t('player.openPlayer')}
               onClick={(e) => {
                 // Whole row opens fullscreen, except when the click lands on
                 // an interactive control (cover/title also openFullscreen on
                 // their own; artist/like/play/next handle their own actions
                 // and the closest('button') guard prevents a second call).
-                const t = e.target as HTMLElement | null;
-                if (t?.closest('button, a')) return;
+                const node = e.target as HTMLElement | null;
+                if (node?.closest('button, a')) return;
                 openFullscreen();
               }}
               onKeyDown={(e) => {
@@ -205,7 +205,7 @@ export function MobileBottomDock() {
                   prev and next track ghosts behind the soft edge
                   fade so the gesture has clear visual affordance. */}
               <SwipeTrackStrip className="min-w-0 flex-1">
-                {(t, position) => (
+                {(track, position) => (
                   <div
                     className="flex w-full min-w-0 items-center gap-3"
                     style={{ opacity: position === 'current' ? 1 : 0.6 }}
@@ -213,14 +213,14 @@ export function MobileBottomDock() {
                     <button
                       type="button"
                       onClick={position === 'current' ? openFullscreen : undefined}
-                      aria-label="Открыть плеер"
+                      aria-label={t('player.openPlayer')}
                       tabIndex={position === 'current' ? 0 : -1}
                       className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
                     >
                       <CoverFallback
-                        src={t.coverUrl}
-                        name={t.title || t.artist || 'Track'}
-                        alt={t.title}
+                        src={track.coverUrl}
+                        name={track.title || track.artist || 'Track'}
+                        alt={track.title}
                         initialsClassName="text-[10px]"
                       />
                       {position === 'current' && (
@@ -243,32 +243,32 @@ export function MobileBottomDock() {
                         onClick={position === 'current' ? openFullscreen : undefined}
                         tabIndex={position === 'current' ? 0 : -1}
                         className="block w-full max-w-full min-w-0 overflow-hidden text-left text-sm font-medium leading-tight"
-                        aria-label="Открыть плеер"
+                        aria-label={t('player.openPlayer')}
                       >
-                        <Marquee text={t.title} />
+                        <Marquee text={track.title} />
                       </button>
-                      {position === 'current' && t.artists && t.artists.length > 1 ? (
+                      {position === 'current' && track.artists && track.artists.length > 1 ? (
                         <div className="block w-full overflow-hidden text-left text-xs text-muted-foreground">
                           <span className="block truncate">
                             <ArtistLinks
-                              artists={t.artists}
-                              fallbackName={t.artist}
-                              fallbackId={t.artistId}
+                              artists={track.artists}
+                              fallbackName={track.artist}
+                              fallbackId={track.artistId}
                               className="hover:text-foreground hover:underline"
                             />
                           </span>
                         </div>
-                      ) : position === 'current' && t.artistId ? (
+                      ) : position === 'current' && track.artistId ? (
                         <button
                           type="button"
-                          onClick={() => navigate(`/artist/${t.artistId}`)}
+                          onClick={() => navigate(`/artist/${track.artistId}`)}
                           className="block w-full text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
-                          aria-label={`Открыть артиста ${t.artist}`}
+                          aria-label={t('player.openArtist', { name: track.artist ?? '' })}
                         >
-                          <Marquee text={t.artist} />
+                          <Marquee text={track.artist} />
                         </button>
                       ) : (
-                        <Marquee text={t.artist} className="text-xs text-muted-foreground" />
+                        <Marquee text={track.artist} className="text-xs text-muted-foreground" />
                       )}
                     </div>
                   </div>
@@ -279,7 +279,7 @@ export function MobileBottomDock() {
                 type="button"
                 onClick={() => currentTrack && toggle(currentTrack)}
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[transform,colors,background-color] active:scale-90 hover:bg-[var(--color-hover-overlay)] hover:text-foreground ${liked ? 'text-[var(--color-accent)]' : ''}`}
-                aria-label={liked ? 'Убрать лайк' : 'Лайк'}
+                aria-label={liked ? t('player.unlike') : t('player.like')}
               >
                 <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
               </button>
@@ -288,7 +288,7 @@ export function MobileBottomDock() {
                 type="button"
                 onClick={togglePlay}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-[0_2px_8px_-2px_var(--color-accent-glow)] transition-[transform,box-shadow] active:scale-95 hover:shadow-[0_4px_16px_-4px_var(--color-accent-glow)]"
-                aria-label={isPlaying ? 'Пауза' : 'Пуск'}
+                aria-label={isPlaying ? t('player.pause') : t('player.play')}
               >
                 {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" />}
               </button>
@@ -297,7 +297,7 @@ export function MobileBottomDock() {
                 type="button"
                 onClick={nextManual}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[transform,colors,background-color] active:scale-90 hover:bg-[var(--color-hover-overlay)] hover:text-foreground"
-                aria-label="Следующий"
+                aria-label={t('player.next')}
               >
                 <SkipForward size={16} />
               </button>
