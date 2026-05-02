@@ -22,6 +22,9 @@ import type { RoomDetail, RoomMember, RoomTrackSnapshot } from '@/types/rooms';
 import type { Track } from '@/types';
 import { useQuery } from '@tanstack/react-query';
 import { EASE_SPRING } from '@/lib/motion';
+import { useT } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
 
 export function RoomPage() {
   return (
@@ -32,6 +35,7 @@ export function RoomPage() {
 }
 
 function RoomPageInner() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const me = useAuthStore((s) => s.user);
@@ -118,7 +122,7 @@ function RoomPageInner() {
   };
   const onDelete = async () => {
     if (!id) return;
-    if (!window.confirm('Удалить комнату? Это действие нельзя отменить — все участники потеряют доступ.')) return;
+    if (!window.confirm(t('rooms.page.confirmDelete'))) return;
     await deleteMut.mutateAsync(id);
     clearActiveRoom();
     navigate('/rooms');
@@ -147,7 +151,7 @@ function RoomPageInner() {
   if (!id || initialQuery.isLoading || !initial) {
     return (
       <div className="flex min-h-[60dvh] items-center justify-center text-sm text-muted-foreground">
-        Загружаем комнату…
+        {t('rooms.page.loading')}
       </div>
     );
   }
@@ -171,7 +175,7 @@ function RoomPageInner() {
             to="/rooms"
             className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground hover:text-foreground"
           >
-            ← Все комнаты
+            {t('rooms.page.backAll')}
           </Link>
           <h1 className="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight sm:text-3xl">
             <Radio size={20} className="text-[var(--color-accent)]" />
@@ -181,7 +185,7 @@ function RoomPageInner() {
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => void onLeave()} disabled={leaveMut.isPending}>
-            <LogOut size={14} /> Выйти
+            <LogOut size={14} /> {t('rooms.page.leave')}
           </Button>
           {isHost && (
             <Button
@@ -191,7 +195,7 @@ function RoomPageInner() {
               className="border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive/10"
             >
               {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              Удалить
+              {t('rooms.page.delete')}
             </Button>
           )}
         </div>
@@ -230,25 +234,25 @@ function RoomPageInner() {
               <CoverFallback src={track.coverUrl ?? null} name={track.title} className="rounded-[var(--radius-md)]" />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-secondary text-xs text-muted-foreground">
-                ничего не играет
+                {t('rooms.page.silenceCover')}
               </div>
             )}
           </motion.div>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-              Сейчас играет
+              {t('rooms.page.nowPlaying')}
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 normal-case tracking-normal ${
                 isLive
                   ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
                   : 'border border-border bg-secondary text-muted-foreground'
               }`}>
                 <span className={`h-1.5 w-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
-                {isLive ? 'в эфире' : 'переподключение…'}
+                {isLive ? t('rooms.page.statusLive') : t('rooms.page.statusReconnect')}
               </span>
             </div>
             <div className="mt-2 truncate text-xl font-semibold tracking-tight sm:text-2xl">
-              {track?.title || 'Поставь любой трек, чтобы он заиграл у всех в комнате'}
+              {track?.title || t('rooms.page.placeholderTrack')}
             </div>
             <div className="mt-1 truncate text-sm text-muted-foreground">
               {track?.artist || '—'}
@@ -260,12 +264,12 @@ function RoomPageInner() {
               <span>{formatTime(positionSec)} / {formatTime(duration)}</span>
               {controller && (
                 <span className="ml-auto">
-                  Последнее действие — <span className="text-foreground">{memberLabel(controller, me?.id)}</span>
+                  {t('rooms.page.lastActionPrefix')}<span className="text-foreground">{memberLabel(controller, me?.id, t)}</span>
                 </span>
               )}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Управление воспроизведением — в мини-плеере внизу экрана. Что слушаешь ты — то слышат все.
+              {t('rooms.page.controlsHint')}
             </p>
           </div>
         </div>
@@ -274,7 +278,7 @@ function RoomPageInner() {
       {/* Members */}
       <section className="mt-8">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          <Users size={14} /> Слушатели · {liveMembers.length} из {remoteMembers.length}
+          <Users size={14} /> {t('rooms.page.listeners', { live: liveMembers.length, total: remoteMembers.length })}
         </div>
         <ul className="flex flex-wrap gap-3">
           <AnimatePresence>
@@ -287,7 +291,7 @@ function RoomPageInner() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.3, ease: EASE_SPRING }}
               >
-                <MemberChip member={m} isMe={m.userId === me?.id} />
+                <MemberChip member={m} isMe={m.userId === me?.id} t={t} />
               </motion.li>
             ))}
           </AnimatePresence>
@@ -299,13 +303,13 @@ function RoomPageInner() {
         <section className="mt-8">
           <div className="flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-border bg-card/60 px-4 py-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium">Только хост ставит треки</p>
+              <p className="text-sm font-medium">{t('rooms.page.hostOnly')}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Участники смогут только слушать — переключать музыку сможешь только ты.
+                {t('rooms.page.hostOnlyHint')}
               </p>
               {settingsMut.isError && (
                 <p className="mt-1 text-xs text-destructive">
-                  Не удалось сохранить настройку. Попробуй ещё раз.
+                  {t('rooms.page.hostOnlySaveError')}
                 </p>
               )}
             </div>
@@ -315,7 +319,7 @@ function RoomPageInner() {
                 settingsMut.mutate({ hostOnlyControl: next });
               }}
               disabled={settingsMut.isPending}
-              ariaLabel="Только хост ставит треки"
+              ariaLabel={t('rooms.page.hostOnlyToggleAria')}
             />
           </div>
         </section>
@@ -324,13 +328,13 @@ function RoomPageInner() {
       {canSetTrack ? (
         <section className="mt-8">
           <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <Search size={14} /> Поставить трек
+            <Search size={14} /> {t('rooms.page.setTrackTitle')}
           </div>
           <RoomTrackPicker onPick={onPickTrack} />
         </section>
       ) : (
         <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 px-4 py-6 text-center text-xs text-muted-foreground">
-          Хост включил режим «только слушать» — менять треки может только хост.
+          {t('rooms.page.listenOnlyNote')}
         </section>
       )}
 
@@ -339,11 +343,11 @@ function RoomPageInner() {
       </div>
 
       <section className="mt-8 rounded-[var(--radius-md)] border border-dashed border-border bg-card/40 p-4 text-xs leading-relaxed text-muted-foreground">
-        <p className="mb-2 font-medium text-foreground">Как это работает</p>
+        <p className="mb-2 font-medium text-foreground">{t('rooms.page.howItWorks')}</p>
         <ul className="list-disc space-y-1 pl-4">
-          <li>Любой участник может управлять воспроизведением{hostOnlyControl ? '' : ' и ставить треки'} — что у тебя играет, то слышат все.</li>
-          <li>Громкость и mute — у каждого свои в мини-плеере. Кроссфейд и шафл здесь отключены, чтобы не было рассинхрона.</li>
-          <li>Если связь моргнёт — догонит само. Стартовый момент трека хранится у хоста и подтягивается раз в пару секунд.</li>
+          <li>{hostOnlyControl ? t('rooms.page.howWorksHostOnly') : t('rooms.page.howWorksAll')}</li>
+          <li>{t('rooms.page.howWorksItem2')}</li>
+          <li>{t('rooms.page.howWorksItem3')}</li>
         </ul>
       </section>
     </div>
@@ -362,16 +366,16 @@ function ProgressBar({ positionSec, durationSec }: { positionSec: number; durati
   );
 }
 
-function MemberChip({ member, isMe }: { member: RoomMember; isMe: boolean }) {
+function MemberChip({ member, isMe, t }: { member: RoomMember; isMe: boolean; t: Translate }) {
   // Display label leans on `name` first per the unified UX spec — username
   // is only shown when there's no real display name.
-  const label = member.name?.trim() || (member.username && '@' + member.username) || 'аноним';
+  const label = member.name?.trim() || (member.username && '@' + member.username) || t('rooms.page.anonymous');
   return (
     <div
       className={`flex items-center gap-2 rounded-full border bg-background pl-1 pr-3 py-1 text-xs transition-opacity ${
         member.isLive ? 'border-border opacity-100' : 'border-border opacity-50'
       }`}
-      title={member.isLive ? 'Сейчас на связи' : 'Был в комнате'}
+      title={member.isLive ? t('rooms.page.memberOnline') : t('rooms.page.memberOffline')}
     >
       <UserAvatar
         name={member.name}
@@ -382,11 +386,11 @@ function MemberChip({ member, isMe }: { member: RoomMember; isMe: boolean }) {
         initialsClassName="text-xs"
       />
       <span className="truncate font-medium">
-        {label}{isMe ? ' · ты' : ''}
+        {label}{isMe ? t('rooms.page.youSuffix') : ''}
       </span>
       {member.role === 'host' && (
         <span className="rounded-full bg-[var(--color-accent)]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
-          хост
+          {t('rooms.page.hostBadge')}
         </span>
       )}
     </div>
@@ -406,6 +410,7 @@ function buildInviteUrl(code: string): string {
 }
 
 function RoomCode({ code }: { code: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const inviteUrl = useMemo(() => buildInviteUrl(code), [code]);
   const onCopy = async () => {
@@ -425,26 +430,27 @@ function RoomCode({ code }: { code: string }) {
         title={inviteUrl}
         className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        {copied ? 'Скопировано!' : (<><Copy size={12} /> Скопировать ссылку</>)}
+        {copied ? t('rooms.page.copied') : (<><Copy size={12} /> {t('rooms.page.copyLink')}</>)}
       </button>
       <button
         onClick={() => {
-          const text = `Слушаем вместе! Открой ссылку — войдёшь автоматически:\n${inviteUrl}`;
+          const text = t('rooms.page.shareText', { url: inviteUrl });
           if (navigator.share) {
-            void navigator.share({ title: 'Bratan Music — комната', text, url: inviteUrl }).catch(() => undefined);
+            void navigator.share({ title: t('rooms.page.shareAppName'), text, url: inviteUrl }).catch(() => undefined);
           } else {
             void navigator.clipboard.writeText(text).catch(() => undefined);
           }
         }}
         className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
-        <Share2 size={12} /> Поделиться
+        <Share2 size={12} /> {t('rooms.page.share')}
       </button>
     </div>
   );
 }
 
 function RoomTrackPicker({ onPick }: { onPick: (track: RoomTrackSnapshot) => void }) {
+  const t = useT();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   useEffect(() => {
@@ -459,28 +465,28 @@ function RoomTrackPicker({ onPick }: { onPick: (track: RoomTrackSnapshot) => voi
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Поиск трека по Tidal-каталогу"
+        placeholder={t('rooms.page.searchPlaceholder')}
       />
       {debounced.length >= 2 && (
         <div className="mt-3 max-h-80 overflow-y-auto rounded-[var(--radius-md)] border border-border bg-card/60">
           {isFetching && tracks.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">Ищем…</div>
+            <div className="px-3 py-6 text-center text-xs text-muted-foreground">{t('rooms.page.searching')}</div>
           ) : tracks.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">Ничего не нашли.</div>
+            <div className="px-3 py-6 text-center text-xs text-muted-foreground">{t('rooms.page.noResults')}</div>
           ) : (
             <ul>
-              {tracks.slice(0, 12).map((t) => (
-                <li key={t.id}>
+              {tracks.slice(0, 12).map((tr) => (
+                <li key={tr.id}>
                   <button
-                    onClick={() => onPick(trackToSnapshot(t))}
+                    onClick={() => onPick(trackToSnapshot(tr))}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-secondary"
                   >
                     <div className="h-10 w-10 overflow-hidden rounded-[var(--radius-sm)]">
-                      <CoverFallback src={t.coverUrl ?? null} name={t.title} />
+                      <CoverFallback src={tr.coverUrl ?? null} name={tr.title} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{t.title}</div>
-                      <div className="truncate text-xs text-muted-foreground">{t.artist}</div>
+                      <div className="truncate text-sm font-medium">{tr.title}</div>
+                      <div className="truncate text-xs text-muted-foreground">{tr.artist}</div>
                     </div>
                     <Play size={14} className="text-muted-foreground" />
                   </button>
@@ -494,25 +500,25 @@ function RoomTrackPicker({ onPick }: { onPick: (track: RoomTrackSnapshot) => voi
   );
 }
 
-function trackToSnapshot(t: Track): RoomTrackSnapshot {
+function trackToSnapshot(tr: Track): RoomTrackSnapshot {
   return {
-    id: t.id,
-    title: t.title,
-    artist: t.artist,
-    artistId: t.artistId ?? null,
-    artists: t.artists,
-    album: t.album ?? null,
-    albumId: t.albumId ?? null,
-    coverUrl: t.coverUrl ?? null,
-    coverVideoUrl: t.coverVideoUrl ?? null,
-    duration: t.duration ?? 0,
-    source: t.source ?? 'tidal',
+    id: tr.id,
+    title: tr.title,
+    artist: tr.artist,
+    artistId: tr.artistId ?? null,
+    artists: tr.artists,
+    album: tr.album ?? null,
+    albumId: tr.albumId ?? null,
+    coverUrl: tr.coverUrl ?? null,
+    coverVideoUrl: tr.coverVideoUrl ?? null,
+    duration: tr.duration ?? 0,
+    source: tr.source ?? 'tidal',
   };
 }
 
-function memberLabel(m: RoomMember, meId?: string): string {
-  if (m.userId === meId) return 'ты';
-  return m.name?.trim() || (m.username && '@' + m.username) || 'аноним';
+function memberLabel(m: RoomMember, meId: string | undefined, t: Translate): string {
+  if (m.userId === meId) return t('rooms.page.you');
+  return m.name?.trim() || (m.username && '@' + m.username) || t('rooms.page.anonymous');
 }
 
 function formatTime(seconds: number): string {

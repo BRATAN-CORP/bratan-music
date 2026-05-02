@@ -4,6 +4,9 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useRoomChat, type UiRoomMessage } from '@/hooks/useRoomChat';
 import { useAuthStore } from '@/store/auth';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { useT } from '@/i18n';
+
+type Translate = ReturnType<typeof useT>;
 
 const MAX_LEN = 1000;
 
@@ -33,6 +36,7 @@ interface RoomChatProps {
  *     is no in-flight spinner to flash and feel laggy.
  */
 export function RoomChat({ roomId }: RoomChatProps) {
+  const t = useT();
   const me = useAuthStore((s) => s.user);
   const { messages, send, error } = useRoomChat(roomId);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -72,7 +76,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
   return (
     <section className="rounded-[var(--radius-md)] border border-border bg-card/60 p-4">
       <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-        <MessageSquare size={14} /> Чат комнаты
+        <MessageSquare size={14} /> {t('rooms.chat.title')}
       </div>
 
       <div
@@ -82,7 +86,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
       >
         {messages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center text-center text-xs text-muted-foreground">
-            Пока тишина. Напиши что-нибудь — все увидят.
+            {t('rooms.chat.empty')}
           </div>
         ) : (
           <AnimatePresence initial={false}>
@@ -92,6 +96,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
                 message={m}
                 mine={m.userId === me?.id}
                 reduceMotion={!!reduceMotion}
+                t={t}
               />
             ))}
           </AnimatePresence>
@@ -103,7 +108,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, MAX_LEN))}
-          placeholder="Сообщение"
+          placeholder={t('rooms.chat.placeholder')}
           className="h-9 flex-1 rounded-[var(--radius-sm)] border border-border bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-[var(--color-accent)]"
           maxLength={MAX_LEN}
           autoComplete="off"
@@ -111,7 +116,7 @@ export function RoomChat({ roomId }: RoomChatProps) {
         <motion.button
           type="submit"
           disabled={!text.trim()}
-          aria-label="Отправить"
+          aria-label={t('rooms.chat.send')}
           whileTap={reduceMotion ? undefined : { scale: 0.92 }}
           whileHover={reduceMotion ? undefined : { scale: 1.04 }}
           transition={{ type: 'spring', stiffness: 520, damping: 28 }}
@@ -132,10 +137,11 @@ interface ChatRowProps {
   message: UiRoomMessage;
   mine: boolean;
   reduceMotion: boolean;
+  t: Translate;
 }
 
-function ChatRow({ message, mine, reduceMotion }: ChatRowProps) {
-  const display = message.name?.trim() || message.username?.trim() || 'Гость';
+function ChatRow({ message, mine, reduceMotion, t }: ChatRowProps) {
+  const display = message.name?.trim() || message.username?.trim() || t('rooms.chat.guest');
   const bubbleTone = mine
     ? 'bg-[var(--color-accent)]/15 text-foreground'
     : 'bg-secondary text-foreground';
@@ -167,7 +173,7 @@ function ChatRow({ message, mine, reduceMotion }: ChatRowProps) {
           <span className="text-muted-foreground">{formatTime(message.createdAtMs)}</span>
           {failed && (
             <span className="inline-flex items-center gap-1 text-red-400">
-              <AlertCircle size={11} /> не доставлено
+              <AlertCircle size={11} /> {t('rooms.chat.failed')}
             </span>
           )}
         </div>
