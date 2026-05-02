@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppRouter } from '@/app/router';
 import { getTelegramWebApp } from '@/hooks/useAuth';
 import { I18nProvider } from '@/i18n';
+import { LocaleFade } from '@/components/features/LocaleFade';
 import '@/styles/globals.scss';
 
 getTelegramWebApp()?.ready?.();
@@ -22,7 +23,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
-        <AppRouter />
+        <LocaleFade>
+          <AppRouter />
+        </LocaleFade>
       </I18nProvider>
     </QueryClientProvider>
   </React.StrictMode>
