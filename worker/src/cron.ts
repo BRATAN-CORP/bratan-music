@@ -1,6 +1,7 @@
 import type { Env } from './types/env';
 import { TasteService } from './services/TasteService';
 import { DailyPlaylistService } from './services/DailyPlaylistService';
+import { HealthService } from './services/HealthService';
 
 /**
  * Recompute per-user taste profiles, regenerate daily-playlists, GC
@@ -15,6 +16,15 @@ import { DailyPlaylistService } from './services/DailyPlaylistService';
  */
 export async function runScheduledJobs(env: Env): Promise<void> {
   const start = Date.now();
+  const health = new HealthService(env);
+  const runId = await health.recordCronStart('scheduled');
+  let processedCount = 0;
+  let errorCount = 0;
+  let firstError: string | null = null;
+  const recordError = (msg: string) => {
+    errorCount++;
+    if (firstError === null) firstError = msg;
+  };
 
   // 1. Find active users.
   const cutoff = start - 14 * 24 * 60 * 60 * 1000;
@@ -49,8 +59,12 @@ export async function runScheduledJobs(env: Env): Promise<void> {
     try {
       await taste.recompute(userId);
       await daily.regenerate(userId);
+      processedCount++;
     } catch (err) {
-      console.error('[cron] user', userId, err instanceof Error ? err.message : err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[cron] user', userId, msg);
+      recordError(`user ${userId}: ${msg}`);
+      await health.log('error', 'cron.user', msg, { userId });
     }
   }
 
@@ -59,7 +73,10 @@ export async function runScheduledJobs(env: Env): Promise<void> {
   try {
     await daily.gc();
   } catch (err) {
-    console.error('[cron] gc daily', err instanceof Error ? err.message : err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[cron] gc daily', msg);
+    recordError(`gc daily: ${msg}`);
+    await health.log('error', 'cron.gc.daily', msg);
   }
 
   try {
@@ -69,7 +86,10 @@ export async function runScheduledJobs(env: Env): Promise<void> {
       .bind(seenCutoff)
       .run();
   } catch (err) {
-    console.error('[cron] gc seen', err instanceof Error ? err.message : err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[cron] gc seen', msg);
+    recordError(`gc seen: ${msg}`);
+    await health.log('error', 'cron.gc.seen', msg);
   }
 
   try {
@@ -78,9 +98,28 @@ export async function runScheduledJobs(env: Env): Promise<void> {
     const { RoomService } = await import('./services/RoomService');
     await new RoomService(env).gc();
   } catch (err) {
-    console.error('[cron] gc rooms', err instanceof Error ? err.message : err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[cron] gc rooms', msg);
+    recordError(`gc rooms: ${msg}`);
+    await health.log('error', 'cron.gc.rooms', msg);
   }
 
-  // cron summary intentionally not logged — operational signal.
-  void start; void userIds;
+  // GC the service log ring + old cron_runs rows. Keep ~30 days of logs
+  // and 90 days of cron rows so the admin can spot regressions.
+  try {
+    const logCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    await health.gc(logCutoff);
+    const cronCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    await env.DB
+      .prepare(`DELETE FROM cron_runs WHERE started_at < ?`)
+      .bind(cronCutoff)
+      .run();
+  } catch (err) {
+    console.error('[cron] gc logs', err instanceof Error ? err.message : err);
+  }
+
+  if (runId !== null) {
+    await health.recordCronFinish(runId, errorCount === 0, processedCount, errorCount, firstError ?? undefined);
+  }
+  void start;
 }

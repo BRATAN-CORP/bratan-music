@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { AdminTidalPanel } from '@/components/features/AdminTidalPanel';
 import { AdminTidalPoolPanel } from '@/components/features/AdminTidalPoolPanel';
+import { AdminHealthPanel } from '@/components/features/AdminHealthPanel';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
@@ -186,6 +187,9 @@ export function ProfilePage() {
             <div className="grid gap-4 md:grid-cols-2">
               <AdminGrantPanel />
               <AdminAdminFlagPanel />
+              <div className="md:col-span-2">
+                <AdminHealthPanel />
+              </div>
               <div className="md:col-span-2">
                 <AdminTidalPoolPanel />
               </div>
