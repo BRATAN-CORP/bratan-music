@@ -96,7 +96,14 @@ img {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
+  // No `overflow: hidden` here. Whether the aurora blobs clip at the
+  // section edge or bleed into the next section is controlled by the
+  // *parent* section's overflow rule — most pages use
+  // `overflow-hidden` and clip the aurora exactly at their edge, but
+  // the landing hero relaxes its section to `overflow-x-hidden` so
+  // the bottom blob spills downward into the features grid for a
+  // seamless visual transition (no hard horizontal seam between
+  // hero and the rest of the page).
   z-index: 0;
 
   &::before,
