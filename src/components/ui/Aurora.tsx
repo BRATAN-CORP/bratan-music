@@ -24,9 +24,12 @@ export function Aurora({ className = '', variant = 'hero' }: AuroraProps) {
 
   // Wrapper has no `overflow-hidden`. The actual clip boundary is the
   // parent section — keeping the wrapper free lets pages opt-in to a
-  // bleed (e.g. landing hero relaxes section to `overflow-x-hidden`
-  // so the bottom blob can extend into the next section without
-  // creating horizontal scrollbars).
+  // bleed. The landing/home hero use
+  // `[clip-path:inset(0_0_-240px_0)]` on the section: it preserves
+  // horizontal clipping (no scrollbars from extra-wide blobs) while
+  // letting the bottom blob extend ~240px past the section edge so
+  // the hero transitions softly into the next section instead of
+  // ending in a hard horizontal cut.
   return (
     <div
       className={`pointer-events-none absolute inset-0 ${className} ${reduce ? '' : 'aurora'}`}

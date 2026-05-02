@@ -7,7 +7,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
-import { Aurora } from '@/components/ui/Aurora';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { usePlayerStore } from '@/store/player';
@@ -98,12 +97,13 @@ function Inner() {
 
   return (
     <div className="relative w-full">
-      {/* Same hero stage as home: Aurora gradient + grid background +
-          centered max-w-6xl container with the standard responsive
-          padding the rest of the app uses. The card itself is just
-          a normal `bg-card` panel — no TiltCard, no extra widths. */}
+      {/* Hero stage: per user request the corner Aurora blobs are NOT
+          rendered on /ai ("во вкладке /ai вообще не нужны эти градиенты
+          по углам фона"). The grid pattern stays as a quiet structural
+          texture — it isn't a corner radial. The card itself is a
+          normal `bg-card` panel with its own subtle two-corner idle
+          gradient + hover halo (see TiltCard block below). */}
       <section className="relative overflow-hidden pb-8 pt-12 sm:pt-16 lg:pb-10">
-        <Aurora variant="hero" />
         <div className="grid-bg absolute inset-0 opacity-20" aria-hidden />
 
         <div className="relative mx-auto flex max-w-6xl flex-col gap-8 px-4 sm:px-6 lg:px-10">
@@ -146,13 +146,16 @@ function Inner() {
             transition={{ duration: 0.45, ease: EASE_SPRING, delay: 0.05 }}
             className="group relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:p-6"
           >
-            {/* Hover-only halo. The two-corner static idle gradient
-                used on the SubscriptionCard reference and on /home was
-                pulled here per user feedback ("убери два градиента
-                радиальных по углам"): on the AI page the eye should
-                land on the prompt textarea, not on a decorated panel
-                edge. The single corner halo on hover stays so the
-                premium tilt + glare still has a soft "lift" cue. */}
+            {/* Static idle gradient — same two-corner signature as the
+                SubscriptionCard reference in /profile. */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              aria-hidden
+              style={{
+                background:
+                  'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+              }}
+            />
             <div
               className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-90"
               aria-hidden
