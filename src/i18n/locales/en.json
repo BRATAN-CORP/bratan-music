@@ -555,12 +555,12 @@
     "featuresHint": "Nine features that make this player worth opening. No marketing fluff — only what actually works.",
     "openLink": "Open",
     "demos": {
-      "censored": "censored",
-      "yourCut": "your cut",
       "aiPrompt": "«drifting down empty highways at 3am»",
       "aiResult": "→ 24 tracks • 1h 38m",
-      "lineBefore": "hear it",
-      "lineWord": "uncut"
+      "censorPrefix": "Skip",
+      "censorWord": "the censor",
+      "revealPrefix": "Hear",
+      "revealWord": "it uncut"
     },
     "features": {
       "censorOverlay": {
