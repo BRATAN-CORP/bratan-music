@@ -1,0 +1,211 @@
+BRATAN MUSIC SOURCE-AVAILABLE LICENSE
+Version 1.0, 2026
+
+Copyright (c) 2026 BRATAN-CORP. All rights reserved.
+
+This software, together with all associated source code, build artifacts,
+configuration files, documentation, design assets, branding, sound and
+visual material contained in this repository (the "Software"), is made
+publicly accessible solely for the purpose of personal review, study,
+evaluation, and demonstration as part of the author's portfolio.
+
+THE SOFTWARE IS NOT OPEN-SOURCE SOFTWARE, IS NOT FREE SOFTWARE, AND IS NOT
+LICENSED UNDER ANY OPEN-SOURCE OR FREE-SOFTWARE LICENSE. NO PART OF THE
+SOFTWARE MAY BE USED IN ANY MANNER NOT EXPRESSLY PERMITTED BELOW.
+
+-------------------------------------------------------------------------------
+1. GRANT OF LIMITED RIGHTS
+-------------------------------------------------------------------------------
+
+Subject strictly to the restrictions in Section 2, any natural person
+obtaining access to the Software is hereby granted a non-exclusive, non-
+transferable, non-sublicensable, fully revocable, royalty-free right to:
+
+  (a) view, read, and study the source code of the Software for the
+      purposes of personal education, journalistic review, academic
+      research, and evaluation of the author's professional skills;
+
+  (b) cite, quote (in non-substantial portions), reference, or hyperlink
+      to the Software for the purposes described in (a), provided that
+      such citation includes attribution to the copyright holder and a
+      link to this repository.
+
+No other rights are granted, either expressly or by implication, estoppel,
+or otherwise.
+
+-------------------------------------------------------------------------------
+2. PROHIBITED USES
+-------------------------------------------------------------------------------
+
+The following uses are EXPRESSLY PROHIBITED without prior written and
+signed permission from the copyright holder:
+
+  (a) any reproduction, copying, replication, transcription, scraping,
+      mirroring, archiving, or extraction of the Software, in whole or
+      in part, by any means or in any medium, beyond what is technically
+      required to view the Software in a web browser, code-hosting user
+      interface, or git client during permitted activities under
+      Section 1;
+
+  (b) any modification, translation, adaptation, transformation, or
+      preparation of derivative works based on the Software, in whole
+      or in part, regardless of whether the result is published;
+
+  (c) any incorporation of the Software, in whole or in part, into any
+      other software, library, package, dataset, model training corpus,
+      product, or service;
+
+  (d) any distribution, publication, broadcast, transmission, lending,
+      leasing, gifting, sale, sublicensing, or making available of the
+      Software, modified or unmodified, by any means including but not
+      limited to git mirrors, package registries, content-delivery
+      networks, file-sharing services, archives, and torrents;
+
+  (e) any execution, hosting, deployment, or operation of the Software
+      for any purpose other than ephemeral local execution by the
+      reviewer for the purposes described in Section 1, including but
+      not limited to:
+        (i) operating the Software as an internet-facing service,
+            whether for free or for compensation, whether for a closed
+            user group or for the public;
+       (ii) embedding the Software, or any portion thereof, in any
+            internal or commercial product, system, or workflow;
+      (iii) using the Software to provide hosting, streaming, content
+            delivery, or any other service to third parties;
+
+  (f) any use of the Software in connection with training, fine-tuning,
+      embedding, retrieval-augmented generation, or any other input to
+      any machine-learning model, whether or not the resulting model is
+      distributed;
+
+  (g) any commercial use of the Software, whether direct or indirect,
+      including but not limited to use in revenue-generating activity,
+      advertising-supported services, paid offerings, donation-funded
+      services, and competitive analysis by commercial entities;
+
+  (h) any removal, modification, alteration, or obfuscation of any
+      copyright notice, license notice, trademark, attribution, or other
+      proprietary marking contained in the Software;
+
+  (i) any use of the names "BRATAN MUSIC", "BRATAN", "BRATAN-CORP",
+      "@bratan_music_bot", or any associated logos, marks, designs, or
+      branding for any purpose other than identifying the original
+      Software in compliance with Section 1, including but not limited
+      to use in product names, service names, domain names, social-
+      media handles, and marketing materials;
+
+  (j) any reverse-engineering, decompilation, or disassembly of any
+      binary, container image, package, or compiled artifact derived
+      from the Software, except to the limited extent that such activity
+      cannot be lawfully restricted under applicable law.
+
+-------------------------------------------------------------------------------
+3. THIRD-PARTY DEPENDENCIES
+-------------------------------------------------------------------------------
+
+The Software incorporates open-source third-party libraries listed in
+the `package.json`, `package-lock.json`, and equivalent manifest files.
+Those libraries remain subject to their own respective licenses; this
+license does not modify or override them. Nothing in this license shall
+be construed as a claim of authorship or ownership over any third-party
+component.
+
+The Software also issues requests to third-party services, including but
+not limited to Tidal, Telegram, Cloudflare, GitHub, and Yandex. Use of
+those services is subject to their respective terms; this license does
+not grant any rights with respect to those services or their content,
+and the operator of any deployment of the Software is solely responsible
+for compliance with the terms of any service it interacts with.
+
+-------------------------------------------------------------------------------
+4. LICENSING INQUIRIES
+-------------------------------------------------------------------------------
+
+To request permission for any use beyond Section 1, contact the copyright
+holder via the Telegram bot referenced in the project's README. The
+copyright holder is under no obligation to respond, grant permission, or
+negotiate, and may decline any request at its sole and absolute
+discretion. Silence from the copyright holder shall not be construed as
+permission.
+
+-------------------------------------------------------------------------------
+5. ENFORCEMENT
+-------------------------------------------------------------------------------
+
+The copyright holder expressly reserves all rights, remedies, and causes
+of action available under copyright law, contract law, trademark law,
+unfair-competition law, trade-secret law, and any other applicable law
+in any jurisdiction.
+
+By accessing the Software in any form, the user acknowledges that the
+user has read, understood, and accepted the terms of this license, and
+that any use beyond Section 1 will constitute a wilful, knowing, and
+material breach of this license.
+
+The copyright holder may, at its sole discretion, pursue civil and (where
+applicable) criminal remedies against any person or entity that violates
+this license, including but not limited to injunctive relief, monetary
+damages, statutory damages, recovery of legal costs and attorney fees,
+takedown notices under the United States Digital Millennium Copyright
+Act (17 U.S.C. § 512), takedown notices under the European Union Digital
+Services Act (Regulation (EU) 2022/2065), and equivalent procedures in
+other jurisdictions.
+
+This license is governed by, and any dispute arising out of or relating
+to this license shall be resolved in accordance with, the laws of the
+jurisdiction of the copyright holder's residence, without regard to its
+conflict-of-laws principles.
+
+-------------------------------------------------------------------------------
+6. TERMINATION
+-------------------------------------------------------------------------------
+
+The rights granted in Section 1 terminate automatically and without
+notice upon any breach of this license by the user. Upon termination,
+the user shall immediately cease all access to the Software and destroy
+all copies of the Software in the user's possession or control,
+including any local clones, caches, build outputs, and backups.
+
+The copyright holder may also terminate the rights granted in Section 1
+at any time, with or without cause, by publishing a revocation notice in
+this repository or by directly notifying the user. Termination of the
+rights granted in Section 1 does not relieve the user of liability for
+breaches that occurred before termination.
+
+-------------------------------------------------------------------------------
+7. NO WARRANTY
+-------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT,
+ACCURACY, AVAILABILITY, AND SECURITY. THE COPYRIGHT HOLDER MAKES NO
+REPRESENTATION THAT THE SOFTWARE IS FREE OF DEFECTS, BUGS, OR
+VULNERABILITIES.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, PUNITIVE, OR CONSEQUENTIAL
+DAMAGES (INCLUDING BUT NOT LIMITED TO LOSS OF PROFITS, LOSS OF DATA,
+LOSS OF GOODWILL, BUSINESS INTERRUPTION, OR PROCUREMENT OF SUBSTITUTE
+GOODS OR SERVICES) ARISING IN ANY WAY OUT OF THE USE OF, INABILITY TO
+USE, OR ACCESS TO THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+-------------------------------------------------------------------------------
+8. SEVERABILITY AND ENTIRE AGREEMENT
+-------------------------------------------------------------------------------
+
+If any provision of this license is held to be unenforceable in any
+jurisdiction, the remaining provisions shall remain in full force and
+effect, and the unenforceable provision shall be interpreted, to the
+maximum extent permitted by applicable law, so as to give effect to the
+intent of the original provision.
+
+This license, together with any explicit written and signed agreement
+between the user and the copyright holder, constitutes the entire
+agreement between the parties regarding the Software, and supersedes
+any prior or contemporaneous understandings, whether oral or written.
+
+-------------------------------------------------------------------------------
+END OF LICENSE
+-------------------------------------------------------------------------------
