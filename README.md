@@ -446,9 +446,27 @@ PRs are welcome. The basic flow:
 
 ### 📜 License
 
-This project is for **educational and personal use**. The Tidal API integration uses publicly known mobile client credentials reverse-engineered from open-source projects. Compliance with [Tidal's Terms of Service](https://tidal.com/terms) is the operator's responsibility. The authors take no liability for misuse.
+[![License: Source-Available](https://img.shields.io/badge/License-Source--Available-red.svg)](./LICENSE)
 
-If you want a commercial license / partnership, reach out via the Telegram bot.
+> **This project is NOT open-source.**
+
+The source is published for **personal review, study, and portfolio demonstration only**. See [LICENSE](./LICENSE) for the full terms.
+
+**You may**: read the code in this repository for educational or evaluation purposes; cite or reference it with attribution.
+
+**You may NOT** (without prior written permission from the copyright holder):
+
+- copy, mirror, fork, archive, or otherwise reproduce the code;
+- modify it or create derivative works;
+- distribute, publish, redistribute, or include it in any package, image, or service;
+- deploy, host, or operate the software for any third party (commercially or otherwise);
+- use it as input or training data for any machine-learning model;
+- use the names "BRATAN MUSIC", "BRATAN", or "@bratan_music_bot" in any product, service, or branding;
+- remove or alter any copyright or attribution notice.
+
+**Tidal API disclaimer.** The Tidal integration uses publicly known mobile-client credentials reverse-engineered from open-source projects. Compliance with [Tidal's Terms of Service](https://tidal.com/terms) is the operator's responsibility. The authors take no liability for misuse.
+
+**Licensing inquiries / partnerships / commercial use** — contact via the [Telegram bot](https://t.me/bratan_music_bot).
 
 ---
 
@@ -880,9 +898,27 @@ PR'ы приветствуются. Базовый flow:
 
 ### 📜 Лицензия
 
-Проект — для **образовательного и личного использования**. Интеграция с Tidal API использует публично известные mobile-client credentials, reverse-engineered из open-source проектов. Соблюдение [Tidal Terms of Service](https://tidal.com/terms) — ответственность оператора. Авторы не несут ответственности за нецелевое использование.
+[![License: Source-Available](https://img.shields.io/badge/License-Source--Available-red.svg)](./LICENSE)
 
-Если нужна коммерческая лицензия / партнёрство — пишите через Telegram-бота.
+> **Проект НЕ open-source.**
+
+Исходники выложены исключительно для **личного ознакомления, изучения и портфолио-демонстрации**. Полные условия — в файле [LICENSE](./LICENSE).
+
+**Можно**: читать код в этом репозитории в образовательных или оценочных целях; цитировать или ссылаться с атрибуцией.
+
+**Нельзя** (без письменного разрешения правообладателя):
+
+- копировать, зеркалировать, форкать, архивировать или иначе воспроизводить код;
+- модифицировать или создавать производные работы;
+- распространять, публиковать или включать в любые пакеты, образы или сервисы;
+- деплоить, хостить или эксплуатировать программу для третьих лиц (коммерчески или нет);
+- использовать код в качестве входа или обучающих данных для систем машинного обучения;
+- использовать названия «BRATAN MUSIC», «BRATAN», «@bratan_music_bot» в любых продуктах, сервисах или брендинге;
+- удалять или изменять любые копирайт- или атрибуция-нотисы.
+
+**Дисклеймер про Tidal API.** Интеграция с Tidal использует публично известные mobile-client credentials, reverse-engineered из open-source проектов. Соблюдение [Tidal Terms of Service](https://tidal.com/terms) — ответственность оператора. Авторы не несут ответственности за нецелевое использование.
+
+**Лицензионные запросы / партнёрство / коммерческое использование** — через [Telegram-бота](https://t.me/bratan_music_bot).
 
 ---
 
