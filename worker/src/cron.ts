@@ -92,6 +92,24 @@ export async function runScheduledJobs(env: Env): Promise<void> {
     await health.log('error', 'cron.gc.seen', msg);
   }
 
+  // GC expired auth_nonces. The deeplink-login flow inserts a row per
+  // /start with a 5-minute TTL and the polling endpoint deletes it on
+  // first claim, but unclaimed rows (user opens /start, never opens the
+  // app) accumulate forever. Sweep anything past expiry on every cron
+  // tick — `expires_at` is in unix seconds.
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    await env.DB
+      .prepare(`DELETE FROM auth_nonces WHERE expires_at < ?`)
+      .bind(nowSec)
+      .run();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[cron] gc auth_nonces', msg);
+    recordError(`gc auth_nonces: ${msg}`);
+    await health.log('error', 'cron.gc.auth_nonces', msg);
+  }
+
   try {
     // GC closes rooms whose host has been silent for too long. Result
     // is intentionally not logged — it's operational, not an error.

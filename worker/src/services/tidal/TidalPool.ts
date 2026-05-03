@@ -178,10 +178,11 @@ export class TidalPool {
    */
   async upsert(tokens: TidalAccountTokens, label?: string): Promise<TidalAccountRecord> {
     const key = this.env.SESSION_ENCRYPTION_KEY;
+    const envName = this.env.ENVIRONMENT;
     const [accessToken, refreshToken, clientSecret] = await Promise.all([
-      encryptSecret(tokens.accessToken, key),
-      encryptSecret(tokens.refreshToken, key),
-      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key) : Promise.resolve(null),
+      encryptSecret(tokens.accessToken, key, envName),
+      encryptSecret(tokens.refreshToken, key, envName),
+      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key, envName) : Promise.resolve(null),
     ]);
     const now = nowSec();
     await this.env.DB
@@ -229,10 +230,11 @@ export class TidalPool {
   /** Persist refreshed tokens for a specific account (called from TidalAuth on refresh). */
   async updateTokens(id: number, tokens: TidalAccountTokens): Promise<void> {
     const key = this.env.SESSION_ENCRYPTION_KEY;
+    const envName = this.env.ENVIRONMENT;
     const [accessToken, refreshToken, clientSecret] = await Promise.all([
-      encryptSecret(tokens.accessToken, key),
-      encryptSecret(tokens.refreshToken, key),
-      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key) : Promise.resolve(null),
+      encryptSecret(tokens.accessToken, key, envName),
+      encryptSecret(tokens.refreshToken, key, envName),
+      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key, envName) : Promise.resolve(null),
     ]);
     await this.env.DB
       .prepare(

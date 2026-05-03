@@ -584,10 +584,11 @@ export class TidalAuth {
     // legacy row here; the migration is one-way.
     const updatedAt = Math.floor(Date.now() / 1000);
     const key = this.env.SESSION_ENCRYPTION_KEY;
+    const envName = this.env.ENVIRONMENT;
     const [accessToken, refreshToken, clientSecret] = await Promise.all([
-      encryptSecret(tokens.accessToken, key),
-      encryptSecret(tokens.refreshToken, key),
-      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key) : Promise.resolve(null),
+      encryptSecret(tokens.accessToken, key, envName),
+      encryptSecret(tokens.refreshToken, key, envName),
+      tokens.clientSecret ? encryptSecret(tokens.clientSecret, key, envName) : Promise.resolve(null),
     ]);
     await this.env.DB
       .prepare(
