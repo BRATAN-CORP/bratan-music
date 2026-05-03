@@ -8,6 +8,13 @@ interface RateLimitConfig {
 
 const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
   'POST:/auth': { limit: 5, windowSeconds: 60 },
+  // /auth/nonce/:nonce is the deeplink-login polling endpoint. The site
+  // hits it every ~1s after /start, so we need way more headroom than the
+  // POST:/auth login bucket, but we still want to make brute-forcing a
+  // 122-bit UUID nonce obviously infeasible per IP. 60/min handles a
+  // 5-minute polling session with margin and caps a brute-forcer at
+  // ~86k tries/day — irrelevant against UUID entropy.
+  'GET:/auth/nonce': { limit: 60, windowSeconds: 60 },
   'GET:/search': { limit: 30, windowSeconds: 60 },
   'GET:/tracks/stream': { limit: 60, windowSeconds: 3600 },
   'GET:/tracks/download': { limit: 10, windowSeconds: 3600 },

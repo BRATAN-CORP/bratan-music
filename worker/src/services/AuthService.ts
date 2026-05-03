@@ -160,6 +160,23 @@ export class AuthService {
     const [header, payload, signature] = parts;
     const signingInput = `${header}.${payload}`;
 
+    // Defense-in-depth: reject any token whose header advertises an algorithm
+    // other than HS256 before we even touch the signature. We always sign
+    // with HS256 and the verify path is wired to HMAC-SHA256, so an
+    // alg=none / alg=RS256 forgery would already fail signature check, but
+    // refusing to look at non-HS256 headers eliminates a whole class of
+    // future regressions if the verifier ever grows alg dispatch.
+    let parsedHeader: { alg?: unknown; typ?: unknown };
+    try {
+      parsedHeader = JSON.parse(atob(header.replace(/-/g, '+').replace(/_/g, '/'))) as {
+        alg?: unknown;
+        typ?: unknown;
+      };
+    } catch {
+      return null;
+    }
+    if (parsedHeader.alg !== 'HS256') return null;
+
     const key = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(secret),

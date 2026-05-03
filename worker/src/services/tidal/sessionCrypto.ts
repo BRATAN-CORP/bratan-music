@@ -15,11 +15,11 @@
  * before this change so we never lose an existing session over the
  * deploy boundary.
  *
- * If `SESSION_ENCRYPTION_KEY` is missing or unparseable we log once
- * and store plaintext — this matches the previous behaviour and keeps
- * production from breaking on a misconfigured deploy. Operators who
- * care about confidentiality should set the secret; operators who
- * don't care still have a working worker.
+ * If `SESSION_ENCRYPTION_KEY` is missing or unparseable in dev we log
+ * once and store plaintext so a fresh local checkout still works. In
+ * production we hard-fail instead — silently writing Tidal tokens in
+ * plaintext to D1 when the operator clearly meant to encrypt them is
+ * the kind of "fail open" that gets you on a vendor's incident report.
  */
 
 const ENC_PREFIX = 'enc:v1:';
@@ -50,9 +50,19 @@ async function deriveKey(rawKey: string): Promise<CryptoKey | null> {
   return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
-export async function encryptSecret(plaintext: string, rawKey: string | undefined): Promise<string> {
+export async function encryptSecret(
+  plaintext: string,
+  rawKey: string | undefined,
+  environment?: string,
+): Promise<string> {
   if (!plaintext) return plaintext;
+  const isProduction = environment === 'production';
   if (!rawKey) {
+    if (isProduction) {
+      throw new Error(
+        'SESSION_ENCRYPTION_KEY is required in production — refusing to write Tidal tokens to D1 in plaintext',
+      );
+    }
     if (!warnedMissingKey) {
       console.error('[sessionCrypto] SESSION_ENCRYPTION_KEY not set — Tidal tokens stored in plaintext');
       warnedMissingKey = true;
@@ -60,7 +70,12 @@ export async function encryptSecret(plaintext: string, rawKey: string | undefine
     return plaintext;
   }
   const key = await deriveKey(rawKey);
-  if (!key) return plaintext;
+  if (!key) {
+    if (isProduction) {
+      throw new Error('SESSION_ENCRYPTION_KEY too short / invalid — must be ≥16 chars');
+    }
+    return plaintext;
+  }
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
