@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import type { ArtistRef } from '@/types';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,53 @@ interface ArtistLinksProps {
   separator?: string;
 }
 
+/**
+ * Match every separator that visually splits a multi-credit string.
+ * Includes the obvious ", " plus the long tail of upstream variants
+ * we've seen on Tidal: "&", " / ", " feat.", " ft.", " vs.", " x ",
+ * " · ", " — ". The regex is intentionally case-insensitive and
+ * permissive — we'd rather mark a borderline single-artist name like
+ * "Tyler, The Creator" as multi-credit and render it as plain text
+ * than wrap the whole string in ONE link to a wrong-artist page.
+ *
+ * The negative-lookbehind on " - " is omitted — matching " - " in a
+ * track-credit string is rare enough that the noise it'd cause on
+ * single-artist names like "Beyoncé - I Care" outweighs the benefit.
+ */
+const CREDIT_SEPARATOR_RE = /(\s*,\s*|\s*;\s*|\s*&\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+vs\.?\s+|\s+\/\s+|\s+x\s+|\s+·\s+|\s+—\s+)/i;
+
+function looksMultiCreditName(name: string | undefined): boolean {
+  if (typeof name !== 'string' || name.length === 0) return false;
+  return CREDIT_SEPARATOR_RE.test(name);
+}
+
+interface CreditChunk {
+  text: string;
+  /** Trailing separator (visible spacing/punctuation), empty for the last chunk. */
+  sep: string;
+}
+
+/**
+ * Split a joined credit string ("A, B feat. C") into renderable chunks
+ * preserving the original separators so the visual rendering matches
+ * what the upstream emitted (no normalisation / re-formatting).
+ */
+function splitCredits(joined: string): CreditChunk[] {
+  // Use a global match to preserve the matched separators alongside
+  // the text fragments. `String.split` with a captured group does
+  // exactly that: returns alternating [text, sep, text, sep, ...].
+  const re = new RegExp(CREDIT_SEPARATOR_RE.source, 'gi');
+  const parts = joined.split(re);
+  const chunks: CreditChunk[] = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const text = (parts[i] ?? '').trim();
+    if (!text) continue;
+    const sep = (parts[i + 1] ?? '').trimStart();
+    chunks.push({ text, sep: sep || '' });
+  }
+  return chunks;
+}
+
 export function ArtistLinks({
   artists,
   fallbackName,
@@ -48,32 +96,75 @@ export function ArtistLinks({
 }: ArtistLinksProps) {
   const list = artists && artists.length > 0 ? artists : null;
 
-  if (!list) {
-    // Multi-credit fallback: when the structured `artists` list is
-    // missing but the joined display string still contains separators,
-    // wrapping the whole "A, B" in ONE <Link> would silently navigate
-    // ALL of those visible names to the primary id. That's the
-    // "names stuck together" bug from listening history rows where
-    // play_history pre-migration only stored the single id. Render as
-    // plain text instead — no link, no wrong-artist nav. New rows
-    // (post-migration 0024) carry `artists` and take the per-link
-    // path below.
-    const looksMultiCredit = typeof fallbackName === 'string'
-      && /(,|&|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b)/i.test(fallbackName);
-    if (fallbackId && fallbackName && !looksMultiCredit) {
+  // Trust the structured list only if it carries multi-credit
+  // information cleanly: either ≥2 entries, or a single entry whose
+  // name doesn't itself look like a joined-multi-credit string.
+  // Tidal occasionally collapses "Drake & Future" into a single
+  // contributor row whose `name` is the joined string; rendering
+  // THAT as one link silently sends every visible name to the
+  // primary id ("clicking 'Future' goes to Drake's page" — the
+  // exact bug the user keeps hitting). Falling through to the
+  // fallback path below splits the joined name visually instead.
+  const trustList = list !== null && (list.length > 1 || !looksMultiCreditName(list[0]?.name));
+
+  if (!trustList) {
+    // Pick the best-available display string. A single-entry but
+    // collapsed `artists` row beats `fallbackName` (it's typically
+    // the cleaned-up version), but if it's missing we fall back
+    // straight to the joined string from the upstream payload.
+    const collapsedName = list && list.length === 1 ? list[0]?.name ?? null : null;
+    const text = collapsedName ?? fallbackName ?? '';
+    const looksMulti = looksMultiCreditName(text);
+
+    if (looksMulti) {
+      // Multi-credit fallback: split into individual chunks and
+      // render each as plain text. The user sees every name as a
+      // visually separate token (with its original separator) but
+      // there's no link to navigate — and crucially no WRONG link
+      // that would silently route every name to the primary id.
+      // The kebab menu's "Перейти к артисту" still surfaces the
+      // primary artist for navigation. Once the upstream is
+      // correctly populated (post-migration 0024 history rows,
+      // freshly-mapped Tidal tracks) the `trustList` branch above
+      // takes over and each name gets its own anchor again.
+      const chunks = splitCredits(text);
+      if (chunks.length > 1) {
+        return (
+          <span className={cn('inline-flex flex-wrap items-baseline gap-x-0', wrapperClassName)}>
+            {chunks.map((c, i) => (
+              <Fragment key={`${c.text}:${i}`}>
+                <span className={cn(className)}>{c.text}</span>
+                {i < chunks.length - 1 && (
+                  <span className={cn('whitespace-pre', className)}>
+                    {c.sep || separator}
+                  </span>
+                )}
+              </Fragment>
+            ))}
+          </span>
+        );
+      }
+      // Splitting yielded only one chunk (the regex matched but the
+      // whole string was empty either side) — render as plain text.
+      return <span className={cn(wrapperClassName, className)}>{text}</span>;
+    }
+
+    // Clean single-credit name → keep the original Link behaviour.
+    if (fallbackId && text) {
       return (
         <Link
           to={`/artist/${fallbackId}`}
           onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
           className={cn('hover:text-foreground hover:underline', className)}
         >
-          {fallbackName}
+          {text}
         </Link>
       );
     }
-    return <span className={cn(wrapperClassName, className)}>{fallbackName ?? ''}</span>;
+    return <span className={cn(wrapperClassName, className)}>{text}</span>;
   }
 
+  // Trustworthy structured list → each contributor gets its own link.
   return (
     <span className={cn('inline-flex flex-wrap items-baseline gap-x-0', wrapperClassName)}>
       {list.map((a, i) => (

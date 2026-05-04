@@ -288,6 +288,16 @@ export function FullscreenPlayer() {
     'video, canvas, [data-no-sheet-drag]';
   const startSheetDrag = (e: React.PointerEvent) => {
     if (reduce) return;
+    // Hard-disable the sheet's drag-to-dismiss whenever a foreground
+    // surface that owns its own gesture is open. The EQ in particular
+    // captures vertical strokes on the curve canvas to set band gain;
+    // letting those strokes also start the dismiss drag double-counts
+    // the gesture and collapses the player out from under the user.
+    // (Lyrics + queue dialogs likewise have their own scroll/drag
+    // semantics, but they live inside their own portals — the EQ
+    // panel renders inline as a sibling to the cover, so we have to
+    // gate it explicitly.)
+    if (eqOpen) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest(SHEET_DRAG_EXCLUDE_SELECTOR)) return;
     sheetDragControls.start(e);
