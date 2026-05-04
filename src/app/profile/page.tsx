@@ -173,7 +173,13 @@ export function ProfilePage() {
           <LanguageSwitcher />
         </SettingsCard>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        {/* Reset/maintenance row — three sibling self-service actions
+            sharing one visual rhythm with the SettingsCard family
+            (same radius, same accent-soft icon swatch, same body
+            density). Layout fans out from one column on mobile through
+            two on tablets to three on desktop so we never end up with
+            a single card stranded on its own row. */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <ResetRecommendationsPanel />
           <ClearHistoryPanel />
           <ResetTourPanel />
@@ -181,14 +187,31 @@ export function ProfilePage() {
 
         <BannedListPanel />
 
-        <Button
-          onClick={logout}
-          variant="outline"
-          className="w-full md:max-w-xs md:self-start"
-        >
-          <LogOut size={14} />
-          {t('profile.logout')}
-        </Button>
+        {/* Sign-out lives in its own thin card so the page closes on the
+            same visual rhythm as the surrounding settings/maintenance
+            panels (matching radius, accent-soft icon swatch) instead of
+            an orphaned button floating between sections. */}
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+              <LogOut size={16} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-medium leading-tight">{t('profile.logout')}</h2>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                {t('auth_more.logoutHint')}
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={logout}
+            variant="outline"
+            className="w-full sm:w-auto"
+          >
+            <LogOut size={14} />
+            {t('profile.logout')}
+          </Button>
+        </section>
 
         {isAdmin && (
           <div className="flex flex-col gap-4">
@@ -581,13 +604,21 @@ function SettingsCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Icon size={14} className="text-muted-foreground" />
-        {title}
+    <section className="flex h-full flex-col rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+          <Icon size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-medium leading-tight">{title}</h2>
+          {hint && (
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              {hint}
+            </p>
+          )}
+        </div>
       </div>
-      {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
-      <div className={hint ? 'mt-4' : 'mt-3'}>{children}</div>
+      <div className="mt-4 flex flex-1 flex-col">{children}</div>
     </section>
   );
 }
