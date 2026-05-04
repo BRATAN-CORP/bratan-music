@@ -16,6 +16,7 @@ import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel } from '@/components/features/LyricsPanel';
+import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useDislikesStore } from '@/store/dislikes';
@@ -106,7 +107,7 @@ export function FullscreenPlayer() {
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
-  const artistDisliked = useDislikesStore((s) => Boolean(currentTrack?.artistId && s.artists.has(currentTrack.artistId)));
+
   const toggleDislike = useToggleDislike();
   // `touchOnly` is stricter than the legacy `useCoarsePointer` —
   // requires NO hover capability AND coarse pointer, so touchscreen
@@ -243,20 +244,7 @@ export function FullscreenPlayer() {
     setMoreOpen(false);
   };
 
-  const handleToggleArtistDislike = () => {
-    if (!currentTrack?.artistId) return;
-    const wasDisliked = artistDisliked;
-    toggleDislike.mutate(
-      { kind: 'artist', id: currentTrack.artistId, source: currentTrack.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
-      {
-        onSuccess: () => {
-          toast.info(wasDisliked ? t('dislike.artistRestored') : t('dislike.artistHidden', { name: currentTrack.artist }));
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
-      },
-    );
-    setMoreOpen(false);
-  };
+
 
   // Vertical drag-to-dismiss (the "swipe down from the top to
   // collapse" gesture the user asked for). The whole fullscreen
@@ -600,17 +588,10 @@ export function FullscreenPlayer() {
                     >
                       {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
                     </MenuItem>
-                    {currentTrack.artistId && (
-                      <MenuItem
-                        onClick={handleToggleArtistDislike}
-                        disabled={toggleDislike.isPending}
-                        icon={artistDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
-                      >
-                        {artistDisliked
-                          ? t('dislike.artistUnban', { name: currentTrack.artist })
-                          : t('dislike.artistBan', { name: currentTrack.artist })}
-                      </MenuItem>
-                    )}
+                    <ArtistDislikeMenuItems
+                      track={currentTrack}
+                      onAction={() => setMoreOpen(false)}
+                    />
                   </>
                 )}
               </PopoverMenu>

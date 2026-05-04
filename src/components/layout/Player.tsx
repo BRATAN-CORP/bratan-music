@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/auth';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
+import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
@@ -91,7 +92,6 @@ export function Player() {
   const navigate = useNavigate();
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
-  const artistDisliked = useDislikesStore((s) => Boolean(currentTrack?.artistId && s.artists.has(currentTrack.artistId)));
   const toggleDislike = useToggleDislike();
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -172,21 +172,6 @@ export function Player() {
       {
         onSuccess: () => {
           toast.info(wasDisliked ? t('dislike.trackRestored') : t('dislike.trackHidden', { title: currentTrack.title }));
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
-      },
-    );
-    setMenuOpen(false);
-  };
-
-  const handleToggleArtistDislike = () => {
-    if (!currentTrack?.artistId) return;
-    const wasDisliked = artistDisliked;
-    toggleDislike.mutate(
-      { kind: 'artist', id: currentTrack.artistId, source: currentTrack.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
-      {
-        onSuccess: () => {
-          toast.info(wasDisliked ? t('dislike.artistRestored') : t('dislike.artistHidden', { name: currentTrack.artist }));
         },
         onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
       },
@@ -543,17 +528,10 @@ export function Player() {
                     >
                       {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
                     </MenuItem>
-                    {currentTrack.artistId && (
-                      <MenuItem
-                        onClick={handleToggleArtistDislike}
-                        disabled={toggleDislike.isPending}
-                        icon={artistDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
-                      >
-                        {artistDisliked
-                          ? t('dislike.artistUnban', { name: currentTrack.artist })
-                          : t('dislike.artistBan', { name: currentTrack.artist })}
-                      </MenuItem>
-                    )}
+                    <ArtistDislikeMenuItems
+                      track={currentTrack}
+                      onAction={() => setMenuOpen(false)}
+                    />
                   </>
                 )}
               </PopoverMenu>
