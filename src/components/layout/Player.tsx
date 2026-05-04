@@ -530,6 +530,8 @@ export function Player() {
                     </MenuItem>
                     <ArtistDislikeMenuItems
                       track={currentTrack}
+                      triggerRef={menuTriggerRef}
+                      anchor="top"
                       onAction={() => setMenuOpen(false)}
                     />
                   </>

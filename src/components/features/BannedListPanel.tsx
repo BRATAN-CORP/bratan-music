@@ -96,7 +96,7 @@ function TriggerCard({ icon, label, count, loading, onOpen }: TriggerCardProps) 
       onClick={onOpen}
       className="group flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-background px-3 py-3 text-left transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-sm)]"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent-soft)]">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
