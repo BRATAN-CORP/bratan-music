@@ -24,6 +24,7 @@ import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
 import { ClearHistoryPanel } from '@/components/features/ClearHistoryPanel';
 import { ResetTourPanel } from '@/components/features/ResetTourPanel';
+import { BannedListPanel } from '@/components/features/BannedListPanel';
 import { AdminDashboard } from '@/app/admin/page';
 import { useT, useI18n } from '@/i18n';
 
@@ -177,6 +178,8 @@ export function ProfilePage() {
           <ClearHistoryPanel />
           <ResetTourPanel />
         </div>
+
+        <BannedListPanel />
 
         <Button
           onClick={logout}

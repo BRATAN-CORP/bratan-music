@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -9,18 +9,23 @@ import { useT } from '@/i18n';
 
 /**
  * Global toast surface mounted once at the layout root. Renders the
- * stack from `useToastStore` in the **top-left** corner per UX spec
- * (errors don't compete with the bottom mini-player or the sidebar
- * search affordance). Stacks newest-on-bottom so the entry animation
- * pushes older toasts upward instead of jumping. Ignored by
- * pointer-events on the wrapper so clicks pass through to the page;
- * each individual toast re-enables them on its own surface.
+ * stack from `useToastStore` **horizontally centred at the top** of
+ * the viewport — the user reported the previous left-aligned variant
+ * collided with the sidebar's hover affordances and read like a
+ * "developer console" rather than a real notification system.
+ *
+ * - Centre column with a fixed `max-w` so longer messages wrap
+ *   instead of running edge-to-edge.
+ * - Stacks newest-on-bottom so the entry animation pushes older
+ *   toasts down off-axis without jumping.
+ * - `pointer-events-none` on the wrapper so clicks pass through to
+ *   the page; each toast re-enables them on its own surface.
  */
 export function ToastHost() {
   const toasts = useToastStore((s) => s.toasts);
   return (
     <div
-      className="pointer-events-none fixed left-3 top-3 z-[80] flex w-[min(360px,calc(100vw-1.5rem))] flex-col gap-2 sm:left-4 sm:top-4"
+      className="pointer-events-none fixed inset-x-0 top-3 z-[80] flex flex-col items-center gap-2 px-3 sm:top-4"
       role="region"
       aria-label="Notifications"
       aria-live="polite"
@@ -41,24 +46,45 @@ const TONE_ICON: Record<ToastTone, LucideIcon> = {
   success: CheckCircle2,
 };
 
-const TONE_CLS: Record<ToastTone, { surface: string; icon: string; bar: string }> = {
+/**
+ * Per-tone visual recipe.
+ *
+ * The previous version coloured the **entire surface** with the
+ * tone's accent (e.g. info had a cyan-on-cyan-soft surface), which
+ * made the message text fight the background and the progress bar
+ * disappear into the surface fill. The new recipe keeps the
+ * surface neutral (elevated card colour, slight tone-tinted border
+ * + soft tone glow), and reserves the saturated tone colour for
+ * the icon and the dismiss-progress bar — those are the only
+ * surfaces that should pop.
+ */
+const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: string; bar: string }> = {
   error: {
-    surface: 'border-[var(--color-danger)]/40 bg-[var(--color-danger-muted)] text-[var(--color-danger)]',
+    surface: 'border-[var(--color-danger)]/50 ring-1 ring-[var(--color-danger)]/15',
+    iconWrap: 'bg-[var(--color-danger-muted)]',
     icon: 'text-[var(--color-danger)]',
     bar: 'bg-[var(--color-danger)]',
   },
   warn: {
-    surface: 'border-amber-500/40 bg-amber-500/10 text-amber-500',
+    surface: 'border-amber-500/50 ring-1 ring-amber-500/15',
+    iconWrap: 'bg-amber-500/15',
     icon: 'text-amber-500',
     bar: 'bg-amber-500',
   },
   info: {
-    surface: 'border-[var(--color-accent)]/40 bg-[var(--color-accent-soft)] text-[var(--color-accent)]',
-    icon: 'text-[var(--color-accent)]',
-    bar: 'bg-[var(--color-accent)]',
+    // Info used to share the accent colour with the rest of the UI
+    // (mini-player accents, like-hearts, etc.) and the toast just
+    // dissolved into the surrounding chrome. Switched to a neutral
+    // sky-blue tone that reads clearly as "informational" without
+    // blending with the brand accent.
+    surface: 'border-sky-400/50 ring-1 ring-sky-400/15',
+    iconWrap: 'bg-sky-400/15',
+    icon: 'text-sky-400',
+    bar: 'bg-sky-400',
   },
   success: {
-    surface: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500',
+    surface: 'border-emerald-500/50 ring-1 ring-emerald-500/15',
+    iconWrap: 'bg-emerald-500/15',
     icon: 'text-emerald-500',
     bar: 'bg-emerald-500',
   },
@@ -71,38 +97,38 @@ function ToastCard({ toast }: { toast: Toast }) {
   const Icon = TONE_ICON[toast.tone];
   const cls = TONE_CLS[toast.tone];
 
-  // Drives the auto-dismiss progress bar at the bottom edge. The actual
-  // dismiss is owned by the store's setTimeout so pause-on-hover would
-  // need to be coordinated with it — for now we keep things simple and
-  // the bar is purely cosmetic. With duration=0 we hide the bar.
-  const [progress, setProgress] = useState(1);
+  // CSS-driven dismiss progress bar. We mount the bar at width:100%
+  // for a single tick (mountedBar=false → no transition class), then
+  // flip mountedBar=true on the next frame which adds the
+  // `transition-[width]` rule and sets width:0%. The browser
+  // interpolates between the two over `toast.duration` ms — no
+  // requestAnimationFrame setState loop, no React re-renders per
+  // frame. Rock-solid even when the page is throttled in a
+  // background tab.
+  const [mountedBar, setMountedBar] = useState(false);
+  const rafRef = useRef<number | null>(null);
   useEffect(() => {
     if (toast.duration <= 0) return;
-    const start = toast.createdAt;
-    const end = start + toast.duration;
-    let raf = 0;
-    const tick = () => {
-      const now = Date.now();
-      const left = Math.max(0, end - now) / toast.duration;
-      setProgress(left);
-      if (left > 0) raf = requestAnimationFrame(tick);
+    rafRef.current = requestAnimationFrame(() => setMountedBar(true));
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [toast.duration, toast.createdAt]);
+  }, [toast.duration]);
 
   return (
     <motion.div
       role="status"
       layout
-      initial={reduce ? { opacity: 0 } : { opacity: 0, x: -16, scale: 0.97 }}
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={reduce ? { opacity: 0 } : { opacity: 0, x: -16, scale: 0.97, transition: { duration: 0.18 } }}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.97, transition: { duration: 0.18 } }}
       transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-      className={`pointer-events-auto liquid-glass relative overflow-hidden rounded-[var(--radius-md)] border ${cls.surface} shadow-[0_8px_24px_-12px_rgba(0,0,0,0.45)]`}
+      className={`pointer-events-auto liquid-glass relative w-full max-w-[420px] overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-elevated)] shadow-[0_18px_48px_-20px_rgba(0,0,0,0.55)] ${cls.surface}`}
     >
-      <div className="flex gap-3 px-3 py-2.5">
-        <Icon size={16} className={`mt-0.5 shrink-0 ${cls.icon}`} />
+      <div className="flex gap-3 px-3.5 py-3">
+        <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${cls.iconWrap}`}>
+          <Icon size={15} className={cls.icon} />
+        </span>
         <div className="min-w-0 flex-1 text-sm">
           {toast.title && <div className="mb-0.5 font-medium text-foreground">{toast.title}</div>}
           <div className="break-words text-foreground/90">{toast.message}</div>
@@ -117,11 +143,21 @@ function ToastCard({ toast }: { toast: Toast }) {
         </button>
       </div>
       {toast.duration > 0 && (
-        <div
-          className={`absolute bottom-0 left-0 h-[2px] ${cls.bar}`}
-          style={{ width: `${progress * 100}%`, transition: 'width 0.05s linear' }}
-          aria-hidden
-        />
+        <>
+          {/* Track behind the dismiss bar so the user sees the full
+              width even before the bar starts shrinking. */}
+          <div className="absolute inset-x-0 bottom-0 h-[3px] bg-foreground/8" aria-hidden />
+          <div
+            className={`absolute bottom-0 left-0 h-[3px] ${cls.bar}`}
+            style={{
+              width: mountedBar ? '0%' : '100%',
+              transitionProperty: 'width',
+              transitionTimingFunction: 'linear',
+              transitionDuration: `${toast.duration}ms`,
+            }}
+            aria-hidden
+          />
+        </>
       )}
     </motion.div>
   );

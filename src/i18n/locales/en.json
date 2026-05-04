@@ -379,6 +379,18 @@
     "artistRestored": "Artist restored to recommendations",
     "failed": "Failed to update hidden list"
   },
+  "bannedList": {
+    "title": "Hidden from recommendations",
+    "hint": "Artists and tracks you removed via the \"…\" menu. They won't appear in the wave, daily playlists, or AI playlists.",
+    "empty": "Nothing hidden yet. Use the \"Hide\" actions in any track menu or on the artist page.",
+    "failed": "Couldn't load the list",
+    "artistsSection": "Artists · {count}",
+    "tracksSection": "Tracks · {count}",
+    "restore": "Restore",
+    "addedAt": "Hidden {date}",
+    "unavailableArtist": "Artist unavailable",
+    "unavailableTrack": "Track unavailable"
+  },
   "track": {
     "openMenu": "Open menu",
     "openTrack": "Open track",

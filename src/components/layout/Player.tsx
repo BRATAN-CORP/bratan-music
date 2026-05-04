@@ -4,16 +4,19 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, Heart,
   MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
-  Download, Upload,
+  Download, Upload, Disc, Ban, RotateCcw,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
 import { useAudioPlayer, usePlaybackVisuals } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/Button';
-import { PopoverMenu, MenuItem } from '@/components/ui/PopoverMenu';
+import { PopoverMenu, MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
 import { Marquee } from '@/components/ui/Marquee';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { useDislikesStore } from '@/store/dislikes';
+import { useToggleDislike } from '@/hooks/useDislikes';
+import { useAuthStore } from '@/store/auth';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -86,6 +89,10 @@ export function Player() {
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const navigate = useNavigate();
+  const isAuthed = useAuthStore((s) => Boolean(s.user));
+  const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
+  const artistDisliked = useDislikesStore((s) => Boolean(currentTrack?.artistId && s.artists.has(currentTrack.artistId)));
+  const toggleDislike = useToggleDislike();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
@@ -149,6 +156,42 @@ export function Player() {
     }
     // Keep the menu open briefly so the "Ссылка скопирована" confirmation is visible.
     setTimeout(() => setMenuOpen(false), 900);
+  };
+
+  const handleGoToAlbum = () => {
+    if (!currentTrack?.albumId) return;
+    setMenuOpen(false);
+    navigate(`/album/${currentTrack.albumId}`);
+  };
+
+  const handleToggleTrackDislike = () => {
+    if (!currentTrack) return;
+    const wasDisliked = trackDisliked;
+    toggleDislike.mutate(
+      { kind: 'track', id: currentTrack.id, source: currentTrack.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(wasDisliked ? t('dislike.trackRestored') : t('dislike.trackHidden', { title: currentTrack.title }));
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
+      },
+    );
+    setMenuOpen(false);
+  };
+
+  const handleToggleArtistDislike = () => {
+    if (!currentTrack?.artistId) return;
+    const wasDisliked = artistDisliked;
+    toggleDislike.mutate(
+      { kind: 'artist', id: currentTrack.artistId, source: currentTrack.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(wasDisliked ? t('dislike.artistRestored') : t('dislike.artistHidden', { name: currentTrack.artist }));
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
+      },
+    );
+    setMenuOpen(false);
   };
 
   const handleGoToArtist = () => {
@@ -481,6 +524,37 @@ export function Player() {
                   >
                     {t('track.goToArtist')}
                   </MenuItem>
+                )}
+                {currentTrack.albumId && (
+                  <MenuItem
+                    onClick={handleGoToAlbum}
+                    icon={<Disc size={14} />}
+                  >
+                    {t('track.goToAlbum')}
+                  </MenuItem>
+                )}
+                {isAuthed && (
+                  <>
+                    <MenuDivider />
+                    <MenuItem
+                      onClick={handleToggleTrackDislike}
+                      disabled={toggleDislike.isPending}
+                      icon={trackDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+                    >
+                      {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
+                    </MenuItem>
+                    {currentTrack.artistId && (
+                      <MenuItem
+                        onClick={handleToggleArtistDislike}
+                        disabled={toggleDislike.isPending}
+                        icon={artistDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+                      >
+                        {artistDisliked
+                          ? t('dislike.artistUnban', { name: currentTrack.artist })
+                          : t('dislike.artistBan', { name: currentTrack.artist })}
+                      </MenuItem>
+                    )}
+                  </>
                 )}
               </PopoverMenu>
             </div>

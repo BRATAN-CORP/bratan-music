@@ -90,6 +90,81 @@ recommendations.get('/dislikes', async (c) => {
 });
 
 /**
+ * Hydrated variant of `/dislikes` for the profile "Скрытые" panel —
+ * returns full Tidal metadata (title, cover, artist name) so the UI
+ * can render meaningful rows without N+1 client fetches. Failures on
+ * individual lookups are swallowed and the row falls back to a stub
+ * with `unavailable: true`, so a single dead Tidal id doesn't blank
+ * the whole list.
+ */
+recommendations.get('/dislikes/details', async (c) => {
+  const userId = c.get('userId');
+  const res = await c.env.DB
+    .prepare(`SELECT item_id, kind, created_at FROM user_dislikes WHERE user_id = ? ORDER BY created_at DESC`)
+    .bind(userId)
+    .all<{ item_id: string; kind: 'track' | 'artist'; created_at: number }>();
+  const rows = res.results ?? [];
+  const trackIds = rows.filter((r) => r.kind === 'track').map((r) => r.item_id);
+  const artistIds = rows.filter((r) => r.kind === 'artist').map((r) => r.item_id);
+  const createdAt = new Map<string, number>(rows.map((r) => [`${r.kind}:${r.item_id}`, r.created_at]));
+
+  const tidal = new TidalService(c.env);
+
+  // Hydrate in parallel. Individual failures don't poison the whole
+  // response — we just emit a stub row so the user can still see
+  // and unban that id from the list.
+  const tracks = await Promise.all(trackIds.map(async (id) => {
+    try {
+      const t = await tidal.getTrack(id);
+      return {
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        artistId: t.artistId ?? null,
+        coverUrl: t.coverUrl ?? null,
+        duration: t.duration,
+        addedAt: createdAt.get(`track:${id}`) ?? null,
+        unavailable: false,
+      };
+    } catch {
+      return {
+        id,
+        title: id,
+        artist: '',
+        artistId: null,
+        coverUrl: null,
+        duration: 0,
+        addedAt: createdAt.get(`track:${id}`) ?? null,
+        unavailable: true,
+      };
+    }
+  }));
+
+  const artists = await Promise.all(artistIds.map(async (id) => {
+    try {
+      const a = await tidal.getArtist(id);
+      return {
+        id: a.id,
+        name: a.name,
+        imageUrl: a.imageUrl ?? null,
+        addedAt: createdAt.get(`artist:${id}`) ?? null,
+        unavailable: false,
+      };
+    } catch {
+      return {
+        id,
+        name: id,
+        imageUrl: null,
+        addedAt: createdAt.get(`artist:${id}`) ?? null,
+        unavailable: true,
+      };
+    }
+  }));
+
+  return c.json({ tracks, artists });
+});
+
+/**
  * Explicit dislike. The frontend hits this from the 3-dot menu's
  * "Не нравится" entry on tracks/artists.
  */
