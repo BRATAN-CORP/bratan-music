@@ -163,10 +163,17 @@ export function useToggleDislike() {
       if (nextState === 'banned') addLocal(kind, id);
       else removeLocal(kind, id);
       // Drop any queue items the user just banned and skip-forward
-      // if the current track itself was the one banned. The player
+      // ONLY if the user explicitly banned the currently-playing
+      // track. Banning any other track (or any artist) leaves
+      // audio untouched and only shrinks the queue. We always pass
+      // the just-toggled id (track id for track bans, artist id for
+      // artist bans — different namespace, will never match
+      // currentTrack.id) so the player store can be exact rather
+      // than falling back to a broad `isTrackBanned(currentTrack)`
+      // heuristic that could mis-fire on legacy bans. The player
       // store reads from the synchronous mirror we just updated.
       if (nextState === 'banned') {
-        usePlayerStore.getState().pruneBanned();
+        usePlayerStore.getState().pruneBanned(id);
       }
       return { prev };
     },

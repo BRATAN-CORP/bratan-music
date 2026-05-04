@@ -106,8 +106,16 @@ interface PlayerState {
    *  yank already-queued tracks). If the current track itself was
    *  the one explicitly banned, advance to the next still-valid one.
    *  Called by the dislike mutation right after the optimistic
-   *  update. */
-  pruneBanned: () => void;
+   *  update.
+   *
+   *  `bannedTrackId` is the id the user just toggled. Skip-to-next is
+   *  only triggered when this id matches the current track — banning
+   *  any OTHER track (or any artist) just prunes the queue, never
+   *  hijacks playback of whatever the user is listening to right now.
+   *  Omit the argument for the bootstrap path that has no notion of
+   *  "the user just clicked ban" — falls back to the legacy "skip if
+   *  current is banned" semantics for backwards compatibility. */
+  pruneBanned: (bannedTrackId?: string) => void;
   /** Move a track inside the queue from one index to another. */
   reorderQueue: (from: number, to: number) => void;
   /** Jump straight to the given queue index. */
@@ -195,7 +203,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   removeFromQueue: (trackId) => set((s) => ({
     queue: s.queue.filter((t) => t.id !== trackId),
   })),
-  pruneBanned: () => {
+  pruneBanned: (bannedTrackId) => {
     // Track-id-only filter: artist bans never retroactively yank
     // their tracks from the user's queue. See the type-decl comment
     // and `dislikes.ts` for the full rationale.
@@ -204,12 +212,64 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     const queueChanged = cleanQueue.length !== s.queue.length;
     const currentBanned = s.currentTrack ? isTrackBanned(s.currentTrack) : false;
     if (!queueChanged && !currentBanned) return;
-    set({ queue: cleanQueue });
-    if (currentBanned) {
-      // Advance with the same skip-on-play semantics that the audio
-      // engine uses on natural track-end. `next()` honours repeat
-      // mode and recursively skips further banned items.
-      get().next();
+
+    // Decide whether the just-pruned track was the user's currently-
+    // playing one. The mutation path passes `bannedTrackId` so we can
+    // be exact: only the *click I just did on the playing track*
+    // should hijack playback — banning any neighbour in the queue
+    // (the kebab on a different row, the artist menu) leaves audio
+    // untouched and only the queue shrinks. The bootstrap path
+    // (cross-device sync, page-load rehydrate) has no click context
+    // and falls back to the broader currentBanned check.
+    const shouldSkip = bannedTrackId !== undefined
+      ? currentBanned && bannedTrackId === s.currentTrack?.id
+      : currentBanned;
+
+    if (!shouldSkip) {
+      set({ queue: cleanQueue });
+      return;
+    }
+
+    // Find the next still-valid track AFTER the position the current
+    // track held in the OLD queue, NOT after wherever findIndex would
+    // land in the cleaned queue (which would be -1, and the legacy
+    // `next()` handles -1 by jumping to queue[0] — that lands the
+    // user on the *first* track instead of the natural successor and
+    // is exactly the surprise jump-back-to-track-1 the user reported
+    // when they ban the currently-playing track). Walk forward from
+    // the old position; fall back to wrapping if repeat='all'.
+    const oldIdx = s.currentTrack
+      ? s.queue.findIndex((t) => t.id === s.currentTrack!.id)
+      : -1;
+    let nextTrack: Track | null = null;
+    if (oldIdx >= 0) {
+      for (let i = oldIdx + 1; i < s.queue.length; i++) {
+        const t = s.queue[i];
+        if (t && !isBanned(t)) { nextTrack = t; break; }
+      }
+      if (!nextTrack && s.repeat === 'all') {
+        for (let i = 0; i < oldIdx; i++) {
+          const t = s.queue[i];
+          if (t && !isBanned(t)) { nextTrack = t; break; }
+        }
+      }
+    } else {
+      // Defensive: current wasn't in the (pre-prune) queue at all.
+      // Pick the first non-banned track in the cleaned queue.
+      nextTrack = cleanQueue.find((t) => !isBanned(t)) ?? null;
+    }
+
+    if (nextTrack) {
+      set({
+        queue: cleanQueue,
+        currentTrack: nextTrack,
+        isPlaying: true,
+        progress: 0,
+        playHistory: pushHistory(s.playHistory, s.currentTrack?.id, nextTrack.id),
+      });
+    } else {
+      // Nothing forward and no wrap target — just clean and pause.
+      set({ queue: cleanQueue, isPlaying: false });
     }
   },
   reorderQueue: (from, to) => set((s) => {
@@ -337,7 +397,20 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
         // builds where the stack might have been polluted).
         if (!lastId || lastId === currentTrack?.id) continue;
         const target = queue.find((t) => t.id === lastId);
-        if (target && !isBanned(target)) {
+        // The pop is a back-target as long as the queue still
+        // contains it. We deliberately do NOT also gate on
+        // `isBanned(target)` here: track-id-banned items are
+        // already filtered out of the queue (`filterTrackBanned`),
+        // so `queue.find` returning truthy means the track is
+        // still a valid hop. Artist-banned tracks DO survive in
+        // the queue (per `pruneBanned`'s "user's queue is sacred"
+        // contract) and a previous version of this walk also
+        // skipped them — that was the source of "back from track 6
+        // to track 4 works but back from track 2 to track 1
+        // doesn't" when one of the intermediate tracks shared an
+        // artist with one the user later banned. "Back" is an
+        // explicit user gesture; honour it.
+        if (target) {
           set({
             currentTrack: target,
             isPlaying: true,
@@ -346,44 +419,41 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
           });
           return;
         }
-        // Track is no longer in the queue (dequeued, banned, etc.) —
-        // drop the entry and keep walking backward.
+        // Track is no longer in the queue (dequeued, track-id-banned
+        // and pruned, etc.) — drop the entry and keep walking
+        // backward.
       }
       // History exhausted with nothing playable — persist the cleanup
       // and fall through to the queue-walk fallback.
       set({ playHistory: history });
     }
 
-    // First, see whether there is an actual previous track to walk to
-    // (skipping banned neighbours). If there is, "back" always goes
-    // there — the user expects "back" to mean "go to the previous
-    // song", not "rewind the current one". The classic 3s-rewind
-    // idiom (Spotify et al) is preserved as a fallback for the case
-    // where there is no valid neighbour to walk to (first track of
-    // the queue, or every earlier track is banned).
+    // First, see whether there is an actual previous track to walk to.
+    // If there is, "back" always goes there — the user expects "back"
+    // to mean "go to the previous song", not "rewind the current one".
+    // The classic 3s-rewind idiom (Spotify et al) is preserved as a
+    // fallback for the case where there is no valid neighbour to walk
+    // to (first track of the queue under repeat='off').
+    //
+    // We deliberately do NOT skip artist-banned neighbours here.
+    // Track-id-banned ones are already filtered out of the queue by
+    // `filterTrackBanned`, so any item we land on is a legitimate
+    // back target. Walking past artist-banned items used to leave
+    // "back from 2 → 1" silently no-op once a credited artist of the
+    // intermediate track had been banned — the user explicitly
+    // pressed back, honour it.
     let target: Track | null = null;
     if (queue.length > 0) {
       const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
-      let probe = startIdx;
-      for (let attempts = 0; attempts < queue.length; attempts++) {
-        let prevIdx: number;
-        if (probe > 0) {
-          prevIdx = probe - 1;
-        } else if (repeat === 'all') {
-          prevIdx = queue.length - 1;
-        } else {
-          break;
-        }
-        const candidate = queue[prevIdx];
-        if (!candidate) break;
-        if (!isBanned(candidate)) {
-          target = candidate;
-          break;
-        }
-        probe = prevIdx;
-        // Bailout for the pathological "every track is banned" case
-        // under repeat='all' so the loop can't run forever.
-        if (probe === startIdx && attempts > 0) break;
+      if (startIdx > 0) {
+        target = queue[startIdx - 1] ?? null;
+      } else if (startIdx === 0 && repeat === 'all') {
+        target = queue[queue.length - 1] ?? null;
+      } else if (startIdx < 0) {
+        // Current track isn't in the queue (rare — pruned mid-flight,
+        // room-bridge state mismatch). Pick the last item as a
+        // best-effort back target so the user isn't stranded.
+        target = queue[queue.length - 1] ?? null;
       }
     }
 
