@@ -590,6 +590,7 @@ export function FullscreenPlayer() {
                     </MenuItem>
                     <ArtistDislikeMenuItems
                       track={currentTrack}
+                      triggerRef={moreTriggerRef}
                       onAction={() => setMoreOpen(false)}
                     />
                   </>

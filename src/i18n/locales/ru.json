@@ -377,6 +377,10 @@
     "trackRestored": "Трек снова в рекомендациях",
     "artistHidden": "Артист {name} скрыт из рекомендаций",
     "artistRestored": "Артист снова в рекомендациях",
+    "artistPickerOpen": "Скрыть артиста",
+    "artistPickerTitle": "Кого из соавторов скрыть",
+    "artistPickerBack": "Назад",
+    "artistPickerHidden": "Уже скрыт",
     "failed": "Не удалось обновить список скрытых"
   },
   "bannedList": {

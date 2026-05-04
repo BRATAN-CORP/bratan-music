@@ -377,6 +377,10 @@
     "trackRestored": "Track restored to recommendations",
     "artistHidden": "Artist {name} hidden from recommendations",
     "artistRestored": "Artist restored to recommendations",
+    "artistPickerOpen": "Hide artist",
+    "artistPickerTitle": "Pick a credit to hide",
+    "artistPickerBack": "Back",
+    "artistPickerHidden": "Already hidden",
     "failed": "Failed to update hidden list"
   },
   "bannedList": {

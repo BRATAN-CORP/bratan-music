@@ -317,7 +317,13 @@ export function TrackKebabMenu({
             >
               {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
             </MenuItem>
-            <ArtistDislikeMenuItems track={track} onAction={close} />
+            <ArtistDislikeMenuItems
+              track={track}
+              triggerRef={triggerRef}
+              anchor={anchor}
+              align={align}
+              onAction={close}
+            />
           </>
         )}
 

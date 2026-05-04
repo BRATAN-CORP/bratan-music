@@ -51,24 +51,22 @@ const TONE_ICON: Record<ToastTone, LucideIcon> = {
  *
  * The recipe keeps the surface neutral (elevated card colour with a
  * tone-tinted border + soft tone glow), reserves the saturated tone
- * colour for the icon, the left accent rail and the dismiss-progress
- * bar, and pushes the message text up to maximum contrast so it
- * never dissolves into the glass plate underneath.
+ * colour for the icon and the dismiss-progress bar, and pushes the
+ * message text up to maximum contrast so it never dissolves into the
+ * glass plate underneath.
  */
-const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: string; bar: string; rail: string }> = {
+const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: string; bar: string }> = {
   error: {
     surface: 'border-[var(--color-danger)]/55 ring-1 ring-[var(--color-danger)]/15',
     iconWrap: 'bg-[var(--color-danger-muted)]',
     icon: 'text-[var(--color-danger)]',
     bar: 'bg-[var(--color-danger)]',
-    rail: 'bg-[var(--color-danger)]',
   },
   warn: {
     surface: 'border-amber-500/55 ring-1 ring-amber-500/15',
     iconWrap: 'bg-amber-500/15',
     icon: 'text-amber-500',
     bar: 'bg-amber-500',
-    rail: 'bg-amber-500',
   },
   info: {
     // Info used to share the accent colour with the rest of the UI
@@ -80,14 +78,12 @@ const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: str
     iconWrap: 'bg-sky-400/15',
     icon: 'text-sky-400',
     bar: 'bg-sky-400',
-    rail: 'bg-sky-400',
   },
   success: {
     surface: 'border-emerald-500/55 ring-1 ring-emerald-500/15',
     iconWrap: 'bg-emerald-500/15',
     icon: 'text-emerald-500',
     bar: 'bg-emerald-500',
-    rail: 'bg-emerald-500',
   },
 };
 
@@ -126,16 +122,7 @@ function ToastCard({ toast }: { toast: Toast }) {
       transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       className={`pointer-events-auto liquid-glass relative w-full max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--color-surface-elevated)] shadow-[0_24px_56px_-24px_rgba(0,0,0,0.55)] ${cls.surface}`}
     >
-      {/* Tone accent rail — anchors the toast's tone on the left edge so
-          even at a glance the user knows error/warn/info/success without
-          having to parse the icon. Sits above the surface fill so the
-          glass blur doesn't wash it out. */}
-      <span
-        className={`pointer-events-none absolute inset-y-0 left-0 w-[3px] ${cls.rail}`}
-        aria-hidden
-      />
-
-      <div className="flex items-center gap-3.5 py-3.5 pl-[18px] pr-3">
+      <div className="flex items-center gap-3.5 px-4 py-3.5">
         <span
           className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-[currentColor]/15 ${cls.iconWrap} ${cls.icon}`}
         >

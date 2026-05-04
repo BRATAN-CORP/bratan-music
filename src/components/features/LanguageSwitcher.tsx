@@ -36,7 +36,11 @@ export function LanguageSwitcher() {
       <div
         role="radiogroup"
         aria-label={t('settings.language')}
-        className="inline-flex rounded-full border border-border bg-background p-1 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+        // `self-start` keeps the pill at content width inside the
+        // surrounding `flex flex-col` SettingsCard body. Without it
+        // the column's default `align-items: stretch` overrode the
+        // `inline-flex` and made the pill span the full card.
+        className="inline-flex self-start rounded-full border border-border bg-background p-1 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
       >
         {LOCALES.map((option) => (
           <LocaleButton
@@ -76,8 +80,10 @@ function LocaleButton({ code, label, active, onSelect }: LocaleButtonProps) {
           layoutId="lang-highlight"
           className="absolute inset-0 rounded-full"
           style={{
-            background:
-              'linear-gradient(135deg, var(--color-accent) 0%, color-mix(in oklab, var(--color-accent) 85%, fuchsia) 100%)',
+            // Single-accent fill — matches the rest of the profile
+            // family (no fuchsia tail). Glow is the same accent token
+            // so light/dark themes adapt automatically.
+            background: 'var(--color-accent)',
             boxShadow:
               '0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 18px -6px var(--color-accent-glow, rgba(99,102,241,0.45))',
           }}

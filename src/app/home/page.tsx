@@ -204,7 +204,7 @@ function AiPlaylistPromo() {
                 Wand2 glyph that telegraphs "AI generation" without needing a
                 rainbow. The hover scale is preserved so the lift physics
                 still match the daily-playlist cards directly below. */}
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)] transition-transform duration-700 group-hover:scale-105">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-accent-soft)] text-[var(--color-accent)] transition-transform duration-700 group-hover:scale-105">
               <Wand2 size={20} />
             </div>
             <div className="min-w-0">

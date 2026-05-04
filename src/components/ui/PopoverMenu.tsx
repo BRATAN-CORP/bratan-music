@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -138,15 +138,24 @@ export function PopoverMenu({
 type MenuItemProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   /** Optional leading icon. Rendered at 14px to match the existing rows. */
   icon?: ReactNode;
+  /** Optional trailing element rendered flush against the right edge
+   *  of the row (e.g. a chevron for sub-menu triggers, a count
+   *  badge, a kbd hint). Sits inside the same flex row so the icon +
+   *  label combo never collides with it. */
+  rightSlot?: ReactNode;
   /** Hide on `md+` widths (used for actions that have a dedicated inline
    *  button on wide screens and only need to be in the kebab on narrow). */
   mobileOnly?: boolean;
 };
 
-export function MenuItem({ icon, mobileOnly, className = '', children, type = 'button', ...rest }: MenuItemProps) {
+export const MenuItem = forwardRef<HTMLButtonElement, MenuItemProps>(function MenuItem(
+  { icon, rightSlot, mobileOnly, className = '', children, type = 'button', ...rest },
+  ref,
+) {
   const visibility = mobileOnly ? ' md:hidden' : '';
   return (
     <button
+      ref={ref}
       type={type}
       role="menuitem"
       {...rest}
@@ -157,10 +166,11 @@ export function MenuItem({ icon, mobileOnly, className = '', children, type = 'b
       }
     >
       {icon}
-      {children}
+      <span className="min-w-0 flex-1">{children}</span>
+      {rightSlot}
     </button>
   );
-}
+});
 
 /** Visual divider between groups of `MenuItem`. */
 export function MenuDivider({ mobileOnly }: { mobileOnly?: boolean }) {

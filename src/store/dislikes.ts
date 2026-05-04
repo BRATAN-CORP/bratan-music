@@ -78,12 +78,28 @@ export const useDislikesStore = create<DislikesState>((set, get) => ({
 }));
 
 /**
- * Pure helper that mirrors the server-side filter (worker
- * `services/dislikes.ts → filterTracksByDislikes`). Matches a track if
- * its id, artistId, OR any credited artist id is on the banned list.
+ * Pure helpers that mirror the server-side filter (worker
+ * `services/dislikes.ts → filterTracksByDislikes`).
  *
  * Reads the current snapshot of the dislikes store, so safe to call
  * from non-React code (player store mutators, audio engine).
+ *
+ * Two predicates because the user's mental model splits them:
+ *
+ *   - `isBanned()` — track-id banned OR any credited artist banned.
+ *     Used everywhere a track is "filterable" — recommendation
+ *     fetchers, AI mixes, daily playlists, the wave, infinite radio
+ *     fill, the visual dim treatment in track lists. This is the
+ *     "should we show / suggest this track?" lens.
+ *
+ *   - `isTrackBanned()` — only checks the track-id. Used by the
+ *     player's queue walking (`next()` / `previous()`) and
+ *     `pruneBanned()`. The user's queue is a deliberate, manual
+ *     selection: tracks added by the user (or kept from a previous
+ *     session's queue) should keep playing even if a credited artist
+ *     was later banned. Banning an artist hides the artist from
+ *     recommendations going forward but does not retroactively yank
+ *     their tracks out of the user's already-curated queue.
  */
 export interface FilterableTrack {
   id: string;
@@ -104,6 +120,21 @@ export function isBanned(track: FilterableTrack | null | undefined): boolean {
   return false;
 }
 
+/**
+ * Track-id-only check. Artist bans are *not* considered. See block
+ * comment above for the reasoning behind the split.
+ */
+export function isTrackBanned(track: FilterableTrack | null | undefined): boolean {
+  if (!track) return false;
+  return useDislikesStore.getState().tracks.has(track.id);
+}
+
+/**
+ * Recommendation-side filter — drops items whose track id or any
+ * credited artist id sits on the banned list. Used by the
+ * recommendation fetchers and `pruneBanned()` for explicit track
+ * bans (which still get pruned).
+ */
 export function filterBanned<T extends FilterableTrack>(items: T[]): T[] {
   const { tracks, artists } = useDislikesStore.getState();
   if (tracks.size === 0 && artists.size === 0) return items;
@@ -117,4 +148,15 @@ export function filterBanned<T extends FilterableTrack>(items: T[]): T[] {
     }
     return true;
   });
+}
+
+/**
+ * Queue-side filter — only drops items whose track id is banned.
+ * Mirrors `isTrackBanned()` so banning an artist never silently
+ * yanks their tracks out of the user's already-curated queue.
+ */
+export function filterTrackBanned<T extends FilterableTrack>(items: T[]): T[] {
+  const { tracks } = useDislikesStore.getState();
+  if (tracks.size === 0) return items;
+  return items.filter((t) => !tracks.has(t.id));
 }
