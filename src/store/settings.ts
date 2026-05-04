@@ -41,7 +41,7 @@ export const TIDAL_QUALITY_LABEL_KEYS: Record<TidalQuality, TranslationKey> = {
  * count here (instead of importing the array) breaks an otherwise
  * circular dependency between the store and the audio hook.
  */
-export const EQ_BAND_COUNT = 6;
+export const EQ_BAND_COUNT = 10;
 
 interface SettingsState {
   /** Smooth track-to-track transition. Two audio elements + gain ramps. */

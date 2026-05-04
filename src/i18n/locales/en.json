@@ -972,7 +972,8 @@
     "resetShort": "Reset",
     "resetAria": "Reset",
     "hint": "Start any track and the sliders will start shaping the sound — current values are saved and applied automatically.",
-    "freqHzAria": "{label} Hz"
+    "freqHzAria": "{label} Hz",
+    "curveAria": "Parametric equalizer. Ten bands — drag any node or click on the curve to tweak gain."
   },
   "onboarding": {
     "skip": "Skip",

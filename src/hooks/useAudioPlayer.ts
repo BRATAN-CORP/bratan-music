@@ -197,7 +197,17 @@ let preloadedIncoming: { slot: Slot; trackId: string } | null = null;
  *  slot. */
 let preloadingNext: string | null = null;
 
-export const EQ_BANDS = [60, 170, 350, 1000, 3500, 10000] as const;
+/**
+ * 10-band parametric EQ centre frequencies (Hz). Spaced one octave
+ * apart starting from 31.25 Hz, then rounded to round numbers, with
+ * the top band pinned at 16 kHz so the high-shelf covers the full
+ * audible range. The first band is wired as a low-shelf, the last
+ * as a high-shelf, and everything in-between as peaking — see the
+ * filter chain in `ensureAudioGraph` below.
+ */
+export const EQ_BANDS = [
+  31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
+] as const;
 
 /**
  * iOS Safari / iOS PWA detection. Web Audio (`AudioContext` +
