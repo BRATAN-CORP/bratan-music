@@ -115,6 +115,13 @@ export interface PlayLogPayload {
   source?: string;
   artistId?: string;
   artistName?: string;
+  /**
+   * Full structured contributor list. Worker stores this alongside
+   * the joined `artistName` so the recent-plays renderer can give
+   * each name its own clickable link instead of wrapping the whole
+   * "A, B, C" string in a single anchor.
+   */
+  artists?: { id: string; name: string }[];
   title?: string;
   albumId?: string;
   coverUrl?: string;

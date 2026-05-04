@@ -19,11 +19,20 @@ history.use('/*', jwtAuth);
  */
 history.post('/play', async (c) => {
   const userId = c.get('userId');
+  interface ArtistRefBody {
+    id?: string;
+    name?: string;
+  }
   interface PlayBody {
     trackId?: string;
     source?: string;
     artistId?: string;
     artistName?: string;
+    /**
+     * Full structured contributor list. Migration 0024 stores this so
+     * the recent-plays renderer can give each name its own link.
+     */
+    artists?: ArtistRefBody[];
     title?: string;
     albumId?: string;
     coverUrl?: string;
@@ -37,12 +46,25 @@ history.post('/play', async (c) => {
     return c.json({ error: 'trackId обязателен' }, 400);
   }
 
+  // Normalise the artists list so DB only ever sees `{id,name}` rows
+  // with non-empty strings — drops any junk and keeps the column
+  // round-trip safe to JSON.parse on read.
+  const normalisedArtists = Array.isArray(body.artists)
+    ? body.artists
+        .map((a) => ({
+          id: typeof a?.id === 'string' ? a.id : '',
+          name: typeof a?.name === 'string' ? a.name : '',
+        }))
+        .filter((a) => a.id && a.name)
+    : [];
+  const artistsJson = normalisedArtists.length > 0 ? JSON.stringify(normalisedArtists) : null;
+
   await c.env.DB
     .prepare(
       `INSERT INTO play_history
-         (user_id, track_id, source, artist_id, artist_name, title, album_id,
+         (user_id, track_id, source, artist_id, artist_name, artists_json, title, album_id,
           cover_url, duration, listened_seconds, completed, played_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       userId,
@@ -50,6 +72,7 @@ history.post('/play', async (c) => {
       typeof body.source === 'string' ? body.source : 'tidal',
       typeof body.artistId === 'string' ? body.artistId : null,
       typeof body.artistName === 'string' ? body.artistName : '',
+      artistsJson,
       typeof body.title === 'string' ? body.title : '',
       typeof body.albumId === 'string' ? body.albumId : null,
       typeof body.coverUrl === 'string' ? body.coverUrl : null,
@@ -68,6 +91,7 @@ interface RecentRow {
   source: string;
   artist_id: string | null;
   artist_name: string;
+  artists_json: string | null;
   title: string;
   album_id: string | null;
   cover_url: string | null;
@@ -83,10 +107,16 @@ interface RecentRow {
 history.get('/recent', async (c) => {
   const userId = c.get('userId');
   const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10) || 20));
+  // GROUP BY (track_id, source) collapses repeats; MAX(played_at)
+  // wins the latest timestamp. We carry artists_json through the
+  // grouping with MAX() too — for repeated plays the value is
+  // either the same JSON or NULL, so MAX prefers the populated row.
   const res = await c.env.DB
     .prepare(
-      `SELECT track_id, source, artist_id, artist_name, title, album_id,
-              cover_url, duration, MAX(played_at) AS played_at
+      `SELECT track_id, source, artist_id, artist_name,
+              MAX(artists_json) AS artists_json,
+              title, album_id, cover_url, duration,
+              MAX(played_at) AS played_at
          FROM play_history
         WHERE user_id = ?
         GROUP BY track_id, source
@@ -96,17 +126,40 @@ history.get('/recent', async (c) => {
     .bind(userId, limit)
     .all<RecentRow>();
 
-  const items = (res.results ?? []).map((r) => ({
-    id: r.track_id,
-    source: r.source,
-    title: r.title,
-    artist: r.artist_name,
-    artistId: r.artist_id ?? undefined,
-    albumId: r.album_id ?? undefined,
-    coverUrl: r.cover_url ?? undefined,
-    duration: r.duration,
-    playedAt: r.played_at,
-  }));
+  const items = (res.results ?? []).map((r) => {
+    let artists: { id: string; name: string }[] | undefined;
+    if (r.artists_json) {
+      try {
+        const parsed = JSON.parse(r.artists_json) as unknown;
+        if (Array.isArray(parsed)) {
+          artists = parsed
+            .map((a) => {
+              const obj = a as { id?: unknown; name?: unknown };
+              return {
+                id: typeof obj.id === 'string' ? obj.id : '',
+                name: typeof obj.name === 'string' ? obj.name : '',
+              };
+            })
+            .filter((a) => a.id && a.name);
+          if (artists.length === 0) artists = undefined;
+        }
+      } catch {
+        // malformed row — fall back to the joined-string render
+      }
+    }
+    return {
+      id: r.track_id,
+      source: r.source,
+      title: r.title,
+      artist: r.artist_name,
+      artistId: r.artist_id ?? undefined,
+      artists,
+      albumId: r.album_id ?? undefined,
+      coverUrl: r.cover_url ?? undefined,
+      duration: r.duration,
+      playedAt: r.played_at,
+    };
+  });
 
   return c.json({ items });
 });

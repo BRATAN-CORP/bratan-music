@@ -1,0 +1,18 @@
+-- Multi-artist credits for the listening history.
+--
+-- Before this migration `play_history` only stored the joined display
+-- string in `artist_name` and a single primary `artist_id`. The home
+-- "What you've been playing" feed renders the names through
+-- `<ArtistLinks>`, which without a structured `artists` array fell
+-- back to wrapping the whole "Artist 1, Artist 2" string in ONE
+-- `<Link>` to the primary id — clicking the second name visually
+-- looked like a separate link but actually navigated to the first
+-- artist.
+--
+-- Adding a JSON column lets us preserve every credited contributor
+-- end-to-end: client logs the structured `artists` list when a play
+-- crosses the significance threshold, the worker writes it through,
+-- and the recent-plays endpoint hands it back so each name renders
+-- as its own clickable link. Old rows (NULL) keep the previous
+-- single-link fallback behaviour, so there's no compat break.
+ALTER TABLE play_history ADD COLUMN artists_json TEXT;

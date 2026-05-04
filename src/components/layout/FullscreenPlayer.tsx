@@ -1230,6 +1230,12 @@ export function FullscreenPlayer() {
           <AnimatePresence>
             {eqOpen && (
               <>
+                {/* Soft scrim. Just dims the player content behind the
+                    EQ; deliberately no glassmorphism box around the EQ
+                    itself — the user wanted the curve and band readouts
+                    floating on the same surface as the rest of the
+                    fullscreen player, not stacked inside a darker
+                    secondary card. */}
                 <motion.div
                   key="eq-backdrop"
                   initial={{ opacity: 0 }}
@@ -1237,22 +1243,25 @@ export function FullscreenPlayer() {
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                   onClick={() => setEqOpen(false)}
-                  className="absolute inset-0 z-[5] bg-black/55 backdrop-blur-md"
+                  className="absolute inset-0 z-[5] bg-black/30"
                   aria-hidden
                 />
-                {/* The equalizer panel takes a sizeable share of the
-                    surface — `max-w-3xl` on desktop and the full width
-                    on mobile so the curve has room to breathe and the
-                    14-preset chip rail doesn't wrap into 4 ragged
-                    rows. We anchor it to the bottom edge with a soft
-                    spring so it slides into view without overshoot. */}
+                {/* `data-no-sheet-drag` keeps the parent fullscreen
+                    sheet's drag-to-dismiss from grabbing pointer events
+                    that originate inside the EQ canvas (band nodes,
+                    curve sweep) — the canvas itself also stops
+                    propagation, this is the belt-and-braces opt-out
+                    via the selector exclusion list in
+                    `startSheetDrag`. */}
                 <motion.div
                   key="eq-panel"
-                  initial={{ y: 80, opacity: 0, scale: 0.985 }}
-                  animate={{ y: 0, opacity: 1, scale: 1 }}
-                  exit={{ y: 80, opacity: 0, scale: 0.985 }}
+                  initial={{ y: 80, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 80, opacity: 0 }}
                   transition={{ delay: 0.06, duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute inset-x-0 bottom-0 z-10 mx-auto flex max-h-[88dvh] w-full max-w-3xl items-end justify-center p-3 sm:p-5"
+                  data-no-sheet-drag
+                  onPointerDown={(e) => e.stopPropagation()}
                 >
                   <Equalizer onClose={() => setEqOpen(false)} />
                 </motion.div>

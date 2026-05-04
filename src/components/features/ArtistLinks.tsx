@@ -49,7 +49,18 @@ export function ArtistLinks({
   const list = artists && artists.length > 0 ? artists : null;
 
   if (!list) {
-    if (fallbackId && fallbackName) {
+    // Multi-credit fallback: when the structured `artists` list is
+    // missing but the joined display string still contains separators,
+    // wrapping the whole "A, B" in ONE <Link> would silently navigate
+    // ALL of those visible names to the primary id. That's the
+    // "names stuck together" bug from listening history rows where
+    // play_history pre-migration only stored the single id. Render as
+    // plain text instead — no link, no wrong-artist nav. New rows
+    // (post-migration 0024) carry `artists` and take the per-link
+    // path below.
+    const looksMultiCredit = typeof fallbackName === 'string'
+      && /(,|&|\bfeat\.?\b|\bft\.?\b|\bvs\.?\b)/i.test(fallbackName);
+    if (fallbackId && fallbackName && !looksMultiCredit) {
       return (
         <Link
           to={`/artist/${fallbackId}`}
