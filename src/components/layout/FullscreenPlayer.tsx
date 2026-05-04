@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
-  SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check,
+  SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check, Ban, RotateCcw,
 } from 'lucide-react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -18,6 +18,9 @@ import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel } from '@/components/features/LyricsPanel';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
+import { useDislikesStore } from '@/store/dislikes';
+import { useToggleDislike } from '@/hooks/useDislikes';
+import { useAuthStore } from '@/store/auth';
 import { useTrack } from '@/hooks/useTrack';
 import { useTouchOnlyDevice } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
@@ -101,6 +104,10 @@ export function FullscreenPlayer() {
   const flash = Math.min(1, kick);
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
+  const isAuthed = useAuthStore((s) => Boolean(s.user));
+  const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
+  const artistDisliked = useDislikesStore((s) => Boolean(currentTrack?.artistId && s.artists.has(currentTrack.artistId)));
+  const toggleDislike = useToggleDislike();
   // `touchOnly` is stricter than the legacy `useCoarsePointer` —
   // requires NO hover capability AND coarse pointer, so touchscreen
   // laptops with a trackpad still keep the volume slider. Matches
@@ -219,6 +226,36 @@ export function FullscreenPlayer() {
     if (!currentTrack?.albumId) return;
     closeFullscreen();
     navigate(`/album/${currentTrack.albumId}`);
+  };
+
+  const handleToggleTrackDislike = () => {
+    if (!currentTrack) return;
+    const wasDisliked = trackDisliked;
+    toggleDislike.mutate(
+      { kind: 'track', id: currentTrack.id, source: currentTrack.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(wasDisliked ? t('dislike.trackRestored') : t('dislike.trackHidden', { title: currentTrack.title }));
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
+      },
+    );
+    setMoreOpen(false);
+  };
+
+  const handleToggleArtistDislike = () => {
+    if (!currentTrack?.artistId) return;
+    const wasDisliked = artistDisliked;
+    toggleDislike.mutate(
+      { kind: 'artist', id: currentTrack.artistId, source: currentTrack.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(wasDisliked ? t('dislike.artistRestored') : t('dislike.artistHidden', { name: currentTrack.artist }));
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : t('dislike.failed')),
+      },
+    );
+    setMoreOpen(false);
   };
 
   // Vertical drag-to-dismiss (the "swipe down from the top to
@@ -553,6 +590,29 @@ export function FullscreenPlayer() {
                 >
                   {t('track.uploadOwn')}
                 </MenuItem>
+                {isAuthed && (
+                  <>
+                    <MenuDivider />
+                    <MenuItem
+                      onClick={handleToggleTrackDislike}
+                      disabled={toggleDislike.isPending}
+                      icon={trackDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+                    >
+                      {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
+                    </MenuItem>
+                    {currentTrack.artistId && (
+                      <MenuItem
+                        onClick={handleToggleArtistDislike}
+                        disabled={toggleDislike.isPending}
+                        icon={artistDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+                      >
+                        {artistDisliked
+                          ? t('dislike.artistUnban', { name: currentTrack.artist })
+                          : t('dislike.artistBan', { name: currentTrack.artist })}
+                      </MenuItem>
+                    )}
+                  </>
+                )}
               </PopoverMenu>
             </div>
           </div>

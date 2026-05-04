@@ -29,7 +29,32 @@ interface DislikesPayload {
   artists: string[];
 }
 
+export interface BannedTrackDetail {
+  id: string;
+  title: string;
+  artist: string;
+  artistId: string | null;
+  coverUrl: string | null;
+  duration: number;
+  addedAt: number | null;
+  unavailable: boolean;
+}
+
+export interface BannedArtistDetail {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  addedAt: number | null;
+  unavailable: boolean;
+}
+
+interface DislikesDetailsPayload {
+  tracks: BannedTrackDetail[];
+  artists: BannedArtistDetail[];
+}
+
 export const DISLIKES_QUERY_KEY = ['dislikes'] as const;
+export const DISLIKES_DETAILS_QUERY_KEY = ['dislikes', 'details'] as const;
 
 export function useDislikesQuery() {
   const isAuthed = useAuthStore((s) => Boolean(s.user));
@@ -41,6 +66,27 @@ export function useDislikesQuery() {
     // from re-fetching on every navigation. The mutation does its
     // own optimistic update + cache invalidation.
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hydrated detail list for the profile "Скрытые" panel. Returns
+ * full track / artist metadata so the panel can render meaningful
+ * rows (cover, title, name) without N+1 client fetches. Heavier
+ * than `useDislikesQuery` — only mount on screens that actually
+ * render the list.
+ */
+export function useDislikesDetails() {
+  const isAuthed = useAuthStore((s) => Boolean(s.user));
+  return useQuery<DislikesDetailsPayload>({
+    queryKey: DISLIKES_DETAILS_QUERY_KEY,
+    queryFn: () => api.get<DislikesDetailsPayload>('/recommendations/dislikes/details'),
+    enabled: isAuthed,
+    // Stale-while-revalidate: details change when the user toggles a
+    // dislike from the kebab. The mutation invalidates this query
+    // explicitly, so the staleTime here just keeps idle navigation
+    // from re-fetching the (potentially expensive) hydrated list.
+    staleTime: 60 * 1000,
   });
 }
 
@@ -127,6 +173,10 @@ export function useToggleDislike() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: DISLIKES_QUERY_KEY });
+      // The hydrated profile-panel list needs to refresh too — the
+      // user may have just unbanned a track from there and expects
+      // the row to disappear.
+      qc.invalidateQueries({ queryKey: DISLIKES_DETAILS_QUERY_KEY });
       // Recommendation-driven feeds need to re-fetch so newly-banned
       // items disappear (or restored ones reappear) without a hard
       // reload.
