@@ -309,36 +309,16 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
       animate={reduce ? undefined : { opacity: 1, scale: 1, y: 0 }}
       exit={reduce ? undefined : { opacity: 0, scale: 0.98, y: 12 }}
       transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
-      // Liquid-glass container: a frosted, lightly-tinted card that
-      // floats on the fullscreen player's blurred backdrop. The
-      // canvas inside is intentionally chrome-free (no black wash,
-      // no inner card) — the curve and band nodes sit directly on
-      // this glass surface, which is the design the user wanted
-      // ("прозрачный бекграунд" was misread as "no container at
-      // all" in the prior pass; the request was to keep the glass
-      // shell but stop nesting a darker tile *inside* the canvas).
-      className="relative flex w-full flex-col gap-4 overflow-hidden rounded-[var(--radius-xl)] border border-white/15 bg-white/5 p-4 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.55)] backdrop-blur-2xl supports-[backdrop-filter:blur(0)]:bg-white/8 sm:gap-5 sm:p-5"
+      // Reuse the project-wide `liquid-glass` token — the same
+      // surface QueueDialog, AddToPlaylistDialog and the rest of
+      // the modals paint with. Keeps the EQ visually coherent with
+      // every other floating panel instead of inventing a one-off
+      // "white/5 + backdrop-blur-2xl" stack here.
+      className="liquid-glass relative flex w-full flex-col gap-4 overflow-hidden rounded-[var(--radius-xl)] p-4 sm:gap-5 sm:p-5"
       role="dialog"
       aria-label={t('equalizer.title')}
       data-no-sheet-drag
     >
-      {/* Subtle highlight gradient — the same trick used on macOS
-          Big Sur control-centre tiles. Sits behind the rest of the
-          panel so the body content and the canvas read on a
-          coherent translucent surface without competing with the
-          fullscreen player's own backdrop. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit]"
-        style={{
-          background:
-            'radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.10), transparent 60%), radial-gradient(120% 80% at 100% 100%, color-mix(in oklab, var(--color-accent) 14%, transparent), transparent 65%)',
-        }}
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-[inherit] bg-gradient-to-r from-transparent via-white/35 to-transparent"
-      />
       <motion.div {...fadeIn(0.12)} className="relative z-[1] flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span

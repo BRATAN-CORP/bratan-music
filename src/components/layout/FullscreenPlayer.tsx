@@ -1240,12 +1240,10 @@ export function FullscreenPlayer() {
           <AnimatePresence>
             {eqOpen && (
               <>
-                {/* Soft scrim. Just dims the player content behind the
-                    EQ; deliberately no glassmorphism box around the EQ
-                    itself — the user wanted the curve and band readouts
-                    floating on the same surface as the rest of the
-                    fullscreen player, not stacked inside a darker
-                    secondary card. */}
+                {/* Soft scrim — reuse the same `liquid-glass-scrim`
+                    backdrop the QueueDialog / AddToPlaylistDialog
+                    use, so layered modals share a consistent dim
+                    + slight backdrop-blur language. */}
                 <motion.div
                   key="eq-backdrop"
                   initial={{ opacity: 0 }}
@@ -1253,7 +1251,7 @@ export function FullscreenPlayer() {
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                   onClick={() => setEqOpen(false)}
-                  className="absolute inset-0 z-[5] bg-black/30"
+                  className="liquid-glass-scrim absolute inset-0 z-[5]"
                   aria-hidden
                 />
                 {/* `data-no-sheet-drag` keeps the parent fullscreen
