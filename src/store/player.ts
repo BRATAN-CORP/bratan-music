@@ -2,6 +2,25 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { isTrackBanned, isBanned, filterTrackBanned } from '@/store/dislikes';
 
+const PLAY_HISTORY_MAX = 50;
+
+/**
+ * Push a "previous" pointer onto the LIFO history stack used by
+ * `previous()`. Skips no-op transitions (same track to same track) and
+ * de-dupes the immediate top so a user that taps next/previous in
+ * quick succession doesn't grow the stack with redundant entries.
+ */
+function pushHistory(history: string[], oldId: string | undefined, newId: string): string[] {
+  if (!oldId || oldId === newId) return history;
+  // De-dupe top of stack — guards against double `setTrack` calls
+  // (rapid promote-then-set during crossfade teardown, room-bridge
+  // echoes, etc.) that would otherwise push the same id twice.
+  if (history.length > 0 && history[history.length - 1] === oldId) return history;
+  const next = [...history, oldId];
+  if (next.length > PLAY_HISTORY_MAX) next.splice(0, next.length - PLAY_HISTORY_MAX);
+  return next;
+}
+
 interface Track {
   id: string;
   title: string;
@@ -57,6 +76,14 @@ interface PlayerState {
   /** Incremented when the audio element needs to seek to 0 (e.g. back
    *  button restart). The audio hook subscribes to this counter. */
   _seekToZero: number;
+  /**
+   * LIFO stack of track ids the user (or the auto-advance engine) just
+   * walked off, newest at the end. Drives `previous()` — popping a real
+   * "the one you were on a moment ago" pointer survives queue mutations,
+   * post-crossfade slot churn and any other state the queue-walking path
+   * can't see. Capped to keep persisted state lightweight.
+   */
+  playHistory: string[];
   bumpStream: () => void;
   setTrack: (track: Track) => void;
   /**
@@ -126,16 +153,24 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   fullscreen: false,
   streamVersion: 0,
   _seekToZero: 0,
+  playHistory: [],
 
   bumpStream: () => set((s) => ({ streamVersion: s.streamVersion + 1, progress: 0 })),
 
-  setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0, error: null }),
-  setTrackAt: (track, progressSec, isPlaying) => set({
+  setTrack: (track) => set((s) => ({
+    currentTrack: track,
+    isPlaying: true,
+    progress: 0,
+    error: null,
+    playHistory: pushHistory(s.playHistory, s.currentTrack?.id, track.id),
+  })),
+  setTrackAt: (track, progressSec, isPlaying) => set((s) => ({
     currentTrack: track,
     isPlaying,
     progress: Math.max(0, progressSec),
     error: null,
-  }),
+    playHistory: pushHistory(s.playHistory, s.currentTrack?.id, track.id),
+  })),
   // Queue mutators only filter on track-id bans. Artist bans are
   // recommendation-side concerns — the user's queue is allowed to
   // contain tracks by a banned artist (e.g. they queued the track
@@ -190,7 +225,12 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   jumpToQueue: (index) => set((s) => {
     const target = s.queue[index];
     if (!target) return s;
-    return { currentTrack: target, isPlaying: true, progress: 0 };
+    return {
+      currentTrack: target,
+      isPlaying: true,
+      progress: 0,
+      playHistory: pushHistory(s.playHistory, s.currentTrack?.id, target.id),
+    };
   }),
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
@@ -227,7 +267,12 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       const candidate = queue[nextIdx];
       if (!candidate) return;
       if (!isBanned(candidate)) {
-        set({ currentTrack: candidate, isPlaying: true, progress: 0 });
+        set((s) => ({
+          currentTrack: candidate,
+          isPlaying: true,
+          progress: 0,
+          playHistory: pushHistory(s.playHistory, s.currentTrack?.id, candidate.id),
+        }));
         return;
       }
       probe = nextIdx;
@@ -256,7 +301,12 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       const candidate = queue[nextIdx];
       if (!candidate) return;
       if (!isBanned(candidate)) {
-        set({ currentTrack: candidate, isPlaying: true, progress: 0 });
+        set((s) => ({
+          currentTrack: candidate,
+          isPlaying: true,
+          progress: 0,
+          playHistory: pushHistory(s.playHistory, s.currentTrack?.id, candidate.id),
+        }));
         return;
       }
       probe = nextIdx;
@@ -265,7 +315,45 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   },
 
   previous: () => {
-    const { queue, currentTrack, progress, _seekToZero, repeat } = get();
+    const { queue, currentTrack, progress, _seekToZero, repeat, playHistory } = get();
+    // Primary path: pop the explicit play-history stack. This is the
+    // *actual* "the track you were on a moment ago" pointer, pushed by
+    // every state transition that promotes a new currentTrack —
+    // setTrack, jumpToQueue, next, nextManual, the room bridge's
+    // setTrackAt, and the audio engine's auto-crossfade promotion.
+    // Walking the queue backwards (legacy fallback below) is fragile
+    // around auto-advance: in some cases the queue/currentTrack pair
+    // is in a transient state (post-crossfade slot churn, mid-fetch
+    // queue prune, room bridge reorder) and findIndex returns -1,
+    // leaving "back" silently no-op. The history stack survives all
+    // of that because it stores ids, not array positions.
+    if (playHistory.length > 0) {
+      let history = playHistory;
+      while (history.length > 0) {
+        const lastId = history[history.length - 1];
+        history = history.slice(0, -1);
+        // Skip self-references (shouldn't happen with the pushHistory
+        // guard, but be defensive against persisted state from older
+        // builds where the stack might have been polluted).
+        if (!lastId || lastId === currentTrack?.id) continue;
+        const target = queue.find((t) => t.id === lastId);
+        if (target && !isBanned(target)) {
+          set({
+            currentTrack: target,
+            isPlaying: true,
+            progress: 0,
+            playHistory: history,
+          });
+          return;
+        }
+        // Track is no longer in the queue (dequeued, banned, etc.) —
+        // drop the entry and keep walking backward.
+      }
+      // History exhausted with nothing playable — persist the cleanup
+      // and fall through to the queue-walk fallback.
+      set({ playHistory: history });
+    }
+
     // First, see whether there is an actual previous track to walk to
     // (skipping banned neighbours). If there is, "back" always goes
     // there — the user expects "back" to mean "go to the previous
@@ -354,6 +442,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     duration: 0,
     error: null,
     fullscreen: false,
+    playHistory: [],
   }),
 }), {
   name: 'bratan-player',
@@ -370,6 +459,11 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     // expanded player when they refreshed, we re-open it on rehydrate so
     // the experience picks up exactly where it left off.
     fullscreen: s.fullscreen,
+    // Persist the back-stack so a quick reload doesn't strand the
+    // user on track 2 with no way back to track 1 (the most common
+    // path before this fix — rehydrate dropped the history and the
+    // queue-walk fallback couldn't always reach the prior song).
+    playHistory: s.playHistory,
   }),
   // П2 — never auto-resume playback after a page reload. We deliberately
   // do NOT persist `isPlaying`. Even when the browser would technically

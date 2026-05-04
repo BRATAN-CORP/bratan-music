@@ -242,6 +242,15 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
   // to the FullscreenPlayer's `useDragControls().start(e)` before the
   // closest()-selector check can run if we don't kill propagation
   // explicitly here.
+  //
+  // Drag model: pin the band on pointerdown (whichever node was
+  // closest in log-frequency space) and KEEP it pinned for the
+  // entire gesture. X-axis movement is purely cosmetic — the band's
+  // frequency is fixed by the parametric chain, so re-binding to the
+  // "nearest band" mid-stroke (the previous behaviour) felt like the
+  // node was magnetising away under the cursor. Ears Audio Toolkit
+  // and any other respectable graphic-EQ surface keeps the grabbed
+  // node bound to the gesture; that's what we replicate here.
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -254,19 +263,18 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
     updateBand(band, next);
   };
 
-  // 2-axis drag: as the cursor sweeps across the canvas, X re-binds
-  // to the closest band and Y sets that band's gain. This turns the
-  // graph into a free "paint the curve" surface — the same input
-  // model FL Studio's Parametric EQ 2 uses when the user drags from
-  // one band over another, instead of the previous lock-to-the-band
-  // we picked on pointerdown.
+  // Free-form drag: the band picked on pointerdown stays bound for
+  // the entire gesture. Cursor X is intentionally ignored for band
+  // selection — only Y controls the gain. This matches the user's
+  // mental model ("hold the point, move it freely") and removes the
+  // mid-stroke jump-to-neighbour that came from the previous
+  // `nearestBand(vb.x)` re-binding.
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (draggingBandRef.current === null) return;
+    const band = draggingBandRef.current;
+    if (band === null) return;
     e.stopPropagation();
     const vb = eventToVB(e);
     if (!vb) return;
-    const band = nearestBand(vb.x);
-    draggingBandRef.current = band;
     const next = Math.round(yToGain(vb.y) * 2) / 2;
     updateBand(band, next);
   };
@@ -301,11 +309,36 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
       animate={reduce ? undefined : { opacity: 1, scale: 1, y: 0 }}
       exit={reduce ? undefined : { opacity: 0, scale: 0.98, y: 12 }}
       transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
-      className="relative flex w-full flex-col gap-4 p-2 sm:gap-5 sm:p-3"
+      // Liquid-glass container: a frosted, lightly-tinted card that
+      // floats on the fullscreen player's blurred backdrop. The
+      // canvas inside is intentionally chrome-free (no black wash,
+      // no inner card) — the curve and band nodes sit directly on
+      // this glass surface, which is the design the user wanted
+      // ("прозрачный бекграунд" was misread as "no container at
+      // all" in the prior pass; the request was to keep the glass
+      // shell but stop nesting a darker tile *inside* the canvas).
+      className="relative flex w-full flex-col gap-4 overflow-hidden rounded-[var(--radius-xl)] border border-white/15 bg-white/5 p-4 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.55)] backdrop-blur-2xl supports-[backdrop-filter:blur(0)]:bg-white/8 sm:gap-5 sm:p-5"
       role="dialog"
       aria-label={t('equalizer.title')}
       data-no-sheet-drag
     >
+      {/* Subtle highlight gradient — the same trick used on macOS
+          Big Sur control-centre tiles. Sits behind the rest of the
+          panel so the body content and the canvas read on a
+          coherent translucent surface without competing with the
+          fullscreen player's own backdrop. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-[inherit]"
+        style={{
+          background:
+            'radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.10), transparent 60%), radial-gradient(120% 80% at 100% 100%, color-mix(in oklab, var(--color-accent) 14%, transparent), transparent 65%)',
+        }}
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-[inherit] bg-gradient-to-r from-transparent via-white/35 to-transparent"
+      />
       <motion.div {...fadeIn(0.12)} className="relative z-[1] flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span
@@ -407,16 +440,23 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
           the same input model as FL Studio Parametric EQ 2. */}
       <motion.div
         {...fadeIn(0.28)}
-        className="relative z-[1]"
+        // `aspect-[3/1]` matches the SVG viewBox so the geometry
+        // stays in sync no matter how wide the panel renders. The
+        // previous fixed `h-44 sm:h-52 w-full` paired with
+        // `preserveAspectRatio="none"` deformed every shape on the
+        // canvas (circles became horizontal ellipses) — the
+        // "stretched / растянутые ползунки" complaint. Letting the
+        // container drive the box size and dropping the override
+        // keeps the band nodes round and the curve evenly scaled.
+        className="relative z-[1] aspect-[3/1] w-full"
         data-no-sheet-drag
       >
         <svg
           ref={svgRef}
           viewBox={`0 0 ${VBW} ${VBH}`}
-          preserveAspectRatio="none"
           role="application"
           aria-label={t('equalizer.curveAria')}
-          className="block h-44 w-full touch-none select-none sm:h-52"
+          className="block h-full w-full touch-none select-none"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
