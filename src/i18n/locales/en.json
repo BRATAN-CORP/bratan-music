@@ -852,7 +852,8 @@
       "ban": "Ban",
       "banPlaceholder": "Ban reason (optional, up to 280 characters)",
       "banConfirm": "Ban",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "openDetails": "Open user details"
     },
     "pagination": {
       "range": "{start}–{end} of {total}",
@@ -864,6 +865,64 @@
       "minutes": "{n}m ago",
       "hours": "{n}h ago",
       "days": "{n}d ago"
+    },
+    "detail": {
+      "title": "User profile",
+      "loading": "Loading stats…",
+      "error": "Failed to load stats",
+      "subActive": "Subscription active",
+      "banned": "Banned",
+      "no": "no",
+      "id": "ID",
+      "username": "Username",
+      "joined": "Joined",
+      "updated": "Updated",
+      "lastPlayed": "Last play",
+      "lastSession": "Last session",
+      "tour": "Tour completed",
+      "banDetails": "Ban",
+      "section": {
+        "storage": "Storage",
+        "library": "Library",
+        "listening": "Listening",
+        "subscription": "Subscriptions",
+        "sessions": "Sessions",
+        "preferences": "Preferences"
+      },
+      "storage": {
+        "uploads": "Uploaded tracks",
+        "overrides": "Track overrides",
+        "total": "Total in R2",
+        "totalSub": "uploads + overrides"
+      },
+      "library": {
+        "playlists": "Playlists",
+        "playlistsSub": "{created} owned · {liked} liked",
+        "tracksInPlaylists": "Tracks in playlists",
+        "albums": "Albums",
+        "artists": "Artists",
+        "dislikes": "Dislikes"
+      },
+      "listen": {
+        "total": "Total plays",
+        "last7d": "Last 7 days",
+        "last30d": "Last 30 days",
+        "bySource": "By source",
+        "recent": "Last 20 plays"
+      },
+      "sub": {
+        "current": "Active subscription",
+        "expiresAt": "Expires",
+        "none": "No active subscription.",
+        "empty": "No subscription history."
+      },
+      "sessions": {
+        "active": "Active sessions",
+        "lastCreated": "Last login"
+      },
+      "prefs": {
+        "empty": "No preferences saved."
+      }
     }
   },
   "share": {

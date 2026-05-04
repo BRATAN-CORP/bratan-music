@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { AdminUsersResponse } from '@/types/admin';
+import type { AdminUsersResponse, AdminUserStats } from '@/types/admin';
 
 export interface AdminUsersFilters {
   q?: string;
@@ -38,7 +38,10 @@ export function useBanUser() {
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason?: string }) =>
       api.post<{ ok: boolean }>(`/admin/users/${id}/ban`, { reason }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'user', vars.id] });
+    },
   });
 }
 
@@ -46,7 +49,10 @@ export function useUnbanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => api.post<{ ok: boolean }>(`/admin/users/${id}/unban`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'user', id] });
+    },
   });
 }
 
@@ -55,7 +61,10 @@ export function useToggleAdmin() {
   return useMutation({
     mutationFn: async ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
       api.post<{ ok: boolean }>('/admin/admin-flag', { userId, isAdmin }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'user', vars.userId] });
+    },
   });
 }
 
@@ -64,6 +73,24 @@ export function useGrantSub() {
   return useMutation({
     mutationFn: async ({ userId, days }: { userId: string; days: number }) =>
       api.post<{ ok: boolean }>('/admin/grant', { userId, days }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'user', vars.userId] });
+    },
+  });
+}
+
+/**
+ * Per-user drill-down stats. Lazy: only triggered when an operator
+ * opens the detail panel for a specific user. The endpoint runs ~15
+ * aggregate queries in parallel — heavy by D1 standards but fine for
+ * on-demand admin use.
+ */
+export function useAdminUserStats(userId: string | null, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['admin', 'user', userId],
+    queryFn: () => api.get<AdminUserStats>(`/admin/users/${userId}`),
+    enabled: !!userId && (opts?.enabled ?? true),
+    staleTime: 10_000,
   });
 }

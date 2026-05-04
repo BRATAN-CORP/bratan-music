@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/features/AuthGuard';
+import { AdminUserDetailDialog } from '@/components/features/AdminUserDetailDialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -67,6 +68,7 @@ export function AdminDashboard({ meId }: { meId: string }) {
   const [sub, setSub] = useState<AdminUsersFilters['sub']>('');
   const [sort, setSort] = useState<AdminUsersFilters['sort']>('created_at');
   const [page, setPage] = useState(0);
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
     return () => window.clearTimeout(id);
@@ -194,13 +196,19 @@ export function AdminDashboard({ meId }: { meId: string }) {
                   animate={{ opacity: 1, y: 0, transition: { duration: 0.3, delay: Math.min(i * 0.015, 0.15), ease: EASE_SPRING } }}
                   exit={reduce ? undefined : { opacity: 0, y: -6 }}
                 >
-                  <UserRow user={u} meId={meId} />
+                  <UserRow user={u} meId={meId} onOpen={() => setOpenUserId(u.id)} />
                 </motion.li>
               ))}
             </AnimatePresence>
           </ul>
         )}
       </div>
+
+      <AdminUserDetailDialog
+        userId={openUserId}
+        meId={meId}
+        onClose={() => setOpenUserId(null)}
+      />
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
         <span>
@@ -226,7 +234,7 @@ export function AdminDashboard({ meId }: { meId: string }) {
   );
 }
 
-function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
+function UserRow({ user, meId, onOpen }: { user: AdminUser; meId: string; onOpen: () => void }) {
   const { t, locale } = useI18n();
   const intl = intlLocale(locale);
   const banMut = useBanUser();
@@ -243,9 +251,29 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
   const subDays = user.subscription
     ? Math.max(0, Math.ceil((user.subscription.expiresAt - Date.now() / 1000) / 86400))
     : 0;
+  // Whole-row click opens the drill-down panel. Action buttons stop
+  // propagation locally so clicking ban/admin/grant doesn't also pop
+  // the modal — matches how Gmail / Linear list rows behave.
+  const handleRowClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('[data-row-action]')) return;
+    onOpen();
+  };
+  const handleRowKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpen();
+    }
+  };
 
   return (
-    <div className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[1fr_120px_120px_120px_120px_140px] lg:items-center">
+    <div
+      className="grid cursor-pointer grid-cols-1 gap-3 px-4 py-4 transition-colors hover:bg-secondary/30 lg:grid-cols-[1fr_120px_120px_120px_120px_140px] lg:items-center"
+      onClick={handleRowClick}
+      onKeyDown={handleRowKey}
+      role="button"
+      tabIndex={0}
+      aria-label={t('admin.action.openDetails')}
+    >
       {/* Identity */}
       <div className="flex items-center gap-3">
         <div className="relative">
@@ -297,17 +325,31 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
         )}
       </div>
 
-      {/* Listened */}
+      {/* Listened — relative for the table, absolute timestamp on hover
+          (title attribute) so an operator can see the exact time
+          without opening the drill-down panel. */}
       <div className="text-xs text-muted-foreground">
         {user.playCount.toLocaleString(intl)} ·{' '}
-        {user.lastPlayedAt ? formatRelative(user.lastPlayedAt, t, intl) : '—'}
+        {user.lastPlayedAt ? (
+          <time
+            title={formatAbsolute(user.lastPlayedAt, intl)}
+            dateTime={new Date(user.lastPlayedAt * 1000).toISOString()}
+          >
+            {formatRelative(user.lastPlayedAt, t, intl)}
+          </time>
+        ) : '—'}
       </div>
 
       {/* Created */}
-      <div className="text-xs text-muted-foreground">{formatDate(user.createdAt, intl)}</div>
+      <div
+        className="text-xs text-muted-foreground"
+        title={formatAbsolute(user.createdAt, intl)}
+      >
+        {formatDate(user.createdAt, intl)}
+      </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <div data-row-action className="flex flex-wrap items-center justify-end gap-1.5">
         <ActionIcon
           title={t('admin.action.grantSub')}
           onClick={() => grantMut.mutate({ userId: user.id, days: 30 })}
@@ -343,6 +385,7 @@ function UserRow({ user, meId }: { user: AdminUser; meId: string }) {
       <AnimatePresence>
         {banDraft.open && (
           <motion.div
+            data-row-action
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -460,6 +503,18 @@ function SortChip({ value, onChange }: { value: NonNullable<AdminUsersFilters['s
 
 function formatDate(epochSec: number, intl: string): string {
   return new Date(epochSec * 1000).toLocaleDateString(intl, { day: '2-digit', month: 'short', year: '2-digit' });
+}
+
+/**
+ * Full datetime — used as a `title` (hover tooltip) on the relative
+ * "Listened" / "Joined" cells so an operator can see the exact moment
+ * without opening the drill-down panel.
+ */
+function formatAbsolute(epochSec: number, intl: string): string {
+  return new Date(epochSec * 1000).toLocaleString(intl, {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
 }
 
 function formatRelative(epochSec: number, t: Translate, intl: string): string {
