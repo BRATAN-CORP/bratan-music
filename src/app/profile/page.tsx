@@ -281,7 +281,11 @@ function RoomsShortcut() {
           }}
         />
         <div className="relative flex items-center gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)]">
+          {/* Icon swatch matches the AI-Playlist promo on /home: a clean
+              accent-soft tint instead of the previous accent→fuchsia
+              gradient, so the entry-point cards across home / profile
+              read as one family in a single accent palette. */}
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
             <Headphones size={18} />
           </div>
           <div className="min-w-0">

@@ -13,6 +13,7 @@ import {
   Heart,
   Disc3,
   Check,
+  Wand2,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -196,8 +197,15 @@ function AiPlaylistPromo() {
             }}
           />
           <div className="relative flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
-              <Sparkles size={20} />
+            {/* Icon swatch — was a fuchsia-to-accent gradient with a Sparkles
+                glyph, which read as a third accent palette grafted onto the
+                page. Now uses the same accent-soft tint family as the rest of
+                the eyebrow chips (Premium tag, daily-mood pills) and a clean
+                Wand2 glyph that telegraphs "AI generation" without needing a
+                rainbow. The hover scale is preserved so the lift physics
+                still match the daily-playlist cards directly below. */}
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)] transition-transform duration-700 group-hover:scale-105">
+              <Wand2 size={20} />
             </div>
             <div className="min-w-0">
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
