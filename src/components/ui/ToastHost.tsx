@@ -49,27 +49,26 @@ const TONE_ICON: Record<ToastTone, LucideIcon> = {
 /**
  * Per-tone visual recipe.
  *
- * The previous version coloured the **entire surface** with the
- * tone's accent (e.g. info had a cyan-on-cyan-soft surface), which
- * made the message text fight the background and the progress bar
- * disappear into the surface fill. The new recipe keeps the
- * surface neutral (elevated card colour, slight tone-tinted border
- * + soft tone glow), and reserves the saturated tone colour for
- * the icon and the dismiss-progress bar — those are the only
- * surfaces that should pop.
+ * The recipe keeps the surface neutral (elevated card colour with a
+ * tone-tinted border + soft tone glow), reserves the saturated tone
+ * colour for the icon, the left accent rail and the dismiss-progress
+ * bar, and pushes the message text up to maximum contrast so it
+ * never dissolves into the glass plate underneath.
  */
-const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: string; bar: string }> = {
+const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: string; bar: string; rail: string }> = {
   error: {
-    surface: 'border-[var(--color-danger)]/50 ring-1 ring-[var(--color-danger)]/15',
+    surface: 'border-[var(--color-danger)]/55 ring-1 ring-[var(--color-danger)]/15',
     iconWrap: 'bg-[var(--color-danger-muted)]',
     icon: 'text-[var(--color-danger)]',
     bar: 'bg-[var(--color-danger)]',
+    rail: 'bg-[var(--color-danger)]',
   },
   warn: {
-    surface: 'border-amber-500/50 ring-1 ring-amber-500/15',
+    surface: 'border-amber-500/55 ring-1 ring-amber-500/15',
     iconWrap: 'bg-amber-500/15',
     icon: 'text-amber-500',
     bar: 'bg-amber-500',
+    rail: 'bg-amber-500',
   },
   info: {
     // Info used to share the accent colour with the rest of the UI
@@ -77,16 +76,18 @@ const TONE_CLS: Record<ToastTone, { surface: string; iconWrap: string; icon: str
     // dissolved into the surrounding chrome. Switched to a neutral
     // sky-blue tone that reads clearly as "informational" without
     // blending with the brand accent.
-    surface: 'border-sky-400/50 ring-1 ring-sky-400/15',
+    surface: 'border-sky-400/55 ring-1 ring-sky-400/15',
     iconWrap: 'bg-sky-400/15',
     icon: 'text-sky-400',
     bar: 'bg-sky-400',
+    rail: 'bg-sky-400',
   },
   success: {
-    surface: 'border-emerald-500/50 ring-1 ring-emerald-500/15',
+    surface: 'border-emerald-500/55 ring-1 ring-emerald-500/15',
     iconWrap: 'bg-emerald-500/15',
     icon: 'text-emerald-500',
     bar: 'bg-emerald-500',
+    rail: 'bg-emerald-500',
   },
 };
 
@@ -123,23 +124,36 @@ function ToastCard({ toast }: { toast: Toast }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.97, transition: { duration: 0.18 } }}
       transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-      className={`pointer-events-auto liquid-glass relative w-full max-w-[420px] overflow-hidden rounded-[var(--radius-md)] border bg-[var(--color-surface-elevated)] shadow-[0_18px_48px_-20px_rgba(0,0,0,0.55)] ${cls.surface}`}
+      className={`pointer-events-auto liquid-glass relative w-full max-w-[440px] overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--color-surface-elevated)] shadow-[0_24px_56px_-24px_rgba(0,0,0,0.55)] ${cls.surface}`}
     >
-      <div className="flex gap-3 px-3.5 py-3">
-        <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${cls.iconWrap}`}>
-          <Icon size={15} className={cls.icon} />
+      {/* Tone accent rail — anchors the toast's tone on the left edge so
+          even at a glance the user knows error/warn/info/success without
+          having to parse the icon. Sits above the surface fill so the
+          glass blur doesn't wash it out. */}
+      <span
+        className={`pointer-events-none absolute inset-y-0 left-0 w-[3px] ${cls.rail}`}
+        aria-hidden
+      />
+
+      <div className="flex items-center gap-3.5 py-3.5 pl-[18px] pr-3">
+        <span
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ring-[currentColor]/15 ${cls.iconWrap} ${cls.icon}`}
+        >
+          <Icon size={17} strokeWidth={2.4} />
         </span>
-        <div className="min-w-0 flex-1 text-sm">
-          {toast.title && <div className="mb-0.5 font-medium text-foreground">{toast.title}</div>}
-          <div className="break-words text-foreground/90">{toast.message}</div>
+        <div className="min-w-0 flex-1 text-sm leading-snug">
+          {toast.title && (
+            <div className="mb-0.5 font-semibold text-foreground">{toast.title}</div>
+          )}
+          <div className="break-words text-foreground/95">{toast.message}</div>
         </div>
         <button
           type="button"
           onClick={() => dismiss(toast.id)}
-          className="-mr-1 -mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="-mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           aria-label={t('common.close')}
         >
-          <X size={12} />
+          <X size={13} />
         </button>
       </div>
       {toast.duration > 0 && (
