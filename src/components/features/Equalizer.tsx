@@ -38,13 +38,17 @@ const PRESETS: { nameKey: TranslationKey; values: number[] }[] = [
 const GAIN_MIN = -12;
 const GAIN_MAX = 12;
 
-// SVG viewBox dimensions. The component scales to its container width
-// via `preserveAspectRatio="none"` on the inner geometry — see render.
+// SVG viewBox dimensions. The canvas is scaled by its container width
+// via `preserveAspectRatio="none"` on the inner geometry. Height is
+// chosen so the curve has visible vertical headroom for ±12 dB
+// without making the surface feel "stretched" inside the bottom
+// sheet — the previous 240 × 600 viewBox + h-60..h-80 stack made
+// the band nodes look like tall vertical sliders.
 const VBW = 600;
-const VBH = 240;
+const VBH = 200;
 const PAD_X = 32;
-const PAD_Y_TOP = 16;
-const PAD_Y_BOT = 28;
+const PAD_Y_TOP = 14;
+const PAD_Y_BOT = 24;
 
 function freqLabel(hz: number): string {
   if (hz >= 1000) return `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)}k`;
@@ -230,8 +234,17 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
     return best;
   };
 
+  // Stop the parent fullscreen sheet's drag-to-dismiss from grabbing
+  // pointer events while the user is sweeping the EQ canvas. Without
+  // this, a vertical drag on the curve double-counts: we adjust the
+  // band gain AND the sheet collapses behind us. `data-no-sheet-drag`
+  // on the wrapper is the public opt-out, but pointerdown bubbles up
+  // to the FullscreenPlayer's `useDragControls().start(e)` before the
+  // closest()-selector check can run if we don't kill propagation
+  // explicitly here.
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     const vb = eventToVB(e);
     if (!vb) return;
     const band = nearestBand(vb.x);
@@ -241,11 +254,19 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
     updateBand(band, next);
   };
 
+  // 2-axis drag: as the cursor sweeps across the canvas, X re-binds
+  // to the closest band and Y sets that band's gain. This turns the
+  // graph into a free "paint the curve" surface — the same input
+  // model FL Studio's Parametric EQ 2 uses when the user drags from
+  // one band over another, instead of the previous lock-to-the-band
+  // we picked on pointerdown.
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    const band = draggingBandRef.current;
-    if (band === null) return;
+    if (draggingBandRef.current === null) return;
+    e.stopPropagation();
     const vb = eventToVB(e);
     if (!vb) return;
+    const band = nearestBand(vb.x);
+    draggingBandRef.current = band;
     const next = Math.round(yToGain(vb.y) * 2) / 2;
     updateBand(band, next);
   };
@@ -276,27 +297,15 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
 
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0, scale: 0.96 }}
-      animate={reduce ? undefined : { opacity: 1, scale: 1 }}
-      exit={reduce ? undefined : { opacity: 0, scale: 0.96 }}
+      initial={reduce ? false : { opacity: 0, scale: 0.98, y: 12 }}
+      animate={reduce ? undefined : { opacity: 1, scale: 1, y: 0 }}
+      exit={reduce ? undefined : { opacity: 0, scale: 0.98, y: 12 }}
       transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
-      className="liquid-glass relative flex w-full flex-col gap-5 overflow-hidden rounded-[var(--radius-lg)] p-4 sm:gap-6 sm:p-6"
+      className="relative flex w-full flex-col gap-4 p-2 sm:gap-5 sm:p-3"
       role="dialog"
       aria-label={t('equalizer.title')}
+      data-no-sheet-drag
     >
-      {/* Soft accent halo behind the canvas — mirrors the rest of the
-          fullscreen player surface and gives the modal a tactile,
-          tinted edge against the dark backdrop. Pointer-events:none
-          so it never intercepts drag/click on the curve below. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-0 opacity-70"
-        style={{
-          background:
-            'radial-gradient(120% 60% at 50% 0%, color-mix(in oklab, var(--color-accent) 18%, transparent) 0%, transparent 60%), radial-gradient(80% 50% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 70%)',
-        }}
-      />
-
       <motion.div {...fadeIn(0.12)} className="relative z-[1] flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span
@@ -311,10 +320,10 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
             <Sliders size={14} />
           </span>
           <div className="flex min-w-0 flex-col">
-            <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/60">
               {t('equalizer.title')}
             </span>
-            <span className="truncate text-[13px] font-medium text-foreground">
+            <span className="truncate text-[13px] font-medium text-white">
               {activePresetLabel}
             </span>
           </div>
@@ -343,7 +352,7 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
       </motion.div>
 
       {!available && (
-        <motion.p {...fadeIn(0.18)} className="relative z-[1] text-xs text-muted-foreground">
+        <motion.p {...fadeIn(0.18)} className="relative z-[1] text-xs text-white/65">
           {t('equalizer.hint')}
         </motion.p>
       )}
@@ -372,7 +381,7 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
                 'relative inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-all',
                 isActive
                   ? 'border-transparent text-[var(--color-text-on-accent)] shadow-[0_4px_18px_-6px_color-mix(in_oklab,var(--color-accent)_55%,transparent)]'
-                  : 'border-border bg-card text-muted-foreground hover:border-[var(--color-border-strong)] hover:text-foreground',
+                  : 'border-white/15 bg-white/5 text-white/75 hover:border-white/30 hover:bg-white/10 hover:text-white',
               ].join(' ')}
               style={
                 isActive
@@ -398,7 +407,8 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
           the same input model as FL Studio Parametric EQ 2. */}
       <motion.div
         {...fadeIn(0.28)}
-        className="relative z-[1] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-strong)] bg-[color-mix(in_oklab,var(--color-surface-elevated)_92%,black_8%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        className="relative z-[1]"
+        data-no-sheet-drag
       >
         <svg
           ref={svgRef}
@@ -406,11 +416,12 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
           preserveAspectRatio="none"
           role="application"
           aria-label={t('equalizer.curveAria')}
-          className="block h-60 w-full touch-none select-none sm:h-72 lg:h-80"
+          className="block h-44 w-full touch-none select-none sm:h-52"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          data-no-sheet-drag
         >
           <defs>
             <linearGradient id="eq-fill" x1="0" y1="0" x2="0" y2="1">
@@ -432,7 +443,10 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
             </filter>
           </defs>
 
-          {/* Y-axis grid lines + labels (-12, -6, 0, +6, +12 dB) */}
+          {/* Y-axis grid lines + labels (-12, -6, 0, +6, +12 dB).
+              Light, low-saturation strokes so they read clearly on
+              the fullscreen player's blurred backdrop without leaning
+              on a card-coloured EQ container. */}
           {yTicks.map((db) => {
             const y = gainToY(db);
             const isZero = db === 0;
@@ -443,17 +457,18 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
                   x2={VBW - PAD_X}
                   y1={y}
                   y2={y}
-                  stroke="var(--color-border-strong)"
+                  stroke="#ffffff"
                   strokeWidth={isZero ? 1 : 0.5}
                   strokeDasharray={isZero ? '' : '3 4'}
-                  opacity={isZero ? 0.55 : 0.3}
+                  opacity={isZero ? 0.4 : 0.18}
                 />
                 <text
                   x={PAD_X - 6}
                   y={y + 3}
                   fontSize={9}
                   textAnchor="end"
-                  fill="var(--color-muted-foreground)"
+                  fill="#ffffff"
+                  fillOpacity={0.7}
                   className="tabular-nums"
                 >
                   {db > 0 ? `+${db}` : db}
@@ -472,17 +487,18 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
                   x2={x}
                   y1={PAD_Y_TOP}
                   y2={VBH - PAD_Y_BOT}
-                  stroke="var(--color-border-strong)"
+                  stroke="#ffffff"
                   strokeWidth={0.5}
                   strokeDasharray="3 4"
-                  opacity={0.25}
+                  opacity={0.15}
                 />
                 <text
                   x={x}
                   y={VBH - PAD_Y_BOT + 14}
                   fontSize={9}
                   textAnchor="middle"
-                  fill="var(--color-muted-foreground)"
+                  fill="#ffffff"
+                  fillOpacity={0.7}
                   className="tabular-nums"
                 >
                   {freqLabel(hz)}
@@ -543,8 +559,8 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
                   cy={p.y}
                   r={dragging ? 8 : 6}
                   fill="var(--color-accent)"
-                  stroke="var(--color-card)"
-                  strokeWidth={2}
+                  stroke="#ffffff"
+                  strokeWidth={1.5}
                   tabIndex={0}
                   role="slider"
                   aria-label={t('equalizer.freqHzAria', { label: freqLabel(freq) })}
@@ -563,13 +579,16 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
         </svg>
       </motion.div>
 
-      {/* Per-band readout chips. Echoes the exact frequency + gain for
-          each band so the user can confirm the curve at a glance and
-          read precise values that the canvas labels (decade ticks
-          only) intentionally omit. */}
+      {/* Per-band readout strip. Compact, transparent — just frequency
+          + dB pairs underneath the curve so the user can read precise
+          values without the canvas decade ticks getting noisy. No
+          card chrome here on purpose: the fullscreen sheet's blurred
+          backdrop is the surface, and a second tier of cards on top
+          would re-introduce the "dark on dark" muddiness this redesign
+          is fixing. */}
       <motion.div
         {...fadeIn(0.32)}
-        className="relative z-[1] grid grid-cols-5 gap-1.5 sm:grid-cols-10"
+        className="relative z-[1] grid grid-cols-5 gap-x-1 gap-y-0.5 px-1 sm:grid-cols-10"
       >
         {EQ_BANDS.map((freq, i) => {
           const value = gains[i] ?? 0;
@@ -577,18 +596,14 @@ export function Equalizer({ onClose }: EqualizerProps = {}) {
           return (
             <div
               key={freq}
-              className={`flex flex-col items-center gap-0.5 rounded-[var(--radius-sm)] border px-1 py-1.5 text-center transition-colors ${
-                active
-                  ? 'border-[var(--color-accent)]/45 bg-[color-mix(in_oklab,var(--color-accent)_10%,var(--color-card)_90%)]'
-                  : 'border-border bg-card'
-              }`}
+              className="flex flex-col items-center gap-0 text-center"
             >
-              <span className="text-[10px] tabular-nums text-muted-foreground">
+              <span className="text-[10px] tabular-nums text-white/55">
                 {freqLabel(freq)}
               </span>
               <span
-                className={`text-[11px] font-medium tabular-nums ${
-                  active ? 'text-[var(--color-accent)]' : 'text-foreground'
+                className={`text-[11px] font-semibold tabular-nums ${
+                  active ? 'text-[var(--color-accent)]' : 'text-white/85'
                 }`}
               >
                 {value > 0 ? '+' : ''}{value.toFixed(1)}

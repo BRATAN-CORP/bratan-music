@@ -43,6 +43,7 @@ interface InFlightTrack {
   source: string;
   artistId?: string;
   artistName: string;
+  artists?: { id: string; name: string }[];
   title: string;
   albumId?: string;
   coverUrl?: string;
@@ -71,6 +72,7 @@ export function usePlayHistoryLogger() {
           source: prev.source,
           artistId: prev.artistId,
           artistName: prev.artistName,
+          artists: prev.artists,
           title: prev.title,
           albumId: prev.albumId,
           coverUrl: prev.coverUrl,
@@ -146,6 +148,13 @@ export function usePlayHistoryLogger() {
           source: t.source ?? 'tidal',
           artistId: t.artistId,
           artistName: t.artist,
+          // Snapshot the full credits list so a multi-artist play
+          // ("A, B") lands in history with both ids preserved — each
+          // name then renders as its own link in the recent-plays
+          // strip on the home page.
+          artists: Array.isArray(t.artists) && t.artists.length > 0
+            ? t.artists.map((a) => ({ id: a.id, name: a.name }))
+            : undefined,
           title: t.title,
           albumId: t.albumId,
           coverUrl: t.coverUrl,

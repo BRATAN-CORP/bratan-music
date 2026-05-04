@@ -266,44 +266,49 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
 
   previous: () => {
     const { queue, currentTrack, progress, _seekToZero, repeat } = get();
-    // Within the first ~3s of a track, "previous" rewinds to 0 to
-    // match the standard music-app idiom. After that, fall through
-    // to the actual neighbour-walking logic below.
-    if (progress > 3) {
-      set({ progress: 0, _seekToZero: _seekToZero + 1 });
+    // First, see whether there is an actual previous track to walk to
+    // (skipping banned neighbours). If there is, "back" always goes
+    // there — the user expects "back" to mean "go to the previous
+    // song", not "rewind the current one". The classic 3s-rewind
+    // idiom (Spotify et al) is preserved as a fallback for the case
+    // where there is no valid neighbour to walk to (first track of
+    // the queue, or every earlier track is banned).
+    let target: Track | null = null;
+    if (queue.length > 0) {
+      const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
+      let probe = startIdx;
+      for (let attempts = 0; attempts < queue.length; attempts++) {
+        let prevIdx: number;
+        if (probe > 0) {
+          prevIdx = probe - 1;
+        } else if (repeat === 'all') {
+          prevIdx = queue.length - 1;
+        } else {
+          break;
+        }
+        const candidate = queue[prevIdx];
+        if (!candidate) break;
+        if (!isBanned(candidate)) {
+          target = candidate;
+          break;
+        }
+        probe = prevIdx;
+        // Bailout for the pathological "every track is banned" case
+        // under repeat='all' so the loop can't run forever.
+        if (probe === startIdx && attempts > 0) break;
+      }
+    }
+
+    if (target) {
+      set({ currentTrack: target, isPlaying: true, progress: 0 });
       return;
     }
-    if (!queue.length) return;
-    const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
-    // Mirror the skip-on-play behaviour from `next()` so a banned
-    // neighbour can't strand the player. Without this, a queue like
-    // [A, B(banned), C] auto-skips forward through B on play, but
-    // pressing "previous" from C lands the user on B — the audio
-    // engine then loads B's stream (it has no skip-on-play of its
-    // own), the React render races with the next pruning pass, and
-    // transport buttons stop responding until reload. Walking
-    // backward through banned items keeps the queue and the audio
-    // engine in lockstep on the still-valid neighbours only.
-    let probe = startIdx;
-    for (let attempts = 0; attempts < queue.length; attempts++) {
-      let prevIdx: number;
-      if (probe > 0) {
-        prevIdx = probe - 1;
-      } else if (repeat === 'all') {
-        prevIdx = queue.length - 1;
-      } else {
-        return;
-      }
-      const candidate = queue[prevIdx];
-      if (!candidate) return;
-      if (!isBanned(candidate)) {
-        set({ currentTrack: candidate, isPlaying: true, progress: 0 });
-        return;
-      }
-      probe = prevIdx;
-      // Bailout for the pathological "every track is banned" case
-      // under repeat='all' so the loop can't run forever.
-      if (probe === startIdx && attempts > 0) return;
+
+    // No valid neighbour — fall back to "rewind current to 0" if the
+    // current track is more than 3s in. Within the first 3 seconds we
+    // intentionally do nothing (no neighbour, nothing to rewind).
+    if (progress > 3) {
+      set({ progress: 0, _seekToZero: _seekToZero + 1 });
     }
   },
 
