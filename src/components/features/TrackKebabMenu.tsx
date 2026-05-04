@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { PopoverMenu, MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
-import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { useDislikesStore } from '@/store/dislikes';
@@ -104,9 +104,17 @@ export function TrackKebabMenu({
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpenState] = useState(false);
+  // The kebab can drill into a per-artist picker for multi-credit
+  // tracks. We track that as a sub-view of the same popover (rather
+  // than a second nested popover) so position/width/outside-click
+  // handling stay in lockstep — the picker simply replaces the main
+  // rows in place. Reset back to 'main' whenever the popover closes
+  // so the next open always lands on the standard list.
+  const [menuView, setMenuView] = useState<ArtistDislikeMenuView>('main');
   const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
     setOpenState((prev) => {
       const value = typeof next === 'function' ? (next as (v: boolean) => boolean)(prev) : next;
+      if (!value) setMenuView('main');
       onOpenChange?.(value);
       return value;
     });
@@ -248,96 +256,106 @@ export function TrackKebabMenu({
         align={align}
         width={width}
       >
-        {header && (
+        {menuView === 'artist-picker' ? (
+          <ArtistDislikeMenuItems
+            track={track}
+            view="artist-picker"
+            onViewChange={setMenuView}
+            onAction={close}
+          />
+        ) : (
           <>
-            {header}
-            <MenuDivider />
-          </>
-        )}
+            {header && (
+              <>
+                {header}
+                <MenuDivider />
+              </>
+            )}
 
-        {isAuthed && (
-          <MenuItem onClick={handleAddToPlaylist} icon={<ListPlus size={14} />}>
-            {t('track.addToPlaylist')}
-          </MenuItem>
-        )}
-        <MenuItem onClick={handlePlayNext} icon={<ListOrdered size={14} />}>
-          {t('track.playNext')}
-        </MenuItem>
-        <MenuItem onClick={handleAddToQueue} icon={<ListOrdered size={14} />}>
-          {t('track.addToQueue')}
-        </MenuItem>
-        <MenuItem
-          onClick={handleStartRadio}
-          disabled={radioBusy}
-          icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
-        >
-          {t('track.startRadio')}
-        </MenuItem>
-
-        <MenuDivider />
-
-        <MenuItem
-          onClick={handleShare}
-          icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
-        >
-          {shareCopied ? t('track.shareCopied') : t('track.share')}
-        </MenuItem>
-        <MenuItem
-          onClick={handleDownload}
-          disabled={downloading}
-          icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-        >
-          {t('track.download')}
-        </MenuItem>
-        {isAuthed && (
-          <MenuItem onClick={handleOpenOverride} icon={<Upload size={14} />}>
-            {t('track.uploadOwn')}
-          </MenuItem>
-        )}
-
-        {(track.artistId || track.albumId) && <MenuDivider />}
-        {track.artistId && (
-          <MenuItem onClick={handleGoToArtist} icon={<UserIcon size={14} />}>
-            {t('track.goToArtist')}
-          </MenuItem>
-        )}
-        {track.albumId && (
-          <MenuItem onClick={handleGoToAlbum} icon={<Disc size={14} />}>
-            {t('track.goToAlbum')}
-          </MenuItem>
-        )}
-
-        {isAuthed && (
-          <>
-            <MenuDivider />
-            <MenuItem
-              onClick={handleToggleTrackDislike}
-              disabled={toggleDislike.isPending}
-              icon={trackDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
-            >
-              {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
+            {isAuthed && (
+              <MenuItem onClick={handleAddToPlaylist} icon={<ListPlus size={14} />}>
+                {t('track.addToPlaylist')}
+              </MenuItem>
+            )}
+            <MenuItem onClick={handlePlayNext} icon={<ListOrdered size={14} />}>
+              {t('track.playNext')}
             </MenuItem>
-            <ArtistDislikeMenuItems
-              track={track}
-              triggerRef={triggerRef}
-              anchor={anchor}
-              align={align}
-              onAction={close}
-            />
-          </>
-        )}
-
-        {showRemove && (
-          <>
-            <MenuDivider />
-            <MenuItem
-              onClick={handleRemoveFromPlaylist}
-              disabled={removeFromPlaylist.isPending}
-              icon={<Trash2 size={14} className="text-[var(--color-danger)]" />}
-              className="text-[var(--color-danger)] hover:bg-[var(--color-danger-muted)]"
-            >
-              {t('track.removeFromPlaylist')}
+            <MenuItem onClick={handleAddToQueue} icon={<ListOrdered size={14} />}>
+              {t('track.addToQueue')}
             </MenuItem>
+            <MenuItem
+              onClick={handleStartRadio}
+              disabled={radioBusy}
+              icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+            >
+              {t('track.startRadio')}
+            </MenuItem>
+
+            <MenuDivider />
+
+            <MenuItem
+              onClick={handleShare}
+              icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
+            >
+              {shareCopied ? t('track.shareCopied') : t('track.share')}
+            </MenuItem>
+            <MenuItem
+              onClick={handleDownload}
+              disabled={downloading}
+              icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            >
+              {t('track.download')}
+            </MenuItem>
+            {isAuthed && (
+              <MenuItem onClick={handleOpenOverride} icon={<Upload size={14} />}>
+                {t('track.uploadOwn')}
+              </MenuItem>
+            )}
+
+            {(track.artistId || track.albumId) && <MenuDivider />}
+            {track.artistId && (
+              <MenuItem onClick={handleGoToArtist} icon={<UserIcon size={14} />}>
+                {t('track.goToArtist')}
+              </MenuItem>
+            )}
+            {track.albumId && (
+              <MenuItem onClick={handleGoToAlbum} icon={<Disc size={14} />}>
+                {t('track.goToAlbum')}
+              </MenuItem>
+            )}
+
+            {isAuthed && (
+              <>
+                <MenuDivider />
+                <MenuItem
+                  onClick={handleToggleTrackDislike}
+                  disabled={toggleDislike.isPending}
+                  icon={trackDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+                >
+                  {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
+                </MenuItem>
+                <ArtistDislikeMenuItems
+                  track={track}
+                  view="main"
+                  onViewChange={setMenuView}
+                  onAction={close}
+                />
+              </>
+            )}
+
+            {showRemove && (
+              <>
+                <MenuDivider />
+                <MenuItem
+                  onClick={handleRemoveFromPlaylist}
+                  disabled={removeFromPlaylist.isPending}
+                  icon={<Trash2 size={14} className="text-[var(--color-danger)]" />}
+                  className="text-[var(--color-danger)] hover:bg-[var(--color-danger-muted)]"
+                >
+                  {t('track.removeFromPlaylist')}
+                </MenuItem>
+              </>
+            )}
           </>
         )}
       </PopoverMenu>

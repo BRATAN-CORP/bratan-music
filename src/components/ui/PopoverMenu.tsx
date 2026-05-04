@@ -73,10 +73,20 @@ export function PopoverMenu({
     const raf = requestAnimationFrame(update);
     window.addEventListener('scroll', update, true);
     window.addEventListener('resize', update);
+    // Re-anchor whenever the menu's own size changes (e.g. the children
+    // swap to a different inner view). With `anchor="top"` the menu's
+    // top coordinate depends on its height, so without this the menu
+    // would visually drift down when its content grew. We reuse the
+    // same `update()` so the viewport-clamping logic stays in one place.
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => update())
+      : null;
+    if (ro && menuRef.current) ro.observe(menuRef.current);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
+      ro?.disconnect();
     };
   }, [open, anchor, align, offset, width, triggerRef]);
 

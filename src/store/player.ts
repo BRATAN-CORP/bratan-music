@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { isTrackBanned, filterTrackBanned } from '@/store/dislikes';
+import { isTrackBanned, isBanned, filterTrackBanned } from '@/store/dislikes';
 
 interface Track {
   id: string;
@@ -203,6 +203,15 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     // Skip-on-play: if the next pick is banned, keep scanning. We
     // bound the scan at queue.length so a fully-banned queue can't
     // hang the engine — worst case we exhaust every slot and bail.
+    //
+    // Skips both explicit track-id bans AND artist-level bans —
+    // banning an artist with `не рекомендовать` should not just
+    // suppress them in recommendations, it should also stop
+    // auto-advance from landing on them. The queue itself still
+    // contains the row (banning an artist intentionally doesn't
+    // prune already-queued items — see `pruneBanned`), so the user
+    // can still play them by clicking the queue entry directly
+    // (`jumpToQueue`); we just walk past them on natural flow.
     let probe = startIdx;
     for (let attempts = 0; attempts < queue.length; attempts++) {
       let nextIdx: number;
@@ -217,7 +226,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       }
       const candidate = queue[nextIdx];
       if (!candidate) return;
-      if (!isTrackBanned(candidate)) {
+      if (!isBanned(candidate)) {
         set({ currentTrack: candidate, isPlaying: true, progress: 0 });
         return;
       }
@@ -246,7 +255,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       }
       const candidate = queue[nextIdx];
       if (!candidate) return;
-      if (!isTrackBanned(candidate)) {
+      if (!isBanned(candidate)) {
         set({ currentTrack: candidate, isPlaying: true, progress: 0 });
         return;
       }
@@ -287,7 +296,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       }
       const candidate = queue[prevIdx];
       if (!candidate) return;
-      if (!isTrackBanned(candidate)) {
+      if (!isBanned(candidate)) {
         set({ currentTrack: candidate, isPlaying: true, progress: 0 });
         return;
       }

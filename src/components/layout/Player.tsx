@@ -20,7 +20,7 @@ import { useAuthStore } from '@/store/auth';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
-import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
@@ -94,7 +94,18 @@ export function Player() {
   const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
   const toggleDislike = useToggleDislike();
 
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpenRaw] = useState(false);
+  // The kebab can drill into a per-artist picker for multi-credit
+  // tracks. The picker reuses the same popover so position and
+  // outside-click handling don't change between views.
+  const [menuView, setMenuView] = useState<ArtistDislikeMenuView>('main');
+  const setMenuOpen = (next: boolean | ((v: boolean) => boolean)) => {
+    setMenuOpenRaw((prev) => {
+      const value = typeof next === 'function' ? (next as (v: boolean) => boolean)(prev) : next;
+      if (!value) setMenuView('main');
+      return value;
+    });
+  };
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   // Mini-player timeline thumb visibility. The thumb is rendered as a
   // sibling of the clipped player surface so it can extend above the
@@ -441,6 +452,15 @@ export function Player() {
                 align="end"
                 width={224}
               >
+                {menuView === 'artist-picker' ? (
+                  <ArtistDislikeMenuItems
+                    track={currentTrack}
+                    view="artist-picker"
+                    onViewChange={setMenuView}
+                    onAction={() => setMenuOpen(false)}
+                  />
+                ) : (
+                  <>
                 {/* Shuffle + repeat — surfaced inside the kebab on narrow
                     widths where the inline buttons are hidden. md+ keeps
                     them as the dedicated icon buttons in the player row
@@ -530,10 +550,12 @@ export function Player() {
                     </MenuItem>
                     <ArtistDislikeMenuItems
                       track={currentTrack}
-                      triggerRef={menuTriggerRef}
-                      anchor="top"
+                      view="main"
+                      onViewChange={setMenuView}
                       onAction={() => setMenuOpen(false)}
                     />
+                  </>
+                )}
                   </>
                 )}
               </PopoverMenu>
