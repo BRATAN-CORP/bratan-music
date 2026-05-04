@@ -852,7 +852,8 @@
       "ban": "Забанить",
       "banPlaceholder": "Причина бана (необязательно, до 280 символов)",
       "banConfirm": "Забанить",
-      "cancel": "Отмена"
+      "cancel": "Отмена",
+      "openDetails": "Открыть карточку пользователя"
     },
     "pagination": {
       "range": "{start}–{end} из {total}",
@@ -864,6 +865,64 @@
       "minutes": "{n}м назад",
       "hours": "{n}ч назад",
       "days": "{n}д назад"
+    },
+    "detail": {
+      "title": "Карточка пользователя",
+      "loading": "Грузим статистику…",
+      "error": "Не удалось загрузить статистику",
+      "subActive": "Подписка активна",
+      "banned": "Забанен",
+      "no": "нет",
+      "id": "ID",
+      "username": "Username",
+      "joined": "Зарегистрирован",
+      "updated": "Обновлён",
+      "lastPlayed": "Последнее прослушивание",
+      "lastSession": "Последняя сессия",
+      "tour": "Тур пройден",
+      "banDetails": "Бан",
+      "section": {
+        "storage": "Хранилище",
+        "library": "Библиотека",
+        "listening": "Прослушивания",
+        "subscription": "Подписки",
+        "sessions": "Сессии",
+        "preferences": "Настройки"
+      },
+      "storage": {
+        "uploads": "Загруженные треки",
+        "overrides": "Подмены треков",
+        "total": "Итого в R2",
+        "totalSub": "uploads + overrides"
+      },
+      "library": {
+        "playlists": "Плейлисты",
+        "playlistsSub": "{created} своих · {liked} лайкнутых",
+        "tracksInPlaylists": "Треков в плейлистах",
+        "albums": "Альбомы",
+        "artists": "Артисты",
+        "dislikes": "Дизлайки"
+      },
+      "listen": {
+        "total": "Всего плеев",
+        "last7d": "За 7 дней",
+        "last30d": "За 30 дней",
+        "bySource": "По источнику",
+        "recent": "Последние 20 плеев"
+      },
+      "sub": {
+        "current": "Текущая подписка",
+        "expiresAt": "Истекает",
+        "none": "Активной подписки нет.",
+        "empty": "История подписок пуста."
+      },
+      "sessions": {
+        "active": "Активные сессии",
+        "lastCreated": "Последний логин"
+      },
+      "prefs": {
+        "empty": "Настроек нет."
+      }
     }
   },
   "share": {
