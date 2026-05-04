@@ -5,6 +5,7 @@ import { usePlayerStore } from '@/store/player';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
 import { useT } from '@/i18n';
+import { toast } from '@/store/toast';
 
 interface TrackOverrideModalProps {
   open: boolean;
@@ -24,7 +25,6 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
   const t = useT();
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<OverrideStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -35,11 +35,10 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setError(null);
     setStatusLoading(true);
     api.get<OverrideStatus>(`/tracks/${trackId}/override`)
       .then((data) => { if (!cancelled) setStatus(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : t('override.errorGeneric')); })
+      .catch((err) => { if (!cancelled) toast.error(err instanceof Error ? err.message : t('override.errorGeneric')); })
       .finally(() => { if (!cancelled) setStatusLoading(false); });
     return () => { cancelled = true; };
     // `t` is intentionally omitted: re-running the effect on locale change
@@ -55,8 +54,6 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
 
   const handleUpload = async (file: File) => {
     setUploading(true);
-    setError(null);
-
     try {
       const res = await fetch(`${API_BASE}/tracks/${trackId}/override`, {
         method: 'PUT',
@@ -76,7 +73,7 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
       setStatus({ exists: true, override: { mime_type: file.type, size_bytes: file.size } });
       refreshStream();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('override.errorGeneric'));
+      toast.error(err instanceof Error ? err.message : t('override.errorGeneric'));
     } finally {
       setUploading(false);
     }
@@ -84,13 +81,12 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
 
   const handleDelete = async () => {
     setDeleting(true);
-    setError(null);
     try {
       await api.delete(`/tracks/${trackId}/override`);
       setStatus({ exists: false });
       refreshStream();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('override.errorGeneric'));
+      toast.error(err instanceof Error ? err.message : t('override.errorGeneric'));
     } finally {
       setDeleting(false);
     }
@@ -183,10 +179,6 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
               )}
             </div>
           </>
-        )}
-
-        {error && (
-          <p className="mt-3 text-center text-xs text-[var(--color-danger)]">{error}</p>
         )}
       </div>
     </div>

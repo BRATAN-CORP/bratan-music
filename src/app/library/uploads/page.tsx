@@ -16,6 +16,7 @@ import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { EditUploadDialog } from '@/components/features/EditUploadDialog';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { useT } from '@/i18n';
+import { toast } from '@/store/toast';
 
 export function UploadsPage() {
   const t = useT();
@@ -32,11 +33,9 @@ export function UploadsPage() {
   const [progress, setProgress] = useState<number | null>(null);
   const [editing, setEditing] = useState<UploadTrack | null>(null);
   const [addingToPlaylist, setAddingToPlaylist] = useState<UploadTrack | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const onPicked = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    setError(null);
     for (const file of Array.from(files)) {
       try {
         const duration = await probeAudioDuration(file);
@@ -46,7 +45,7 @@ export function UploadsPage() {
           onProgress: setProgress,
         });
       } catch (e) {
-        setError(e instanceof Error ? e.message : t('uploads.errorUpload'));
+        toast.error(e instanceof Error ? e.message : t('uploads.errorUpload'));
       }
     }
     setProgress(null);
@@ -106,12 +105,6 @@ export function UploadsPage() {
             }}
           />
         </div>
-
-        {error && (
-          <div className="rounded-[var(--radius-md)] border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            {error}
-          </div>
-        )}
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">{t('uploads.loading')}</p>

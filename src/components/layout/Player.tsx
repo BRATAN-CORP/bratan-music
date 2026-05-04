@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
-  Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, AlertTriangle, Heart,
+  Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, Heart,
   MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
   Download, Upload,
 } from 'lucide-react';
@@ -22,6 +22,7 @@ import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
+import { toast } from '@/store/toast';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -53,7 +54,7 @@ export function Player() {
     currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
     shuffle, toggleShuffle, repeat, cycleRepeat,
-    duration, error, openFullscreen,
+    duration, openFullscreen,
   } = usePlayerStore();
 
   const { progress, seek } = useAudioPlayer();
@@ -157,11 +158,9 @@ export function Player() {
   };
 
   const [radioBusy, setRadioBusy] = useState(false);
-  const [radioError, setRadioError] = useState<string | null>(null);
   const handleStartRadio = async () => {
     if (!currentTrack || radioBusy) return;
     setRadioBusy(true);
-    setRadioError(null);
     try {
       const seed: Track = {
         id: currentTrack.id,
@@ -176,8 +175,9 @@ export function Player() {
       await startTrackRadio(seed);
       setMenuOpen(false);
     } catch (err) {
-      setRadioError(err instanceof Error ? err.message : t('player.radioFailed'));
-      window.setTimeout(() => setRadioError(null), 4000);
+      // Routed through the global toast surface — no more inline
+      // banner stuffed into the player chrome.
+      toast.error(err instanceof Error ? err.message : t('player.radioFailed'));
     } finally {
       setRadioBusy(false);
     }
@@ -201,17 +201,12 @@ export function Player() {
           style={{ height: 'var(--player-height)' }}
         >
           {/* Visible surface — clipped + rounded + liquid-glass. Holds the
-              error banner, the thin rail timeline (h-1 / h-1.5 on hover)
-              flush with the top edge as before, and the main mini-player
-              row. Children are clipped against the rounded corners so the
-              bar fill / cover thumbnail respect the bezel. */}
+              thin rail timeline (h-1 / h-1.5 on hover) flush with the top
+              edge as before, and the main mini-player row. Errors used to
+              live as an inline banner up here; they now fly into the
+              global ToastHost in the top-left corner so playback chrome
+              stays stable as the audio engine retries / falls back. */}
           <div className="absolute inset-0 flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass">
-            {(error || radioError) && (
-              <div className="flex items-center gap-2 bg-[var(--color-danger-muted)] px-4 py-1.5 text-xs text-[var(--color-danger)]">
-                <AlertTriangle size={12} className="shrink-0" />
-                <span className="truncate">{radioError || error}</span>
-              </div>
-            )}
 
             {/* Timeline rail (and its full-width hit area). Identical to
                 the historical mini-player: a 1 px bar flush with the top

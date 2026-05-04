@@ -227,7 +227,22 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     }),
   setProgress: (progress) => set({ progress }),
   setDuration: (duration) => set({ duration }),
-  setError: (error) => set({ error }),
+  // We no longer surface playback errors via an inline banner inside
+  // the mini- and fullscreen-player — that broke the visual rhythm of
+  // the player every time something went wrong (especially common
+  // during long sessions where transient stream errors are normal).
+  // Instead we route through the global toast surface so all
+  // user-facing errors live in one corner of the screen and disappear
+  // on their own. The `error` field is kept on the store so anything
+  // else relying on it (e.g. cleanup branches that treat a non-null
+  // error as "we paused due to a problem") keeps working.
+  setError: (error) => {
+    set({ error });
+    if (error) {
+      // Lazy-import to break the cyclic dep risk between stores.
+      import('@/store/toast').then(({ toast }) => toast.error(error));
+    }
+  },
   openFullscreen: () => set({ fullscreen: true }),
   closeFullscreen: () => set({ fullscreen: false }),
   reset: () => set({
