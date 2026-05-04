@@ -25,6 +25,7 @@ import { startTrackRadio } from '@/lib/trackRadio';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
+import { toast } from '@/store/toast';
 
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
@@ -39,7 +40,7 @@ export function FullscreenPlayer() {
     currentTrack, isPlaying, togglePlay, nextManual, previous,
     muted, toggleMute, volume, setVolume,
     shuffle, toggleShuffle, repeat, cycleRepeat,
-    duration, progress, fullscreen, closeFullscreen, error,
+    duration, progress, fullscreen, closeFullscreen,
   } = usePlayerStore();
   // IMPORTANT: do NOT call `useAudioPlayer()` here. The hook owns the
   // singleton audio engine — every effect (track-change, play/pause,
@@ -84,7 +85,6 @@ export function FullscreenPlayer() {
   const [addToPlaylistOpen, setAddToPlaylistOpen] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [radioBusy, setRadioBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
@@ -163,8 +163,9 @@ export function FullscreenPlayer() {
       await startTrackRadio(seed);
     } catch (err) {
       console.error('[radio]', err);
-      setDownloadError(err instanceof Error ? err.message : t('fullscreenPlayer.radioFailed'));
-      window.setTimeout(() => setDownloadError(null), 4000);
+      // Routed through the global toast surface — no more inline pill
+      // hijacking the cover area when something goes wrong.
+      toast.error(err instanceof Error ? err.message : t('fullscreenPlayer.radioFailed'));
     } finally {
       setRadioBusy(false);
     }
@@ -173,14 +174,11 @@ export function FullscreenPlayer() {
   const handleDownload = async () => {
     if (!currentTrack || downloading) return;
     setDownloading(true);
-    setDownloadError(null);
     try {
       await downloadTrack(currentTrack);
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('fullscreenPlayer.downloadFailed');
       console.error('[download]', err);
-      setDownloadError(message);
-      window.setTimeout(() => setDownloadError(null), 5000);
+      toast.error(err instanceof Error ? err.message : t('fullscreenPlayer.downloadFailed'));
     } finally {
       setDownloading(false);
     }
@@ -962,11 +960,6 @@ export function FullscreenPlayer() {
                     <Marquee text={currentTrack.artist} />
                   </div>
                 )}
-                {error && (
-                  <p className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]">
-                    {error}
-                  </p>
-                )}
               </div>
 
               <Button
@@ -1114,18 +1107,6 @@ export function FullscreenPlayer() {
                 </div>
               </div>
             )}
-            <AnimatePresence>
-              {downloadError && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  className="rounded-full bg-[var(--color-danger-muted)] px-3 py-1 text-xs text-[var(--color-danger)]"
-                >
-                  {downloadError}
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
 
           {/* Desktop side-panel: positioned absolutely over the right

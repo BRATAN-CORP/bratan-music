@@ -14,6 +14,7 @@ import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { OnboardingTour } from '@/components/features/OnboardingTour';
 import { RoomConnectedBadge } from '@/components/features/RoomConnectedBadge';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
+import { ToastHost } from '@/components/ui/ToastHost';
 import { LandingPage } from '@/app/landing/page';
 import { HomePage } from '@/app/home/page';
 import { useAuthStore } from '@/store/auth';
@@ -131,6 +132,7 @@ function AppLayout() {
       <RoomConnectedBadge />
       <QuickPrefsBar />
       <GlassFilter />
+      <ToastHost />
     </div>
   );
 }

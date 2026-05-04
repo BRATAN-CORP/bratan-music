@@ -41,6 +41,7 @@ import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import type { Track } from '@/types';
 import { useT, type TranslationKey } from '@/i18n';
+import { toast } from '@/store/toast';
 
 type Translate = ReturnType<typeof useT>;
 
@@ -234,7 +235,6 @@ function WaveHero({
 }) {
   const t = useT();
   const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const previewQ = useQuery({
     queryKey: ['recommendations', 'wave-preview'],
@@ -259,11 +259,10 @@ function WaveHero({
       return;
     }
     setStarting(true);
-    setError(null);
     try {
       await startMyWave();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('home.waveError'));
+      toast.error(err instanceof Error ? err.message : t('home.waveError'));
     } finally {
       setStarting(false);
     }
@@ -360,9 +359,6 @@ function WaveHero({
                 </Button>
               </div>
 
-              {error ? (
-                <p className="text-sm text-[var(--color-danger)]">{error}</p>
-              ) : null}
             </div>
 
             <div className="hidden lg:block transition-transform duration-700 group-hover:scale-105">

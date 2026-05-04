@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useRemovePlaylistCover, useSetPlaylistCover } from '@/hooks/useLibrary';
 import { resizeImageToDataUrl } from '@/lib/imageResize';
 import { useT } from '@/i18n';
+import { toast } from '@/store/toast';
 
 interface PlaylistCoverButtonProps {
   playlistId: string;
@@ -19,27 +20,24 @@ export function PlaylistCoverButton({
   const inputRef = useRef<HTMLInputElement>(null);
   const setCover = useSetPlaylistCover();
   const removeCover = useRemovePlaylistCover();
-  const [error, setError] = useState<string | null>(null);
   const busy = setCover.isPending || removeCover.isPending;
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
-    setError(null);
     try {
       const dataUrl = await resizeImageToDataUrl(file);
       await setCover.mutateAsync({ id: playlistId, dataUrl });
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('cover.errorUpload'));
+      toast.error(e instanceof Error ? e.message : t('cover.errorUpload'));
     }
   };
 
   const handleRemove = async () => {
     if (!hasCover) return;
-    setError(null);
     try {
       await removeCover.mutateAsync(playlistId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('cover.errorGeneric'));
+      toast.error(e instanceof Error ? e.message : t('cover.errorGeneric'));
     }
   };
 
@@ -80,9 +78,6 @@ export function PlaylistCoverButton({
           </button>
         )}
       </div>
-      {error && (
-        <p className="text-xs text-[var(--color-danger)]">{error}</p>
-      )}
     </div>
   );
 }

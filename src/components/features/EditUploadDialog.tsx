@@ -5,6 +5,7 @@ import { useReplaceUploadFile, useUpdateUpload, type UploadTrack, probeAudioDura
 import { resizeImageToDataUrl } from '@/lib/imageResize';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n';
+import { toast } from '@/store/toast';
 
 interface Props {
   upload: UploadTrack;
@@ -18,7 +19,6 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
   const [artist, setArtist] = useState(upload.artist);
   const [album, setAlbum] = useState(upload.album ?? '');
   const [cover, setCover] = useState<string | null>(upload.coverUrl ?? null);
-  const [error, setError] = useState<string | null>(null);
   const [replaceProgress, setReplaceProgress] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -32,12 +32,10 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
     setArtist(upload.artist);
     setAlbum(upload.album ?? '');
     setCover(upload.coverUrl ?? null);
-    setError(null);
     setReplaceProgress(null);
   }, [open, upload.id, upload.title, upload.artist, upload.album, upload.coverUrl]);
 
   const handleSave = async () => {
-    setError(null);
     try {
       await update.mutateAsync({
         id: upload.rawId,
@@ -48,22 +46,20 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
       });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('editUpload.errorSave'));
+      toast.error(e instanceof Error ? e.message : t('editUpload.errorSave'));
     }
   };
 
   const onCoverPicked = async (file: File) => {
-    setError(null);
     try {
       const dataUrl = await resizeImageToDataUrl(file, 512);
       setCover(dataUrl);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('editUpload.errorImage'));
+      toast.error(e instanceof Error ? e.message : t('editUpload.errorImage'));
     }
   };
 
   const onAudioPicked = async (file: File) => {
-    setError(null);
     try {
       const duration = await probeAudioDuration(file);
       await replaceFile.mutateAsync({
@@ -75,7 +71,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
       setReplaceProgress(null);
     } catch (e) {
       setReplaceProgress(null);
-      setError(e instanceof Error ? e.message : t('editUpload.errorReplace'));
+      toast.error(e instanceof Error ? e.message : t('editUpload.errorReplace'));
     }
   };
 
@@ -212,8 +208,6 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
                 }}
               />
             </div>
-
-            {error && <p className="text-xs text-red-400">{error}</p>}
 
             <div className="flex items-center justify-end gap-2">
               <Button variant="ghost" onClick={onClose}>{t('editUpload.cancel')}</Button>
