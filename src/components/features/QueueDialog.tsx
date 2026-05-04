@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, Reorder, useReducedMotion } from 'motion/react';
-import { GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react';
+import { Ban, GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useT } from '@/i18n';
 
 interface QueueDialogProps {
@@ -151,6 +152,7 @@ function QueueRow({
   onRemove,
 }: RowProps) {
   const t = useT();
+  const banned = useIsTrackBanned(track);
   return (
     <Reorder.Item
       value={track}
@@ -160,6 +162,8 @@ function QueueRow({
       // bounce-free curve, but the dragged item snaps tightly to the
       // pointer so it doesn't feel rubbery.
       transition={{ type: 'spring', stiffness: 600, damping: 50, mass: 1 }}
+      animate={{ opacity: banned && !active ? 0.45 : 1 }}
+      whileHover={banned && !active ? { opacity: 1 } : undefined}
       whileDrag={{
         scale: 1.03,
         boxShadow: '0 18px 36px -12px rgba(0,0,0,0.45)',
@@ -173,6 +177,7 @@ function QueueRow({
           ? 'bg-[var(--color-hover-overlay-strong)]'
           : 'hover:bg-[var(--color-hover-overlay-strong)] focus-within:bg-[var(--color-hover-overlay-strong)]',
         dragging ? 'shadow-lg' : '',
+        banned && !active ? 'saturate-50' : '',
       ].join(' ')}
     >
       <span
@@ -198,9 +203,18 @@ function QueueRow({
         )}
         <div className="min-w-0">
           <p
-            className={`truncate text-sm ${active ? 'font-semibold text-[var(--color-accent)]' : 'font-medium'}`}
+            className={`flex items-center gap-1.5 truncate text-sm ${active ? 'font-semibold text-[var(--color-accent)]' : 'font-medium'}`}
           >
-            {track.title}
+            {banned && (
+              <span
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/70"
+                title={t('track.bannedHint')}
+                aria-label={t('track.bannedHint')}
+              >
+                <Ban size={12} />
+              </span>
+            )}
+            <span className="truncate">{track.title}</span>
           </p>
           <p className="truncate text-xs text-muted-foreground">
             <ArtistLinks

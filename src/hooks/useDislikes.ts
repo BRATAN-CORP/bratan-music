@@ -98,7 +98,13 @@ export function useDislikesBootstrap() {
   const q = useDislikesQuery();
   const setAll = useDislikesStore((s) => s.setAll);
   useEffect(() => {
-    if (q.data) setAll(q.data);
+    if (!q.data) return;
+    setAll(q.data);
+    // The persisted player queue may pre-date the user's most recent
+    // bans (they could have been added on another device, or before
+    // a sync resolved). Prune any banned items now so they don't
+    // leak into Previous/Next walks or the queue dialog.
+    usePlayerStore.getState().pruneBanned();
   }, [q.data, setAll]);
 }
 

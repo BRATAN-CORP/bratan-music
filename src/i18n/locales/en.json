@@ -409,6 +409,7 @@
     "addToQueue": "Add to queue",
     "playNext": "Play next",
     "share": "Share",
+    "bannedHint": "Hidden from recommendations",
     "removeFromPlaylist": "Remove from playlist",
     "viewQueue": "Queue",
     "lyrics": "Lyrics",
