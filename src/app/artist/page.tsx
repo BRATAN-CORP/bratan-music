@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Pause, Play, Heart, Radio } from 'lucide-react';
+import { Pause, Play, Heart, Radio, Ban, RotateCcw } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
@@ -10,6 +10,9 @@ import { ShareButton } from '@/components/features/ShareButton';
 import { useArtist, useArtistRadio } from '@/hooks/useTrack';
 import { useToggleArtistLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { useDislikesStore } from '@/store/dislikes';
+import { useToggleDislike } from '@/hooks/useDislikes';
+import { toast } from '@/store/toast';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +28,8 @@ export function ArtistPage() {
   const setQueue = usePlayerStore((s) => s.setQueue);
   const artistLike = useToggleArtistLike();
   const liked = artist ? artistLike.isLiked(artist.id) : false;
+  const artistDisliked = useDislikesStore((s) => Boolean(artist?.id && s.artists.has(artist.id)));
+  const toggleDislike = useToggleDislike();
   const reduce = useReducedMotion();
   // Match `ArtistCard`: if Tidal's portrait URL is stale and 404s,
   // swap to the initials tile instead of letting the browser draw
@@ -153,6 +158,41 @@ export function ArtistPage() {
                     aria-label={liked ? t('artistPage.unfollow') : t('artistPage.follow')}
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const wasDisliked = artistDisliked;
+                      toggleDislike.mutate(
+                        { kind: 'artist', id: artist.id, source: 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+                        {
+                          onSuccess: () => {
+                            toast.info(
+                              wasDisliked
+                                ? t('dislike.artistRestored')
+                                : t('dislike.artistHidden', { name: artist.name }),
+                            );
+                          },
+                          onError: (err) => {
+                            toast.error(err instanceof Error ? err.message : t('dislike.failed'));
+                          },
+                        },
+                      );
+                    }}
+                    disabled={toggleDislike.isPending}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
+                      artistDisliked
+                        ? 'border-[var(--color-danger)]/30 bg-[var(--color-danger-muted)] text-[var(--color-danger)]'
+                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                    aria-label={artistDisliked
+                      ? t('dislike.artistUnban', { name: artist.name })
+                      : t('dislike.artistBan', { name: artist.name })}
+                    title={artistDisliked
+                      ? t('dislike.artistUnban', { name: artist.name })
+                      : t('dislike.artistBan', { name: artist.name })}
+                  >
+                    {artistDisliked ? <RotateCcw size={16} /> : <Ban size={16} />}
                   </button>
                   {radio?.items?.length ? (
                     <button

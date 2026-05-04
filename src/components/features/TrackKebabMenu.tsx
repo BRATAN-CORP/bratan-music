@@ -1,8 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Check, Disc, Download, ListOrdered, ListPlus, Loader2,
-  MoreHorizontal, Radio, Share2, Trash2, Upload, User as UserIcon,
+  Ban, Check, Disc, Download, ListOrdered, ListPlus, Loader2,
+  MoreHorizontal, Radio, RotateCcw, Share2, Trash2, Upload, User as UserIcon,
 } from 'lucide-react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
@@ -11,9 +11,12 @@ import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
+import { useDislikesStore } from '@/store/dislikes';
+import { useToggleDislike } from '@/hooks/useDislikes';
 import { useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack, buildTrackShareUrl, copyToClipboard } from '@/lib/trackActions';
+import { toast } from '@/store/toast';
 import { useT } from '@/i18n';
 
 /**
@@ -92,6 +95,10 @@ export function TrackKebabMenu({
 
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+
+  const trackDisliked = useDislikesStore((s) => s.tracks.has(track.id));
+  const artistDisliked = useDislikesStore((s) => Boolean(track.artistId && s.artists.has(track.artistId)));
+  const toggleDislike = useToggleDislike();
 
   const removeFromPlaylist = useRemoveTrackFromPlaylist();
 
@@ -193,6 +200,39 @@ export function TrackKebabMenu({
     close();
   };
 
+  const handleToggleTrackDislike = () => {
+    const wasDisliked = trackDisliked;
+    toggleDislike.mutate(
+      { kind: 'track', id: track.id, source: track.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(wasDisliked ? t('dislike.trackRestored') : t('dislike.trackHidden', { title: track.title }));
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : t('dislike.failed'));
+        },
+      },
+    );
+    close();
+  };
+
+  const handleToggleArtistDislike = () => {
+    if (!track.artistId) return;
+    const wasDisliked = artistDisliked;
+    toggleDislike.mutate(
+      { kind: 'artist', id: track.artistId, source: track.source ?? 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(wasDisliked ? t('dislike.artistRestored') : t('dislike.artistHidden', { name: track.artist }));
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : t('dislike.failed'));
+        },
+      },
+    );
+    close();
+  };
+
   const handleRemoveFromPlaylist = () => {
     if (!playlistId) return;
     removeFromPlaylist.mutate({ playlistId, trackId: track.id });
@@ -282,6 +322,30 @@ export function TrackKebabMenu({
           <MenuItem onClick={handleGoToAlbum} icon={<Disc size={14} />}>
             {t('track.goToAlbum')}
           </MenuItem>
+        )}
+
+        {isAuthed && (
+          <>
+            <MenuDivider />
+            <MenuItem
+              onClick={handleToggleTrackDislike}
+              disabled={toggleDislike.isPending}
+              icon={trackDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+            >
+              {trackDisliked ? t('dislike.trackUnban') : t('dislike.trackBan')}
+            </MenuItem>
+            {track.artistId && (
+              <MenuItem
+                onClick={handleToggleArtistDislike}
+                disabled={toggleDislike.isPending}
+                icon={artistDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+              >
+                {artistDisliked
+                  ? t('dislike.artistUnban', { name: track.artist })
+                  : t('dislike.artistBan', { name: track.artist })}
+              </MenuItem>
+            )}
+          </>
         )}
 
         {showRemove && (

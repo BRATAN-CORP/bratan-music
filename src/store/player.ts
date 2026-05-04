@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { isBanned, filterBanned } from '@/store/dislikes';
 
 interface Track {
   id: string;
@@ -71,6 +72,11 @@ interface PlayerState {
   /** Insert a track immediately after the currently-playing one. */
   playNext: (track: Track) => void;
   removeFromQueue: (trackId: string) => void;
+  /** Drop every queue item the user has just banned (track or
+   *  contributing artist). If the current track itself becomes
+   *  banned, advance to the next still-valid one. Called by the
+   *  dislike mutation right after the optimistic update. */
+  pruneBanned: () => void;
   /** Move a track inside the queue from one index to another. */
   reorderQueue: (from: number, to: number) => void;
   /** Jump straight to the given queue index. */
@@ -126,8 +132,15 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     progress: Math.max(0, progressSec),
     error: null,
   }),
-  setQueue: (tracks) => set({ queue: tracks }),
-  addToQueue: (track) => set((s) => ({ queue: [...s.queue, track] })),
+  setQueue: (tracks) => set({ queue: filterBanned(tracks) }),
+  addToQueue: (track) => set((s) => {
+    // Per user spec: banned tracks shouldn't even enter the queue
+    // ("даже в очередь не добавлялся"). Single tap on a banned
+    // track still works because the play-track callsite uses
+    // `setTrack` directly, which bypasses this filter.
+    if (isBanned(track)) return s;
+    return { queue: [...s.queue, track] };
+  }),
   playNext: (track) => set((s) => {
     const idx = s.queue.findIndex((t) => t.id === s.currentTrack?.id);
     const next = [...s.queue];
@@ -142,6 +155,20 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   removeFromQueue: (trackId) => set((s) => ({
     queue: s.queue.filter((t) => t.id !== trackId),
   })),
+  pruneBanned: () => {
+    const s = get();
+    const cleanQueue = filterBanned(s.queue);
+    const queueChanged = cleanQueue.length !== s.queue.length;
+    const currentBanned = s.currentTrack ? isBanned(s.currentTrack) : false;
+    if (!queueChanged && !currentBanned) return;
+    set({ queue: cleanQueue });
+    if (currentBanned) {
+      // Advance with the same skip-on-play semantics that the audio
+      // engine uses on natural track-end. `next()` honours repeat
+      // mode and recursively skips further banned items.
+      get().next();
+    }
+  },
   reorderQueue: (from, to) => set((s) => {
     if (from === to) return s;
     if (from < 0 || from >= s.queue.length) return s;
@@ -164,38 +191,60 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   next: () => {
     const { queue, currentTrack, shuffle, repeat } = get();
     if (!queue.length) return;
-    const idx = queue.findIndex((t) => t.id === currentTrack?.id);
-    let nextIdx: number;
-    if (shuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
-    } else if (idx < queue.length - 1) {
-      nextIdx = idx + 1;
-    } else if (repeat === 'all') {
-      nextIdx = 0;
-    } else {
-      return;
+    const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
+    // Skip-on-play: if the next pick is banned, keep scanning. We
+    // bound the scan at queue.length so a fully-banned queue can't
+    // hang the engine — worst case we exhaust every slot and bail.
+    let probe = startIdx;
+    for (let attempts = 0; attempts < queue.length; attempts++) {
+      let nextIdx: number;
+      if (shuffle) {
+        nextIdx = Math.floor(Math.random() * queue.length);
+      } else if (probe < queue.length - 1) {
+        nextIdx = probe + 1;
+      } else if (repeat === 'all') {
+        nextIdx = 0;
+      } else {
+        return;
+      }
+      const candidate = queue[nextIdx];
+      if (!candidate) return;
+      if (!isBanned(candidate)) {
+        set({ currentTrack: candidate, isPlaying: true, progress: 0 });
+        return;
+      }
+      probe = nextIdx;
+      // Don't loop forever in repeat='all' if every track is banned.
+      if (probe === startIdx && attempts > 0) return;
     }
-    const nextTrack = queue[nextIdx];
-    if (nextTrack) set({ currentTrack: nextTrack, isPlaying: true, progress: 0 });
   },
 
   nextManual: () => {
     const { queue, currentTrack, shuffle } = get();
     if (!queue.length) return;
-    const idx = queue.findIndex((t) => t.id === currentTrack?.id);
-    let nextIdx: number;
-    if (shuffle) {
-      nextIdx = Math.floor(Math.random() * queue.length);
-    } else if (idx < queue.length - 1) {
-      nextIdx = idx + 1;
-    } else {
-      // End of queue — wrap regardless of repeat mode. The user pressed
-      // skip-forward expecting *something* to play, and the queue is
-      // non-empty.
-      nextIdx = 0;
+    const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
+    let probe = startIdx;
+    for (let attempts = 0; attempts < queue.length; attempts++) {
+      let nextIdx: number;
+      if (shuffle) {
+        nextIdx = Math.floor(Math.random() * queue.length);
+      } else if (probe < queue.length - 1) {
+        nextIdx = probe + 1;
+      } else {
+        // End of queue — wrap regardless of repeat mode. The user
+        // pressed skip-forward expecting *something* to play, and
+        // the queue is non-empty.
+        nextIdx = 0;
+      }
+      const candidate = queue[nextIdx];
+      if (!candidate) return;
+      if (!isBanned(candidate)) {
+        set({ currentTrack: candidate, isPlaying: true, progress: 0 });
+        return;
+      }
+      probe = nextIdx;
+      if (probe === startIdx && attempts > 0) return;
     }
-    const nextTrack = queue[nextIdx];
-    if (nextTrack) set({ currentTrack: nextTrack, isPlaying: true, progress: 0 });
   },
 
   previous: () => {

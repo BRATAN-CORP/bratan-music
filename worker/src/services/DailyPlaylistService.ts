@@ -3,6 +3,7 @@ import type { Track } from '../types/music';
 import { RecommendationService } from './RecommendationService';
 import { TasteService } from './TasteService';
 import { TidalService } from './tidal/TidalService';
+import { loadDislikes, filterTracksByDislikes } from './dislikes';
 
 /**
  * Three daily-playlists per active user:
@@ -159,9 +160,17 @@ export class DailyPlaylistService {
     const today = isoDate(Date.now());
     const out: DailyPlaylist[] = [];
 
+    // Belt-and-braces: the wave-driven variants already filter via
+    // `RecommendationService.rerank`, but the genre-seeded mood variant
+    // pulls straight from explore pages and otherwise wouldn't honour
+    // the user's dislike list. Apply a final filter here so all three
+    // variants stay consistent.
+    const dislikes = await loadDislikes(this.env, userId);
+
     for (const variant of variants) {
       const spec = SPECS[variant];
-      const tracks = await this.buildVariantTracks(variant, userId, profile.completedTrackIds, genreSeeds);
+      const built = await this.buildVariantTracks(variant, userId, profile.completedTrackIds, genreSeeds);
+      const tracks = filterTracksByDislikes(built, dislikes);
       if (tracks.length === 0) continue;
 
       const cover = pickCover(tracks);
