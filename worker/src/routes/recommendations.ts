@@ -68,6 +68,28 @@ recommendations.get('/genre-seeds', async (c) => {
 });
 
 /**
+ * Returns the caller's full dislike list — both banned tracks and
+ * banned artists. The frontend uses this to (a) decorate kebab menus
+ * with "уже скрыт / восстановить" toggles and (b) skip-on-play any
+ * legacy queue items that were added before the user banned the
+ * artist.
+ */
+recommendations.get('/dislikes', async (c) => {
+  const userId = c.get('userId');
+  const res = await c.env.DB
+    .prepare(`SELECT item_id, kind FROM user_dislikes WHERE user_id = ? ORDER BY created_at DESC`)
+    .bind(userId)
+    .all<{ item_id: string; kind: 'track' | 'artist' }>();
+  const tracks: string[] = [];
+  const artists: string[] = [];
+  for (const r of res.results ?? []) {
+    if (r.kind === 'artist') artists.push(r.item_id);
+    else tracks.push(r.item_id);
+  }
+  return c.json({ tracks, artists });
+});
+
+/**
  * Explicit dislike. The frontend hits this from the 3-dot menu's
  * "Не нравится" entry on tracks/artists.
  */

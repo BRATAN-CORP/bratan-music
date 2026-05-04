@@ -368,6 +368,17 @@
       "submit": "Create and add"
     }
   },
+  "dislike": {
+    "trackBan": "Don't recommend this track",
+    "trackUnban": "Restore to recommendations",
+    "artistBan": "Hide artist {name}",
+    "artistUnban": "Restore artist {name}",
+    "trackHidden": "Track \"{title}\" hidden from recommendations",
+    "trackRestored": "Track restored to recommendations",
+    "artistHidden": "Artist {name} hidden from recommendations",
+    "artistRestored": "Artist restored to recommendations",
+    "failed": "Failed to update hidden list"
+  },
   "track": {
     "openMenu": "Open menu",
     "openTrack": "Open track",

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
 import { AiPlaylistService, AiPlaylistError } from '../services/AiPlaylistService';
+import { loadDislikes, filterTracksByDislikes } from '../services/dislikes';
 import type { Track } from '../types/music';
 
 /**
@@ -27,6 +28,7 @@ interface GenerateBody {
 }
 
 aiPlaylists.post('/generate', async (c) => {
+  const userId = c.get('userId');
   const body = await c.req.json<GenerateBody>().catch(() => ({} as GenerateBody));
   const prompt = (body.prompt ?? '').trim();
   if (!prompt) return c.json({ error: 'Промпт обязателен' }, 400);
@@ -35,6 +37,12 @@ aiPlaylists.post('/generate', async (c) => {
   try {
     const svc = new AiPlaylistService(c.env);
     const preview = await svc.generate(prompt, body.size);
+    // Strip user-banned tracks/artists so the preview the user sees
+    // matches what they'd hear if they save+play the playlist; the
+    // recommendation/wave path already does this, AI generation
+    // happens parallel to it and used to leak banned items through.
+    const dislikes = await loadDislikes(c.env, userId);
+    preview.tracks = filterTracksByDislikes(preview.tracks, dislikes);
     return c.json(preview);
   } catch (err) {
     if (err instanceof AiPlaylistError) {
