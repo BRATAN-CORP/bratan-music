@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Download, Heart, Pause, Play, Upload } from 'lucide-react';
+import { Download, Heart, Pause, Play, Upload, Ban } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
 import { useTrackPlayback, useTrackHoverPrefetch } from '@/hooks/usePlaybackSync';
+import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -50,6 +51,11 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   // `isActivePlaying`) as the toggle gate.
   const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
   const hoverPrefetch = useTrackHoverPrefetch();
+  // Dim the row when the track or one of its artists is on the user's
+  // banned list. The row stays interactive (single-tap is still
+  // allowed — that's an explicit override, see store/player.ts) but
+  // the visual weight drops so disliked items recede in long lists.
+  const banned = useIsTrackBanned(track);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -73,10 +79,14 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
     <motion.div
       layout
       initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: banned && !isActive ? 0.45 : 1, y: 0 }}
+      whileHover={banned && !isActive ? { opacity: 1 } : undefined}
       exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: Math.min((index ?? 0) * 0.025, 0.4) }}
-      className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
+      className={
+        'group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary ' +
+        (banned && !isActive ? 'saturate-50' : '')
+      }
       onPointerEnter={() => hoverPrefetch(track)}
       onClick={() => {
         // Active row → toggle play/pause (whether currently playing or
@@ -123,7 +133,18 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{track.title}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+          {banned && (
+            <span
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/70"
+              title={t('track.bannedHint')}
+              aria-label={t('track.bannedHint')}
+            >
+              <Ban size={12} />
+            </span>
+          )}
+          <span className="truncate">{track.title}</span>
+        </p>
         <p className="truncate text-xs text-muted-foreground">
           <ArtistLinks
             artists={track.artists}

@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Download, Heart, Pause, Play, GripVertical, Upload } from 'lucide-react';
+import { Download, Heart, Pause, Play, GripVertical, Upload, Ban } from 'lucide-react';
 import { Reorder, useDragControls, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useAuthStore } from '@/store/auth';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
+import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useCoarsePointer } from '@/hooks/useCoarsePointer';
 import { downloadTrack } from '@/lib/trackActions';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -49,6 +50,7 @@ export function PlaylistTrackItem({
   const liked = isAuthed && isLiked(track.id);
   const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
   const coarse = useCoarsePointer();
+  const banned = useIsTrackBanned(track);
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -122,7 +124,18 @@ export function PlaylistTrackItem({
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className={'truncate text-sm font-medium ' + (isActive ? 'text-[var(--color-accent)]' : '')}>{track.title}</p>
+        <p className={'flex items-center gap-1.5 truncate text-sm font-medium ' + (isActive ? 'text-[var(--color-accent)]' : '')}>
+          {banned && (
+            <span
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/70"
+              title={t('track.bannedHint')}
+              aria-label={t('track.bannedHint')}
+            >
+              <Ban size={12} />
+            </span>
+          )}
+          <span className="truncate">{track.title}</span>
+        </p>
         <p className="truncate text-xs text-muted-foreground">
           <ArtistLinks
             artists={track.artists}
@@ -203,15 +216,18 @@ export function PlaylistTrackItem({
         // bounce-free curve, but the dragged item snaps tightly to the
         // pointer so it doesn't feel rubbery (П5).
         transition={{ type: 'spring', stiffness: 600, damping: 50, mass: 1 }}
+        animate={{ opacity: banned && !isActive ? 0.45 : 1 }}
         whileDrag={{
           scale: 1.02,
           boxShadow: '0 18px 36px -12px rgba(0,0,0,0.45)',
           cursor: 'grabbing',
           zIndex: 5,
         }}
+        whileHover={banned && !isActive ? { opacity: 1 } : undefined}
         style={{ position: 'relative' }}
         className={
-          'group flex cursor-pointer items-center gap-3 border-b border-border bg-[var(--color-bg)] px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary'
+          'group flex cursor-pointer items-center gap-3 border-b border-border bg-[var(--color-bg)] px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary ' +
+          (banned && !isActive ? 'saturate-50' : '')
         }
         onClick={() => {
           if (dragging) return;
@@ -229,7 +245,10 @@ export function PlaylistTrackItem({
 
   return (
     <div
-      className="group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary"
+      className={
+        'group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-[colors,opacity] hover:bg-secondary hover:opacity-100 ' +
+        (banned && !isActive ? 'opacity-50 saturate-50' : '')
+      }
       onClick={() => {
         if (isActive) {
           playOrToggle(track);
