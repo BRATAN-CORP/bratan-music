@@ -71,17 +71,24 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
             aria-hidden
           />
 
-          <div className="fixed inset-0 z-[70] flex items-stretch justify-end pointer-events-none">
+          {/* Layout: bottom-sheet on phones, centred modal on md+, matching
+              QueueDialog / BannedListDialog so admin drill-down reads as
+              the same dialog vocabulary as the rest of the app. The
+              previous right-rail layout (slide-in from x:32, full-height
+              border-l) was an outlier — the user explicitly asked for
+              this card to come from the centre, like the queue. */}
+          <div className="fixed inset-0 z-[70] flex flex-col items-center justify-end md:justify-center pointer-events-none">
             <motion.div
               key="admin-detail-panel"
               role="dialog"
               aria-modal="true"
               aria-label={t('admin.detail.title')}
-              initial={reduce ? false : { opacity: 0, x: 32 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 32, transition: { duration: 0.18 } }}
+              initial={reduce ? false : { opacity: 0, y: 32, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
               transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              className="liquid-glass pointer-events-auto flex h-[100dvh] w-full max-w-[640px] flex-col overflow-hidden border-l border-border bg-card lg:rounded-l-[var(--radius-xl)]"
+              style={{ maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))' }}
+              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(720px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card md:mb-0 md:rounded-[var(--radius-lg)]"
             >
               <DetailHeader
                 title={t('admin.detail.title')}
