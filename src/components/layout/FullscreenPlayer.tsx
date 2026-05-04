@@ -16,7 +16,7 @@ import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel } from '@/components/features/LyricsPanel';
-import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useDislikesStore } from '@/store/dislikes';
@@ -90,7 +90,17 @@ export function FullscreenPlayer() {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [radioBusy, setRadioBusy] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreOpen, setMoreOpenRaw] = useState(false);
+  // The kebab can drill into a per-artist picker for multi-credit
+  // tracks. Picker swaps inside the same popover.
+  const [moreView, setMoreView] = useState<ArtistDislikeMenuView>('main');
+  const setMoreOpen = (next: boolean | ((v: boolean) => boolean)) => {
+    setMoreOpenRaw((prev) => {
+      const value = typeof next === 'function' ? (next as (v: boolean) => boolean)(prev) : next;
+      if (!value) setMoreView('main');
+      return value;
+    });
+  };
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   // Bass-only signals (П6). `amp` is the smoothed envelope (0..~0.6),
   // `kick` is a transient detector that briefly spikes whenever the bass
@@ -481,6 +491,15 @@ export function FullscreenPlayer() {
                 align="end"
                 width={240}
               >
+                {moreView === 'artist-picker' ? (
+                  <ArtistDislikeMenuItems
+                    track={currentTrack}
+                    view="artist-picker"
+                    onViewChange={setMoreView}
+                    onAction={() => setMoreOpen(false)}
+                  />
+                ) : (
+                  <>
                 {/* Mobile-only group: surfaces the four track-side actions
                     that are inline buttons on md+ but collapse here on
                     narrow widths. */}
@@ -590,9 +609,12 @@ export function FullscreenPlayer() {
                     </MenuItem>
                     <ArtistDislikeMenuItems
                       track={currentTrack}
-                      triggerRef={moreTriggerRef}
+                      view="main"
+                      onViewChange={setMoreView}
                       onAction={() => setMoreOpen(false)}
                     />
+                  </>
+                )}
                   </>
                 )}
               </PopoverMenu>
@@ -1213,20 +1235,26 @@ export function FullscreenPlayer() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                   onClick={() => setEqOpen(false)}
-                  className="absolute inset-0 z-[5] bg-black/50 backdrop-blur-sm"
+                  className="absolute inset-0 z-[5] bg-black/55 backdrop-blur-md"
                   aria-hidden
                 />
+                {/* The equalizer panel takes a sizeable share of the
+                    surface — `max-w-3xl` on desktop and the full width
+                    on mobile so the curve has room to breathe and the
+                    14-preset chip rail doesn't wrap into 4 ragged
+                    rows. We anchor it to the bottom edge with a soft
+                    spring so it slides into view without overshoot. */}
                 <motion.div
                   key="eq-panel"
-                  initial={{ y: 60, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 60, opacity: 0 }}
-                  transition={{ delay: 0.12, type: 'spring', stiffness: 320, damping: 30 }}
-                  className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-md p-4"
+                  initial={{ y: 80, opacity: 0, scale: 0.985 }}
+                  animate={{ y: 0, opacity: 1, scale: 1 }}
+                  exit={{ y: 80, opacity: 0, scale: 0.985 }}
+                  transition={{ delay: 0.06, duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-x-0 bottom-0 z-10 mx-auto flex max-h-[88dvh] w-full max-w-3xl items-end justify-center p-3 sm:p-5"
                 >
-                  <Equalizer />
+                  <Equalizer onClose={() => setEqOpen(false)} />
                 </motion.div>
               </>
             )}
