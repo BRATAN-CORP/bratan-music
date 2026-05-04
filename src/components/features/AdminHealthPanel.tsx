@@ -230,16 +230,20 @@ export function AdminHealthPanel() {
   }, [overview]);
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-border bg-card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            <Activity size={14} className="text-muted-foreground" />
-            {t('admin_panels.health.title')}
-          </h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t('admin_panels.health.headerHint')}
-          </p>
+    <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+            <Activity size={16} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-medium leading-tight">
+              {t('admin_panels.health.title')}
+            </h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              {t('admin_panels.health.headerHint')}
+            </p>
+          </div>
         </div>
         <Button variant="ghost" size="icon" onClick={load} aria-label={t('admin_panels.health.refreshAria')} className="h-8 w-8">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />

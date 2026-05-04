@@ -82,14 +82,20 @@ export function AdminUserPurgePanel() {
   const localizedConfirmPhrase = t('admin_panels.userPurge.confirmPhrase');
 
   return (
-    <section className="rounded-[var(--radius-md)] border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 p-5 md:col-span-2">
-      <h2 className="flex items-center gap-2 text-sm font-medium text-[var(--color-danger)]">
-        <AlertTriangle size={14} />
-        {t('admin_panels.userPurge.titleLong')}
-      </h2>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {t('admin_panels.userPurge.hintLong')}
-      </p>
+    <section className="rounded-[var(--radius-xl)] border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/5 p-5 sm:p-6 md:col-span-2">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 text-[var(--color-danger)]">
+          <AlertTriangle size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-medium leading-tight text-[var(--color-danger)]">
+            {t('admin_panels.userPurge.titleLong')}
+          </h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {t('admin_panels.userPurge.hintLong')}
+          </p>
+        </div>
+      </div>
 
       <div className="mt-4 flex flex-col gap-3">
         <div className="relative">

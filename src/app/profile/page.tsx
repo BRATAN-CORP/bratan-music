@@ -690,15 +690,21 @@ function AdminGrantPanel() {
   };
 
   return (
-    <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5">
-      <h2 className="flex items-center gap-2 text-sm font-medium">
-        <Wand2 size={14} className="text-muted-foreground" />
-        {t('admin_panels.grant.title')}
-      </h2>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {t('admin_panels.grant.hint')}
-      </p>
-      <div className="mt-3 flex flex-col gap-2">
+    <section className="flex h-full flex-col rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+          <Wand2 size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-medium leading-tight">
+            {t('admin_panels.grant.title')}
+          </h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+            {t('admin_panels.grant.hint')}
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-1 flex-col gap-2">
         <input
           value={target}
           onChange={(e) => setTarget(e.target.value)}
