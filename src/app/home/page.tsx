@@ -357,12 +357,20 @@ function WaveHero({
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              {/* CTA layout split across breakpoints:
+                    - mobile: primary button takes the full row so the
+                      "Включить волну" / Pause / Continue verb is the
+                      first thing the thumb hits, secondary actions
+                      sit in their own row underneath as 50/50 tiles
+                      (no awkward third-button-on-its-own-line wrap).
+                    - sm+: everything inline, gap-3, primary keeps its
+                      generous horizontal padding for visual weight. */}
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <Button
                   size="lg"
                   onClick={start}
                   disabled={starting}
-                  className="gap-2 px-7"
+                  className="w-full gap-2 sm:w-auto sm:px-7"
                 >
                   {starting ? (
                     <>
@@ -387,35 +395,40 @@ function WaveHero({
                   )}
                 </Button>
 
-                <Button variant="outline" size="lg" onClick={onChangeArtists} className="gap-2">
-                  <Sparkles size={16} />
-                  {hasSeedArtists ? t('home.waveChangeArtists') : t('home.wavePickArtists')}
-                </Button>
+                <div className="flex items-stretch gap-2 sm:contents">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={onChangeArtists}
+                    className="flex-1 gap-2 sm:flex-none"
+                  >
+                    <Sparkles size={16} />
+                    <span className="truncate">
+                      {hasSeedArtists ? t('home.waveChangeArtists') : t('home.wavePickArtists')}
+                    </span>
+                  </Button>
 
-                {/* Configurator button in the same row — opens a Yandex-
-                    Music-style sheet where the user picks mood +
-                    character. We keep it OUT of the hero card body so
-                    chips never push the hero copy / cover stack
-                    around (that's what the regression in the previous
-                    iteration looked like). Active settings show a dot
-                    indicator so the state is visible without opening
-                    the sheet. */}
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setSettingsOpen(true)}
-                  className="relative gap-2"
-                  aria-label={t('home.waveSettingsOpen')}
-                >
-                  <SlidersHorizontal size={16} />
-                  {t('home.waveSettingsOpen')}
-                  {(mood || character) && (
-                    <span
-                      aria-hidden
-                      className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-accent)] ring-2 ring-card"
-                    />
-                  )}
-                </Button>
+                  {/* Configurator button — opens the Yandex-Music-style
+                      sheet (mood + character). Active settings show a
+                      dot indicator so the state is visible without
+                      opening the sheet. */}
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setSettingsOpen(true)}
+                    className="relative flex-1 gap-2 sm:flex-none"
+                    aria-label={t('home.waveSettingsOpen')}
+                  >
+                    <SlidersHorizontal size={16} />
+                    <span className="truncate">{t('home.waveSettingsOpen')}</span>
+                    {(mood || character) && (
+                      <span
+                        aria-hidden
+                        className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-accent)] ring-2 ring-card"
+                      />
+                    )}
+                  </Button>
+                </div>
               </div>
 
             </div>
@@ -517,23 +530,34 @@ function WaveSettingsDialog({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="liquid-glass-scrim fixed inset-0 z-[60]"
+            // Scrim sits at z-[100] — above the mobile bottom dock
+            // (z-40), the AI-playlist banner and the floating mini
+            // player so the whole home page reads as blurred-out when
+            // the configurator is up. z-[60] (the QueueDialog default)
+            // wasn't enough on mobile because the dock + player share
+            // the bottom of the viewport with the dialog's panel.
+            className="liquid-glass-scrim fixed inset-0 z-[100]"
             onClick={onClose}
             aria-hidden
           />
 
-          <div className="fixed inset-0 z-[60] flex flex-col items-center justify-end md:justify-center pointer-events-none">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center px-3 pointer-events-none">
             <motion.div
               key="wave-settings-panel"
               role="dialog"
               aria-modal="true"
               aria-label={t('home.waveSettingsTitle')}
-              initial={{ opacity: 0, y: 32, scale: 0.97 }}
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
+              exit={{ opacity: 0, y: 24, scale: 0.97, transition: { duration: 0.18 } }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              style={{ maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))' }}
-              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(560px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--radius-xl)] md:mb-0 md:rounded-[var(--radius-lg)]"
+              // Centred on every breakpoint so the panel can't be
+              // covered by the mini-player / mobile dock that live at
+              // the bottom of the viewport. The max-height keeps the
+              // dialog clear of system UI on the very smallest
+              // devices.
+              style={{ maxHeight: 'calc(100dvh - 4rem - env(safe-area-inset-bottom, 0px))' }}
+              className="liquid-glass pointer-events-auto flex w-[min(560px,100%)] flex-col overflow-hidden rounded-[var(--radius-xl)] md:rounded-[var(--radius-lg)]"
             >
               <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -563,8 +587,8 @@ function WaveSettingsDialog({
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                <div className="space-y-6">
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:py-5">
+                <div className="space-y-5 sm:space-y-6">
                   <SettingsGroup label={t('home.waveSettingsMoodLabel')}>
                     <ChipRow
                       ariaLabel={t('home.waveSettingsMoodLabel')}
@@ -588,10 +612,14 @@ function WaveSettingsDialog({
                   </SettingsGroup>
 
                   <SettingsGroup label={t('home.waveSettingsCharacterLabel')}>
+                    {/* 1-col on the smallest screens (each tile lays
+                        the icon left of label+hint so the line still
+                        looks dense), 3-col on sm+ where width is
+                        comfortable enough for the stacked variant. */}
                     <div
                       role="radiogroup"
                       aria-label={t('home.waveSettingsCharacterLabel')}
-                      className="grid grid-cols-3 gap-2"
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-3"
                     >
                       {WAVE_CHARACTERS.map((c) => (
                         <CharacterTile
@@ -707,8 +735,12 @@ function CharacterTile({
       onClick={onClick}
       whileTap={{ scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 600, damping: 30 }}
+      // Mobile: horizontal row (icon left, label/hint right) so a
+      // single-column 1-col grid still reads dense and tappable.
+      // sm+: stacked column (icon top, then label, then hint) — same
+      // shape as the daily-playlist cards a few rows below this.
       className={cn(
-        'group relative flex flex-col items-start gap-1.5 rounded-2xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'group relative flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-col sm:items-start sm:gap-1.5',
         active
           ? 'border-[var(--color-accent)]/60 bg-[var(--color-accent)]/12'
           : 'border-border bg-[var(--color-surface-elevated)]/40 hover:border-[var(--color-border-strong)]',
@@ -716,7 +748,7 @@ function CharacterTile({
     >
       <div
         className={cn(
-          'inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors',
+          'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors sm:h-7 sm:w-7',
           active
             ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent,white)]'
             : 'border-border bg-[var(--color-surface-elevated)]/60 text-foreground/70',
@@ -724,8 +756,10 @@ function CharacterTile({
       >
         <Icon size={14} />
       </div>
-      <span className="text-xs font-medium text-foreground">{label}</span>
-      <span className="text-[10px] leading-snug text-muted-foreground">{hint}</span>
+      <div className="flex min-w-0 flex-col gap-0.5 sm:contents">
+        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className="text-[10px] leading-snug text-muted-foreground">{hint}</span>
+      </div>
       {active && (
         <span
           aria-hidden
