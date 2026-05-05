@@ -286,18 +286,25 @@ export function FullscreenPlayer() {
     'button, a, input, textarea, select, ' +
     '[role="slider"], [role="menu"], [role="menuitem"], ' +
     'video, canvas, [data-no-sheet-drag]';
+  // Any foreground panel / modal owns the surface while it's open and
+  // takes priority over the parent sheet's dismiss gesture. The user's
+  // contract: every modal closes on its own affordance (X button,
+  // scrim tap, Esc) and only after the topmost surface is closed does
+  // the dismiss-anywhere swipe wake back up. This prevents (a) EQ
+  // band-gain strokes / lyrics scrolls from double-counting as a
+  // dismiss, and (b) accidentally collapsing the player while a queue
+  // / add-to-playlist / track-override / kebab menu is open and the
+  // user reaches past the dialog scrim onto the player surface.
+  const anyModalOpen =
+    eqOpen ||
+    lyricsOpen ||
+    queueOpen ||
+    addToPlaylistOpen ||
+    overrideOpen ||
+    moreOpen;
   const startSheetDrag = (e: React.PointerEvent) => {
     if (reduce) return;
-    // Hard-disable the sheet's drag-to-dismiss whenever a foreground
-    // surface that owns its own gesture is open. The EQ canvas
-    // captures vertical strokes to set band gain; the mobile lyrics
-    // overlay scrolls its own line list. Letting those strokes also
-    // start the dismiss drag would double-count the gesture and
-    // collapse the player out from under the user mid-adjustment /
-    // mid-scroll. The user must explicitly close the foreground
-    // surface (tap close, tap scrim, tap toolbar toggle) before the
-    // dismiss-anywhere swipe wakes back up.
-    if (eqOpen || lyricsOpen) return;
+    if (anyModalOpen) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest(SHEET_DRAG_EXCLUDE_SELECTOR)) return;
     sheetDragControls.start(e);
