@@ -473,26 +473,73 @@ function SubscriptionCard({
   const { locale } = useI18n();
   const dateLocale = locale === 'en' ? 'en-US' : 'ru-RU';
   if (isSubscribed && expiresAt) {
+    // Active-subscription card mirrors the RoomsShortcut treatment
+    // exactly: TiltCard wrapper, idle two-corner gradient signature
+    // shared with WaveHero / AiPlaylistPromo / RoomsShortcut, hover
+    // halo + accent-glow blob fade-in, and the same icon-swatch +
+    // label/title/hint stack with a pill on the right. That keeps
+    // every entry-point card on the profile page in one premium
+    // family — the user explicitly asked for this parity.
     return (
-      <section className="relative overflow-hidden rounded-[var(--radius-xl)] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent)]/15 text-[var(--color-accent)]">
+      <TiltCard
+        intensity={6}
+        hoverScale={1}
+        glareStrength={0.4}
+        className="rounded-[var(--radius-2xl)]"
+      >
+        <section className="group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-4 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          {/* Static idle gradient — same two-corner signature as the
+              RoomsShortcut / AI promo. */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 14%, transparent) 0%, transparent 60%)',
+            }}
+          />
+          {/* Hover-only intensified gradient pass — adds depth to the
+              lift so the hover state reads stronger than the idle. */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-80"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(120% 80% at 0% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 100% 100%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+            }}
+          />
+          <div
+            className="pointer-events-none absolute -right-32 -top-32 h-64 w-64 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+            aria-hidden
+            style={{
+              background:
+                'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
+            }}
+          />
+          <div className="relative flex items-center gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
               <Crown size={18} />
-            </span>
-            <div>
-              <p className="text-base font-semibold tracking-tight">{t('profile.subscriptionActive')}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {t('profile.subscriptionRenewsBy', { date: new Date(expiresAt * 1000).toLocaleDateString(dateLocale) })}
-              </p>
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                {t('profile.premiumTag')}
+              </div>
+              <div className="mt-0.5 text-sm font-semibold tracking-tight sm:text-base">
+                {t('profile.subscriptionActive')}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                {t('profile.subscriptionRenewsBy', {
+                  date: new Date(expiresAt * 1000).toLocaleDateString(dateLocale),
+                })}
+              </div>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/40 bg-background/60 px-3 py-1 text-xs font-medium text-foreground backdrop-blur">
+          <span className="relative inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors group-hover:border-[var(--color-accent)]/40">
             <Sparkles size={11} className="text-[var(--color-accent)]" />
             {t('profile.subscriptionUnlimited')}
           </span>
-        </div>
-      </section>
+        </section>
+      </TiltCard>
     );
   }
 
