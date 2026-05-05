@@ -560,6 +560,21 @@
       "party": "Party",
       "throwback": "Throwback"
     },
+    "waveSettingsOpen": "Customize",
+    "waveSettingsTitle": "Customize my wave",
+    "waveSettingsReset": "Reset",
+    "waveSettingsMoodLabel": "By mood",
+    "waveSettingsCharacterLabel": "By character",
+    "waveCharacter": {
+      "familiar": "Familiar",
+      "discover": "Discovery",
+      "popular": "Popular"
+    },
+    "waveCharacterHint": {
+      "familiar": "More tracks I already know",
+      "discover": "Only stuff I haven't heard",
+      "popular": "What people are playing now"
+    },
     "dailyBadge": "Daily playlists",
     "dailyTitle": "Three picks for today",
     "dailyHint": "Familiar tracks, fresh discoveries, and a mood-driven mix. Refreshed every morning.",

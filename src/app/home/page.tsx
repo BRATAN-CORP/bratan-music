@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useReducedMotion, LayoutGroup } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
   Play,
   Pause,
@@ -19,6 +19,12 @@ import {
   Target,
   PartyPopper,
   Rewind,
+  SlidersHorizontal,
+  RotateCcw,
+  X,
+  Repeat,
+  Compass,
+  TrendingUp,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -37,9 +43,11 @@ import {
   fetchRecentPlays,
   saveDailyPlaylist,
   WAVE_MOODS,
+  WAVE_CHARACTERS,
   type DailyPlaylist,
   type RecentTrack,
   type WaveMood,
+  type WaveCharacter,
 } from '@/lib/recommendations';
 import { startMyWave } from '@/lib/wave';
 import { usePlayerStore } from '@/store/player';
@@ -250,18 +258,21 @@ function WaveHero({
 }) {
   const t = useT();
   const [starting, setStarting] = useState(false);
-  // null = "сбалансированная" волна без mood-биаса. Каждый клик по чипу
-  // переключает её. На бэке этот mood прокидывается в rerank как
-  // дополнительный +0.30 бонус кандидатам с соответствующего
-  // mood_<slug> explore-page.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // null = "сбалансированная" волна без биаса. Mood управляет
+  // содержанием candidate-pool на бэке (mood_<slug> explore-page +
+  // +0.30 в rerank), character — наклоном novelty/familiar gates
+  // ("чаще что я уже знаю" vs "чаще что не слышал" vs "что сейчас
+  // популярно").
   const [mood, setMood] = useState<WaveMood | null>(null);
+  const [character, setCharacter] = useState<WaveCharacter | null>(null);
 
-  // Подкачиваем превью под выбранный mood — covers + previewStrip
-  // меняются под mood мгновенно, чтобы юзер видел эффект до запуска
-  // волны (а не "сначала запусти, потом увидишь").
+  // Подкачиваем превью под выбранные настройки — covers + previewStrip
+  // мгновенно дают юзеру понять как изменится волна до клика
+  // "Включить волну".
   const previewQ = useQuery({
-    queryKey: ['recommendations', 'wave-preview', mood ?? 'default'],
-    queryFn: () => fetchWave(8, mood),
+    queryKey: ['recommendations', 'wave-preview', mood ?? 'default', character ?? 'default'],
+    queryFn: () => fetchWave(8, { mood, character }),
     // Preview is just a teaser — let it go stale quickly so the user
     // sees a fresh feel after they navigate away and come back.
     staleTime: 60_000,
@@ -283,7 +294,7 @@ function WaveHero({
     }
     setStarting(true);
     try {
-      await startMyWave(mood);
+      await startMyWave({ mood, character });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('home.waveError'));
     } finally {
@@ -346,8 +357,6 @@ function WaveHero({
                 </p>
               </div>
 
-              <WaveMoodPicker mood={mood} onChange={setMood} />
-
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   size="lg"
@@ -382,6 +391,31 @@ function WaveHero({
                   <Sparkles size={16} />
                   {hasSeedArtists ? t('home.waveChangeArtists') : t('home.wavePickArtists')}
                 </Button>
+
+                {/* Configurator button in the same row — opens a Yandex-
+                    Music-style sheet where the user picks mood +
+                    character. We keep it OUT of the hero card body so
+                    chips never push the hero copy / cover stack
+                    around (that's what the regression in the previous
+                    iteration looked like). Active settings show a dot
+                    indicator so the state is visible without opening
+                    the sheet. */}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setSettingsOpen(true)}
+                  className="relative gap-2"
+                  aria-label={t('home.waveSettingsOpen')}
+                >
+                  <SlidersHorizontal size={16} />
+                  {t('home.waveSettingsOpen')}
+                  {(mood || character) && (
+                    <span
+                      aria-hidden
+                      className="absolute -right-1 -top-1 inline-flex h-2.5 w-2.5 rounded-full bg-[var(--color-accent)] ring-2 ring-card"
+                    />
+                  )}
+                </Button>
               </div>
 
             </div>
@@ -402,19 +436,38 @@ function WaveHero({
         </div>
       </div>
       </TiltCard>
+
+      <WaveSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        mood={mood}
+        character={character}
+        onMoodChange={setMood}
+        onCharacterChange={setCharacter}
+      />
     </Reveal>
   );
 }
 
 /**
- * Mood selector for the wave hero. Chips are a horizontally-scrollable
- * radiogroup; the currently selected mood is highlighted with the same
- * accent-fill + spring-layout treatment used by `LanguageSwitcher` so
- * the visual language across the app stays consistent.
+ * Wave configurator — Yandex-Music-flavoured sheet that slides up on
+ * mobile and centres on desktop. Reuses the same `liquid-glass` panel
+ * + `liquid-glass-scrim` backdrop combo as `QueueDialog` /
+ * `AddToPlaylistDialog` so the visual vocabulary is consistent. Lets
+ * the user pick exactly two things:
  *
- * "Без настроения" (mood = null) is the default and acts as a deselect
- * — clicking it on top of an already-selected mood resets to a
- * balanced wave.
+ *  - **Mood** — biases the candidate pool toward a Tidal `mood_<slug>`
+ *    explore page and gives those tracks a +0.30 rerank bonus.
+ *  - **Character** — biases the rerank gates: `familiar` boosts the
+ *    "stuff I know" weight, `discover` flips it negative so the wave
+ *    skews unfamiliar, `popular` pulls from a popularity-weighted
+ *    explore page.
+ *
+ * Both are nullable — clicking an already-active option deselects it,
+ * matching the deselect pattern from the artist picker. The dialog
+ * itself is non-modal in the data sense: changes apply live to the
+ * preview / next wave start, no "Apply" button needed (just a Reset
+ * + Close pair).
  */
 const MOOD_ICON: Record<WaveMood, typeof Moon> = {
   chill: Moon,
@@ -424,59 +477,193 @@ const MOOD_ICON: Record<WaveMood, typeof Moon> = {
   throwback: Rewind,
 };
 
-function WaveMoodPicker({
+const CHARACTER_ICON: Record<WaveCharacter, typeof Repeat> = {
+  familiar: Repeat,
+  discover: Compass,
+  popular: TrendingUp,
+};
+
+function WaveSettingsDialog({
+  open,
+  onClose,
   mood,
-  onChange,
+  character,
+  onMoodChange,
+  onCharacterChange,
 }: {
+  open: boolean;
+  onClose: () => void;
   mood: WaveMood | null;
-  onChange: (m: WaveMood | null) => void;
+  character: WaveCharacter | null;
+  onMoodChange: (m: WaveMood | null) => void;
+  onCharacterChange: (c: WaveCharacter | null) => void;
 }) {
   const t = useT();
+  const reduce = useReducedMotion();
+  const hasAny = mood !== null || character !== null;
+
+  const handleReset = () => {
+    onMoodChange(null);
+    onCharacterChange(null);
+  };
+
   return (
-    <LayoutGroup id="wave-mood">
-      <div
-        role="radiogroup"
-        aria-label={t('home.waveMoodLabel')}
-        // Horizontal scroll on overflow so on narrow screens the user
-        // can swipe through the chips instead of wrapping into 3 rows.
-        // `-mx-1 px-1` gives the focus rings room to render at the
-        // edges without clipping.
-        className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <MoodChip
-          active={mood === null}
-          onClick={() => onChange(null)}
-          icon={Sparkles}
-          label={t('home.waveMoodDefault')}
-          layoutKey="wave-mood-default"
-        />
-        {WAVE_MOODS.map((m) => (
-          <MoodChip
-            key={m}
-            active={mood === m}
-            onClick={() => onChange(mood === m ? null : m)}
-            icon={MOOD_ICON[m]}
-            label={t(`home.waveMood.${m}` as TranslationKey)}
-            layoutKey={`wave-mood-${m}`}
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="wave-settings-backdrop"
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="liquid-glass-scrim fixed inset-0 z-[60]"
+            onClick={onClose}
+            aria-hidden
           />
-        ))}
-      </div>
-    </LayoutGroup>
+
+          <div className="fixed inset-0 z-[60] flex flex-col items-center justify-end md:justify-center pointer-events-none">
+            <motion.div
+              key="wave-settings-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('home.waveSettingsTitle')}
+              initial={{ opacity: 0, y: 32, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              style={{ maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))' }}
+              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(560px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--radius-xl)] md:mb-0 md:rounded-[var(--radius-lg)]"
+            >
+              <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <SlidersHorizontal size={15} className="text-muted-foreground" />
+                  <span className="truncate text-sm font-medium">
+                    {t('home.waveSettingsTitle')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={!hasAny}
+                    aria-label={t('home.waveSettingsReset')}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label={t('common.close')}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                <div className="space-y-6">
+                  <SettingsGroup label={t('home.waveSettingsMoodLabel')}>
+                    <ChipRow
+                      ariaLabel={t('home.waveSettingsMoodLabel')}
+                      items={[
+                        {
+                          key: 'default',
+                          icon: Sparkles,
+                          label: t('home.waveMoodDefault'),
+                          active: mood === null,
+                          onClick: () => onMoodChange(null),
+                        },
+                        ...WAVE_MOODS.map((m) => ({
+                          key: m,
+                          icon: MOOD_ICON[m],
+                          label: t(`home.waveMood.${m}` as TranslationKey),
+                          active: mood === m,
+                          onClick: () => onMoodChange(mood === m ? null : m),
+                        })),
+                      ]}
+                    />
+                  </SettingsGroup>
+
+                  <SettingsGroup label={t('home.waveSettingsCharacterLabel')}>
+                    <div
+                      role="radiogroup"
+                      aria-label={t('home.waveSettingsCharacterLabel')}
+                      className="grid grid-cols-3 gap-2"
+                    >
+                      {WAVE_CHARACTERS.map((c) => (
+                        <CharacterTile
+                          key={c}
+                          active={character === c}
+                          onClick={() => onCharacterChange(character === c ? null : c)}
+                          icon={CHARACTER_ICON[c]}
+                          label={t(`home.waveCharacter.${c}` as TranslationKey)}
+                          hint={t(`home.waveCharacterHint.${c}` as TranslationKey)}
+                        />
+                      ))}
+                    </div>
+                  </SettingsGroup>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
-function MoodChip({
+function SettingsGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function ChipRow({
+  ariaLabel,
+  items,
+}: {
+  ariaLabel: string;
+  items: Array<{
+    key: string;
+    icon: typeof Moon;
+    label: string;
+    active: boolean;
+    onClick: () => void;
+  }>;
+}) {
+  return (
+    <div role="radiogroup" aria-label={ariaLabel} className="flex flex-wrap gap-2">
+      {items.map((it) => (
+        <SettingChip
+          key={it.key}
+          active={it.active}
+          onClick={it.onClick}
+          icon={it.icon}
+          label={it.label}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SettingChip({
   active,
   onClick,
   icon: Icon,
   label,
-  layoutKey,
 }: {
   active: boolean;
   onClick: () => void;
   icon: typeof Moon;
   label: string;
-  layoutKey: string;
 }) {
   return (
     <motion.button
@@ -485,32 +672,68 @@ function MoodChip({
       aria-checked={active}
       onClick={onClick}
       whileTap={{ scale: 0.96 }}
-      whileHover={active ? undefined : { scale: 1.04 }}
       transition={{ type: 'spring', stiffness: 600, damping: 30 }}
       className={cn(
-        'relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         active
-          ? 'border-transparent text-[var(--color-on-accent,white)]'
+          ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent,white)] shadow-[0_6px_18px_-6px_var(--color-accent-glow,rgba(99,102,241,0.45))]'
           : 'border-border bg-[var(--color-surface-elevated)]/60 text-foreground/80 backdrop-blur hover:border-[var(--color-border-strong)] hover:text-foreground',
       )}
     >
-      {active && (
-        <motion.span
-          layoutId={layoutKey}
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: 'var(--color-accent)',
-            boxShadow:
-              '0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 18px -6px var(--color-accent-glow, rgba(99,102,241,0.45))',
-          }}
-          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-          aria-hidden
-        />
+      <Icon size={12} />
+      {label}
+    </motion.button>
+  );
+}
+
+function CharacterTile({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Repeat;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <motion.button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: 'spring', stiffness: 600, damping: 30 }}
+      className={cn(
+        'group relative flex flex-col items-start gap-1.5 rounded-2xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        active
+          ? 'border-[var(--color-accent)]/60 bg-[var(--color-accent)]/12'
+          : 'border-border bg-[var(--color-surface-elevated)]/40 hover:border-[var(--color-border-strong)]',
       )}
-      <span className="relative z-10 inline-flex items-center gap-1.5">
-        <Icon size={12} />
-        {label}
-      </span>
+    >
+      <div
+        className={cn(
+          'inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors',
+          active
+            ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent,white)]'
+            : 'border-border bg-[var(--color-surface-elevated)]/60 text-foreground/70',
+        )}
+      >
+        <Icon size={14} />
+      </div>
+      <span className="text-xs font-medium text-foreground">{label}</span>
+      <span className="text-[10px] leading-snug text-muted-foreground">{hint}</span>
+      {active && (
+        <span
+          aria-hidden
+          className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent,white)]"
+        >
+          <Check size={10} />
+        </span>
+      )}
     </motion.button>
   );
 }

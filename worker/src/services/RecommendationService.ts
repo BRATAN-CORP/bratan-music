@@ -46,8 +46,20 @@ const W_DIVERSITY_PENALTY = -0.15;
 /** Bonus added to candidates pulled from the requested mood's explore
  *  page. Big enough to bias the top of the wave toward that mood,
  *  small enough that taste signal still wins for the user's strongest
- *  artists. */
+ *  artists. The same constant is reused for the "popular" character —
+ *  also a slug pulled from the explore endpoint. */
 const W_MOOD_BONUS = 0.30;
+
+/** Multiplier applied to W_FAMILIAR_BONUS when the user picks the
+ *  "familiar" character: lean harder into stuff already in the
+ *  history. */
+const FAMILIAR_BIAS = 2.0;
+
+/** When the user picks "discover" the familiar bonus flips to a
+ *  similarly-sized penalty so anything they've heard recently gets
+ *  pushed down. We don't go fully `-1` — that would zero out the wave
+ *  for users with thin libraries. */
+const DISCOVER_BIAS = -1.5;
 
 const ARTIST_CAP_IN_RESULT = 3;
 
@@ -63,6 +75,23 @@ const MOOD_SLUG: Record<WaveMood, string> = {
   party: 'mood_party',
   throwback: 'mood_throwback',
 };
+
+/** "Character" of the wave — high-level dial over the rerank gates.
+ *
+ *  - `familiar`  — boost W_FAMILIAR_BONUS (more stuff I already know).
+ *  - `discover`  — flip W_FAMILIAR_BONUS negative + skip the
+ *                  familiarity bias (only fresh stuff).
+ *  - `popular`   — pull from a "popular" explore-page slug as an extra
+ *                  candidate pool with the same +W_MOOD_BONUS as a
+ *                  mood pool. */
+export const WAVE_CHARACTERS = ['familiar', 'discover', 'popular'] as const;
+export type WaveCharacter = typeof WAVE_CHARACTERS[number];
+
+/** Tidal explore page used when `popular` character is requested.
+ *  Kept as a constant so a future repo-wide source switch (e.g.
+ *  pointing at a curated D1 row instead of a Tidal slug) is one
+ *  edit. */
+const POPULAR_EXPLORE_SLUG = 'top_popular';
 
 interface DislikeRow {
   item_id: string;
@@ -103,10 +132,15 @@ export class RecommendationService {
    */
   async wave(
     userId: string,
-    options: { limit?: number; mood?: WaveMood | null } = {},
+    options: {
+      limit?: number;
+      mood?: WaveMood | null;
+      character?: WaveCharacter | null;
+    } = {},
   ): Promise<Track[]> {
     const limit = options.limit ?? 25;
     const mood = options.mood ?? null;
+    const character = options.character ?? null;
     const { profile, genreSeeds, seedArtistIds } = await this.taste.getOrCompute(userId);
     const dislikes = await this.loadDislikes(userId);
     const seen = await this.loadSeen(userId);
@@ -142,6 +176,17 @@ export class RecommendationService {
       pools.push(moodPool);
     }
 
+    // Popular character pulls from a global popularity slice, tagged
+    // with the same +W_MOOD_BONUS so it gets surfaced visibly without
+    // overwriting taste-strong matches. We piggy-back on the same
+    // `moodIds` set because the rerank semantics ("this candidate is
+    // from a curated pool, give it a nudge") are identical.
+    if (character === 'popular') {
+      const popPool = await this.candidatesFromGenres([POPULAR_EXPLORE_SLUG]);
+      for (const t of popPool) moodIds.add(`${t.source ?? 'tidal'}:${t.id}`);
+      pools.push(popPool);
+    }
+
     let candidates = dedupTracks(pools.flat());
 
     if (candidates.length === 0) {
@@ -150,7 +195,7 @@ export class RecommendationService {
       candidates = await this.candidatesFromGenres(['genre_pop', 'genre_rap', 'genre_electronic']);
     }
 
-    return this.rerank(candidates, profile, dislikes, seen, limit, moodIds);
+    return this.rerank(candidates, profile, dislikes, seen, limit, moodIds, character);
   }
 
   /**
@@ -291,10 +336,20 @@ export class RecommendationService {
     seen: Map<string, number>,
     limit: number,
     moodIds: Set<string> = new Set(),
+    character: WaveCharacter | null = null,
   ): Track[] {
     if (candidates.length === 0) return [];
     const now = Date.now();
     const completed = new Set(profile.completedTrackIds);
+
+    // Character biases the familiar-bonus weight at scoring time, so
+    // we resolve the effective coefficient once per call.
+    const familiarWeight =
+      character === 'familiar'
+        ? W_FAMILIAR_BONUS * FAMILIAR_BIAS
+        : character === 'discover'
+          ? W_FAMILIAR_BONUS * DISCOVER_BIAS
+          : W_FAMILIAR_BONUS;
 
     interface Scored { track: Track; score: number; }
     const scored: Scored[] = [];
@@ -322,7 +377,7 @@ export class RecommendationService {
         W_TASTE * tasteSig +
         W_NOVELTY * novelty +
         W_RECENT_SEEN_PENALTY * seenPenalty +
-        W_FAMILIAR_BONUS * familiar +
+        familiarWeight * familiar +
         W_MOOD_BONUS * moodMatch;
 
       scored.push({ track: t, score });
