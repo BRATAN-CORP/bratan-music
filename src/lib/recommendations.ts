@@ -22,12 +22,33 @@ interface ItemsResponse<T> { items: T[]; }
 export const WAVE_MOODS = ['chill', 'workout', 'focus', 'party', 'throwback'] as const;
 export type WaveMood = typeof WAVE_MOODS[number];
 
+/** "Characters" — three high-level dials over the rerank gates:
+ *
+ *  - `familiar`  → "крути что я уже знаю"   — boosts the familiar bonus.
+ *  - `discover`  → "крути что я не слышал"  — flips familiar bonus negative,
+ *                  pulls extra candidates from the global discovery pool.
+ *  - `popular`   → "что слушают сейчас"     — adds the popular explore-page
+ *                  to the candidate pool with the same +0.30 bonus
+ *                  that mood gets.
+ *
+ *  Mirrors WAVE_CHARACTERS in `RecommendationService.ts`. */
+export const WAVE_CHARACTERS = ['familiar', 'discover', 'popular'] as const;
+export type WaveCharacter = typeof WAVE_CHARACTERS[number];
+
+export interface WaveOptions {
+  mood?: WaveMood | null;
+  character?: WaveCharacter | null;
+}
+
 /** Endless personal stream. Used by the "Моя волна" button + home page.
- *  When `mood` is set we tag the request and the backend mixes that
- *  mood's explore page into the candidate pool with a fixed bonus. */
-export async function fetchWave(limit = 25, mood: WaveMood | null = null): Promise<Track[]> {
+ *  `mood` and `character` are layered over the same query — the
+ *  backend rerank gates them independently so combinations like
+ *  "workout + discover" do something sensible (push energetic stuff I
+ *  haven't heard before). */
+export async function fetchWave(limit = 25, opts: WaveOptions = {}): Promise<Track[]> {
   const params = new URLSearchParams({ limit: String(limit) });
-  if (mood) params.set('mood', mood);
+  if (opts.mood) params.set('mood', opts.mood);
+  if (opts.character) params.set('character', opts.character);
   const data = await api.get<ItemsResponse<Track>>(`/recommendations/wave?${params.toString()}`);
   return data.items ?? [];
 }

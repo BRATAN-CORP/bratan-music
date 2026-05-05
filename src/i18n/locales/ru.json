@@ -560,6 +560,21 @@
       "party": "Вечеринка",
       "throwback": "Старая школа"
     },
+    "waveSettingsOpen": "Настроить",
+    "waveSettingsTitle": "Настроить мою волну",
+    "waveSettingsReset": "Сбросить",
+    "waveSettingsMoodLabel": "Под настроение",
+    "waveSettingsCharacterLabel": "По характеру",
+    "waveCharacter": {
+      "familiar": "Знакомое",
+      "discover": "Незнакомое",
+      "popular": "Популярное"
+    },
+    "waveCharacterHint": {
+      "familiar": "Чаще то, что я уже слушал",
+      "discover": "Только то, что я ещё не слышал",
+      "popular": "Что слушают сейчас"
+    },
     "dailyBadge": "Плейлисты дня",
     "dailyTitle": "Три варианта на сегодня",
     "dailyHint": "Знакомое, открытия и подборка под настроение. Обновляются каждое утро.",

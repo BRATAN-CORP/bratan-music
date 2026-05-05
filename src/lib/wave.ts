@@ -1,4 +1,4 @@
-import { fetchWave, type WaveMood } from '@/lib/recommendations';
+import { fetchWave, type WaveOptions } from '@/lib/recommendations';
 import { usePlayerStore } from '@/store/player';
 import { t } from '@/i18n/runtime';
 
@@ -9,14 +9,15 @@ import { t } from '@/i18n/runtime';
  * automatically by useAudioPlayer's auto-extend hook (see
  * `useQueueExtender` inside the audio engine).
  *
- * `mood` (optional) lets the caller bias the wave toward chill /
- * workout / focus / party / throwback. Default null = balanced wave.
+ * `opts` lets the caller bias the wave by mood and/or character — see
+ * `WaveOptions` in `lib/recommendations.ts`. Both nullable; default is
+ * a balanced wave.
  *
  * Throws if the wave came back empty — caller decides how to surface
  * that (typically a toast pointing to the cold-start onboarding).
  */
-export async function startMyWave(mood: WaveMood | null = null): Promise<number> {
-  const tracks = await fetchWave(25, mood);
+export async function startMyWave(opts: WaveOptions = {}): Promise<number> {
+  const tracks = await fetchWave(25, opts);
   if (tracks.length === 0) {
     throw new Error(t('wave.emptyHint'));
   }
