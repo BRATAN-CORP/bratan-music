@@ -551,6 +551,15 @@
     "waveChangeArtists": "Change artists",
     "wavePickArtists": "Pick artists",
     "waveError": "Couldn't start the wave",
+    "waveMoodLabel": "Wave mood",
+    "waveMoodDefault": "No mood",
+    "waveMood": {
+      "chill": "Chill",
+      "workout": "Workout",
+      "focus": "Focus",
+      "party": "Party",
+      "throwback": "Throwback"
+    },
     "dailyBadge": "Daily playlists",
     "dailyTitle": "Three picks for today",
     "dailyHint": "Familiar tracks, fresh discoveries, and a mood-driven mix. Refreshed every morning.",

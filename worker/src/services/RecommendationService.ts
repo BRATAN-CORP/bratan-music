@@ -43,8 +43,26 @@ const W_DISLIKE_ARTIST = -1.0;
 const W_RECENT_SEEN_PENALTY = -0.50;
 const W_FAMILIAR_BONUS = 0.10;
 const W_DIVERSITY_PENALTY = -0.15;
+/** Bonus added to candidates pulled from the requested mood's explore
+ *  page. Big enough to bias the top of the wave toward that mood,
+ *  small enough that taste signal still wins for the user's strongest
+ *  artists. */
+const W_MOOD_BONUS = 0.30;
 
 const ARTIST_CAP_IN_RESULT = 3;
+
+/** Moods we expose to the UI. Each maps to a Tidal explore page slug
+ *  (`mood_<key>`) — so adding a new mood is one row in this table. */
+export const WAVE_MOODS = ['chill', 'workout', 'focus', 'party', 'throwback'] as const;
+export type WaveMood = typeof WAVE_MOODS[number];
+
+const MOOD_SLUG: Record<WaveMood, string> = {
+  chill: 'mood_chill',
+  workout: 'mood_workout',
+  focus: 'mood_focus',
+  party: 'mood_party',
+  throwback: 'mood_throwback',
+};
 
 interface DislikeRow {
   item_id: string;
@@ -67,33 +85,64 @@ export class RecommendationService {
   }
 
   /**
-   * Generate the next ~25 tracks for the user's wave. If the user has
-   * completed plays, we seed from those; otherwise we fall back to
-   * cold-start (genre seeds picked at onboarding → genre-page tracks
-   * → globally popular).
+   * Generate the next ~25 tracks for the user's wave.
+   *
+   * Candidate sources are stacked, not exclusive:
+   *   - Track-seeds from history (sampled from completedTrackIds)
+   *   - Artist-seeds from onboarding picks (always, not just cold-start)
+   *   - Genre-seeds from onboarding picks (only if no listening yet)
+   *   - Global-popular fallback (last resort)
+   *   - Optional mood pool (Tidal mood_<slug>) when `mood` is set
+   *
+   * The previous implementation used a hard if/else chain that disabled
+   * cold-start picks the moment the user finished a single track. We
+   * now always blend so the user's onboarding picks keep contributing
+   * even after history accumulates — combined with the flat baseline
+   * weight in TasteService, this fixes the "wave forgets who I picked"
+   * complaint without drowning out genuine listening signal.
    */
-  async wave(userId: string, limit = 25): Promise<Track[]> {
+  async wave(
+    userId: string,
+    options: { limit?: number; mood?: WaveMood | null } = {},
+  ): Promise<Track[]> {
+    const limit = options.limit ?? 25;
+    const mood = options.mood ?? null;
     const { profile, genreSeeds, seedArtistIds } = await this.taste.getOrCompute(userId);
     const dislikes = await this.loadDislikes(userId);
     const seen = await this.loadSeen(userId);
 
-    let candidates: Track[];
+    const pools: Track[][] = [];
+    const moodIds = new Set<string>();
+
     if (profile.completedTrackIds.length > 0) {
-      // Pick a few diverse seeds — sample, don't always grab the very
-      // top-N, otherwise the wave starts identical every time the user
-      // hits "Моя волна".
+      // Sample, don't always grab the very top-N, otherwise the wave
+      // starts identical every time the user hits "Моя волна".
       const seeds = sampleN(profile.completedTrackIds, SEED_FAN_OUT);
-      candidates = await this.candidatesFromTrackSeeds(seeds);
-    } else if (seedArtistIds.length > 0) {
-      // Cold-start with hand-picked artists: most precise signal we can
-      // get without listening history. Pull tracks from each chosen
-      // artist's radio feed.
-      candidates = await this.candidatesFromArtistSeeds(seedArtistIds);
-    } else if (genreSeeds.length > 0) {
-      candidates = await this.candidatesFromGenres(genreSeeds);
-    } else {
-      candidates = [];
+      pools.push(await this.candidatesFromTrackSeeds(seeds));
     }
+
+    // Always co-include onboarding artist picks (when present). They
+    // get a soft baseline weight in tasteSig from TasteService, but we
+    // also feed their radios into the candidate pool so brand new
+    // tracks from those artists still surface — even after the user
+    // has weeks of history on someone else.
+    if (seedArtistIds.length > 0) {
+      pools.push(await this.candidatesFromArtistSeeds(seedArtistIds));
+    }
+
+    if (pools.length === 0 && genreSeeds.length > 0) {
+      pools.push(await this.candidatesFromGenres(genreSeeds));
+    }
+
+    // Mood pool — only when explicitly requested. Tagged via `moodIds`
+    // so re-rank can hand out a bonus to anything from this slice.
+    if (mood && MOOD_SLUG[mood]) {
+      const moodPool = await this.candidatesFromGenres([MOOD_SLUG[mood]]);
+      for (const t of moodPool) moodIds.add(`${t.source ?? 'tidal'}:${t.id}`);
+      pools.push(moodPool);
+    }
+
+    let candidates = dedupTracks(pools.flat());
 
     if (candidates.length === 0) {
       // Last-resort fallback for brand-new users with neither artist
@@ -101,7 +150,7 @@ export class RecommendationService {
       candidates = await this.candidatesFromGenres(['genre_pop', 'genre_rap', 'genre_electronic']);
     }
 
-    return this.rerank(candidates, profile, dislikes, seen, limit);
+    return this.rerank(candidates, profile, dislikes, seen, limit, moodIds);
   }
 
   /**
@@ -160,8 +209,11 @@ export class RecommendationService {
    */
   private async candidatesFromArtistSeeds(artistIds: string[]): Promise<Track[]> {
     if (artistIds.length === 0) return [];
+    // Up to 15 picks — matches the `setSeedArtists` slice cap and the
+    // ArtistPicker UI limit. Each id costs at most one cached round-
+    // trip through Tidal because of the per-artist KV cache below.
     const pools = await Promise.all(
-      artistIds.slice(0, 6).map(async (id) => {
+      artistIds.slice(0, 15).map(async (id) => {
         try {
           const cacheKey = `artist_seed_tracks:${id}`;
           const cached = await this.env.SESSIONS.get(cacheKey, 'json');
@@ -238,6 +290,7 @@ export class RecommendationService {
     dislikes: { artists: Set<string>; tracks: Set<string> },
     seen: Map<string, number>,
     limit: number,
+    moodIds: Set<string> = new Set(),
   ): Track[] {
     if (candidates.length === 0) return [];
     const now = Date.now();
@@ -263,12 +316,14 @@ export class RecommendationService {
       // not enough to drown out taste signal).
       const novelty = Math.random();
       const familiar = completed.has(t.id) ? 1 : 0;
+      const moodMatch = moodIds.has(`${t.source ?? 'tidal'}:${t.id}`) ? 1 : 0;
 
       const score =
         W_TASTE * tasteSig +
         W_NOVELTY * novelty +
         W_RECENT_SEEN_PENALTY * seenPenalty +
-        W_FAMILIAR_BONUS * familiar;
+        W_FAMILIAR_BONUS * familiar +
+        W_MOOD_BONUS * moodMatch;
 
       scored.push({ track: t, score });
     }
