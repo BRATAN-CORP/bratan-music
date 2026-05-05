@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
-import { RecommendationService } from '../services/RecommendationService';
+import { RecommendationService, WAVE_MOODS, type WaveMood } from '../services/RecommendationService';
 import { TasteService } from '../services/TasteService';
 import { TidalService } from '../services/tidal/TidalService';
 
@@ -17,8 +17,12 @@ recommendations.use('/*', jwtAuth);
 recommendations.get('/wave', async (c) => {
   const userId = c.get('userId');
   const limit = clampInt(c.req.query('limit'), 25, 1, 50);
+  const moodRaw = c.req.query('mood');
+  const mood = (WAVE_MOODS as readonly string[]).includes(moodRaw ?? '')
+    ? (moodRaw as WaveMood)
+    : null;
   const rec = new RecommendationService(c.env);
-  const items = await rec.wave(userId, limit);
+  const items = await rec.wave(userId, { limit, mood });
   // Fire-and-forget: record what we just shipped so the next call
   // suppresses these as "recently seen". We don't await the write so
   // the response doesn't pay an extra round trip.

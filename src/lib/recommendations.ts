@@ -17,9 +17,18 @@ export interface DailyPlaylist {
 
 interface ItemsResponse<T> { items: T[]; }
 
-/** Endless personal stream. Used by the "Моя волна" button + home page. */
-export async function fetchWave(limit = 25): Promise<Track[]> {
-  const data = await api.get<ItemsResponse<Track>>(`/recommendations/wave?limit=${limit}`);
+/** Moods exposed to the user when starting My Wave. Mirror of
+ *  WAVE_MOODS in worker/services/RecommendationService.ts. */
+export const WAVE_MOODS = ['chill', 'workout', 'focus', 'party', 'throwback'] as const;
+export type WaveMood = typeof WAVE_MOODS[number];
+
+/** Endless personal stream. Used by the "Моя волна" button + home page.
+ *  When `mood` is set we tag the request and the backend mixes that
+ *  mood's explore page into the candidate pool with a fixed bonus. */
+export async function fetchWave(limit = 25, mood: WaveMood | null = null): Promise<Track[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (mood) params.set('mood', mood);
+  const data = await api.get<ItemsResponse<Track>>(`/recommendations/wave?${params.toString()}`);
   return data.items ?? [];
 }
 

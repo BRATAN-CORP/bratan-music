@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion, LayoutGroup } from 'motion/react';
 import {
   Play,
   Pause,
@@ -14,6 +14,11 @@ import {
   Disc3,
   Check,
   Wand2,
+  Moon,
+  Flame,
+  Target,
+  PartyPopper,
+  Rewind,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -31,8 +36,10 @@ import {
   fetchSeedArtists,
   fetchRecentPlays,
   saveDailyPlaylist,
+  WAVE_MOODS,
   type DailyPlaylist,
   type RecentTrack,
+  type WaveMood,
 } from '@/lib/recommendations';
 import { startMyWave } from '@/lib/wave';
 import { usePlayerStore } from '@/store/player';
@@ -243,10 +250,18 @@ function WaveHero({
 }) {
   const t = useT();
   const [starting, setStarting] = useState(false);
+  // null = "сбалансированная" волна без mood-биаса. Каждый клик по чипу
+  // переключает её. На бэке этот mood прокидывается в rerank как
+  // дополнительный +0.30 бонус кандидатам с соответствующего
+  // mood_<slug> explore-page.
+  const [mood, setMood] = useState<WaveMood | null>(null);
 
+  // Подкачиваем превью под выбранный mood — covers + previewStrip
+  // меняются под mood мгновенно, чтобы юзер видел эффект до запуска
+  // волны (а не "сначала запусти, потом увидишь").
   const previewQ = useQuery({
-    queryKey: ['recommendations', 'wave-preview'],
-    queryFn: () => fetchWave(8),
+    queryKey: ['recommendations', 'wave-preview', mood ?? 'default'],
+    queryFn: () => fetchWave(8, mood),
     // Preview is just a teaser — let it go stale quickly so the user
     // sees a fresh feel after they navigate away and come back.
     staleTime: 60_000,
@@ -268,7 +283,7 @@ function WaveHero({
     }
     setStarting(true);
     try {
-      await startMyWave();
+      await startMyWave(mood);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('home.waveError'));
     } finally {
@@ -331,6 +346,8 @@ function WaveHero({
                 </p>
               </div>
 
+              <WaveMoodPicker mood={mood} onChange={setMood} />
+
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   size="lg"
@@ -386,6 +403,115 @@ function WaveHero({
       </div>
       </TiltCard>
     </Reveal>
+  );
+}
+
+/**
+ * Mood selector for the wave hero. Chips are a horizontally-scrollable
+ * radiogroup; the currently selected mood is highlighted with the same
+ * accent-fill + spring-layout treatment used by `LanguageSwitcher` so
+ * the visual language across the app stays consistent.
+ *
+ * "Без настроения" (mood = null) is the default and acts as a deselect
+ * — clicking it on top of an already-selected mood resets to a
+ * balanced wave.
+ */
+const MOOD_ICON: Record<WaveMood, typeof Moon> = {
+  chill: Moon,
+  workout: Flame,
+  focus: Target,
+  party: PartyPopper,
+  throwback: Rewind,
+};
+
+function WaveMoodPicker({
+  mood,
+  onChange,
+}: {
+  mood: WaveMood | null;
+  onChange: (m: WaveMood | null) => void;
+}) {
+  const t = useT();
+  return (
+    <LayoutGroup id="wave-mood">
+      <div
+        role="radiogroup"
+        aria-label={t('home.waveMoodLabel')}
+        // Horizontal scroll on overflow so on narrow screens the user
+        // can swipe through the chips instead of wrapping into 3 rows.
+        // `-mx-1 px-1` gives the focus rings room to render at the
+        // edges without clipping.
+        className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <MoodChip
+          active={mood === null}
+          onClick={() => onChange(null)}
+          icon={Sparkles}
+          label={t('home.waveMoodDefault')}
+          layoutKey="wave-mood-default"
+        />
+        {WAVE_MOODS.map((m) => (
+          <MoodChip
+            key={m}
+            active={mood === m}
+            onClick={() => onChange(mood === m ? null : m)}
+            icon={MOOD_ICON[m]}
+            label={t(`home.waveMood.${m}` as TranslationKey)}
+            layoutKey={`wave-mood-${m}`}
+          />
+        ))}
+      </div>
+    </LayoutGroup>
+  );
+}
+
+function MoodChip({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+  layoutKey,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Moon;
+  label: string;
+  layoutKey: string;
+}) {
+  return (
+    <motion.button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      whileTap={{ scale: 0.96 }}
+      whileHover={active ? undefined : { scale: 1.04 }}
+      transition={{ type: 'spring', stiffness: 600, damping: 30 }}
+      className={cn(
+        'relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        active
+          ? 'border-transparent text-[var(--color-on-accent,white)]'
+          : 'border-border bg-[var(--color-surface-elevated)]/60 text-foreground/80 backdrop-blur hover:border-[var(--color-border-strong)] hover:text-foreground',
+      )}
+    >
+      {active && (
+        <motion.span
+          layoutId={layoutKey}
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: 'var(--color-accent)',
+            boxShadow:
+              '0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 18px -6px var(--color-accent-glow, rgba(99,102,241,0.45))',
+          }}
+          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+          aria-hidden
+        />
+      )}
+      <span className="relative z-10 inline-flex items-center gap-1.5">
+        <Icon size={12} />
+        {label}
+      </span>
+    </motion.button>
   );
 }
 

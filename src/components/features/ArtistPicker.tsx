@@ -28,7 +28,14 @@ import { cn } from '@/lib/utils';
  */
 
 const MIN_PICKS = 1;
-const MAX_PICKS = 6;
+// 15 picks gives the cold-start onboarding flow real teeth — more
+// picks → richer initial wave + a stickier baseline weight in the
+// taste vector (TasteService bakes each pick in at a flat 0.6, so the
+// onboarding choices keep nudging recommendations forever, not just
+// until the first completed play). The bounds here, the bound in
+// `setSeedArtists` (server-side slice), and `candidatesFromArtistSeeds`
+// (radio fan-out cap) are kept in lock-step at 15.
+const MAX_PICKS = 15;
 
 interface ArtistPickerProps {
   onComplete: () => void;

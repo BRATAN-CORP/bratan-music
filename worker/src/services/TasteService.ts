@@ -5,13 +5,26 @@ import type { Env } from '../types/env';
  *
  * Conceptually a sparse weighted vector over Tidal artist ids: an artist's
  * weight encodes how much affinity the user has shown for them in the
- * recent listening window. Built from `play_history` with a few simple
- * but-effective rules:
- *   - Each completed play (listened ≥ 80% / hit `ended`) contributes 1.0.
- *   - Each ≥30s but uncompleted play contributes 0.4.
- *   - Plays decay exponentially in time with a 30-day half-life.
- *   - The artist of an explicit dislike gets clamped to 0 (and excluded
- *     from candidate generation in RecommendationService).
+ * recent listening window. Built from THREE positive signals:
+ *
+ *   1. Listening history (`play_history`) — exponentially decayed.
+ *      Completed play = 1.0, partial (≥30s) = 0.4, half-life 30 days.
+ *      Captures "what you actually listen to right now".
+ *   2. Liked tracks (rows in the user's is_liked playlist) — flat 1.5
+ *      per liked track, no decay. A like is an explicit, durable
+ *      preference; we don't want it to fade just because the user
+ *      hasn't replayed it in a month. Per-artist credit comes from
+ *      the snapshot.artistId saved when the like was created.
+ *   3. Cold-start artist picks (`seed_artist_ids`) — flat 0.6 per
+ *      pick, no decay. Lets the onboarding choices keep nudging the
+ *      vector even after the user has built history, instead of
+ *      switching off the moment the first completed play lands.
+ *
+ * After accumulation everything is rescaled to [0, 1] so the rerank
+ * pipeline can mix tasteSig with other 0..1 signals safely.
+ *
+ * Disliked artists/tracks are clamped to 0 and filtered out by the
+ * recommendation candidate pipeline.
  *
  * We also stash up to 50 of the user's most-completed track ids — those
  * are the seeds the wave / continue endpoints feed into Tidal track-radio
@@ -33,6 +46,14 @@ export interface TasteProfile {
 const HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const COMPLETED_WEIGHT = 1.0;
 const PARTIAL_WEIGHT = 0.4;
+/** Each liked track contributes this to its artist's weight. Slightly
+ *  higher than a single completed play because liking is an explicit,
+ *  durable preference signal. No decay. */
+const LIKED_WEIGHT = 1.5;
+/** Each onboarding-picked artist gets this baseline weight, no decay,
+ *  so the cold-start picks keep nudging the vector forever (instead of
+ *  switching off after the first completed play). */
+const SEED_ARTIST_WEIGHT = 0.6;
 
 interface PlayHistoryRow {
   track_id: string;
@@ -112,6 +133,40 @@ export class TasteService {
       if (row.completed) {
         trackScores[row.track_id] = (trackScores[row.track_id] ?? 0) + w;
       }
+    }
+
+    // Pull liked tracks (rows in the user's is_liked playlist). The
+    // snapshot column carries `artistId` (and `artists[]` for multi-
+    // artist credits) saved at the moment of liking. We read both so
+    // featured artists also get credit, matching what the UI shows.
+    const likedRes = await this.env.DB
+      .prepare(
+        `SELECT pt.snapshot
+           FROM playlist_tracks pt
+           JOIN playlists p ON p.id = pt.playlist_id
+          WHERE p.user_id = ? AND p.is_liked = 1`,
+      )
+      .bind(userId)
+      .all<{ snapshot: string | null }>();
+    for (const row of likedRes.results ?? []) {
+      const ids = extractArtistIdsFromSnapshot(row.snapshot);
+      for (const aid of ids) {
+        if (!aid || dislikedArtists.has(aid)) continue;
+        artistWeights[aid] = (artistWeights[aid] ?? 0) + LIKED_WEIGHT;
+      }
+    }
+
+    // Cold-start picks contribute a flat baseline that never decays.
+    // This is what fixes the "after one completed play the wave forgets
+    // who I picked" problem — picks always land in the vector and only
+    // get *outweighed* once heavy listening on someone else builds up.
+    const seedRow = await this.env.DB
+      .prepare(`SELECT seed_artist_ids FROM user_taste_profile WHERE user_id = ?`)
+      .bind(userId)
+      .first<{ seed_artist_ids: string }>();
+    for (const aid of parseStringArray(seedRow?.seed_artist_ids ?? '[]')) {
+      if (dislikedArtists.has(aid)) continue;
+      artistWeights[aid] = (artistWeights[aid] ?? 0) + SEED_ARTIST_WEIGHT;
     }
 
     // Normalise artist weights to [0, 1] so re-rank can mix them with
@@ -210,11 +265,12 @@ export class TasteService {
     await this.upsertSeedColumn(userId, 'genre_seeds', slugs.slice(0, 8));
   }
 
-  /** Replace the cold-start artist seeds. Used by the new onboarding
-   *  flow where the user picks 1–6 artists they like; we then seed
-   *  Tidal track-radio off those artist ids. */
+  /** Replace the cold-start artist seeds. Used by the onboarding flow
+   *  where the user picks 1–15 artists they like; we then seed Tidal
+   *  track-radio off those artist ids and also bake them into the
+   *  taste vector at a flat baseline (see `recompute`). */
   async setSeedArtists(userId: string, artistIds: string[]): Promise<void> {
-    await this.upsertSeedColumn(userId, 'seed_artist_ids', artistIds.slice(0, 12));
+    await this.upsertSeedColumn(userId, 'seed_artist_ids', artistIds.slice(0, 15));
   }
 
   private async upsertSeedColumn(
@@ -264,4 +320,34 @@ function parseStringArray(raw: string): string[] {
     if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');
   } catch { /* ignore */ }
   return [];
+}
+
+interface SnapshotShape {
+  artistId?: string | null;
+  artists?: Array<{ id?: string | null } | null> | null;
+}
+
+/**
+ * Pull every plausible artist id out of a `playlist_tracks.snapshot`
+ * blob. We accept both the legacy single `artistId` and the newer
+ * `artists[]` array (added when Tidal track snapshots started carrying
+ * the full credit list). Falls back to an empty array on malformed JSON
+ * so a single bad row never blows up the whole recompute.
+ */
+function extractArtistIdsFromSnapshot(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  let parsed: SnapshotShape;
+  try {
+    parsed = JSON.parse(raw) as SnapshotShape;
+  } catch {
+    return [];
+  }
+  const out = new Set<string>();
+  if (typeof parsed.artistId === 'string' && parsed.artistId) out.add(parsed.artistId);
+  if (Array.isArray(parsed.artists)) {
+    for (const a of parsed.artists) {
+      if (a && typeof a.id === 'string' && a.id) out.add(a.id);
+    }
+  }
+  return [...out];
 }

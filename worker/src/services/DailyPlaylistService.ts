@@ -212,7 +212,7 @@ export class DailyPlaylistService {
     if (variant === 'familiar') {
       // 70% from wave (which respects taste); 30% known favourites.
       // We re-use wave so the rerank stays in one place.
-      const wave = await this.rec.wave(userId, PLAYLIST_LENGTH);
+      const wave = await this.rec.wave(userId, { limit: PLAYLIST_LENGTH });
       const familiar = wave.slice(0, Math.floor(PLAYLIST_LENGTH * 0.7));
       // Padding from completed tracks if wave came back short.
       const padPool = await this.tracksFromIds(completedTrackIds.slice(0, 30));
@@ -220,7 +220,7 @@ export class DailyPlaylistService {
     }
 
     if (variant === 'discover') {
-      const wave = await this.rec.wave(userId, PLAYLIST_LENGTH * 2);
+      const wave = await this.rec.wave(userId, { limit: PLAYLIST_LENGTH * 2 });
       // Strip anything in the user's history → real "discovery".
       const known = new Set(completedTrackIds);
       const unknown = wave.filter((t) => !known.has(t.id));
@@ -230,11 +230,13 @@ export class DailyPlaylistService {
       return mergeUnique(unknown, filler, PLAYLIST_LENGTH);
     }
 
-    // mood
-    const moodSlug = pickMoodSlug();
+    // mood — pick the slug from the user's actual time-of-day pattern
+    // when we have enough history, fall back to wall-clock UTC hour
+    // for cold-start users.
+    const moodSlug = await this.pickPersonalMoodSlug(userId, hasHistory);
     const moodTracks = await this.tracksFromGenre(moodSlug);
     if (moodTracks.length >= PLAYLIST_LENGTH) return moodTracks.slice(0, PLAYLIST_LENGTH);
-    const fillerWave = await this.rec.wave(userId, PLAYLIST_LENGTH);
+    const fillerWave = await this.rec.wave(userId, { limit: PLAYLIST_LENGTH });
     return mergeUnique(moodTracks, fillerWave, PLAYLIST_LENGTH);
   }
 
@@ -272,6 +274,53 @@ export class DailyPlaylistService {
       return [];
     }
   }
+
+  /**
+   * Map the *current* hour to a mood slug, biased by the user's actual
+   * listening pattern. We bucket their last 30 days of plays into four
+   * 6-hour quadrants, work out which mood each quadrant the user most
+   * resembles, and use *now's* quadrant.
+   *
+   * The previous implementation just used UTC wall-clock hour for
+   * everyone, which made the "Под настроение" daily playlist feel
+   * generic and out of sync with the user's actual habits. Cold-start
+   * users (no history) still fall back to wall-clock since there's
+   * nothing better to ask.
+   */
+  private async pickPersonalMoodSlug(userId: string, hasHistory: boolean): Promise<string> {
+    const wallClock = pickMoodSlugByHour(new Date().getUTCHours());
+    if (!hasHistory) return wallClock;
+
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const rows = await this.env.DB
+      .prepare(`SELECT played_at FROM play_history WHERE user_id = ? AND played_at >= ?`)
+      .bind(userId, since)
+      .all<{ played_at: number }>();
+
+    // Count plays per quadrant (0-5h, 6-11h, 12-17h, 18-23h).
+    const buckets = [0, 0, 0, 0];
+    for (const r of rows.results ?? []) {
+      const h = new Date(r.played_at).getUTCHours();
+      buckets[Math.floor(h / 6)]! += 1;
+    }
+    const total = buckets.reduce((a, b) => a + b, 0);
+    if (total < 20) return wallClock; // not enough signal yet
+
+    // Each quadrant has a "default" mood. We pick the slug for the
+    // quadrant that *now* falls into — but we also amplify the choice
+    // when the user shows a strong concentration there (>40% of plays
+    // in a single 6h window: stick to that quadrant's mood). A more
+    // diffuse pattern → just use now's quadrant. This is intentionally
+    // simple; full audio-features clustering is the next step up.
+    const nowQuadrant = Math.floor(new Date().getUTCHours() / 6);
+    const QUADRANT_MOOD: string[] = ['mood_chill', 'mood_focus', 'mood_workout', 'mood_chill'];
+    const peakQuadrant = buckets.indexOf(Math.max(...buckets));
+    const peakShare = total > 0 ? (buckets[peakQuadrant] ?? 0) / total : 0;
+    const slug = peakShare > 0.4
+      ? QUADRANT_MOOD[peakQuadrant]
+      : QUADRANT_MOOD[nowQuadrant];
+    return slug ?? wallClock;
+  }
 }
 
 function isoDate(ts: number): string {
@@ -289,13 +338,9 @@ function pickCover(tracks: Track[]): string | undefined {
   return undefined;
 }
 
-function pickMoodSlug(): string {
-  const hour = new Date().getUTCHours();
-  // Lightweight heuristic: late evening → chill, morning → focus,
-  // mid-day → upbeat. The cron runs once a day so this picks the slug
-  // for the time the cron fires (or the time the user first hits
-  // /today on day 1 — close enough). A fancier version would be
-  // per-user time-of-day sampling from history.
+function pickMoodSlugByHour(hour: number): string {
+  // Wall-clock fallback used by cold-start users (no history yet).
+  // Late evening → chill, morning → focus, mid-day → workout.
   if (hour < 8) return 'mood_chill';
   if (hour < 13) return 'mood_focus';
   if (hour < 19) return 'mood_workout';
