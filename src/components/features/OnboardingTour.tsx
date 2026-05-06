@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
@@ -46,15 +46,43 @@ interface TourStep {
 }
 
 const STEPS: TourStep[] = [
+  // Home is the index route mounted at "/" (see router.tsx —
+  // `{ index: true, element: <HomeOrLanding /> }`). There is no
+  // dedicated `/home` path; navigating there hits NotFoundPage.
   {
     targetId: 'tour-wave',
-    // Home is the index route mounted at "/" (see router.tsx —
-    // `{ index: true, element: <HomeOrLanding /> }`). There is no
-    // dedicated `/home` path; navigating there hits NotFoundPage.
     route: '/',
     titleKey: 'onboarding.tour.wave.title',
     bodyKey: 'onboarding.tour.wave.body',
     placement: 'bottom',
+  },
+  {
+    targetId: 'tour-wave-settings',
+    route: '/',
+    titleKey: 'onboarding.tour.waveSettings.title',
+    bodyKey: 'onboarding.tour.waveSettings.body',
+    placement: 'bottom',
+  },
+  {
+    targetId: 'tour-ai',
+    route: '/',
+    titleKey: 'onboarding.tour.ai.title',
+    bodyKey: 'onboarding.tour.ai.body',
+    placement: 'bottom',
+  },
+  {
+    targetId: 'tour-daily',
+    route: '/',
+    titleKey: 'onboarding.tour.daily.title',
+    bodyKey: 'onboarding.tour.daily.body',
+    placement: 'top',
+  },
+  {
+    targetId: 'tour-recent',
+    route: '/',
+    titleKey: 'onboarding.tour.recent.title',
+    bodyKey: 'onboarding.tour.recent.body',
+    placement: 'top',
   },
   {
     targetId: 'tour-search',
@@ -71,11 +99,11 @@ const STEPS: TourStep[] = [
     placement: 'bottom',
   },
   {
-    targetId: 'tour-profile',
+    targetId: 'tour-subscription',
     route: '/profile',
-    titleKey: 'onboarding.tour.profile.title',
-    bodyKey: 'onboarding.tour.profile.body',
-    placement: 'bottom',
+    titleKey: 'onboarding.tour.subscription.title',
+    bodyKey: 'onboarding.tour.subscription.body',
+    placement: 'top',
   },
 ];
 
@@ -142,12 +170,14 @@ interface TourCardProps {
   total: number;
   rect: SpotlightRect;
   onNext: () => void;
+  onBack: () => void;
   onSkip: () => void;
 }
 
-function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
+function TourCard({ step, index, total, rect, onNext, onBack, onSkip }: TourCardProps) {
   const t = useT();
   const isLast = index === total - 1;
+  const isFirst = index === 0;
   const cardRef = useRef<HTMLDivElement | null>(null);
   // Real card height after layout. We keep a sensible initial guess
   // (200) so the first frame doesn't jump from 0 → measured height.
@@ -275,10 +305,18 @@ function TourCard({ step, index, total, rect, onNext, onSkip }: TourCardProps) {
         >
           {t('onboarding.skip')}
         </button>
-        <Button size="sm" onClick={onNext} className="gap-1.5">
-          {isLast ? t('onboarding.done') : t('onboarding.next')}
-          {!isLast && <ArrowRight size={14} />}
-        </Button>
+        <div className="flex items-center gap-2">
+          {!isFirst && (
+            <Button size="sm" variant="outline" onClick={onBack} className="gap-1.5">
+              <ArrowLeft size={14} />
+              {t('onboarding.back')}
+            </Button>
+          )}
+          <Button size="sm" onClick={onNext} className="gap-1.5">
+            {isLast ? t('onboarding.done') : t('onboarding.next')}
+            {!isLast && <ArrowRight size={14} />}
+          </Button>
+        </div>
       </div>
     </motion.div>
   );
@@ -318,8 +356,11 @@ export function OnboardingTour() {
   }, [eligible]);
 
   // On every step transition: navigate to the route that owns the
-  // step's target, then poll for the target element until it appears
-  // (give it ~3s, then bail to a centre-screen fallback).
+  // step's target, scroll the target into view, then poll for the
+  // target element until it appears (give it ~3s, then bail to a
+  // centre-screen fallback). Without the explicit scrollIntoView the
+  // spotlight could land on an off-screen element — user reported
+  // "оно не скролит к выделенному компоненту".
   useLayoutEffect(() => {
     if (!running) return;
     const step = STEPS[stepIndex];
@@ -330,10 +371,38 @@ export function OnboardingTour() {
 
     let cancelled = false;
     let frames = 0;
+    let scrolled = false;
     const tick = () => {
       if (cancelled) return;
       const el = document.querySelector(`[data-tour-id="${step.targetId}"]`);
       if (el && el.getBoundingClientRect().width > 0) {
+        if (!scrolled) {
+          scrolled = true;
+          // Centre the target vertically so the floating tooltip has
+          // room above and below — `block: 'center'` is friendlier
+          // than `'start'` for short targets like the WaveHero, which
+          // otherwise hug the top of the viewport with the tooltip
+          // pushed off-screen below.
+          el.scrollIntoView({
+            block: 'center',
+            inline: 'nearest',
+            behavior: reduce ? 'auto' : 'smooth',
+          });
+          // Wait for the smooth scroll to settle before reading the
+          // post-scroll rect. 380ms covers the default browser scroll
+          // duration on every engine; reduce-motion users skip the
+          // wait entirely (the scroll was instant for them anyway).
+          window.setTimeout(() => {
+            if (cancelled) return;
+            const after = document.querySelector(`[data-tour-id="${step.targetId}"]`);
+            if (after && after.getBoundingClientRect().width > 0) {
+              setRect(readRect(after));
+            } else {
+              setRect(fallbackRect());
+            }
+          }, reduce ? 0 : 380);
+          return;
+        }
         setRect(readRect(el));
         return;
       }
@@ -348,7 +417,7 @@ export function OnboardingTour() {
     return () => {
       cancelled = true;
     };
-  }, [running, stepIndex, navigate]);
+  }, [running, stepIndex, navigate, reduce]);
 
   // Keep the spotlight glued to the target on resize/scroll.
   useEffect(() => {
@@ -387,6 +456,10 @@ export function OnboardingTour() {
       return;
     }
     setStepIndex((i) => i + 1);
+  };
+
+  const handleBack = () => {
+    setStepIndex((i) => Math.max(0, i - 1));
   };
 
   const handleSkip = () => {
@@ -436,6 +509,7 @@ export function OnboardingTour() {
             total={STEPS.length}
             rect={rect}
             onNext={handleNext}
+            onBack={handleBack}
             onSkip={handleSkip}
           />
         </motion.div>

@@ -360,7 +360,6 @@ function IdentityHero({
     <TiltCard intensity={6} hoverScale={1} glareStrength={0.4} className="rounded-[var(--radius-2xl)]">
     <section
       className="group relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)] sm:p-8"
-      data-tour-id="tour-profile"
     >
       <div
         className="pointer-events-none absolute inset-0 opacity-80"
@@ -487,7 +486,10 @@ function SubscriptionCard({
         glareStrength={0.4}
         className="rounded-[var(--radius-2xl)]"
       >
-        <section className="group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-4 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <section
+          className="group relative flex flex-col gap-3 overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-4 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-5"
+          data-tour-id="tour-subscription"
+        >
           {/* Static idle gradient — same two-corner signature as the
               RoomsShortcut / AI promo. */}
           <div
@@ -551,7 +553,10 @@ function SubscriptionCard({
   // button lives inside; intensity 6 keeps its hit-box stable.
   return (
     <TiltCard intensity={6} hoverScale={1} glareStrength={0.45} className="rounded-[var(--radius-2xl)]">
-    <section className="group relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)] sm:p-10">
+    <section
+      className="group relative overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card p-6 transition-colors hover:border-[var(--color-border-strong)] sm:p-10"
+      data-tour-id="tour-subscription"
+    >
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden

@@ -1036,7 +1036,23 @@
     "tour": {
       "wave": {
         "title": "Your wave. Tuned to your taste.",
-        "body": "Name 1–6 favourite artists and the player will weave an endless stream around you. Every like, skip and replay teaches the wave more."
+        "body": "An endless stream tuned to you. Every like, skip and replay teaches the wave more — hit \"Start the wave\" and go."
+      },
+      "waveSettings": {
+        "title": "Fine-tune the wave.",
+        "body": "Dial in a mood (chill / workout / party) and a character (familiar / discover / popular). Stack them, reset them in one click."
+      },
+      "ai": {
+        "title": "AI playlist from a prompt.",
+        "body": "Describe what you want — \"tracks for a run with guitar riffs\" — and the player builds a playlist around that vibe."
+      },
+      "daily": {
+        "title": "Today's playlists.",
+        "body": "Three flavours every day: Familiar (your loves), Discovery (new picks for your taste), Mood (matched to time of day and history). Refreshed every morning."
+      },
+      "recent": {
+        "title": "Recently played.",
+        "body": "Your last tracks one tap away. Hit any of them and we resume from there as a queue."
       },
       "search": {
         "title": "Search without borders.",
@@ -1044,11 +1060,11 @@
       },
       "library": {
         "title": "Your library, your call.",
-        "body": "Likes, playlists, history — yours. No algorithm decides what you hear tomorrow."
+        "body": "Likes, playlists, history and uploads — all your collections under one tab. Likes are the strongest signal to your recommendations."
       },
-      "profile": {
-        "title": "Lossless and uncensored.",
-        "body": "Subscribe for 99 Stars/mo: 24-bit lossless, unlimited listening, and the right to replace any censored track with your own version. Only you hear the edits."
+      "subscription": {
+        "title": "Subscription: lossless + uncensored.",
+        "body": "99 Stars/mo: 24-bit lossless, unlimited listening, and the right to replace any censored track with your own version. Only you hear the edits."
       }
     }
   },
@@ -1076,7 +1092,7 @@
     "historyCancel": "Cancel",
     "historyResultLine": "Done. {count} entries removed.",
     "tourTitleLong": "Replay the tour",
-    "tourHintLong": "Plays the four-step product tour again on the next page load.",
+    "tourHintLong": "Plays the eight-step product tour again on the next page load.",
     "tourCtaLong": "Replay the tour",
     "tourDoneLine": "Done — the tour will start in a second."
   },
