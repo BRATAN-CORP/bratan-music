@@ -18,6 +18,7 @@ import { useDislikesStore } from '@/store/dislikes';
 import { useToggleDislike } from '@/hooks/useDislikes';
 import { useAuthStore } from '@/store/auth';
 import { useIsTrackSavedOffline, useTrackDownloadJob, useOfflineActions } from '@/hooks/useOfflineActions';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -90,6 +91,10 @@ export function Player() {
   const reduce = useReducedMotion();
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
+  // Locally-cached cover when the track is saved offline; falls back
+  // to the network URL otherwise. Lets the mini-player thumbnail keep
+  // rendering its artwork after the device drops the network.
+  const trackCoverUrl = useOfflineCoverUrl('track', currentTrack?.id, currentTrack?.coverUrl);
   const navigate = useNavigate();
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
@@ -371,7 +376,7 @@ export function Player() {
                 key={currentTrack.id}
               >
                 <CoverFallback
-                  src={currentTrack.coverUrl}
+                  src={trackCoverUrl}
                   name={currentTrack.title || currentTrack.artist || 'Track'}
                   alt={currentTrack.title}
                   initialsClassName="text-[10px]"
