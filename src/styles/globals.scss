@@ -308,12 +308,17 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
   }
 }
 
-/* Backdrop scrim companion to liquid-glass — mid-darkness with a slight
-   blur so layered modals don't feel fully opaque. */
+/* Backdrop scrim companion to liquid-glass — mid-darkness with an
+   actually noticeable blur. The previous 8px was barely doing anything
+   at hero-heading sizes (text-shadows on .shine-text and the AI
+   banner were still readable through the scrim). 18px + 140%
+   saturation gives a real "depth-of-field" effect: glyphs lose their
+   crisp edge but the colour temperature of the scene is preserved,
+   so the page reads as out-of-focus rather than dimmed-out. */
 .liquid-glass-scrim {
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .surface-panel {
