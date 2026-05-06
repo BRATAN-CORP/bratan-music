@@ -39,7 +39,37 @@
   --pwa-safe-right: 0px;
 }
 
-@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+/*
+ * Only enable the system safe-area insets when the app runs as an
+ * installed PWA on a touch device — i.e. the iOS / Android home-screen
+ * scenarios that own the status-bar / notch / Dynamic Island chrome.
+ *
+ * `display-mode: standalone` covers the canonical iOS / Android PWA
+ * install. We explicitly DO NOT match `fullscreen` or `minimal-ui`:
+ *   - `fullscreen` is rare and reserved for game-like full-screen
+ *     installs which typically do their own chrome handling and
+ *     shouldn't get a forced top inset on top.
+ *   - `minimal-ui` is a transient state on some Chrome versions that
+ *     appears in regular browser tabs while the URL bar collapses,
+ *     which would have applied the padding to plain web users — the
+ *     opposite of what we want.
+ *
+ * `pointer: coarse` filters out desktop PWA installs (Windows /
+ * macOS / Linux), where `display-mode: standalone` matches but the
+ * notion of a notch / status-bar inset doesn't apply — desktop
+ * PWAs already have their own window chrome and forcing a top
+ * inset there just eats vertical space (the user's "не сжирало
+ * пр-во на пк, сайте" complaint). Touch devices report
+ * `pointer: coarse` reliably; iPads in desktop mode and Surface
+ * laptops report `pointer: fine` so they fall through and stay
+ * at `0px`.
+ *
+ * Telegram WebApp / regular mobile Safari tabs report
+ * `display-mode: browser` and so don't match either branch — they
+ * stay on the `0px` defaults from the `:root` block above, exactly
+ * the user's request that the design "не изменилось" outside PWA.
+ */
+@media (display-mode: standalone) and (pointer: coarse) {
   :root {
     --pwa-safe-top: env(safe-area-inset-top, 0px);
     --pwa-safe-bottom: env(safe-area-inset-bottom, 0px);
