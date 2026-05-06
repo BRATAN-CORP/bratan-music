@@ -125,8 +125,21 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
           aria-modal="true"
           aria-label={t('lyrics.title')}
         >
+          {/*
+           * `paddingTop` keeps the original 0.75rem rhythm but mixes
+           * in the PWA notch / status-bar inset so the close (X)
+           * button isn't covered by the iPhone notch / Dynamic Island
+           * when the app runs as an installed PWA. The variable
+           * resolves to `0px` in regular browser tabs and inside
+           * Telegram WebApp (display-mode: browser) so the on-screen
+           * position is byte-for-byte identical there. See
+           * `globals.scss` for the `--pwa-safe-top` definition.
+           */}
           <motion.div
-            className="relative flex shrink-0 items-center justify-end px-3 pt-3"
+            className="relative flex shrink-0 items-center justify-end px-3"
+            style={{
+              paddingTop: 'calc(0.75rem + var(--pwa-safe-top))',
+            }}
             initial={reduce ? false : { opacity: 0, y: -8 }}
             animate={reduce ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.22, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
