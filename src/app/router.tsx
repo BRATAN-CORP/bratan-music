@@ -27,6 +27,7 @@ import { ExploreListPage } from '@/app/explore/list';
 import { TidalPlaylistPage } from '@/app/explore/playlist';
 import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
+import { DownloadedPlaylistPage } from '@/app/library/downloaded/page';
 import { ProfilePage } from '@/app/profile/page';
 import { AiPlaylistPage } from '@/app/ai/page';
 import { DailyPlaylistPreviewPage } from '@/app/daily/page';
@@ -159,6 +160,7 @@ const router = createBrowserRouter(
         { path: 'explore/playlist/:uuid', element: <TidalPlaylistPage /> },
         { path: 'library', element: <LibraryPage /> },
         { path: 'library/uploads', element: <UploadsPage /> },
+        { path: 'library/downloaded', element: <DownloadedPlaylistPage /> },
         { path: 'profile', element: <ProfilePage /> },
         { path: 'ai', element: <AiPlaylistPage /> },
         { path: 'daily/:id', element: <DailyPlaylistPreviewPage /> },

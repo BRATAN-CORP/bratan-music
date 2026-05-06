@@ -6,18 +6,20 @@ import { PlaylistCard } from '@/components/features/PlaylistCard';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
 import { CreatePlaylistDialog } from '@/components/features/CreatePlaylistDialog';
+import { OfflineLibraryTab } from '@/components/features/OfflineLibraryTab';
 import { usePlaylists, useLikedAlbums, useLikedArtists } from '@/hooks/useLibrary';
 import { useUploads } from '@/hooks/useUploads';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
 
-type Tab = 'playlists' | 'albums' | 'artists';
+type Tab = 'playlists' | 'albums' | 'artists' | 'downloaded';
 
 const tabs: { key: Tab; labelKey: TranslationKey }[] = [
   { key: 'playlists', labelKey: 'library.tabPlaylists' },
   { key: 'albums', labelKey: 'library.tabAlbums' },
   { key: 'artists', labelKey: 'library.tabArtists' },
+  { key: 'downloaded', labelKey: 'library.tabDownloaded' },
 ];
 
 // Picks the right Russian/English plural form for the "N tracks" label.
@@ -174,6 +176,8 @@ export function LibraryPage() {
             )}
           </>
         )}
+
+        {tab === 'downloaded' && <OfflineLibraryTab />}
 
         <CreatePlaylistDialog open={showCreate} onClose={() => setShowCreate(false)} />
       </div>
