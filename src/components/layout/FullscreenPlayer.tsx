@@ -432,11 +432,22 @@ export function FullscreenPlayer() {
 
           <div
             className="relative z-[20] flex items-center justify-between px-5 pb-4"
-            // Sheet-dismiss drag is now wired on the inner wrapper
-            // (one level up). The header still listens for pointer
-            // events normally so its buttons keep working; empty
-            // space inside the header bubbles up to the wrapper's
+            // Sheet-dismiss drag is wired on the inner wrapper one
+            // level up. The header still listens for pointer events
+            // normally so its buttons keep working; empty space
+            // inside the header bubbles up to the wrapper's
             // `onPointerDown={startSheetDrag}` and starts the drag.
+            //
+            // `touchAction: 'none'` is critical: with the previous
+            // `pan-y` value the browser claimed every vertical pan as
+            // a native scroll attempt and fired `pointercancel` on
+            // motion's drag pipeline, which is exactly why the
+            // user-reported "свайп сверху вниз по пустому пространству"
+            // never fired the dismiss. The body is `overflow:hidden`
+            // and the player is a fullscreen modal so there is
+            // nowhere for the browser to scroll anyway — letting JS
+            // own all gestures here makes the wrapper's `drag='y'`
+            // see vertical pan events and run the dismiss reliably.
             //
             // `paddingTop` keeps the original 1rem rhythm (`py-4`) but
             // adds the PWA notch / status-bar inset on top so the
@@ -446,7 +457,7 @@ export function FullscreenPlayer() {
             // position is unchanged outside PWA mode — see
             // `globals.scss` for the `--pwa-safe-top` definition.
             style={{
-              touchAction: 'pan-y',
+              touchAction: 'none',
               paddingTop: 'calc(1rem + var(--pwa-safe-top))',
             }}
           >
@@ -769,7 +780,22 @@ export function FullscreenPlayer() {
               style={
                 {
                   maxWidth: 'min(28rem, calc(100vh - 28rem))',
-                  touchAction: 'pan-y',
+                  // `touch-action: none` is intentional. The cover
+                  // covers the bulk of the fullscreen surface, so
+                  // when it claimed vertical pan as native browser
+                  // scroll (the previous `pan-y` value, also the
+                  // implicit default motion picks for `drag='x'`)
+                  // the user's swipe-down dismiss never reached the
+                  // parent wrapper — the browser swallowed the
+                  // gesture and fired `pointercancel` on motion's
+                  // drag pipeline, leaving the player stuck.
+                  // Letting JS own every gesture lets the cover keep
+                  // its `drag='x'` next/prev navigation while
+                  // simultaneously letting the parent's `drag='y'`
+                  // capture vertical pans for the dismiss; motion's
+                  // per-axis drags coexist because each one ignores
+                  // the orthogonal axis.
+                  touchAction: 'none',
                   // Suppress the desktop browser's native image-drag
                   // and text-selection so a left-click + drag on the
                   // cover triggers motion's `drag='x'` swipe instead
