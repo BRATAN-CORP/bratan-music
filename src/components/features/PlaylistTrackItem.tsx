@@ -4,6 +4,7 @@ import { Reorder, useDragControls, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackInlineActions } from '@/components/features/TrackInlineActions';
 import { useT } from '@/i18n';
@@ -45,6 +46,11 @@ export function PlaylistTrackItem({
   const [dragging, setDragging] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Prefer the locally-stored cover blob when the track is saved
+  // offline so the row keeps painting real artwork even when the
+  // device is offline (otherwise the network URL fails and the
+  // browser falls back to its broken-image glyph).
+  const coverUrl = useOfflineCoverUrl('track', track.id, track.coverUrl);
 
   const handleDragStart = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -73,9 +79,9 @@ export function PlaylistTrackItem({
       )}
 
       <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-        {track.coverUrl ? (
+        {coverUrl ? (
           <div className="relative h-10 w-10 overflow-hidden rounded-[var(--radius-sm)]">
-            <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
             {/* Match TrackItem's overlay logic: when this row is the
                 currently-loaded track we always show the overlay
                 (Pause if audio is advancing, Play if it's paused);

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import type { Track } from '@/types';
 import { useTrackPlayback, useTrackHoverPrefetch } from '@/hooks/usePlaybackSync';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackInlineActions } from '@/components/features/TrackInlineActions';
 import { OfflineBadge } from '@/components/features/OfflineBadge';
@@ -49,6 +50,12 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   // allowed — that's an explicit override, see store/player.ts) but
   // the visual weight drops so disliked items recede in long lists.
   const banned = useIsTrackBanned(track);
+  // Prefer the locally-stored cover blob when the track is saved
+  // offline so the row keeps painting real artwork even when the
+  // device is offline (otherwise the network URL fails and the
+  // browser falls back to its broken-image glyph). Falls back to
+  // the network `track.coverUrl` for non-saved tracks.
+  const coverUrl = useOfflineCoverUrl('track', track.id, track.coverUrl);
 
   return (
     <motion.div
@@ -80,9 +87,9 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       }}
     >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center">
-        {track.coverUrl ? (
+        {coverUrl ? (
           <div className="relative h-10 w-10 overflow-hidden rounded-[var(--radius-sm)]">
-            <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
+            <img src={coverUrl} alt="" className="h-full w-full object-cover" />
             {/* Hover overlay. Shows a Pause icon when this row is the
                 currently-playing track (signals "click to stop"), or a
                 Play icon when starting a new track. The active row
