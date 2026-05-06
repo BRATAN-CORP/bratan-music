@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { usePlayerStore } from '@/store/player';
 import { queryClient } from '@/lib/queryClient';
+// Import directly from the storage submodule (not the `@/lib/offline`
+// barrel) — the barrel transitively pulls in `streamResolver`, which
+// reads `useAuthStore`, which would form a circular module graph and
+// trip Vite's strict-init checks during fast refresh.
+import { wipeAll as wipeOfflineCache } from '@/lib/offline/storage';
 
 interface User {
   id: string;
@@ -70,6 +75,11 @@ export const useAuthStore = create<AuthState>()(
         // the user. `clear()` removes all queries and aborts in-flight
         // requests, which is what we want at sign-out.
         queryClient.clear();
+        // Drop the on-device offline cache so a subsequent sign-in on
+        // the same machine doesn't surface the previous user's saved
+        // tracks. Best-effort — IndexedDB might be unavailable in
+        // private mode, in which case the wipe is a no-op.
+        void wipeOfflineCache().catch(() => { /* ignore */ });
         set({ user: null, accessToken: null, refreshToken: null });
       },
       isAuthenticated: () => get().accessToken !== null,

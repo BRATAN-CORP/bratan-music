@@ -85,6 +85,7 @@ export function useSettingsSync() {
         crossfade: state.crossfade,
         crossfadeDuration: state.crossfadeDuration,
         tidalQuality: state.tidalQuality,
+        offlineQuality: state.offlineQuality,
         infinitePlayback: state.infinitePlayback,
         eqGains: state.eqGains,
         locale: state.locale,

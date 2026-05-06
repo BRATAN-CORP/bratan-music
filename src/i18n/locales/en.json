@@ -70,6 +70,8 @@
     "themeToggleAria": "Toggle theme",
     "tidalQualityTitle": "Quality (Tidal)",
     "tidalQualityHint": "Depends on the Tidal proxy account — unavailable qualities are downgraded to whatever the account can stream.",
+    "offlineQualityTitle": "Offline quality",
+    "offlineQualityHint": "Quality at which tracks are saved to your device for offline playback. If the chosen tier is unavailable, the next-best tier is downloaded.",
     "languageTitle": "Language",
     "crossfadeSeconds": "{value}s"
   },
