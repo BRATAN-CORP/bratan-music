@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { jwtAuth } from '../middleware/auth';
 import { TidalService } from '../services/tidal/TidalService';
+import { StreamUrlMemoCache } from '../services/streamCache';
 
 const tracks = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -134,15 +135,17 @@ tracks.get('/:id/stream', async (c) => {
   const overridePromise = c.env.DB.prepare(
     'SELECT r2_key, mime_type FROM track_overrides WHERE user_id = ? AND track_id = ? LIMIT 1'
   ).bind(userId, id).first<{ r2_key: string; mime_type: string }>();
-  const cachedPromise = c.env.SESSIONS.get<{ url: string; quality: string; expiresAt: number }>(
-    cacheKey,
-    'json',
-  );
+  // Per-isolate in-memory memo replaces the previous KV slot for the
+  // 300s stream-URL cache. KV's free tier caps writes at 1000/day
+  // namespace-wide, and the previous shape spent ~1 write per song
+  // play — enough to brick stream resolution after a couple dozen
+  // active users. The memo lookup is synchronous, so we don't need
+  // to put it in the parallel-await fan-out below.
+  const cached = StreamUrlMemoCache.get(cacheKey);
 
-  const [sub, override, cached] = await Promise.all([
+  const [sub, override] = await Promise.all([
     subPromise,
     overridePromise,
-    cachedPromise,
   ]);
 
   if (!isAdmin && !sub) {
@@ -239,21 +242,16 @@ tracks.get('/:id/stream', async (c) => {
   const resolved = await tidal.resolveStream(id, quality);
   const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(resolved.url)}`;
 
-  // Write the resolved URL back into KV for the next play of this
-  // track. `waitUntil` keeps the response on the fast path — the
-  // client doesn't have to wait for the KV round trip.
+  // Memoise the resolved URL in-process for the next play of this
+  // track on the same isolate. Replaces the previous KV write —
+  // see `streamCache.ts` for the full rationale (KV free-tier
+  // 1000-writes/day cap, dominated by this slot).
   const STREAM_URL_TTL_S = 300;
-  c.executionCtx.waitUntil(
-    c.env.SESSIONS.put(
-      cacheKey,
-      JSON.stringify({
-        url: resolved.url,
-        quality: resolved.quality,
-        expiresAt: Date.now() + (STREAM_URL_TTL_S - 30) * 1000,
-      }),
-      { expirationTtl: STREAM_URL_TTL_S },
-    ),
-  );
+  StreamUrlMemoCache.set(cacheKey, {
+    url: resolved.url,
+    quality: resolved.quality,
+    expiresAt: Date.now() + (STREAM_URL_TTL_S - 30) * 1000,
+  });
 
   return c.json({
     url: proxied,

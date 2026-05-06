@@ -1,5 +1,11 @@
 import { TidalAuth } from './TidalAuth';
 import type { Env } from '../../types/env';
+import {
+  cacheGetJson,
+  cacheGetText,
+  cachePutJson,
+  cachePutText,
+} from '../streamCache';
 
 const API_BASE = 'https://api.tidal.com/v1';
 // openapi.tidal.com exposes the entire quality matrix for a track in
@@ -94,10 +100,19 @@ const DISCOVERY_BREAKER_KEY = 'tidal-discovery-breaker';
 const DISCOVERY_BREAKER_TTL_S = 60 * 60; // 1 hour
 
 export class TidalWeb {
-  private kv: KVNamespace | null;
-
-  constructor(private auth: TidalAuth, env?: Env) {
-    this.kv = env?.SESSIONS ?? null;
+  // The legacy KV-backed shape was retired — the worker's free-tier
+  // KV namespace is capped at 1000 writes/day and the discovery /
+  // quality / breaker slots used to compete with the high-volume
+  // stream-URL slot for that quota. All four caches now live on the
+  // Cloudflare Cache API (which has no daily write limit), see
+  // `services/streamCache.ts` for the helpers and the full rationale.
+  // The constructor still accepts `env` so call sites don't have to
+  // change, but it is otherwise unused.
+  constructor(
+    private auth: TidalAuth,
+    _env?: Env,
+  ) {
+    void _env;
   }
 
   async getStreamUrl(trackId: string, quality: string = 'HIGH'): Promise<string> {
@@ -346,18 +361,12 @@ export class TidalWeb {
   }
 
   private async readDiscoveryCache(trackId: string): Promise<DiscoveredQualities | null> {
-    if (!this.kv) return null;
-    try {
-      const cached = await this.kv.get<DiscoveredQualities>(
-        `${DISCOVERY_CACHE_PREFIX}${trackId}`,
-        'json',
-      );
-      if (!cached || !Array.isArray(cached.qualities)) return null;
-      const filtered = cached.qualities.filter((q) => QUALITY_LADDER.includes(q));
-      return { qualities: filtered };
-    } catch {
-      return null;
-    }
+    const cached = await cacheGetJson<DiscoveredQualities>(
+      `${DISCOVERY_CACHE_PREFIX}${trackId}`,
+    );
+    if (!cached || !Array.isArray(cached.qualities)) return null;
+    const filtered = cached.qualities.filter((q) => QUALITY_LADDER.includes(q));
+    return { qualities: filtered };
   }
 
   private async writeDiscoveryCache(
@@ -365,16 +374,11 @@ export class TidalWeb {
     value: DiscoveredQualities,
     ttlSeconds: number = DISCOVERY_CACHE_TTL_S,
   ): Promise<void> {
-    if (!this.kv) return;
-    try {
-      await this.kv.put(
-        `${DISCOVERY_CACHE_PREFIX}${trackId}`,
-        JSON.stringify(value),
-        { expirationTtl: ttlSeconds },
-      );
-    } catch {
-      /* ignore — cache is best-effort */
-    }
+    await cachePutJson(
+      `${DISCOVERY_CACHE_PREFIX}${trackId}`,
+      value,
+      ttlSeconds,
+    );
   }
 
   // ── Global discovery circuit breaker ────────────────────────────
@@ -386,52 +390,30 @@ export class TidalWeb {
   // set, `discoverQualities` bails immediately.
 
   private async isDiscoveryBreakerOpen(): Promise<boolean> {
-    if (!this.kv) return false;
-    try {
-      const v = await this.kv.get(DISCOVERY_BREAKER_KEY);
-      return v != null;
-    } catch {
-      return false;
-    }
+    const v = await cacheGetText(DISCOVERY_BREAKER_KEY);
+    return v != null;
   }
 
   private async tripDiscoveryBreaker(): Promise<void> {
-    if (!this.kv) return;
-    try {
-      await this.kv.put(DISCOVERY_BREAKER_KEY, '1', {
-        expirationTtl: DISCOVERY_BREAKER_TTL_S,
-      });
-      console.warn(
-        `[TidalWeb] discovery breaker tripped — suppressing openapi.tidal.com calls for ${DISCOVERY_BREAKER_TTL_S}s`,
-      );
-    } catch {
-      /* ignore */
-    }
+    await cachePutText(DISCOVERY_BREAKER_KEY, '1', DISCOVERY_BREAKER_TTL_S);
+    console.warn(
+      `[TidalWeb] discovery breaker tripped — suppressing openapi.tidal.com calls for ${DISCOVERY_BREAKER_TTL_S}s`,
+    );
   }
 
   private async readCachedQuality(trackId: string): Promise<string | null> {
-    if (!this.kv) return null;
-    try {
-      const raw = await this.kv.get(`${QUALITY_CACHE_PREFIX}${trackId}`);
-      if (!raw) return null;
-      const upper = raw.toUpperCase();
-      return QUALITY_LADDER.includes(upper) ? upper : null;
-    } catch {
-      return null;
-    }
+    const raw = await cacheGetText(`${QUALITY_CACHE_PREFIX}${trackId}`);
+    if (!raw) return null;
+    const upper = raw.toUpperCase();
+    return QUALITY_LADDER.includes(upper) ? upper : null;
   }
 
   private async writeCachedQuality(trackId: string, quality: string): Promise<void> {
-    if (!this.kv) return;
-    try {
-      await this.kv.put(
-        `${QUALITY_CACHE_PREFIX}${trackId}`,
-        quality.toUpperCase(),
-        { expirationTtl: QUALITY_CACHE_TTL_S },
-      );
-    } catch {
-      /* ignore — cache is best-effort */
-    }
+    await cachePutText(
+      `${QUALITY_CACHE_PREFIX}${trackId}`,
+      quality.toUpperCase(),
+      QUALITY_CACHE_TTL_S,
+    );
   }
 
   async getPlaybackInfo(trackId: string, quality: string = 'HIGH'): Promise<PlaybackInfo> {
