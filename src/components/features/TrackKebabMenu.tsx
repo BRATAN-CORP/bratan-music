@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Ban, Check, Disc, Download, ListOrdered, ListPlus, Loader2,
+  ArrowDownToLine, Ban, Check, Disc, Download, ListOrdered, ListPlus, Loader2,
   MoreHorizontal, Radio, RotateCcw, Share2, Trash2, Upload, User as UserIcon,
 } from 'lucide-react';
 import type { Track } from '@/types';
@@ -15,6 +15,7 @@ import { usePlayerStore } from '@/store/player';
 import { useDislikesStore } from '@/store/dislikes';
 import { useToggleDislike } from '@/hooks/useDislikes';
 import { useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
+import { useIsTrackSavedOffline, useTrackDownloadJob, useOfflineActions } from '@/hooks/useOfflineActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack, buildTrackShareUrl, copyToClipboard } from '@/lib/trackActions';
 import { toast } from '@/store/toast';
@@ -101,6 +102,11 @@ export function TrackKebabMenu({
   const toggleDislike = useToggleDislike();
 
   const removeFromPlaylist = useRemoveTrackFromPlaylist();
+
+  const trackSavedOffline = useIsTrackSavedOffline(track.id);
+  const trackDownloadJob = useTrackDownloadJob(track.id);
+  const { saveTrack, unsaveTrack, cancelTrack } = useOfflineActions();
+  const isTrackDownloading = trackDownloadJob && (trackDownloadJob.status === 'queued' || trackDownloadJob.status === 'downloading');
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpenState] = useState(false);
@@ -193,6 +199,17 @@ export function TrackKebabMenu({
 
   const handleOpenOverride = () => {
     setOverrideOpen(true);
+    close();
+  };
+
+  const handleOfflineToggle = () => {
+    if (isTrackDownloading) {
+      cancelTrack(track.id);
+    } else if (trackSavedOffline) {
+      void unsaveTrack(track.id);
+    } else {
+      void saveTrack(track);
+    }
     close();
   };
 
@@ -305,6 +322,22 @@ export function TrackKebabMenu({
               icon={downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
             >
               {t('track.download')}
+            </MenuItem>
+            <MenuItem
+              onClick={handleOfflineToggle}
+              icon={
+                isTrackDownloading
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : trackSavedOffline
+                    ? <Check size={14} className="text-[var(--color-accent)]" />
+                    : <ArrowDownToLine size={14} />
+              }
+            >
+              {isTrackDownloading
+                ? t('offline.cancelDownload')
+                : trackSavedOffline
+                  ? t('offline.removeFromDevice')
+                  : t('offline.listenOffline')}
             </MenuItem>
             {isAuthed && (
               <MenuItem onClick={handleOpenOverride} icon={<Upload size={14} />}>

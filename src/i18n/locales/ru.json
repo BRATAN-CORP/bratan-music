@@ -1565,5 +1565,14 @@
     "canvasUnavailable": "Canvas 2D недоступен",
     "compressFailed": "Не удалось сжать изображение до допустимого размера.",
     "readFailed": "Не удалось прочитать изображение"
+  },
+  "offline": {
+    "listenOffline": "Слушать офлайн",
+    "removeFromDevice": "Удалить с устройства",
+    "cancelDownload": "Отменить загрузку",
+    "saveToDevice": "Сохранить на устройство",
+    "savedToDevice": "Сохранено на устройство",
+    "removedFromDevice": "Удалено с устройства",
+    "downloadCancelled": "Загрузка отменена"
   }
 }

@@ -230,6 +230,74 @@ class DownloadsManager {
     }
   }
 
+  /** Drop a single track from the offline cache and emit the matching
+   *  `track-deleted` event so the zustand mirror updates immediately.
+   *  The 3-dot menu calls this when the user hits "Удалить с
+   *  устройства" on an individually-saved track. */
+  async removeTrack(trackId: string): Promise<void> {
+    this.cancel(`track:${trackId}`);
+    const track = await db.getTrack(trackId);
+    if (track) {
+      await db.deleteTrack(trackId);
+    }
+    this.events.emit({ type: 'track-deleted', trackId });
+  }
+
+  /** Drop an album and any tracks that were *only* kept around because
+   *  of this album. Tracks that the user explicitly saved on their own,
+   *  or that another saved playlist still references, stay put. */
+  async removeAlbum(albumId: string): Promise<void> {
+    this.cancel(`album:${albumId}`);
+    const album = await db.getAlbum(albumId);
+    if (!album) {
+      this.events.emit({ type: 'album-deleted', albumId });
+      return;
+    }
+    const orphanedTrackIds: string[] = [];
+    await db.deleteAlbum(albumId);
+    for (const tid of album.trackIds) {
+      const t = await db.getTrack(tid);
+      if (!t) continue;
+      const remaining = t.collections.filter((c) => c !== `album:${albumId}`);
+      if (remaining.length === 0) {
+        await db.deleteTrack(tid);
+        orphanedTrackIds.push(tid);
+      } else {
+        await db.putTrack({ ...t, collections: remaining });
+      }
+    }
+    this.events.emit({ type: 'album-deleted', albumId });
+    for (const tid of orphanedTrackIds) {
+      this.events.emit({ type: 'track-deleted', trackId: tid });
+    }
+  }
+
+  async removePlaylist(playlistId: string): Promise<void> {
+    this.cancel(`playlist:${playlistId}`);
+    const playlist = await db.getPlaylist(playlistId);
+    if (!playlist) {
+      this.events.emit({ type: 'playlist-deleted', playlistId });
+      return;
+    }
+    const orphanedTrackIds: string[] = [];
+    await db.deletePlaylist(playlistId);
+    for (const tid of playlist.trackIds) {
+      const t = await db.getTrack(tid);
+      if (!t) continue;
+      const remaining = t.collections.filter((c) => c !== `playlist:${playlistId}`);
+      if (remaining.length === 0) {
+        await db.deleteTrack(tid);
+        orphanedTrackIds.push(tid);
+      } else {
+        await db.putTrack({ ...t, collections: remaining });
+      }
+    }
+    this.events.emit({ type: 'playlist-deleted', playlistId });
+    for (const tid of orphanedTrackIds) {
+      this.events.emit({ type: 'track-deleted', trackId: tid });
+    }
+  }
+
   /** Snapshot of every known job — used by the zustand store on
    *  init so a remount picks up the existing state rather than
    *  starting empty. */
