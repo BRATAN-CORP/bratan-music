@@ -1,17 +1,11 @@
 import { useState } from 'react';
-import { Download, Heart, Pause, Play, GripVertical, Upload, Ban } from 'lucide-react';
+import { Pause, Play, GripVertical, Ban } from 'lucide-react';
 import { Reorder, useDragControls, type PanInfo } from 'motion/react';
 import type { Track } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { useToggleLike } from '@/hooks/useLibrary';
-import { useAuthStore } from '@/store/auth';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
-import { useCoarsePointer } from '@/hooks/useCoarsePointer';
-import { downloadTrack } from '@/lib/trackActions';
-import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
-import { TrackKebabMenu } from '@/components/features/TrackKebabMenu';
+import { TrackInlineActions } from '@/components/features/TrackInlineActions';
 import { useT } from '@/i18n';
 
 interface PlaylistTrackItemProps {
@@ -45,29 +39,12 @@ export function PlaylistTrackItem({
   hideRemoveMenu,
 }: PlaylistTrackItemProps) {
   const t = useT();
-  const isAuthed = useAuthStore((s) => Boolean(s.user));
-  const { isLiked, toggle } = useToggleLike();
-  const liked = isAuthed && isLiked(track.id);
   const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
-  const coarse = useCoarsePointer();
   const banned = useIsTrackBanned(track);
   const dragControls = useDragControls();
   const [dragging, setDragging] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [overrideOpen, setOverrideOpen] = useState(false);
-
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      await downloadTrack(track);
-    } catch (err) {
-      console.error('[download]', err);
-    } finally {
-      setDownloading(false);
-    }
-  };
+  const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleDragStart = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -150,57 +127,13 @@ export function PlaylistTrackItem({
         {formatDuration(track.duration)}
       </span>
 
-      <div className="flex items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
-        <Button
-          variant="ghost"
-          size="icon"
-          className={'h-7 w-7 ' + (liked ? 'text-[var(--color-accent)]' : '')}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isAuthed) return;
-            toggle(track);
-          }}
-          aria-label={liked ? t('player.unlike') : t('player.like')}
-        >
-          <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
-        </Button>
-        {isAuthed && !coarse && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleDownload}
-              disabled={downloading}
-              aria-label={t('track.download')}
-              title={t('track.download')}
-            >
-              <Download size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={(e) => { e.stopPropagation(); setOverrideOpen(true); }}
-              aria-label={t('track.uploadOwn')}
-              title={t('track.uploadOwn')}
-            >
-              <Upload size={14} />
-            </Button>
-          </>
-        )}
-        <TrackKebabMenu
-          track={track}
-          playlistId={playlistId}
-          hideRemoveFromPlaylist={hideRemoveMenu}
-        />
-      </div>
-
-      <TrackOverrideModal
-        open={overrideOpen}
-        onClose={() => setOverrideOpen(false)}
-        trackId={track.id}
-        trackTitle={`${track.artist} — ${track.title}`}
+      <TrackInlineActions
+        track={track}
+        hovered={hovered}
+        menuOpen={menuOpen}
+        onMenuOpenChange={setMenuOpen}
+        playlistId={playlistId}
+        hideRemoveFromPlaylistMenu={hideRemoveMenu}
       />
     </>
   );
@@ -229,6 +162,8 @@ export function PlaylistTrackItem({
           'group flex cursor-pointer items-center gap-3 border-b border-border bg-[var(--color-bg)] px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary ' +
           (banned && !isActive ? 'saturate-50' : '')
         }
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
         onClick={() => {
           if (dragging) return;
           if (isActive) {
@@ -249,6 +184,8 @@ export function PlaylistTrackItem({
         'group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-[colors,opacity] hover:bg-secondary hover:opacity-100 ' +
         (banned && !isActive ? 'opacity-50 saturate-50' : '')
       }
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       onClick={() => {
         if (isActive) {
           playOrToggle(track);

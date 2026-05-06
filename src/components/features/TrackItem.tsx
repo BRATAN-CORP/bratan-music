@@ -1,17 +1,11 @@
 import { useState } from 'react';
-import { Download, Heart, Pause, Play, Upload, Ban } from 'lucide-react';
+import { Pause, Play, Ban } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Track } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { useToggleLike } from '@/hooks/useLibrary';
-import { useAuthStore } from '@/store/auth';
 import { useTrackPlayback, useTrackHoverPrefetch } from '@/hooks/usePlaybackSync';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
-import { useCoarsePointer } from '@/hooks/useCoarsePointer';
-import { downloadTrack } from '@/lib/trackActions';
-import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
-import { TrackKebabMenu } from '@/components/features/TrackKebabMenu';
+import { TrackInlineActions } from '@/components/features/TrackInlineActions';
 import { useT } from '@/i18n';
 
 interface TrackItemProps {
@@ -32,17 +26,15 @@ function formatDuration(seconds: number): string {
 
 export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: TrackItemProps) {
   const t = useT();
-  const isAuthed = useAuthStore((s) => Boolean(s.user));
-  const { isLiked, toggle } = useToggleLike();
-  const liked = isAuthed && isLiked(track.id);
-  const coarse = useCoarsePointer();
-
-  const [downloading, setDownloading] = useState(false);
-  const [overrideOpen, setOverrideOpen] = useState(false);
   // Pinned-visible flag for the right-hand action row while the kebab
   // popover is open. The popover lives in a body portal so the row's
-  // `md:focus-within` selector can't pick it up.
+  // `focus-within` selector can't pick it up.
   const [menuOpen, setMenuOpen] = useState(false);
+  // Pointer-hover state mirrored into React so motion's
+  // `AnimatePresence` can drive the heart-slides-left + kebab-fades-in
+  // reveal. CSS group-hover alone wouldn't be enough — we need a
+  // boolean flag to swap conditional children for AnimatePresence.
+  const [hovered, setHovered] = useState(false);
   // True when *this* row is the currently-loaded track. Used to swap
   // the cover-overlay icon (Play↔Pause) and to route clicks through
   // togglePlay() instead of restarting the track from zero. Resuming
@@ -57,24 +49,6 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
   // the visual weight drops so disliked items recede in long lists.
   const banned = useIsTrackBanned(track);
 
-  const handleDownload = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      await downloadTrack(track);
-    } catch (err) {
-      console.error('[download]', err);
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleOpenOverride = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOverrideOpen(true);
-  };
-
   return (
     <motion.div
       layout
@@ -87,7 +61,11 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
         'group flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 transition-colors hover:bg-secondary ' +
         (banned && !isActive ? 'saturate-50' : '')
       }
-      onPointerEnter={() => hoverPrefetch(track)}
+      onPointerEnter={() => {
+        hoverPrefetch(track);
+        setHovered(true);
+      }}
+      onPointerLeave={() => setHovered(false)}
       onClick={() => {
         // Active row → toggle play/pause (whether currently playing or
         // paused). Inactive row → owner's onPlay callback wires up the
@@ -159,54 +137,13 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
         {formatDuration(track.duration)}
       </span>
 
-      <div className={"flex items-center gap-0.5 transition-opacity " + (liked || menuOpen ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100')}>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={"h-7 w-7 " + (liked ? 'opacity-100 text-[var(--color-accent)]' : '')}
-          onClick={(e) => { e.stopPropagation(); if (isAuthed) toggle(track); }}
-          aria-label={liked ? t('player.unlike') : t('player.like')}
-        >
-          <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
-        </Button>
-        {isAuthed && !coarse && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleDownload}
-              disabled={downloading}
-              aria-label={t('track.download')}
-              title={t('track.download')}
-            >
-              <Download size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleOpenOverride}
-              aria-label={t('track.uploadOwn')}
-              title={t('track.uploadOwn')}
-            >
-              <Upload size={14} />
-            </Button>
-          </>
-        )}
-        <TrackKebabMenu
-          track={track}
-          playlistId={playlistId}
-          hideRemoveFromPlaylist={hideRemoveMenu}
-          onOpenChange={setMenuOpen}
-        />
-      </div>
-
-      <TrackOverrideModal
-        open={overrideOpen}
-        onClose={() => setOverrideOpen(false)}
-        trackId={track.id}
-        trackTitle={`${track.artist} — ${track.title}`}
+      <TrackInlineActions
+        track={track}
+        hovered={hovered}
+        menuOpen={menuOpen}
+        onMenuOpenChange={setMenuOpen}
+        playlistId={playlistId}
+        hideRemoveFromPlaylistMenu={hideRemoveMenu}
       />
     </motion.div>
   );
