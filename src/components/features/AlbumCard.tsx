@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Disc3, Play } from 'lucide-react';
+import { Disc3 } from 'lucide-react';
 import type { Album } from '@/types';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { AlbumPlayButton } from '@/components/features/AlbumPlayButton';
 import { useT } from '@/i18n';
 
 interface AlbumCardProps {
@@ -27,12 +28,11 @@ export function AlbumCard({ album }: AlbumCardProps) {
             </div>
           )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-          <div
-            className="absolute bottom-2 right-2 flex h-9 w-9 translate-y-3 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] opacity-0 shadow-lg transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100"
-            style={{ transform: 'translateZ(30px)' }}
-          >
-            <Play size={14} fill="currentColor" />
-          </div>
+          <AlbumPlayButton
+            albumId={album.id}
+            albumTitle={album.title}
+            className="absolute bottom-2 right-2 flex h-9 w-9 translate-y-3 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] opacity-0 shadow-lg transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 disabled:cursor-progress"
+          />
         </div>
       </TiltCard>
       <div className="min-w-0">
