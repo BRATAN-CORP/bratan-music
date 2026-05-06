@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import type { ArtistRef } from '@/types';
 import { cn } from '@/lib/utils';
+import { looksMultiCreditName, splitCredits } from '@/lib/artistCredit';
 
 /**
  * Render a comma-separated list of contributors where every name is
@@ -36,53 +37,6 @@ interface ArtistLinksProps {
   wrapperClassName?: string;
   /** Custom separator. Defaults to ", ". */
   separator?: string;
-}
-
-/**
- * Match every separator that visually splits a multi-credit string.
- * Includes the obvious ", " plus the long tail of upstream variants
- * we've seen on Tidal: "&", " / ", " feat.", " ft.", " vs.", " x ",
- * " · ", " — ". The regex is intentionally case-insensitive and
- * permissive — we'd rather mark a borderline single-artist name like
- * "Tyler, The Creator" as multi-credit and render it as plain text
- * than wrap the whole string in ONE link to a wrong-artist page.
- *
- * The negative-lookbehind on " - " is omitted — matching " - " in a
- * track-credit string is rare enough that the noise it'd cause on
- * single-artist names like "Beyoncé - I Care" outweighs the benefit.
- */
-const CREDIT_SEPARATOR_RE = /(\s*,\s*|\s*;\s*|\s*&\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+vs\.?\s+|\s+\/\s+|\s+x\s+|\s+·\s+|\s+—\s+)/i;
-
-function looksMultiCreditName(name: string | undefined): boolean {
-  if (typeof name !== 'string' || name.length === 0) return false;
-  return CREDIT_SEPARATOR_RE.test(name);
-}
-
-interface CreditChunk {
-  text: string;
-  /** Trailing separator (visible spacing/punctuation), empty for the last chunk. */
-  sep: string;
-}
-
-/**
- * Split a joined credit string ("A, B feat. C") into renderable chunks
- * preserving the original separators so the visual rendering matches
- * what the upstream emitted (no normalisation / re-formatting).
- */
-function splitCredits(joined: string): CreditChunk[] {
-  // Use a global match to preserve the matched separators alongside
-  // the text fragments. `String.split` with a captured group does
-  // exactly that: returns alternating [text, sep, text, sep, ...].
-  const re = new RegExp(CREDIT_SEPARATOR_RE.source, 'gi');
-  const parts = joined.split(re);
-  const chunks: CreditChunk[] = [];
-  for (let i = 0; i < parts.length; i += 2) {
-    const text = (parts[i] ?? '').trim();
-    if (!text) continue;
-    const sep = (parts[i + 1] ?? '').trimStart();
-    chunks.push({ text, sep: sep || '' });
-  }
-  return chunks;
 }
 
 export function ArtistLinks({

@@ -9,6 +9,7 @@ import { Marquee } from '@/components/ui/Marquee';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { hasMultiCredit } from '@/lib/artistCredit';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import type { Track } from '@/types';
 import { useT, type TranslationKey } from '@/i18n';
@@ -276,7 +277,7 @@ export function MobileBottomDock() {
                       >
                         <Marquee text={track.title} />
                       </button>
-                      {position === 'current' && track.artists && track.artists.length > 1 ? (
+                      {position === 'current' && hasMultiCredit(track.artists, track.artist) ? (
                         <div className="block w-full overflow-hidden text-left text-xs text-muted-foreground">
                           <span className="block truncate">
                             <ArtistLinks

@@ -27,6 +27,7 @@ import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { hasMultiCredit } from '@/lib/artistCredit';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
 import { toast } from '@/store/toast';
@@ -395,7 +396,7 @@ export function Player() {
                 >
                   <Marquee text={currentTrack.title} />
                 </button>
-                {currentTrack.artists && currentTrack.artists.length > 1 ? (
+                {hasMultiCredit(currentTrack.artists, currentTrack.artist) ? (
                   <div className="block w-full overflow-hidden text-xs text-muted-foreground">
                     <span className="block truncate">
                       <ArtistLinks
