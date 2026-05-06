@@ -7,6 +7,7 @@ import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
 import { RenamePlaylistDialog } from '@/components/features/RenamePlaylistDialog';
 import { SharePlaylistDialog } from '@/components/features/SharePlaylistDialog';
 import { PlaylistCoverButton } from '@/components/features/PlaylistCoverButton';
+import { PlaylistOfflineButton } from '@/components/features/OfflineActionButton';
 import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
@@ -205,6 +206,7 @@ export function PlaylistPage() {
                       {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
                     </motion.button>
                   )}
+                  {playlist && <PlaylistOfflineButton playlist={playlist} tracks={tracks} />}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {playlist.trackCount} {playlist.trackCount === 1 ? t('playlistPage.trackOne') : t('playlistPage.trackMany')}

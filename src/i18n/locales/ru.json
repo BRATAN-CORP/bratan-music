@@ -301,7 +301,12 @@
     "noAlbumsTitle": "Нет сохранённых альбомов",
     "noAlbumsHint": "Нажмите сердечко на странице альбома",
     "noArtistsTitle": "Нет сохранённых артистов",
-    "noArtistsHint": "Нажмите сердечко на странице артиста"
+    "noArtistsHint": "Нажмите сердечко на странице артиста",
+    "tabDownloaded": "Загружено",
+    "downloadedPlaylist": "Загруженное",
+    "serviceLabel": "Сервисный плейлист",
+    "noDownloadsTitle": "Пока ничего не сохранено офлайн",
+    "noDownloadsHint": "Откройте трек, альбом или плейлист и нажмите «Слушать офлайн»"
   },
   "playlist": {
     "loading": "Загружаем плейлист…",
@@ -1565,5 +1570,17 @@
     "canvasUnavailable": "Canvas 2D недоступен",
     "compressFailed": "Не удалось сжать изображение до допустимого размера.",
     "readFailed": "Не удалось прочитать изображение"
+  },
+  "offline": {
+    "listenOffline": "Слушать офлайн",
+    "removeFromDevice": "Удалить с устройства",
+    "cancelDownload": "Отменить загрузку",
+    "saveToDevice": "Сохранить на устройство",
+    "savedToDevice": "Сохранено на устройство",
+    "removedFromDevice": "Удалено с устройства",
+    "downloadCancelled": "Загрузка отменена",
+    "bannerOffline": "Вы офлайн — показывается только сохранённое",
+    "filterShowOnlyDownloaded": "Только загруженные",
+    "filterShowAll": "Показать все"
   }
 }

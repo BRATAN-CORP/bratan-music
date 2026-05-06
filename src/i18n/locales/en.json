@@ -301,7 +301,12 @@
     "noAlbumsTitle": "No saved albums yet",
     "noAlbumsHint": "Tap the heart on an album page",
     "noArtistsTitle": "No saved artists yet",
-    "noArtistsHint": "Tap the heart on an artist page"
+    "noArtistsHint": "Tap the heart on an artist page",
+    "tabDownloaded": "Downloaded",
+    "downloadedPlaylist": "Downloaded",
+    "serviceLabel": "Service playlist",
+    "noDownloadsTitle": "Nothing saved offline yet",
+    "noDownloadsHint": "Open a track, album, or playlist and tap \"Listen offline\""
   },
   "playlist": {
     "loading": "Loading playlist…",
@@ -1565,5 +1570,17 @@
     "canvasUnavailable": "This browser can't open a 2D canvas",
     "compressFailed": "Couldn't compress the image down to the size limit.",
     "readFailed": "Couldn't read the image file"
+  },
+  "offline": {
+    "listenOffline": "Listen offline",
+    "removeFromDevice": "Remove from device",
+    "cancelDownload": "Cancel download",
+    "saveToDevice": "Save to device",
+    "savedToDevice": "Saved to device",
+    "removedFromDevice": "Removed from device",
+    "downloadCancelled": "Download cancelled",
+    "bannerOffline": "You're offline — showing saved content only",
+    "filterShowOnlyDownloaded": "Only downloaded",
+    "filterShowAll": "Show all"
   }
 }

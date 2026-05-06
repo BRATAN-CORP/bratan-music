@@ -4,6 +4,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useAlbum } from '@/hooks/useTrack';
 import { ShareButton } from '@/components/features/ShareButton';
+import { AlbumOfflineButton } from '@/components/features/OfflineActionButton';
 import { useToggleAlbumLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
@@ -140,6 +141,7 @@ export function AlbumPage() {
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </button>
+                  <AlbumOfflineButton album={album} tracks={album.tracks ?? []} />
                   <ShareButton
                     path={`/album/${album.id}`}
                     shareTitle={album.title}
