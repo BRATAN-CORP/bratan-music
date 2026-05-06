@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/auth';
 import { useTrack } from '@/hooks/useTrack';
 import { useTouchOnlyDevice } from '@/hooks/useCoarsePointer';
 import { useIsTrackSavedOffline, useTrackDownloadJob, useOfflineActions } from '@/hooks/useOfflineActions';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
@@ -84,6 +85,13 @@ export function FullscreenPlayer() {
     closeFullscreen();
     navigate(`/artist/${currentTrack.artistId}`);
   };
+  // Cover for the active track — switches to the locally-saved blob
+  // when the track is in the offline cache so the fullscreen player's
+  // ambience layer, bass-driven halo and the main artwork all
+  // continue to paint in offline mode. Falls through to the network
+  // URL otherwise so non-saved tracks keep streaming the cover from
+  // Tidal as before.
+  const trackCoverUrl = useOfflineCoverUrl('track', currentTrack?.id, currentTrack?.coverUrl);
   const [eqOpen, setEqOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -364,7 +372,7 @@ export function FullscreenPlayer() {
               "затенящий блюр" the user asked for — sits behind the
               halo and cover, gives white text on a white cover its
               contrast back. */}
-          {(currentTrack.coverUrl || coverVideoUrl) && (
+          {(trackCoverUrl || coverVideoUrl) && (
             <>
               {/* Ambience layer crossfade (П11) — when the track changes,
                   the blurred backdrop should melt into the new artwork
@@ -392,9 +400,9 @@ export function FullscreenPlayer() {
                   />
                 ) : (
                   <motion.div
-                    key={(currentTrack.coverUrl ?? '') + '-bg'}
+                    key={(trackCoverUrl ?? '') + '-bg'}
                     className="absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
-                    style={{ backgroundImage: `url(${currentTrack.coverUrl})` }}
+                    style={{ backgroundImage: `url(${trackCoverUrl})` }}
                     initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
                     animate={{ opacity: 0.5 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
@@ -869,7 +877,7 @@ export function FullscreenPlayer() {
                 }
               }}
             >
-              {(currentTrack.coverUrl || coverVideoUrl) && (
+              {(trackCoverUrl || coverVideoUrl) && (
                 <motion.div
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10"
@@ -915,11 +923,11 @@ export function FullscreenPlayer() {
                         disablePictureInPicture
                         controlsList="nofullscreen nodownload noremoteplayback"
                       />
-                    ) : currentTrack.coverUrl ? (
+                    ) : trackCoverUrl ? (
                       <motion.div
-                        key={currentTrack.coverUrl + '-glow'}
+                        key={trackCoverUrl + '-glow'}
                         className="absolute inset-0 bg-cover bg-center"
-                        style={{ backgroundImage: `url(${currentTrack.coverUrl})`, borderRadius: 'var(--radius-xl)' }}
+                        style={{ backgroundImage: `url(${trackCoverUrl})`, borderRadius: 'var(--radius-xl)' }}
                         initial={reduce ? false : { opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={reduce ? { opacity: 0 } : { opacity: 0 }}
@@ -993,9 +1001,9 @@ export function FullscreenPlayer() {
                       clipPath: 'inset(0 round var(--radius-xl))',
                     }}
                   >
-                    {currentTrack.coverUrl && (
+                    {trackCoverUrl && (
                       <img
-                        src={currentTrack.coverUrl}
+                        src={trackCoverUrl}
                         alt={currentTrack.title}
                         // `pointer-events-none` keeps clicks falling
                         // through to the motion drag wrapper above;
@@ -1010,7 +1018,7 @@ export function FullscreenPlayer() {
                     <video
                       key={coverVideoUrl}
                       src={coverVideoUrl}
-                      poster={currentTrack.coverUrl}
+                      poster={trackCoverUrl}
                       className="relative z-[1] h-full w-full object-cover"
                       style={{
                         borderRadius: 'var(--radius-xl)',
@@ -1033,9 +1041,9 @@ export function FullscreenPlayer() {
                       controlsList="nofullscreen nodownload noremoteplayback"
                     />
                   </div>
-                ) : currentTrack.coverUrl ? (
+                ) : trackCoverUrl ? (
                   <img
-                    src={currentTrack.coverUrl}
+                    src={trackCoverUrl}
                     alt={currentTrack.title}
                     // See above: keep the cover unable to be dragged
                     // or text-selected so the parent motion wrapper

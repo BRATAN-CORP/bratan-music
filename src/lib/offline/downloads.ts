@@ -4,17 +4,26 @@
  * subscribe to a particular job's progress without listening to
  * every download in the system.
  *
- * Concurrency policy: `MAX_CONCURRENT` tracks are decoded in parallel,
- * which is what big streaming apps do (Spotify is around 2; Apple
- * Music sits closer to 4). Going higher saturates Tidal's CDN and
- * tanks the EQ / scrubber UI on lower-end Android devices because
- * the worker thread is doing all the IndexedDB writes on the main
- * thread; going lower drags out an album save to a fastidious crawl.
+ * Concurrency policy
+ * ------------------
+ * **Album and playlist downloads run strictly sequentially** in the
+ * user-provided track order. The earlier implementation used a
+ * worker pool (`MAX_CONCURRENT = 2`) that peeled jobs off the queue
+ * in non-deterministic order, so the on-disk write order didn't
+ * match the tracklist and "Загруженное" / album view rendered
+ * tracks in a different order than the user clicked. The user
+ * explicitly asked for "чёткий порядок, без race conditions", so we
+ * trade some wall-clock speed for deterministic ordering.
+ *
+ * **Single-track jobs** triggered from a 3-dot menu still run
+ * concurrently across separate user clicks — each one is its own
+ * top-level call and rides on `inFlightTracks` for dedupe.
  *
  * Cancellation: each track download owns an `AbortController`. The
  * downloads manager keeps a map of `jobId → controller` so cancelling
  * a parent batch (album/playlist) propagates to every still-in-flight
- * child.
+ * child. Sequential mode also stops dispatching the next track when
+ * the parent job has been cancelled.
  *
  * The manager is *not* a React store — it's framework-agnostic and
  * exposes everything via `EventTarget`. The lightweight zustand
@@ -32,8 +41,6 @@ import {
   resolveStreamForDownload,
 } from './streamResolver';
 import type { DownloadJob, DownloadStatus, OfflineTrack } from './types';
-
-const MAX_CONCURRENT = 2;
 
 /** Custom event payload — exactly one event type, but typed as a
  *  discriminated union for clarity at call sites. */
@@ -121,38 +128,13 @@ class DownloadsManager {
     this.events.emit({ type: 'album-saved', albumId: album.id });
 
     this.recordJob(job, 'downloading');
-    let succeeded = 0;
-    let failed = 0;
-    const reportProgress = () => {
-      job.progress = tracks.length === 0 ? 1 : (succeeded + failed) / tracks.length;
-      this.events.emit({ type: 'job-changed', job });
-    };
-
-    // Run track downloads with a small concurrency cap. We use a
-    // simple worker pool — peel jobs off the array until empty.
-    const queue = tracks.slice();
-    const worker = async () => {
-      for (;;) {
-        const t = queue.shift();
-        if (!t) return;
-        try {
-          await this.runTrack(`track:${t.id}`, t, parent);
-          succeeded++;
-        } catch {
-          failed++;
-        } finally {
-          reportProgress();
-        }
-      }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(MAX_CONCURRENT, tracks.length) }, () => worker()),
-    );
+    const { succeeded, failed } = await this.runBatchInOrder(parent, tracks, job);
 
     this.recordJob(job, failed === tracks.length && tracks.length > 0 ? 'failed' : 'completed');
     if (failed === tracks.length && tracks.length > 0) {
       job.error = 'All tracks failed to download';
     }
+    void succeeded;
   }
 
   async enqueuePlaylist(playlist: Playlist, tracks: Track[]): Promise<void> {
@@ -187,36 +169,68 @@ class DownloadsManager {
     this.events.emit({ type: 'playlist-saved', playlistId: playlist.id });
 
     this.recordJob(job, 'downloading');
+    const { succeeded, failed } = await this.runBatchInOrder(parent, tracks, job);
+
+    this.recordJob(job, failed === tracks.length && tracks.length > 0 ? 'failed' : 'completed');
+    if (failed === tracks.length && tracks.length > 0) {
+      job.error = 'All tracks failed to download';
+    }
+    void succeeded;
+  }
+
+  /**
+   * Run a sequence of track downloads strictly in the order the
+   * caller passed them, surfacing progress on the parent job after
+   * each track lands.
+   *
+   * Why sequential and not parallel
+   * --------------------------------
+   * The previous worker-pool implementation processed two tracks at
+   * a time. Two tracks completing in a different order than they
+   * were dispatched made the IndexedDB `savedAt` timestamps
+   * interleave, so the "Загруженное" service playlist (sorted
+   * newest-first) showed tracks in a different order than the user
+   * had asked them to download. The user explicitly asked for
+   * "чёткий порядок, без race conditions" so we trade a bit of
+   * wall-clock saving speed for deterministic ordering.
+   *
+   * Cancellation
+   * ------------
+   * `cancel(parent)` flips the parent job's status to `cancelled`
+   * via `recordJob`. We re-read the latest status from `this.jobs`
+   * before each iteration so the loop stops dispatching as soon as
+   * the user cancels — already-running track downloads still see
+   * their own `AbortController.abort()` propagation through
+   * `runTrack` / `inFlightTracks`.
+   */
+  private async runBatchInOrder(
+    parent: string,
+    tracks: Track[],
+    job: DownloadJob,
+  ): Promise<{ succeeded: number; failed: number }> {
     let succeeded = 0;
     let failed = 0;
     const reportProgress = () => {
       job.progress = tracks.length === 0 ? 1 : (succeeded + failed) / tracks.length;
       this.events.emit({ type: 'job-changed', job });
     };
-
-    const queue = tracks.slice();
-    const worker = async () => {
-      for (;;) {
-        const t = queue.shift();
-        if (!t) return;
-        try {
-          await this.runTrack(`track:${t.id}`, t, parent);
-          succeeded++;
-        } catch {
-          failed++;
-        } finally {
-          reportProgress();
-        }
+    for (const t of tracks) {
+      // Bail out if the user (or a programmatic caller) cancelled
+      // the parent job while a previous track was downloading. We
+      // count remaining tracks as "failed" only if the user hasn't
+      // explicitly cancelled — a cancellation just stops the loop.
+      const latest = this.jobs.get(job.jobId);
+      if (latest && latest.status === 'cancelled') break;
+      try {
+        await this.runTrack(`track:${t.id}`, t, parent);
+        succeeded++;
+      } catch {
+        failed++;
+      } finally {
+        reportProgress();
       }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(MAX_CONCURRENT, tracks.length) }, () => worker()),
-    );
-
-    this.recordJob(job, failed === tracks.length && tracks.length > 0 ? 'failed' : 'completed');
-    if (failed === tracks.length && tracks.length > 0) {
-      job.error = 'All tracks failed to download';
     }
+    return { succeeded, failed };
   }
 
   /** Cancel an in-flight job and any of its children (for a batch).

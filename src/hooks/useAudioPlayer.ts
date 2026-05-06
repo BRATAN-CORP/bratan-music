@@ -10,6 +10,7 @@ import {
   getOrStartInFlight,
 } from '@/lib/streamUrlCache';
 import { getSavedTrack, touchTrack } from '@/lib/offline/storage';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { useT } from '@/i18n';
 
 import type { TidalQuality } from '@/store/settings';
@@ -841,6 +842,14 @@ export function useAudioPlayer() {
   const crossfadeDuration = useSettingsStore((s) => s.crossfadeDuration);
   const tidalQuality = useSettingsStore((s) => s.tidalQuality);
 
+  // Cover URL fed into the OS / lock-screen MediaSession metadata. We
+  // resolve the offline blob first so a phone playing a saved track
+  // with no network shows real artwork on the lock screen instead of
+  // a broken-image placeholder. `useOfflineCoverUrl` keeps the blob
+  // URL alive across re-renders and revokes it when the track
+  // changes.
+  const trackCoverUrl = useOfflineCoverUrl('track', currentTrack?.id, currentTrack?.coverUrl);
+
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
   /** Active blob: URL for the currently loaded offline track, kept around
@@ -1173,8 +1182,13 @@ export function useAudioPlayer() {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.title,
           artist: currentTrack.artist,
-          artwork: currentTrack.coverUrl
-            ? [{ src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' }]
+          // `trackCoverUrl` resolves to a `blob:` URL for offline-saved
+          // tracks (so the lock screen still shows artwork on a flaky
+          // / no network) and falls back to the network cover URL
+          // otherwise. We omit `type` so Chrome doesn't mismatch a
+          // PNG-backed blob against `image/jpeg`.
+          artwork: trackCoverUrl
+            ? [{ src: trackCoverUrl, sizes: '512x512' }]
             : [],
         });
       }
@@ -1244,8 +1258,8 @@ export function useAudioPlayer() {
           navigator.mediaSession.metadata = new MediaMetadata({
             title: currentTrack.title,
             artist: currentTrack.artist,
-            artwork: currentTrack.coverUrl
-              ? [{ src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' }]
+            artwork: trackCoverUrl
+              ? [{ src: trackCoverUrl, sizes: '512x512' }]
               : [],
           });
         }
@@ -1262,8 +1276,8 @@ export function useAudioPlayer() {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: currentTrack.title,
           artist: currentTrack.artist,
-          artwork: currentTrack.coverUrl
-            ? [{ src: currentTrack.coverUrl, sizes: '512x512', type: 'image/jpeg' }]
+          artwork: trackCoverUrl
+            ? [{ src: trackCoverUrl, sizes: '512x512' }]
             : [],
         });
       }
@@ -1315,6 +1329,12 @@ export function useAudioPlayer() {
       preloadedIncoming = null;
       loadTrack(currentTrack);
     }
+    // `trackCoverUrl` is intentionally omitted from the dependency
+    // array: re-running the entire load / promotion effect every time
+    // the offline cover blob resolves would re-issue stream fetches
+    // and tear an in-flight crossfade. The dedicated metadata effect
+    // below picks up cover-URL changes on its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack, loadTrack, streamVersion, tidalQuality, setDuration]);
 
   // Play / pause toggle on the active slot.
@@ -1975,6 +1995,28 @@ export function useAudioPlayer() {
       }
     };
   }, [currentTrack?.id]);
+
+  // The track-load effect already wires `navigator.mediaSession.metadata`
+  // when a new track starts, but it sees `trackCoverUrl` at the moment
+  // the track changes — for an offline-saved track this is initially
+  // the network URL fallback because IndexedDB hasn't returned the
+  // blob yet. The moment the blob URL resolves we re-publish the
+  // metadata so the lock screen picks up the locally-cached artwork
+  // even when there's no network. Skipping the bail-on-no-cover
+  // branch on purpose: if the resolution comes back empty we leave
+  // whatever the load effect last wrote.
+  useEffect(() => {
+    if (!currentTrack) return;
+    if (!('mediaSession' in navigator)) return;
+    if (!trackCoverUrl) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist,
+        artwork: [{ src: trackCoverUrl, sizes: '512x512' }],
+      });
+    } catch { /* ignore */ }
+  }, [currentTrack, trackCoverUrl]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;

@@ -4,6 +4,7 @@ import { ListMusic, Heart, MoreHorizontal, Trash2, Loader2, Pencil, Pin, PinOff 
 import { AnimatePresence, motion } from 'motion/react';
 import type { Playlist } from '@/types';
 import { useDeletePlaylist, usePinPlaylist } from '@/hooks/useLibrary';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { RenamePlaylistDialog } from './RenamePlaylistDialog';
@@ -24,6 +25,10 @@ interface PlaylistCardProps {
 
 export function PlaylistCard({ playlist }: PlaylistCardProps) {
   const t = useT();
+  // Mirror AlbumCard: prefer the saved cover blob when the playlist
+  // is offline so the row keeps rendering its artwork without a
+  // network round-trip.
+  const coverUrl = useOfflineCoverUrl('playlist', playlist.id, playlist.coverUrl);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -72,9 +77,9 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           className="flex items-center gap-4 border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary rounded-[var(--radius-md)]"
         >
           <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
-            {playlist.coverUrl ? (
+            {coverUrl ? (
               <img
-                src={playlist.coverUrl}
+                src={coverUrl}
                 alt=""
                 className="h-full w-full object-cover"
                 aria-hidden
