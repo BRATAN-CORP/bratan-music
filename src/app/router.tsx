@@ -119,7 +119,18 @@ function AppLayout() {
           short viewports. */}
       <div className="flex flex-1">
         <Sidebar />
-        <main className="min-w-0 flex-1 pb-44 lg:pb-32">
+        {/*
+         * `pt-safe` adds an iOS-PWA notch / status-bar inset on top of
+         * the existing page padding. The variable resolves to `0px`
+         * inside Telegram WebApp and regular browser tabs (display-mode:
+         * browser) so the layout stays byte-for-byte identical there;
+         * it picks up `env(safe-area-inset-top)` only when launched as
+         * a standalone PWA. See `globals.scss` for the variable
+         * definition. This single hook covers every sub-page back
+         * button, sticky header and hero gradient that currently
+         * rendered under the iPhone notch when the app was installed.
+         */}
+        <main className="pt-safe min-w-0 flex-1 pb-44 lg:pb-32">
           <PageTransition>
             <Outlet />
           </PageTransition>
