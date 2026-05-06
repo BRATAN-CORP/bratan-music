@@ -23,6 +23,7 @@ import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
+import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
@@ -535,14 +536,19 @@ export function Player() {
                   onClick={() => { handleOfflineToggle(); setMenuOpen(false); }}
                   icon={
                     isTrackDownloadingOffline
-                      ? <Loader2 size={14} className="animate-spin" />
+                      ? (
+                          <OfflineProgressIcon
+                            progress={trackDownloadJob?.progress ?? null}
+                            size={14}
+                          />
+                        )
                       : trackSavedOffline
                         ? <Check size={14} className="text-[var(--color-accent)]" />
                         : <ArrowDownToLine size={14} />
                   }
                 >
                   {isTrackDownloadingOffline
-                    ? t('offline.cancelDownload')
+                    ? `${Math.round((trackDownloadJob?.progress ?? 0) * 100)}% · ${t('offline.cancelDownload')}`
                     : trackSavedOffline
                       ? t('offline.removeFromDevice')
                       : t('offline.listenOffline')}
