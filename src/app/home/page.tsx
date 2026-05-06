@@ -320,8 +320,8 @@ function WaveHero({
         glareStrength={0.45}
         className="rounded-[var(--radius-xl)]"
       >
-      <div className="group rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
-        <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
+      <div className="group min-w-0 rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
+        <div className="relative isolate overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
           {/* Static idle gradient — same two-corner signature as the
               SubscriptionCard reference in /profile. */}
           <div
@@ -341,14 +341,14 @@ function WaveHero({
             }}
           />
 
-          <div className="relative grid gap-8 p-6 sm:p-10 lg:grid-cols-[1fr_auto] lg:gap-10">
-            <div className="flex flex-col justify-between gap-6">
-              <div className="flex flex-col gap-3">
+          <div className="relative grid gap-6 p-5 sm:gap-8 sm:p-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-10">
+            <div className="flex min-w-0 flex-col justify-between gap-6">
+              <div className="flex min-w-0 flex-col gap-3">
                 <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
                   <Disc3 size={12} className="text-[var(--color-accent)]" />
                   {t('home.waveBadge')}
                 </div>
-                <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
+                <h2 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-5xl">
                   {t('home.waveTitleA')}{' '}
                   <span className="font-serif italic text-muted-foreground">{t('home.waveTitleItalic')}</span> {t('home.waveTitleB')}
                 </h2>
@@ -365,12 +365,12 @@ function WaveHero({
                       (no awkward third-button-on-its-own-line wrap).
                     - sm+: everything inline, gap-3, primary keeps its
                       generous horizontal padding for visual weight. */}
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <Button
                   size="lg"
                   onClick={start}
                   disabled={starting}
-                  className="w-full gap-2 sm:w-auto sm:px-7"
+                  className="w-full min-w-0 gap-2 sm:w-auto sm:px-7"
                 >
                   {starting ? (
                     <>
@@ -395,14 +395,14 @@ function WaveHero({
                   )}
                 </Button>
 
-                <div className="flex items-stretch gap-2 sm:contents">
+                <div className="flex min-w-0 items-stretch gap-2 sm:contents">
                   <Button
                     variant="outline"
                     size="lg"
                     onClick={onChangeArtists}
-                    className="flex-1 gap-2 sm:flex-none"
+                    className="min-w-0 flex-1 gap-2 sm:flex-none"
                   >
-                    <Sparkles size={16} />
+                    <Sparkles size={16} className="shrink-0" />
                     <span className="truncate">
                       {hasSeedArtists ? t('home.waveChangeArtists') : t('home.wavePickArtists')}
                     </span>
@@ -416,10 +416,10 @@ function WaveHero({
                     variant="outline"
                     size="lg"
                     onClick={() => setSettingsOpen(true)}
-                    className="relative flex-1 gap-2 sm:flex-none"
+                    className="relative min-w-0 flex-1 gap-2 sm:flex-none"
                     aria-label={t('home.waveSettingsOpen')}
                   >
-                    <SlidersHorizontal size={16} />
+                    <SlidersHorizontal size={16} className="shrink-0" />
                     <span className="truncate">{t('home.waveSettingsOpen')}</span>
                     {(mood || character) && (
                       <span
