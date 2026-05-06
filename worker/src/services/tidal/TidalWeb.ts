@@ -1,10 +1,10 @@
 import { TidalAuth } from './TidalAuth';
 import type { Env } from '../../types/env';
 import {
-  cacheGetJson,
-  cacheGetText,
-  cachePutJson,
-  cachePutText,
+  kvGetJson,
+  kvGetText,
+  kvPutJson,
+  kvPutText,
 } from '../streamCache';
 
 const API_BASE = 'https://api.tidal.com/v1';
@@ -100,20 +100,18 @@ const DISCOVERY_BREAKER_KEY = 'tidal-discovery-breaker';
 const DISCOVERY_BREAKER_TTL_S = 60 * 60; // 1 hour
 
 export class TidalWeb {
-  // The legacy KV-backed shape was retired — the worker's free-tier
-  // KV namespace is capped at 1000 writes/day and the discovery /
-  // quality / breaker slots used to compete with the high-volume
-  // stream-URL slot for that quota. All four caches now live on the
-  // Cloudflare Cache API (which has no daily write limit), see
-  // `services/streamCache.ts` for the helpers and the full rationale.
-  // The constructor still accepts `env` so call sites don't have to
-  // change, but it is otherwise unused.
+  // Long-lived discovery / quality / breaker slots are stored in
+  // `env.SESSIONS` (a KV namespace). The high-volume stream-URL slot
+  // that previously dominated KV writes was migrated to an in-memory
+  // memo (see `StreamUrlMemoCache` in `services/streamCache.ts`), so
+  // the slots that remain here are bounded by the cold-track
+  // discovery rate and stay comfortably under the 1000 writes/day
+  // free-tier cap. The full rationale and the history of the earlier
+  // (broken on workers.dev) Cache API attempt is in `streamCache.ts`.
   constructor(
     private auth: TidalAuth,
-    _env?: Env,
-  ) {
-    void _env;
-  }
+    private env: Env,
+  ) {}
 
   async getStreamUrl(trackId: string, quality: string = 'HIGH'): Promise<string> {
     const resolved = await this.resolveStream(trackId, quality);
@@ -361,7 +359,8 @@ export class TidalWeb {
   }
 
   private async readDiscoveryCache(trackId: string): Promise<DiscoveredQualities | null> {
-    const cached = await cacheGetJson<DiscoveredQualities>(
+    const cached = await kvGetJson<DiscoveredQualities>(
+      this.env.SESSIONS,
       `${DISCOVERY_CACHE_PREFIX}${trackId}`,
     );
     if (!cached || !Array.isArray(cached.qualities)) return null;
@@ -374,7 +373,8 @@ export class TidalWeb {
     value: DiscoveredQualities,
     ttlSeconds: number = DISCOVERY_CACHE_TTL_S,
   ): Promise<void> {
-    await cachePutJson(
+    await kvPutJson(
+      this.env.SESSIONS,
       `${DISCOVERY_CACHE_PREFIX}${trackId}`,
       value,
       ttlSeconds,
@@ -390,26 +390,35 @@ export class TidalWeb {
   // set, `discoverQualities` bails immediately.
 
   private async isDiscoveryBreakerOpen(): Promise<boolean> {
-    const v = await cacheGetText(DISCOVERY_BREAKER_KEY);
+    const v = await kvGetText(this.env.SESSIONS, DISCOVERY_BREAKER_KEY);
     return v != null;
   }
 
   private async tripDiscoveryBreaker(): Promise<void> {
-    await cachePutText(DISCOVERY_BREAKER_KEY, '1', DISCOVERY_BREAKER_TTL_S);
+    await kvPutText(
+      this.env.SESSIONS,
+      DISCOVERY_BREAKER_KEY,
+      '1',
+      DISCOVERY_BREAKER_TTL_S,
+    );
     console.warn(
       `[TidalWeb] discovery breaker tripped — suppressing openapi.tidal.com calls for ${DISCOVERY_BREAKER_TTL_S}s`,
     );
   }
 
   private async readCachedQuality(trackId: string): Promise<string | null> {
-    const raw = await cacheGetText(`${QUALITY_CACHE_PREFIX}${trackId}`);
+    const raw = await kvGetText(
+      this.env.SESSIONS,
+      `${QUALITY_CACHE_PREFIX}${trackId}`,
+    );
     if (!raw) return null;
     const upper = raw.toUpperCase();
     return QUALITY_LADDER.includes(upper) ? upper : null;
   }
 
   private async writeCachedQuality(trackId: string, quality: string): Promise<void> {
-    await cachePutText(
+    await kvPutText(
+      this.env.SESSIONS,
       `${QUALITY_CACHE_PREFIX}${trackId}`,
       quality.toUpperCase(),
       QUALITY_CACHE_TTL_S,

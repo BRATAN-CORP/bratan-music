@@ -10,23 +10,18 @@
  *      Volume: dominant. The single biggest contributor to KV
  *      writes by an order of magnitude.
  *   2) `tidal-track-formats:<id>` — TTL 30 days, written once per
- *      never-discovered-before track. Volume: medium on cold
- *      catalogue spelunks, near-zero on a stable rotation.
+ *      never-discovered-before track. Volume: near-zero on a
+ *      stable rotation.
  *   3) `tidal-discovery-breaker` — TTL 1h, written when
- *      `openapi.tidal.com` rejects the bearer. Volume: very low.
+ *      `openapi.tidal.com` rejects the bearer. Volume: ≤1/h.
  *   4) `tidal-track-quality:<id>` — TTL 30 days, written once per
- *      track with the actual playable quality. Volume: medium,
- *      same order as (2).
+ *      track with the actual playable quality. Volume: same order
+ *      as (2).
  *
- * Cumulatively, an active user playing 30-50 unique tracks/day is
- * enough to put the project over the 1000/day write cap because the
- * stream-URL slot writes ~1 per click, and the long-TTL slots
- * stack on top of that on cold tracks. Once we hit the cap KV
- * writes get rejected, the resolver can't memoise anything, and
- * /tracks/:id/stream pays the full 800ms playbackinfopostpaywall
- * RTT on every play (the user-visible "стриминг поломался" symptom).
- *
- * Two strategies replace the writes:
+ * The dominant slot was (1). Once you take it out of KV the other
+ * three slots are nowhere near the 1000/day cap on any realistic
+ * traffic shape (a busy day cold-discovers maybe a few hundred new
+ * tracks; warm days are near-zero). So:
  *
  *   A. {@link StreamUrlMemoCache} — in-memory `Map` per isolate for
  *      the short-lived (300s) stream-URL slot. We don't need this
@@ -34,21 +29,32 @@
  *      conservative estimate for a single-region deployment) we
  *      still avoid the KV write entirely. Trade-off: a fresh
  *      isolate has a cold cache. Acceptable because the alternative
- *      (KV writes) is now a hard-blocker once the 1000 cap is hit.
+ *      (KV writes) was the actual hard-blocker once the 1000 cap
+ *      was hit.
  *
- *   B. {@link CacheApiStore} — Cloudflare's `caches.default`
- *      (the Cache API) for the long-lived (30d / 1h) slots. The
- *      Cache API has NO daily write limits and is the documented
- *      escape hatch for exactly this kind of high-volume ephemeral
- *      cache. We synthesise a stable `Request` URL per key so the
- *      cache layer can hash / shard normally:
+ *   B. {@link kvGetJson}/{@link kvPutJson}/{@link kvGetText}/
+ *      {@link kvPutText} — thin wrappers over `env.SESSIONS` (the
+ *      KV namespace) for the long-lived (30d / 1h) slots. KV's
+ *      writes-per-day quota is namespace-wide, but the volume on
+ *      these slots is bounded by the cold-track discovery rate
+ *      (which is itself bounded by ~Tidal's catalogue × users), so
+ *      this never re-introduces the 1k/day failure mode. Reads are
+ *      free.
  *
- *          https://cache.bratan.local/track-formats/<id>
- *
- *      The hostname is private; the URL is never fetched, only
- *      used as a cache key. We store JSON-encoded values with a
- *      `Cache-Control: public, max-age=<ttl>` header so the cache
- *      respects our TTLs.
+ * History — an earlier revision of this file (PR #344) routed the
+ * long-lived slots through `caches.default` (the Workers Cache API)
+ * to escape KV's write cap entirely. That works on a Worker bound
+ * to a custom domain or zone route, but the production deploy
+ * lives on `bratan-music-api.bratan-corp.workers.dev` (a workers.dev
+ * subdomain) and on workers.dev `caches.default.put()` is documented
+ * as a no-op (refer to Cloudflare's "Cache · Workers" docs:
+ * "any Cache API operations [...] will have no impact" outside of a
+ * custom-domain Worker). The symptom was the discovery breaker
+ * tripping on every cold call instead of staying tripped for 1h —
+ * confirmed in `wrangler tail` logs where every `/tracks/:id/stream`
+ * was emitting `[TidalWeb] discovery breaker tripped` repeatedly,
+ * and every cold play paid an extra wasted RTT to openapi.tidal.com
+ * before falling through to the legacy ladder.
  */
 
 /* ────────── A. In-memory stream-URL memo ────────── */
@@ -100,97 +106,82 @@ export const StreamUrlMemoCache = {
   },
 };
 
-/* ────────── B. Cache-API helpers for long-lived slots ────────── */
+/* ────────── B. KV helpers for long-lived slots ────────── */
 
 /**
- * Synthetic origin used to build cache-key URLs. The hostname is
- * never resolved or fetched — `caches.default.put/match` only use
- * the URL as an opaque key.
+ * Minimal subset of `KVNamespace` used by the helpers below. Lets
+ * call sites typecheck without dragging the full `Env` shape into
+ * this file (and lets unit tests drop in a stub).
  */
-const CACHE_KEY_ORIGIN = 'https://cache.bratan.local';
-
-function buildCacheRequest(key: string): Request {
-  // `key` already includes its semantic prefix (e.g.
-  // `track-formats/<id>`) so the URL is human-readable in the
-  // Cache API dashboard / wrangler tail.
-  return new Request(`${CACHE_KEY_ORIGIN}/${key}`, { method: 'GET' });
+export interface KvLike {
+  get(key: string): Promise<string | null>;
+  put(
+    key: string,
+    value: string,
+    options?: { expirationTtl?: number },
+  ): Promise<void>;
 }
 
 /**
- * Read a JSON value from the Cache API. Returns `null` on miss,
- * malformed entries, or any error — callers must treat this as a
- * best-effort optimisation and have a fallback path.
+ * Read a JSON value from KV. Returns `null` on miss, malformed
+ * entries, or any error — callers must treat this as a best-effort
+ * optimisation and have a fallback path.
  */
-export async function cacheGetJson<T>(key: string): Promise<T | null> {
+export async function kvGetJson<T>(kv: KvLike, key: string): Promise<T | null> {
   try {
-    const cache = caches.default;
-    const hit = await cache.match(buildCacheRequest(key));
-    if (!hit) return null;
-    return (await hit.json()) as T;
+    const raw = await kv.get(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
   } catch {
     return null;
   }
 }
 
 /**
- * Read a plain string value from the Cache API. Same error handling
- * as {@link cacheGetJson}.
+ * Read a plain string value from KV. Same error handling as
+ * {@link kvGetJson}.
  */
-export async function cacheGetText(key: string): Promise<string | null> {
+export async function kvGetText(kv: KvLike, key: string): Promise<string | null> {
   try {
-    const cache = caches.default;
-    const hit = await cache.match(buildCacheRequest(key));
-    if (!hit) return null;
-    return await hit.text();
+    return await kv.get(key);
   } catch {
     return null;
   }
 }
 
 /**
- * Write a JSON value to the Cache API with the given TTL.
- *
- * Wraps the value in a `Response` with `Cache-Control:
- * public, max-age=<ttlSeconds>` so the underlying cache layer
- * respects the same expiry the previous KV `expirationTtl` did.
+ * Write a JSON value to KV with the given TTL. Errors are swallowed
+ * — the caches are best-effort and a write failure (e.g. the rare
+ * KV-quota-exhausted case) must not leak up into the request path.
  */
-export async function cachePutJson(
+export async function kvPutJson(
+  kv: KvLike,
   key: string,
   value: unknown,
   ttlSeconds: number,
 ): Promise<void> {
   try {
-    const cache = caches.default;
-    const body = JSON.stringify(value);
-    const response = new Response(body, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': `public, max-age=${Math.max(1, Math.floor(ttlSeconds))}`,
-      },
+    await kv.put(key, JSON.stringify(value), {
+      expirationTtl: Math.max(60, Math.floor(ttlSeconds)),
     });
-    await cache.put(buildCacheRequest(key), response);
   } catch {
     /* ignore — cache is best-effort */
   }
 }
 
 /**
- * Write a plain string value to the Cache API with the given TTL.
+ * Write a plain string value to KV with the given TTL.
  */
-export async function cachePutText(
+export async function kvPutText(
+  kv: KvLike,
   key: string,
   value: string,
   ttlSeconds: number,
 ): Promise<void> {
   try {
-    const cache = caches.default;
-    const response = new Response(value, {
-      headers: {
-        'Content-Type': 'text/plain',
-        'Cache-Control': `public, max-age=${Math.max(1, Math.floor(ttlSeconds))}`,
-      },
+    await kv.put(key, value, {
+      expirationTtl: Math.max(60, Math.floor(ttlSeconds)),
     });
-    await cache.put(buildCacheRequest(key), response);
   } catch {
     /* ignore — cache is best-effort */
   }
