@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { enqueueSync } from '@/lib/offline/syncQueue';
+import { getSavedPlaylistWithTracks } from '@/lib/offline/storage';
 import type { Track, Playlist, ArtistRef } from '@/types';
 
 /** Treat the device as offline if `navigator.onLine` is false. The
@@ -76,17 +77,34 @@ export function usePlaylist(id: string) {
   return useQuery({
     queryKey: ['playlist', id],
     queryFn: async () => {
-      const data = await api.get<PlaylistWithTracks>(`/playlists/${id}`);
-      // Detail-view fetch refreshes the backend's cached
-      // `source_track_count` for linked playlists. Invalidate the
-      // library list so the card count picks up the freshly cached
-      // value on next render — otherwise the user sees the correct
-      // count on the detail page but a stale 0 (or stale older value)
-      // back on the Library tab.
-      if (data?.sourceKind) {
-        qc.invalidateQueries({ queryKey: ['playlists'] });
+      // Mirror `useAlbum`: when the device is offline (or the network
+      // is unreachable) and the playlist is in IndexedDB, hydrate it
+      // from the local cache instead of erroring out with "плейлист
+      // не найден". User instruction: "Если есть интернет, окей,
+      // делаем на сервер запрос. Если нет интернета, подгружаем
+      // локальную."
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const local = await getSavedPlaylistWithTracks(id);
+        if (local) return local as PlaylistWithTracks;
+        throw new Error('offline-playlist-not-saved');
       }
-      return data;
+      try {
+        const data = await api.get<PlaylistWithTracks>(`/playlists/${id}`);
+        // Detail-view fetch refreshes the backend's cached
+        // `source_track_count` for linked playlists. Invalidate the
+        // library list so the card count picks up the freshly cached
+        // value on next render — otherwise the user sees the correct
+        // count on the detail page but a stale 0 (or stale older value)
+        // back on the Library tab.
+        if (data?.sourceKind) {
+          qc.invalidateQueries({ queryKey: ['playlists'] });
+        }
+        return data;
+      } catch (err) {
+        const local = await getSavedPlaylistWithTracks(id);
+        if (local) return local as PlaylistWithTracks;
+        throw err;
+      }
     },
     enabled: !!id,
   });

@@ -18,6 +18,7 @@
 
 import * as db from './db';
 import type { OfflineAlbum, OfflinePlaylist, OfflineTrack } from './types';
+import type { Album, Playlist, Track } from '@/types';
 
 /** True if the given track id is already saved locally. */
 export async function isTrackSaved(id: string): Promise<boolean> {
@@ -116,6 +117,99 @@ async function pruneOrphanedTracks(trackIds: string[], removedParent: string): P
       await db.putTrack({ ...track, collections: remaining });
     }
   }
+}
+
+/**
+ * Convert a saved `OfflineTrack` row into a network-shaped `Track`
+ * for consumption by code paths that don't care about local-only
+ * fields like `audioBlob` or `byteLength` (album / playlist detail
+ * pages, the player queue, etc.). Drops the blob payloads so the
+ * resulting object can safely flow into React Query caches without
+ * pinning ~100 MB of FLAC bytes per track in memory.
+ */
+function offlineTrackToNetworkTrack(t: OfflineTrack): Track {
+  return {
+    id: t.id,
+    title: t.title,
+    artist: t.artist,
+    artistId: t.artistId,
+    artists: t.artists,
+    album: t.album,
+    albumId: t.albumId,
+    duration: t.duration,
+    coverUrl: t.coverUrl,
+    coverVideoUrl: t.coverVideoUrl,
+    source: t.source,
+  };
+}
+
+/**
+ * Hydrate a saved album into the same shape `useAlbum` returns from
+ * the network. Used as the offline fallback on the album detail
+ * page so tapping a downloaded album with no network shows the
+ * actual track list instead of "альбом не найден".
+ *
+ * Tracks the album referenced but that aren't in IndexedDB (a
+ * partially-finished download) are silently skipped — the user
+ * still gets to play and inspect everything they actually have on
+ * device, ordered by the album's original `trackIds` list.
+ */
+export async function getSavedAlbumWithTracks(
+  id: string,
+): Promise<(Album & { tracks: Track[] }) | null> {
+  const album = await db.getAlbum(id);
+  if (!album) return null;
+  const tracks: Track[] = [];
+  for (const tid of album.trackIds) {
+    const t = await db.getTrack(tid);
+    if (t) tracks.push(offlineTrackToNetworkTrack(t));
+  }
+  return {
+    id: album.id,
+    title: album.title,
+    artist: album.artist,
+    artistId: album.artistId,
+    artists: album.artists,
+    releaseType: album.releaseType,
+    coverUrl: album.coverUrl,
+    coverVideoUrl: album.coverVideoUrl,
+    releaseDate: album.releaseDate,
+    tracks,
+  };
+}
+
+/**
+ * Hydrate a saved playlist into a `Playlist & { tracks: Track[] }`
+ * shape — same role as `getSavedAlbumWithTracks`, scoped to the
+ * playlist detail page. The playlist's `trackIds` ordering is
+ * preserved so the offline view matches the order the user saved.
+ */
+export async function getSavedPlaylistWithTracks(
+  id: string,
+): Promise<(Playlist & { tracks: Track[] }) | null> {
+  const playlist = await db.getPlaylist(id);
+  if (!playlist) return null;
+  const tracks: Track[] = [];
+  for (const tid of playlist.trackIds) {
+    const t = await db.getTrack(tid);
+    if (t) tracks.push(offlineTrackToNetworkTrack(t));
+  }
+  return {
+    id: playlist.id,
+    name: playlist.name,
+    trackCount: playlist.trackCount,
+    isLiked: playlist.isLiked,
+    coverUrl: playlist.coverUrl ?? null,
+    pinnedAt: playlist.pinnedAt ?? null,
+    updatedAt: playlist.updatedAt,
+    isPublic: playlist.isPublic,
+    shareToken: playlist.shareToken,
+    sourceKind: playlist.sourceKind,
+    sourcePlaylistId: playlist.sourcePlaylistId,
+    sourceUserId: playlist.sourceUserId,
+    readOnly: playlist.readOnly,
+    tracks,
+  };
 }
 
 /**
