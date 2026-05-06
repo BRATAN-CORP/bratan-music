@@ -2,6 +2,37 @@ import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } fro
 import { type CSSProperties, type PointerEvent, type ReactNode, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Firefox refuses to deliver pointerup / click events to descendants
+ * of an element that owns `transform-style: preserve-3d` +
+ * `perspective` while `rotateX/rotateY` are non-zero — even after
+ * we synchronously reset the transform on pointerdown via
+ * `.tilt-flatten`. The hit-test geometry stays cached on the
+ * compositor layer for the rest of the gesture, so the buttons
+ * inside the wave hero / fullscreen cover are reachable on hover
+ * but never receive their `click`. Reproduces in current Firefox
+ * stable / ESR, no upstream fix on the tracker.
+ *
+ * Chromium and WebKit both honour `tilt-flatten` instantly, so we
+ * keep the tilt animation on those engines and skip it on Firefox.
+ * Detection is done with `CSS.supports('-moz-appearance: none')`
+ * because UA sniffing matches Firefox forks (LibreWolf, Tor
+ * Browser, Mullvad, Waterfox) too — those forks share the same
+ * Gecko hit-test bug, so they should fall through the same path.
+ *
+ * SSR-safe: `typeof CSS === 'undefined'` covers the build-time and
+ * Node test paths, in which case we default to the 3D-tilt
+ * behaviour (the static markup is rendered identically either way).
+ */
+function isFirefoxLike(): boolean {
+  if (typeof CSS === 'undefined' || !CSS.supports) return false;
+  try {
+    return CSS.supports('-moz-appearance', 'none');
+  } catch {
+    return false;
+  }
+}
+
 interface TiltCardProps {
   children: ReactNode;
   className?: string;
@@ -123,10 +154,18 @@ export function TiltCard({
     ref.current?.classList.remove('tilt-flatten');
   };
 
-  if (reduce) {
+  if (reduce || isFirefoxLike()) {
+    // Static fallback for users with `prefers-reduced-motion: reduce`
+    // and for Firefox / Gecko forks (see comment on `isFirefoxLike`
+    // above). We render the same outer markup with the same
+    // `className` so layout / borders / shadows / clipping match the
+    // 3D path exactly — only the rotation/scale/glare animation is
+    // skipped. That keeps the card visually indistinguishable when
+    // it's at rest (which is the dominant state) and restores click
+    // delivery to descendants like the wave hero buttons.
     return (
       <div ref={ref} className={cn('relative', className)} style={extraStyle}>
-        {children}
+        <div className="relative h-full w-full">{children}</div>
       </div>
     );
   }
