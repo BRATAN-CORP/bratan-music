@@ -30,6 +30,7 @@ import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { hasMultiCredit } from '@/lib/artistCredit';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
 import { toast } from '@/store/toast';
@@ -1117,7 +1118,7 @@ export function FullscreenPlayer() {
                     previously the no-artistId branch let the Marquee
                     inherit the parent flex column's `items-stretch`
                     default and the text drifted to the left edge. */}
-                {currentTrack.artists && currentTrack.artists.length > 1 ? (
+                {hasMultiCredit(currentTrack.artists, currentTrack.artist) ? (
                   <div className="block w-full text-center text-sm text-muted-foreground sm:text-base">
                     <ArtistLinks
                       artists={currentTrack.artists}
