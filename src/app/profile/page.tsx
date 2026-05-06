@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LogOut, Crown, Shield, Moon, Sun, Sliders, Music2, Languages,
-  Sparkles, Check, Lock, Wand2, Headphones, ArrowRight,
+  Sparkles, Check, Lock, Wand2, Headphones, ArrowRight, Download,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
@@ -69,8 +69,8 @@ export function ProfilePage() {
   const { user, logout } = useAuthStore();
   const { theme, toggleTheme, openSubscriptionPrompt } = useUiStore();
   const {
-    crossfade, crossfadeDuration, tidalQuality, infinitePlayback,
-    setCrossfade, setCrossfadeDuration, setTidalQuality, setInfinitePlayback,
+    crossfade, crossfadeDuration, tidalQuality, offlineQuality, infinitePlayback,
+    setCrossfade, setCrossfadeDuration, setTidalQuality, setOfflineQuality, setInfinitePlayback,
   } = useSettingsStore();
   const { data: profile } = useQuery({
     queryKey: ['profile'],
@@ -164,6 +164,41 @@ export function ProfilePage() {
             </div>
           </SettingsCard>
         </div>
+
+        {/* Offline-quality picker — mirrors the visual rhythm of the
+            Tidal quality card but governs the bitrate the downloads
+            manager requests when a track / album / playlist is saved
+            for offline listening. Default sits at the highest rung
+            since the user explicitly asked for max-fidelity offline
+            saves; the picker is here so anyone on a tight storage
+            budget can dial it back without dropping live-stream
+            quality too. */}
+        <SettingsCard
+          title={t('profile.offlineQualityTitle')}
+          icon={Download}
+          hint={t('profile.offlineQualityHint')}
+        >
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            {(Object.keys(TIDAL_QUALITY_LABEL_KEYS) as TidalQuality[]).map((q) => {
+              const active = offlineQuality === q;
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setOfflineQuality(q)}
+                  className={`flex h-10 items-center justify-between gap-2 rounded-[var(--radius-md)] border px-3 text-left text-sm transition-colors ${
+                    active
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-foreground'
+                      : 'border-border hover:bg-secondary'
+                  }`}
+                >
+                  <span className="truncate">{t(TIDAL_QUALITY_LABEL_KEYS[q])}</span>
+                  {active && <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-accent)]" />}
+                </button>
+              );
+            })}
+          </div>
+        </SettingsCard>
 
         <SettingsCard
           title={t('profile.languageTitle')}

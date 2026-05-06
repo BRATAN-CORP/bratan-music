@@ -5,10 +5,17 @@ import { AppRouter } from '@/app/router';
 import { getTelegramWebApp } from '@/hooks/useAuth';
 import { I18nProvider } from '@/i18n';
 import { queryClient } from '@/lib/queryClient';
+import { wireOfflineBridge } from '@/store/offline';
 import '@/styles/globals.scss';
 
 getTelegramWebApp()?.ready?.();
 getTelegramWebApp()?.expand?.();
+
+// Plug the framework-agnostic downloads manager into the React store
+// exactly once at boot. Subsequent fast-refresh reloads short-circuit
+// inside `wireOfflineBridge` so we never end up with two listeners
+// for the same event bus.
+wireOfflineBridge();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

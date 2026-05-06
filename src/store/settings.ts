@@ -51,6 +51,22 @@ interface SettingsState {
   /** Stream quality requested from the Tidal proxy account. */
   tidalQuality: TidalQuality;
   /**
+   * Quality used when saving tracks to the on-device offline cache.
+   * Defaults to `HI_RES_LOSSLESS` so the saved version is the highest
+   * fidelity the proxy account can deliver — the user explicitly
+   * asked for max-quality offline saves. Lower values let users on
+   * tight storage caps trade audio quality for footprint without
+   * sacrificing live-stream quality (which still follows
+   * `tidalQuality`).
+   *
+   * The downloads manager walks the same
+   * `HI_RES_LOSSLESS → LOSSLESS → HIGH → LOW` ladder the player
+   * walks, starting at this value, so a track that isn't available
+   * at the requested quality still saves at the highest level the
+   * proxy can deliver.
+   */
+  offlineQuality: TidalQuality;
+  /**
    * Бесконечное воспроизведение: когда очередь почти пуста и `repeat='off'`,
    * автоматически добавляем рекомендации в хвост. Если выключено — плеер
    * останавливается на последнем треке.
@@ -84,6 +100,7 @@ interface SettingsState {
   setCrossfade: (on: boolean) => void;
   setCrossfadeDuration: (s: number) => void;
   setTidalQuality: (q: TidalQuality) => void;
+  setOfflineQuality: (q: TidalQuality) => void;
   setInfinitePlayback: (on: boolean) => void;
   setEqGain: (index: number, value: number) => void;
   setEqGains: (gains: number[]) => void;
@@ -143,6 +160,7 @@ export const useSettingsStore = create<SettingsState>()(
       crossfade: false,
       crossfadeDuration: 6,
       tidalQuality: 'HIGH',
+      offlineQuality: 'HI_RES_LOSSLESS',
       // На бы дефолт — это ожидаемое поведение «музыка не кончается»,
       // и явный opt-out в настройках для тех, кому нужно чтобы очередь остановилась
       // ровно там, где положил.
@@ -153,6 +171,7 @@ export const useSettingsStore = create<SettingsState>()(
       setCrossfade: (on) => set({ crossfade: on }),
       setCrossfadeDuration: (s) => set({ crossfadeDuration: Math.max(1, Math.min(12, s)) }),
       setTidalQuality: (q) => set({ tidalQuality: q }),
+      setOfflineQuality: (q) => set({ offlineQuality: q }),
       setInfinitePlayback: (on) => set({ infinitePlayback: on }),
       setEqGain: (index, value) => {
         if (index < 0 || index >= EQ_BAND_COUNT) return;
@@ -177,6 +196,14 @@ export const useSettingsStore = create<SettingsState>()(
         ) {
           patch.tidalQuality = prefs.tidalQuality;
         }
+        if (
+          prefs.offlineQuality === 'LOW' ||
+          prefs.offlineQuality === 'HIGH' ||
+          prefs.offlineQuality === 'LOSSLESS' ||
+          prefs.offlineQuality === 'HI_RES_LOSSLESS'
+        ) {
+          patch.offlineQuality = prefs.offlineQuality;
+        }
         if (typeof prefs.infinitePlayback === 'boolean') patch.infinitePlayback = prefs.infinitePlayback;
         if (Array.isArray(prefs.eqGains)) patch.eqGains = normaliseGains(prefs.eqGains);
         const fromServer = normaliseLocale(prefs.locale);
@@ -195,6 +222,7 @@ export const useSettingsStore = create<SettingsState>()(
         crossfade: s.crossfade,
         crossfadeDuration: s.crossfadeDuration,
         tidalQuality: s.tidalQuality,
+        offlineQuality: s.offlineQuality,
         infinitePlayback: s.infinitePlayback,
         eqGains: s.eqGains,
         locale: s.locale,
