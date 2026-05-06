@@ -3,6 +3,7 @@ import { Disc3 } from 'lucide-react';
 import type { Album } from '@/types';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { AlbumPlayButton } from '@/components/features/AlbumPlayButton';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { useT } from '@/i18n';
 
 interface AlbumCardProps {
@@ -11,13 +12,18 @@ interface AlbumCardProps {
 
 export function AlbumCard({ album }: AlbumCardProps) {
   const t = useT();
+  // Prefer the locally-cached cover blob when the album is saved
+  // offline so the tile renders even with the network down. Falls
+  // back to the network URL for non-saved albums and to the `Disc3`
+  // placeholder when both are missing.
+  const coverUrl = useOfflineCoverUrl('album', album.id, album.coverUrl);
   return (
     <Link to={`/album/${album.id}`} className="group flex flex-col gap-2.5">
       <TiltCard intensity={6} className="aspect-square w-full rounded-[var(--radius-md)]">
         <div className="relative aspect-square w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-secondary">
-          {album.coverUrl ? (
+          {coverUrl ? (
             <img
-              src={album.coverUrl}
+              src={coverUrl}
               alt={album.title}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
               loading="lazy"
