@@ -556,13 +556,38 @@ function SnapScroller({
   // Mouse drag-to-scroll on desktop. We deliberately scope the drag
   // initiator to the mouse button: touch users get the native flick
   // momentum scroll and we'd just fight it by hijacking pointer
-  // events here. On pointerdown we capture the pointer so the drag
-  // survives the cursor crossing the scroller edge and call
-  // preventDefault so the browser doesn't kick off its native
-  // image-drag / link-drag / text-selection gesture (any of which
-  // would tear down our `pointermove` listening and the carousel
-  // would just refuse to scroll on PC — exactly the regression the
-  // user reported after the previous click-suppression fix).
+  // events here.
+  //
+  // **Click-vs-capture pitfall**: an earlier version called
+  // `e.preventDefault()` AND `setPointerCapture()` synchronously on
+  // pointerdown. Both broke clicks on the tile `<Link>` children:
+  //   1. preventDefault on a mouse pointerdown over an `<a>` tile
+  //      cancels the synthetic click in Chromium (the default action
+  //      of pointerdown on a link is to prepare the navigation; UA
+  //      preventDefault on it suppresses the eventual click).
+  //   2. `setPointerCapture` redirects pointerup to the captured
+  //      element, which makes the `click` event's target the LCA of
+  //      pointerdown and pointerup — i.e. the scroller, not the
+  //      `<Link>` tile. The Link's own click handler never runs and
+  //      navigation silently no-ops.
+  // The user-facing symptom on PC was: clicking an album/playlist
+  // tile in /explore did nothing. Tapping (touch) worked because
+  // touch input skipped this handler entirely.
+  //
+  // **Current approach**: keep pointerdown side-effect-free as far as
+  // the click pipeline is concerned. We register the gesture in a
+  // ref but DO NOT call preventDefault and DO NOT capture. The
+  // native HTML5 drag-image / link-drag is suppressed at the
+  // `dragstart` level (see `onDragStart` on the scroller div) which
+  // doesn't interfere with clicks. To keep pointermove firing once
+  // the cursor leaves the scroller's bounding box (the long-drag-
+  // to-edge case the previous patch tried to solve with capture),
+  // we attach the move/up listeners to `window` for the duration of
+  // the gesture. Once the user crosses the 6 px drag-threshold we
+  // call preventDefault on the move event (suppresses text-selection
+  // mid-drag) and toggle `body.style.userSelect = 'none'` so the
+  // page doesn't visibly select while the row is being dragged.
+  //
   // Stop any glide animation that's still running. Called on a fresh
   // pointerdown so the user can grab the scroller mid-glide and
   // immediately drag it from the new position, and at the end of the
@@ -574,48 +599,27 @@ function SnapScroller({
     }
   };
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse') return;
-    const el = scrollerRef.current;
-    if (!el) return;
-    // Suppress the browser's native drag pipeline (cover image
-    // becoming a drag-image, link being dragged, text selection
-    // starting). Click events are unaffected — preventDefault on
-    // pointerdown only cancels the default UA behaviours, not the
-    // synthetic click that follows pointerup with no movement.
-    e.preventDefault();
-    // Stop any in-flight inertia glide so the row "grabs" instantly
-    // under the cursor instead of fighting the new drag.
-    cancelInertia();
-    // Disable scroll-snap for the duration of the drag. With snap
-    // enabled the browser fights every `scrollLeft` write, slewing
-    // the row toward the nearest snap-point and producing a
-    // step-wise / sticky feel — exactly what the user reported as
-    // "коряво и не плавно". Snap is restored at the end of the
-    // post-release inertia animation so the final resting position
-    // still aligns to a card.
-    el.style.scrollSnapType = 'none';
-    // Capture the pointer up-front so pointermove keeps firing on the
-    // scroller even when the cursor leaves its bounding box. The
-    // earlier "defer capture until threshold" approach broke
-    // long-drag-to-edge scrolling because pointermove stopped
-    // arriving once the cursor hit the page edge. Capture is safe
-    // for clicks: the threshold gate below (`moved`) is what
-    // actually suppresses the post-drag click on tile links, and
-    // taps below threshold leave `moved=false` so the click fires
-    // normally on the original tile.
-    try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    dragStateRef.current = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startScroll: el.scrollLeft,
-      moved: false,
-      pendingScroll: null,
-      rafId: null,
-      samples: [{ t: performance.now(), x: e.clientX }],
-    };
+  // Refs to window-level move/up listeners attached during a gesture.
+  // Stored on the component so the cleanup path on pointerup /
+  // pointercancel can detach them. We can't keep them inside
+  // `dragStateRef` because the React closure that registered them
+  // needs to detach the SAME function references later.
+  const windowMoveRef = useRef<((ev: PointerEvent) => void) | null>(null);
+  const windowUpRef = useRef<((ev: PointerEvent) => void) | null>(null);
+
+  const detachWindowListeners = () => {
+    if (windowMoveRef.current) {
+      window.removeEventListener('pointermove', windowMoveRef.current);
+      windowMoveRef.current = null;
+    }
+    if (windowUpRef.current) {
+      window.removeEventListener('pointerup', windowUpRef.current);
+      window.removeEventListener('pointercancel', windowUpRef.current);
+      windowUpRef.current = null;
+    }
   };
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+
+  const handlePointerMove = (e: PointerEvent) => {
     const drag = dragStateRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     const el = scrollerRef.current;
@@ -634,6 +638,16 @@ function SnapScroller({
     if (!drag.moved) {
       if (Math.abs(dx) <= 6) return;
       drag.moved = true;
+      // Now that we've committed to a drag: disable scroll-snap so
+      // the browser doesn't fight every `scrollLeft` write, suppress
+      // text-selection so dragging doesn't paint a selection across
+      // the page, and (defensively) call preventDefault to kill any
+      // residual mid-gesture text-selection on Firefox.
+      el.style.scrollSnapType = 'none';
+      document.body.style.userSelect = 'none';
+    }
+    if (drag.moved) {
+      e.preventDefault();
     }
     // Keep a short rolling window of pointer samples so the inertia
     // animation can compute the release velocity from the LAST few
@@ -663,13 +677,41 @@ function SnapScroller({
       });
     }
   };
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return;
+    if (e.button !== 0) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    // Stop any in-flight inertia glide so the row "grabs" instantly
+    // under the cursor instead of fighting the new drag.
+    cancelInertia();
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startScroll: el.scrollLeft,
+      moved: false,
+      pendingScroll: null,
+      rafId: null,
+      samples: [{ t: performance.now(), x: e.clientX }],
+    };
+    // Window-level move/up listeners keep the gesture alive when the
+    // cursor leaves the scroller's bounding box, without needing
+    // setPointerCapture (which would re-route the click target).
+    detachWindowListeners();
+    const onMove = (ev: PointerEvent) => handlePointerMove(ev);
+    const onUp = (ev: PointerEvent) => endDragImpl(ev);
+    windowMoveRef.current = onMove;
+    windowUpRef.current = onUp;
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+  const endDragImpl = (e: PointerEvent) => {
     const drag = dragStateRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
+    detachWindowListeners();
     const el = scrollerRef.current;
-    if (el) {
-      try { el.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-    }
     // Flush any pending rAF write before computing release velocity
     // so the inertia animation starts from the actual final cursor
     // position, not whatever the last fully-flushed frame happened
@@ -689,6 +731,8 @@ function SnapScroller({
     setTimeout(() => {
       if (dragStateRef.current === drag) dragStateRef.current = null;
     }, 0);
+    // Restore page-level userSelect regardless of whether we glided.
+    document.body.style.userSelect = '';
     if (wasMoved) {
       // Suppress the synthetic click that fires after a drag-release.
       // Without this the user's drag-to-scroll would also activate
@@ -809,9 +853,14 @@ function SnapScroller({
             maskImage: buildEdgeMask(canPrev, canNext),
           }}
           onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          // Native HTML5 drag pipeline suppression — `dragstart`
+          // fires when the browser is about to begin a link-drag /
+          // image-drag / text-drag gesture. Cancelling it here keeps
+          // mouse pointerdown side-effect-free so clicks on tile
+          // `<Link>` children fire normally, while still preventing
+          // the page from kicking off a drag-image when the user
+          // mouse-drags across an album cover.
+          onDragStart={(e) => e.preventDefault()}
         >
           <div className="flex gap-4">{children}</div>
         </div>
