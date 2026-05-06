@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
@@ -520,7 +521,19 @@ function WaveSettingsDialog({
     onCharacterChange(null);
   };
 
-  return (
+  // Render through a portal anchored at <body>. Without this, the
+  // `position: fixed` scrim + panel would be size-constrained to the
+  // first ancestor with a `transform` / `filter` / `perspective` —
+  // and the WaveHero is wrapped in <Reveal /> (a motion.div that
+  // keeps an inline `transform: translateY(0)` even after its enter
+  // animation settles). With Reveal as the containing block the
+  // "fixed" scrim was actually pinned to the WaveHero card's box,
+  // which is why the page heading + AI banner stayed sharp behind it
+  // ("не всю блюрит за собой" — they were never under the scrim in
+  // the first place). Portalling out of the transform tree means the
+  // viewport is the containing block, the scrim covers everything,
+  // and the backdrop-filter blurs the entire home page.
+  const dialog = (
     <AnimatePresence>
       {open && (
         <>
@@ -641,6 +654,9 @@ function WaveSettingsDialog({
       )}
     </AnimatePresence>
   );
+
+  if (typeof document === 'undefined') return dialog;
+  return createPortal(dialog, document.body);
 }
 
 function SettingsGroup({ label, children }: { label: string; children: React.ReactNode }) {
