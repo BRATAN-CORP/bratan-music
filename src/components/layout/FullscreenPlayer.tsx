@@ -17,6 +17,7 @@ import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel } from '@/components/features/LyricsPanel';
 import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
+import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
 import { useDislikesStore } from '@/store/dislikes';
@@ -667,14 +668,19 @@ export function FullscreenPlayer() {
                   onClick={() => { handleOfflineToggle(); setMoreOpen(false); }}
                   icon={
                     isTrackDownloadingOffline
-                      ? <Loader2 size={14} className="animate-spin" />
+                      ? (
+                          <OfflineProgressIcon
+                            progress={trackDownloadJob?.progress ?? null}
+                            size={14}
+                          />
+                        )
                       : trackSavedOffline
                         ? <Check size={14} className="text-[var(--color-accent)]" />
                         : <ArrowDownToLine size={14} />
                   }
                 >
                   {isTrackDownloadingOffline
-                    ? t('offline.cancelDownload')
+                    ? `${Math.round((trackDownloadJob?.progress ?? 0) * 100)}% · ${t('offline.cancelDownload')}`
                     : trackSavedOffline
                       ? t('offline.removeFromDevice')
                       : t('offline.listenOffline')}

@@ -2,6 +2,9 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownToLine, Ban, Check, Disc, Download, ListOrdered, ListPlus, Loader2,
+  // Loader2 still used for the radio + per-file download spinners (no
+  // job-progress signal available there). The offline-save action
+  // uses `OfflineProgressIcon` so the user sees a real percentage.
   MoreHorizontal, Radio, RotateCcw, Share2, Trash2, Upload, User as UserIcon,
 } from 'lucide-react';
 import type { Track } from '@/types';
@@ -16,6 +19,7 @@ import { useDislikesStore } from '@/store/dislikes';
 import { useToggleDislike } from '@/hooks/useDislikes';
 import { useRemoveTrackFromPlaylist } from '@/hooks/useLibrary';
 import { useIsTrackSavedOffline, useTrackDownloadJob, useOfflineActions } from '@/hooks/useOfflineActions';
+import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack, buildTrackShareUrl, copyToClipboard } from '@/lib/trackActions';
 import { toast } from '@/store/toast';
@@ -327,14 +331,19 @@ export function TrackKebabMenu({
               onClick={handleOfflineToggle}
               icon={
                 isTrackDownloading
-                  ? <Loader2 size={14} className="animate-spin" />
+                  ? (
+                      <OfflineProgressIcon
+                        progress={trackDownloadJob?.progress ?? null}
+                        size={14}
+                      />
+                    )
                   : trackSavedOffline
                     ? <Check size={14} className="text-[var(--color-accent)]" />
                     : <ArrowDownToLine size={14} />
               }
             >
               {isTrackDownloading
-                ? t('offline.cancelDownload')
+                ? `${Math.round((trackDownloadJob?.progress ?? 0) * 100)}% · ${t('offline.cancelDownload')}`
                 : trackSavedOffline
                   ? t('offline.removeFromDevice')
                   : t('offline.listenOffline')}
