@@ -301,7 +301,12 @@
     "noAlbumsTitle": "No saved albums yet",
     "noAlbumsHint": "Tap the heart on an album page",
     "noArtistsTitle": "No saved artists yet",
-    "noArtistsHint": "Tap the heart on an artist page"
+    "noArtistsHint": "Tap the heart on an artist page",
+    "tabDownloaded": "Downloaded",
+    "downloadedPlaylist": "Downloaded",
+    "serviceLabel": "Service playlist",
+    "noDownloadsTitle": "Nothing saved offline yet",
+    "noDownloadsHint": "Open a track, album, or playlist and tap \"Listen offline\""
   },
   "playlist": {
     "loading": "Loading playlist…",
