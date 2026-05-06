@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { usePlayerStore } from '@/store/player';
 import { useAuthStore } from '@/store/auth';
 import { useSettingsStore } from '@/store/settings';
-import { logPlay, fetchContinue } from '@/lib/recommendations';
+import { logPlay, fetchContinue, fetchWave } from '@/lib/recommendations';
+import type { Track } from '@/types';
 
 /**
  * Two responsibilities, intentionally co-located so they share the
@@ -78,6 +79,12 @@ export function usePlayHistoryLogger() {
   // `queue.every(...)` check, so they're effectively scoped to the
   // queue they belong to without any extra bookkeeping.
   const playedQueueIdsRef = useRef<Set<string>>(new Set());
+  // Single-flight guard for the end-of-queue handler. Set when an
+  // extension fetch kicks off, cleared when it resolves. Prevents
+  // rapid skip-forward taps on the last track from queueing up
+  // multiple parallel fetchContinue/fetchWave calls and racing each
+  // other into setQueue.
+  const endExtendInFlight = useRef(false);
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -105,6 +112,53 @@ export function usePlayHistoryLogger() {
       }
       inFlight.current = null;
       maxProgressRef.current = 0;
+    };
+
+    // Build the list of seed hints to feed fetchContinue. We try the
+    // most-specific seed first (the track the user is currently on)
+    // and back off to the first track of the queue (the canonical
+    // anchor of an album/playlist load). Either can return zero
+    // recommendations — sparse catalogue entries, cold-start tracks,
+    // transient API misses — so each is just a "best effort" hint.
+    const seedHints = (currentTrackId: string): string[] => {
+      const seeds: string[] = [currentTrackId];
+      const queueSeed = usePlayerStore.getState().queue[0]?.id;
+      if (queueSeed && queueSeed !== currentTrackId) seeds.push(queueSeed);
+      return seeds;
+    };
+
+    // Try fetchContinue with each seed; if everything returns 0 fall
+    // back to fetchWave (the user's personal endless stream). Without
+    // the wave fallback, an album whose tracks all have empty
+    // continuation responses leaves the player silent at the end —
+    // which was the "ничего не играется после последнего трека"
+    // symptom users hit even after the seed-fallback was added. The
+    // wave is shaped by the user's overall taste so it always returns
+    // something for an authenticated user with any history.
+    const fetchExtensionTracks = async (seeds: string[]): Promise<Track[]> => {
+      for (const seed of seeds) {
+        try {
+          const res = await fetchContinue(seed, 20);
+          if (res.length > 0) return res;
+        } catch {
+          // continue to next seed / wave fallback
+        }
+      }
+      try {
+        const wave = await fetchWave(20);
+        return wave;
+      } catch {
+        return [];
+      }
+    };
+
+    // De-dupe an extension batch against whatever is already in the
+    // queue. We key on `${id}:${source}` because the same id can
+    // legitimately appear from two different providers (tidal + a
+    // user upload) and should not be collapsed.
+    const filterFresh = (extension: Track[], queue: Track[]): Track[] => {
+      const have = new Set(queue.map((t) => `${t.id}:${(t as { source?: string }).source ?? 'tidal'}`));
+      return extension.filter((t) => !have.has(`${t.id}:${(t as { source?: string }).source ?? 'tidal'}`));
     };
 
     // Fire-once-per-track guard: extend queue when the new current track
@@ -155,52 +209,70 @@ export function usePlayHistoryLogger() {
 
       lastExtendForTrackId.current = currentTrack.id;
       void (async () => {
-        try {
-          // Try seeding from the current track first — that's the
-          // tightest "what should come right after THIS" signal.
-          // If it returns nothing (cold-start track, very rare
-          // catalogue entry, or transient API miss) fall back to the
-          // first track of the queue, which for an album / playlist
-          // load is the canonical anchor and almost always has
-          // recommendations attached. Without this fallback, an
-          // empty response left the queue un-extended forever and
-          // the player simply stopped at the end of the album —
-          // exactly the "ничего не играется после последнего трека"
-          // symptom.
-          const seedCandidates: string[] = [currentTrack.id];
-          const queueSeed = usePlayerStore.getState().queue[0]?.id;
-          if (queueSeed && queueSeed !== currentTrack.id) {
-            seedCandidates.push(queueSeed);
-          }
-          let next: Awaited<ReturnType<typeof fetchContinue>> = [];
-          for (const seed of seedCandidates) {
-            next = await fetchContinue(seed, 20);
-            if (next.length > 0) break;
-          }
-          if (next.length === 0) {
-            // Genuinely no continuation available — clear the guard so
-            // a later track-change (e.g. user manually picks something
-            // else and comes back) gets a fresh attempt instead of
-            // being silently locked out forever.
-            lastExtendForTrackId.current = null;
-            return;
-          }
-          // Re-read state in case the user did something between the
-          // request and the response.
-          const after = usePlayerStore.getState();
-          const stillCurrent = after.currentTrack?.id === currentTrack.id;
-          if (!stillCurrent) return;
-          // Filter out anything already in the queue.
-          const have = new Set(after.queue.map((t) => `${t.id}:${(t as { source?: string }).source ?? 'tidal'}`));
-          const fresh = next.filter((t) => !have.has(`${t.id}:${t.source ?? 'tidal'}`));
-          if (fresh.length === 0) return;
-          after.setQueue([...after.queue, ...fresh]);
-        } catch {
-          // network blip — try again on the next track-change.
+        const extension = await fetchExtensionTracks(seedHints(currentTrack.id));
+        if (extension.length === 0) {
+          // Genuinely no continuation available — clear the guard so a
+          // later track-change (e.g. user manually picks something else
+          // and comes back) gets a fresh attempt instead of being
+          // silently locked out forever.
           lastExtendForTrackId.current = null;
+          return;
         }
+        // Re-read state in case the user did something between the
+        // request and the response.
+        const after = usePlayerStore.getState();
+        if (after.currentTrack?.id !== currentTrack.id) return;
+        const fresh = filterFresh(extension, after.queue);
+        if (fresh.length === 0) return;
+        after.setQueue([...after.queue, ...fresh]);
       })();
     };
+
+    // Reactive end-of-queue handler. The store calls this synchronously
+    // from `next()` / `nextManual()` the moment they would otherwise
+    // stop or wrap, so we always get a chance to extend before the
+    // player visibly does the wrong thing (silence after the album, or
+    // a flash of track 1 when the user expected a wave continuation).
+    // Returns true if we accept responsibility — the store then does
+    // not apply its built-in fallback. We accept whenever infinite
+    // playback is on and we're not already in flight; the actual
+    // queue extension and `setTrack` happen asynchronously below.
+    const handleEndOfQueue = (): boolean => {
+      if (!useSettingsStore.getState().infinitePlayback) return false;
+      const player = usePlayerStore.getState();
+      const currentTrack = player.currentTrack;
+      if (!currentTrack) return false;
+      // 'all' / 'one' repeat modes manage their own end-of-queue
+      // semantics (loop the queue, loop the track) — bow out so the
+      // store's built-in handling stays authoritative.
+      if (player.repeat !== 'off') return false;
+      if (endExtendInFlight.current) return true;
+      endExtendInFlight.current = true;
+      void (async () => {
+        try {
+          const extension = await fetchExtensionTracks(seedHints(currentTrack.id));
+          if (extension.length === 0) return;
+          const after = usePlayerStore.getState();
+          const fresh = filterFresh(extension, after.queue);
+          const head = fresh[0];
+          if (!head) return;
+          // Append first so the queue UI immediately reflects the new
+          // tracks, then promote the first fresh track into
+          // currentTrack so the audio engine actually starts playing
+          // it. Without the explicit setTrack the player would still
+          // be on the album's last track but with audio ended /
+          // stopped, exactly the "ничего не играется после последнего
+          // трека" symptom.
+          after.setQueue([...after.queue, ...fresh]);
+          after.setTrack(head);
+        } finally {
+          endExtendInFlight.current = false;
+        }
+      })();
+      return true;
+    };
+
+    usePlayerStore.getState().setEndHandler(handleEndOfQueue);
 
     const handleTrackChange = (
       next: ReturnType<typeof usePlayerStore.getState>['currentTrack'],
@@ -275,6 +347,12 @@ export function usePlayHistoryLogger() {
       flushPrevious();
       unsubTrack();
       unsubProgress();
+      // Only clear the slot if it's still our handler — guards against
+      // a double-mount race in StrictMode where the second mount
+      // installs its own handler before the first cleanup runs.
+      if (usePlayerStore.getState().endHandler === handleEndOfQueue) {
+        usePlayerStore.getState().setEndHandler(null);
+      }
       window.removeEventListener('beforeunload', onBeforeUnload);
     };
   }, [isAuthed]);
