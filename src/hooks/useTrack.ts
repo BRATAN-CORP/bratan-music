@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { getSavedAlbumWithTracks } from '@/lib/offline/storage';
 import type { Track, Album, Artist } from '@/types';
 
 const PAGE_SIZE = 50;
@@ -36,11 +37,56 @@ export function useTrackRadio(id: string) {
   });
 }
 
+/**
+ * Fetch album metadata + track list with an offline fallback.
+ *
+ * The user reported that opening a downloaded album from the
+ * "Загруженное" tab in offline mode used to render "альбом не
+ * найден" because the network request 404'd. The fix is "if
+ * online — query the server; if offline — load the local copy"
+ * (paraphrasing the user's verbatim Russian instruction). We
+ * implement that in two layers:
+ *
+ *   1. If the device reports `navigator.onLine === false`, we read
+ *      directly from IndexedDB and skip the network call entirely
+ *      (saves a guaranteed-failing fetch + DNS round-trip on flaky
+ *      cellular).
+ *   2. If we *do* try the network and it errors out (DNS, 5xx, etc.)
+ *      we attempt the offline fallback before giving up. This
+ *      handles the in-between "online but unreachable" case
+ *      (airplane Wi-Fi, captive portal) that the user also runs
+ *      into.
+ *
+ * The resulting object matches the network `AlbumDetail` shape so
+ * the album page renders identically; tracks that were never fully
+ * downloaded are silently dropped, leaving only what the user can
+ * actually play.
+ */
 export function useAlbum(id: string) {
   return useQuery({
     queryKey: ['album', id],
-    queryFn: () => api.get<AlbumDetail>(`/albums/${id}`),
+    queryFn: async () => {
+      // Skip the network entirely when the browser already knows
+      // it's offline — `api.get` would just timeout / fail.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const local = await getSavedAlbumWithTracks(id);
+        if (local) return local as AlbumDetail;
+        throw new Error('offline-album-not-saved');
+      }
+      try {
+        return await api.get<AlbumDetail>(`/albums/${id}`);
+      } catch (err) {
+        const local = await getSavedAlbumWithTracks(id);
+        if (local) return local as AlbumDetail;
+        throw err;
+      }
+    },
     enabled: !!id,
+    // The album-detail data we'd render from the offline cache is
+    // identical to itself across re-fetches; let React Query keep
+    // showing it instead of bouncing to a "loading" placeholder
+    // every time the user navigates away and back.
+    staleTime: 60_000,
   });
 }
 
