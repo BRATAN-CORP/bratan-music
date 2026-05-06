@@ -9,6 +9,7 @@ import {
   getCachedStreamUrl,
   getOrStartInFlight,
 } from '@/lib/streamUrlCache';
+import { getSavedTrack, touchTrack } from '@/lib/offline/storage';
 import { useT } from '@/i18n';
 
 import type { TidalQuality } from '@/store/settings';
@@ -842,6 +843,17 @@ export function useAudioPlayer() {
 
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
+  /** Active blob: URL for the currently loaded offline track, kept around
+   *  so we can `URL.revokeObjectURL` it the next time we swap tracks.
+   *  Failing to revoke leaks the entire audio Blob (FLAC files can be
+   *  ~100 MB) for the lifetime of the tab. */
+  const currentBlobUrlRef = useRef<string | null>(null);
+  const releaseCurrentBlobUrl = () => {
+    if (currentBlobUrlRef.current) {
+      URL.revokeObjectURL(currentBlobUrlRef.current);
+      currentBlobUrlRef.current = null;
+    }
+  };
   // The "attempted-once" gate that prevents busy-looping the crossfade
   // trigger every timeupdate (e.g. on a flaky network) lives on the
   // bundle as `b.crossfadeAttemptedTrackId` so module-scope helpers
@@ -948,12 +960,53 @@ export function useAudioPlayer() {
     }
     audio.pause();
 
+    // Drop any blob URL we minted for the previous track first; we only
+    // ever keep one alive at a time and the new src is about to take
+    // its place either as a blob: URL (offline path below) or a
+    // network URL (network path below).
+    releaseCurrentBlobUrl();
+
     // Try each quality level in the fallback chain.
     let url: string | null = null;
     let loaded = false;
     let paywall = false;
     const MAX_RETRIES = 2;
-    while (true) {
+
+    // Offline-first: if the track has been saved into IndexedDB,
+    // play directly from the local Blob via `URL.createObjectURL`
+    // and skip the entire stream-URL ladder. Avoids any worker round
+    // trip (and works while the device is fully offline). We still
+    // fall through to the network path if the offline read fails for
+    // any reason — typically because the user logged out or wiped the
+    // cache mid-playback.
+    try {
+      const offline = await getSavedTrack(track.id);
+      if (loadingRef.current !== trackId) return;
+      if (offline) {
+        const blobUrl = URL.createObjectURL(offline.audioBlob);
+        currentBlobUrlRef.current = blobUrl;
+        audio.crossOrigin = null;
+        const ok = await tryLoadSrc(audio, blobUrl);
+        if (loadingRef.current !== trackId) return;
+        if (ok) {
+          // LRU bookkeeping for a future eviction policy — and a hint
+          // for the user-facing "recently played" view.
+          void touchTrack(track.id).catch(() => { /* non-critical */ });
+          currentQualityRef.current = offline.quality;
+          loaded = true;
+          url = blobUrl;
+        } else {
+          // Blob load failed (rare — corrupt blob, OOM). Drop the URL
+          // and fall through to the network ladder.
+          releaseCurrentBlobUrl();
+        }
+      }
+    } catch {
+      releaseCurrentBlobUrl();
+    }
+    // Skip the network fallback ladder entirely if the offline blob
+    // is already loaded into the audio element (loaded === true).
+    while (!loaded) {
       if (loadingRef.current !== trackId) return;
       try {
         url = await fetchStreamUrl(track, effectiveQuality);
@@ -1947,6 +2000,16 @@ export function useAudioPlayer() {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : currentTrack ? 'paused' : 'none';
   }, [isPlaying, currentTrack]);
+
+  // Revoke any outstanding offline blob URL on unmount so a hot-reload
+  // (or component teardown during logout) doesn't leak the audio Blob
+  // for the rest of the tab's life. `releaseCurrentBlobUrl` is a stable
+  // closure over a ref — safe to skip the deps array.
+  useEffect(() => {
+    return () => {
+      releaseCurrentBlobUrl();
+    };
+  }, []);
 
   return { progress, seek };
 }
