@@ -1,6 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { enqueueSync } from '@/lib/offline/syncQueue';
 import type { Track, Playlist, ArtistRef } from '@/types';
+
+/** Treat the device as offline if `navigator.onLine` is false. The
+ *  flag is famously imprecise but the queue replay path is
+ *  idempotent enough that a stale "online" status just means we'll
+ *  attempt a network call, fail, and the user retries — same UX
+ *  they'd get on a working connection that returned a transient
+ *  error. */
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && !navigator.onLine;
+}
 
 interface LikedResponse {
   items: Track[];
@@ -242,7 +253,17 @@ export function useRemoveTrackFromPlaylist() {
 export function useLikeTrack() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (track: LikeableTrack) => api.post(`/library/like/${track.id}`, snapshotOf(track)),
+    mutationFn: async (track: LikeableTrack) => {
+      const snapshot = snapshotOf(track);
+      if (isOffline()) {
+        // Buffer for replay. The optimistic onMutate below has
+        // already updated the local liked-ids cache so the heart
+        // is filled immediately.
+        await enqueueSync({ kind: 'like-track', trackId: track.id, snapshot });
+        return;
+      }
+      await api.post(`/library/like/${track.id}`, snapshot);
+    },
     onMutate: async (track) => {
       await qc.cancelQueries({ queryKey: ['liked', 'ids'] });
       const prev = qc.getQueryData<LikedIds>(['liked', 'ids']);
@@ -265,7 +286,13 @@ export function useLikeTrack() {
 export function useUnlikeTrack() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (trackId: string) => api.delete(`/library/like/${trackId}`),
+    mutationFn: async (trackId: string) => {
+      if (isOffline()) {
+        await enqueueSync({ kind: 'unlike-track', trackId });
+        return;
+      }
+      await api.delete(`/library/like/${trackId}`);
+    },
     onMutate: async (trackId) => {
       await qc.cancelQueries({ queryKey: ['liked', 'ids'] });
       const prev = qc.getQueryData<LikedIds>(['liked', 'ids']);
@@ -342,8 +369,13 @@ export function useLikedArtists() {
 export function useLikeAlbum() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...snapshot }: { id: string } & LibraryAlbumSnapshot) =>
-      api.post(`/library/items/album/${id}`, snapshot),
+    mutationFn: async ({ id, ...snapshot }: { id: string } & LibraryAlbumSnapshot) => {
+      if (isOffline()) {
+        await enqueueSync({ kind: 'like-album', albumId: id, snapshot });
+        return;
+      }
+      await api.post(`/library/items/album/${id}`, snapshot);
+    },
     onMutate: async ({ id }) => {
       await qc.cancelQueries({ queryKey: ['library', 'album', 'ids'] });
       const prev = qc.getQueryData<{ ids: string[] }>(['library', 'album', 'ids']);
@@ -364,7 +396,13 @@ export function useLikeAlbum() {
 export function useUnlikeAlbum() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/library/items/album/${id}`),
+    mutationFn: async (id: string) => {
+      if (isOffline()) {
+        await enqueueSync({ kind: 'unlike-album', albumId: id });
+        return;
+      }
+      await api.delete(`/library/items/album/${id}`);
+    },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['library', 'album', 'ids'] });
       const prev = qc.getQueryData<{ ids: string[] }>(['library', 'album', 'ids']);
@@ -400,8 +438,13 @@ export function useToggleAlbumLike() {
 export function useLikeArtist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...snapshot }: { id: string } & LibraryArtistSnapshot) =>
-      api.post(`/library/items/artist/${id}`, snapshot),
+    mutationFn: async ({ id, ...snapshot }: { id: string } & LibraryArtistSnapshot) => {
+      if (isOffline()) {
+        await enqueueSync({ kind: 'like-artist', artistId: id, snapshot });
+        return;
+      }
+      await api.post(`/library/items/artist/${id}`, snapshot);
+    },
     onMutate: async ({ id }) => {
       await qc.cancelQueries({ queryKey: ['library', 'artist', 'ids'] });
       const prev = qc.getQueryData<{ ids: string[] }>(['library', 'artist', 'ids']);
@@ -422,7 +465,13 @@ export function useLikeArtist() {
 export function useUnlikeArtist() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/library/items/artist/${id}`),
+    mutationFn: async (id: string) => {
+      if (isOffline()) {
+        await enqueueSync({ kind: 'unlike-artist', artistId: id });
+        return;
+      }
+      await api.delete(`/library/items/artist/${id}`);
+    },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['library', 'artist', 'ids'] });
       const prev = qc.getQueryData<{ ids: string[] }>(['library', 'artist', 'ids']);

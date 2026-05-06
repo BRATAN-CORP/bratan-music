@@ -150,6 +150,76 @@ export interface DownloadJob {
   completedAt?: number;
 }
 
+/** A single offline-buffered mutation that needs to be replayed
+ *  against the worker once connectivity returns. The shape mirrors
+ *  the existing online mutation hooks 1:1 so the flush loop can
+ *  call the same `api.*` helpers without a per-action adapter.
+ *
+ *  Stored in the `syncQueue` IndexedDB object store, keyed by `id`.
+ *  `id` is a UUID we generate at enqueue time so two duplicate
+ *  actions (e.g. the user double-taps the like button before the
+ *  flush runs) end up as separate rows; the flush loop dedupes by
+ *  examining the resulting state and dropping no-ops.
+ */
+export type SyncAction =
+  | { kind: 'like-track'; trackId: string; snapshot: SyncTrackSnapshot }
+  | { kind: 'unlike-track'; trackId: string }
+  | { kind: 'like-album'; albumId: string; snapshot: SyncAlbumSnapshot }
+  | { kind: 'unlike-album'; albumId: string }
+  | { kind: 'like-artist'; artistId: string; snapshot: SyncArtistSnapshot }
+  | { kind: 'unlike-artist'; artistId: string }
+  | { kind: 'log-play'; payload: SyncPlayPayload };
+
+export interface SyncTrackSnapshot {
+  title?: string;
+  artist?: string;
+  artistId?: string;
+  artists?: { id: string; name: string }[];
+  album?: string;
+  albumId?: string;
+  duration?: number;
+  coverUrl?: string;
+  source?: string;
+}
+export interface SyncAlbumSnapshot {
+  title: string;
+  artist: string;
+  artistId: string;
+  coverUrl?: string;
+}
+export interface SyncArtistSnapshot {
+  name: string;
+  imageUrl?: string;
+}
+export interface SyncPlayPayload {
+  trackId: string;
+  source?: string;
+  artistId?: string;
+  artistName?: string;
+  artists?: { id: string; name: string }[];
+  title?: string;
+  albumId?: string;
+  coverUrl?: string;
+  duration?: number;
+  listenedSeconds?: number;
+  completed?: boolean;
+}
+
+export interface SyncQueueEntry {
+  id: string;
+  enqueuedAt: number;
+  action: SyncAction;
+  /** Number of times we've tried to flush this entry. After
+   *  `MAX_ATTEMPTS` we drop it to keep the queue from growing
+   *  unboundedly on a permanent server-side rejection. */
+  attempts: number;
+  /** If we got an error from the server other than a network
+   *  failure (4xx that's not 401/429), we record the message here
+   *  before dropping the entry, so a future debug screen can
+   *  surface what happened. */
+  lastError?: string;
+}
+
 /** Single entry in the IndexedDB `meta` store. Records everything
  *  the manager needs to decide whether a track is fully saved,
  *  which collections it belongs to, and (in PR #5) whether there's
