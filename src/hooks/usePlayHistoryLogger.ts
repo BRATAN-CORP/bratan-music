@@ -32,6 +32,15 @@ import { logPlay, fetchContinue } from '@/lib/recommendations';
  *      keeps the queue pure for the whole album, and by the time the
  *      last track ends the wave has been fetched in the background.
  *
+ *      Shuffle is a special case: `next()` picks a random queue index
+ *      instead of advancing linearly, so the linear "remaining === 0"
+ *      heuristic fires whenever random happens to land on the last
+ *      queue position — which is independent of whether the user has
+ *      heard the album in full. The shuffle branch tracks per-queue
+ *      played track ids and only extends once every queue track has
+ *      actually been played at least once, so wave tracks don't bleed
+ *      into the listen mid-album.
+ *
  * Mounted once at the AppLayout level. Activates only for
  * authenticated users.
  */
@@ -56,6 +65,19 @@ export function usePlayHistoryLogger() {
   const inFlight = useRef<InFlightTrack | null>(null);
   const maxProgressRef = useRef<number>(0);
   const lastExtendForTrackId = useRef<string | null>(null);
+  // Tracks queue track ids that have been heard at least once during
+  // the current listening session. Used by maybeExtendQueue's shuffle
+  // branch to gate the wave-continuation fetch behind "all tracks in
+  // the current queue have actually been played". Without this gate,
+  // shuffle would extend the queue with wave tracks the first time
+  // random landed on the LAST INDEX of the queue (`remaining === 0` in
+  // the linear sense) — which is decoupled from how many album/playlist
+  // tracks the user had actually heard, so wave tracks started bleeding
+  // into the album mid-listen. The set is never explicitly reset:
+  // tracks from a previous queue context don't appear in the current
+  // `queue.every(...)` check, so they're effectively scoped to the
+  // queue they belong to without any extra bookkeeping.
+  const playedQueueIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isAuthed) return;
@@ -88,7 +110,7 @@ export function usePlayHistoryLogger() {
     // Fire-once-per-track guard: extend queue when the new current track
     // is announced and the queue is small.
     const maybeExtendQueue = () => {
-      const { currentTrack, queue, repeat } = usePlayerStore.getState();
+      const { currentTrack, queue, repeat, shuffle } = usePlayerStore.getState();
       if (!currentTrack) return;
       if (lastExtendForTrackId.current === currentTrack.id) return;
       // Only extend in plain "off" mode. 'all' loops the user's queue,
@@ -99,22 +121,70 @@ export function usePlayHistoryLogger() {
       // When off, the queue is intentionally finite and the player
       // stops on the last track.
       if (!useSettingsStore.getState().infinitePlayback) return;
-      const idx = queue.findIndex((t) => t.id === currentTrack.id);
-      // Only extend when the user is on the very last track of the
-      // current queue (remaining === 0). Earlier builds extended
-      // when remaining ≤ 2, but that polluted album/playlist queues
-      // with wave continuations before the user had finished the
-      // explicit selection. The fetch below is async, so kicking it
-      // off at the start of the last track gives it ~minutes to
-      // resolve before the track actually ends.
-      const remaining = idx >= 0 ? queue.length - idx - 1 : queue.length;
-      if (remaining > 0) return;
+
+      if (shuffle) {
+        // Shuffle is decoupled from queue position — `next()` just picks
+        // `Math.random() * queue.length`, so the linear "remaining === 0"
+        // check fires the first time random happens to land on the last
+        // queue index, which can be early in the album. Wave tracks then
+        // start bleeding into the queue and shuffle picks them mid-album,
+        // which is the "треки из бесконечного прослушивания брались до
+        // того как доиграл альбом целиком" behaviour the user reported.
+        // Gate the trigger on "every track in the current queue has
+        // actually been played at least once" instead — by the time we
+        // hit the last unheard track in shuffle, we know the user has
+        // genuinely finished the album/playlist and pulling wave
+        // continuations is the right next step.
+        const played = playedQueueIdsRef.current;
+        const allPlayed = queue.every(
+          (t) => played.has(t.id) || t.id === currentTrack.id,
+        );
+        if (!allPlayed) return;
+      } else {
+        const idx = queue.findIndex((t) => t.id === currentTrack.id);
+        // Linear playback: extend when the user is on the very last
+        // track of the current queue (remaining === 0). Earlier builds
+        // extended when remaining ≤ 2, but that polluted album/playlist
+        // queues with wave continuations before the user had finished
+        // the explicit selection. The fetch below is async, so kicking
+        // it off at the start of the last track gives it ~minutes to
+        // resolve before the track actually ends.
+        const remaining = idx >= 0 ? queue.length - idx - 1 : queue.length;
+        if (remaining > 0) return;
+      }
 
       lastExtendForTrackId.current = currentTrack.id;
       void (async () => {
         try {
-          const next = await fetchContinue(currentTrack.id, 20);
-          if (next.length === 0) return;
+          // Try seeding from the current track first — that's the
+          // tightest "what should come right after THIS" signal.
+          // If it returns nothing (cold-start track, very rare
+          // catalogue entry, or transient API miss) fall back to the
+          // first track of the queue, which for an album / playlist
+          // load is the canonical anchor and almost always has
+          // recommendations attached. Without this fallback, an
+          // empty response left the queue un-extended forever and
+          // the player simply stopped at the end of the album —
+          // exactly the "ничего не играется после последнего трека"
+          // symptom.
+          const seedCandidates: string[] = [currentTrack.id];
+          const queueSeed = usePlayerStore.getState().queue[0]?.id;
+          if (queueSeed && queueSeed !== currentTrack.id) {
+            seedCandidates.push(queueSeed);
+          }
+          let next: Awaited<ReturnType<typeof fetchContinue>> = [];
+          for (const seed of seedCandidates) {
+            next = await fetchContinue(seed, 20);
+            if (next.length > 0) break;
+          }
+          if (next.length === 0) {
+            // Genuinely no continuation available — clear the guard so
+            // a later track-change (e.g. user manually picks something
+            // else and comes back) gets a fresh attempt instead of
+            // being silently locked out forever.
+            lastExtendForTrackId.current = null;
+            return;
+          }
           // Re-read state in case the user did something between the
           // request and the response.
           const after = usePlayerStore.getState();
@@ -138,6 +208,16 @@ export function usePlayHistoryLogger() {
       // Same-track no-ops (zustand subscribe fires on every set).
       const prev = inFlight.current;
       if (next?.id && prev?.trackId === next.id) return;
+
+      // Record the track we're transitioning AWAY from as "played" so
+      // the shuffle branch of maybeExtendQueue can tell when the user
+      // has heard every track in the current queue. We add it whether
+      // or not it ended up logged via flushPrevious — even a short
+      // skip counts as "this track has been seen" for the purposes of
+      // not re-shuffling the same items endlessly.
+      if (prev?.trackId) {
+        playedQueueIdsRef.current.add(prev.trackId);
+      }
 
       flushPrevious();
 

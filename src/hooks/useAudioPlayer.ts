@@ -1673,15 +1673,19 @@ export function useAudioPlayer() {
           if (Math.abs(realT - restoreTarget) > 1.5) return;
           pendingRestoreProgressRef.current = null;
         }
-        // Jump detection: only trigger the end-of-track auto-crossfade
-        // when we've reached the final window via natural playback
-        // progression, not a user scrub into the last few seconds. We
-        // consider the step natural if it advanced by between 0 and
-        // 1.5 s — the typical `timeupdate` cadence is 200–300 ms but
-        // some browsers coalesce frames on slow tracks.
-        const prevRealT = b.lastRealT[slot];
-        const delta = realT - prevRealT;
-        const isNaturalProgression = delta >= 0 && delta < 1.5;
+        // Bookkeeping for delta tracking. The seek-time guard below is
+        // the authoritative defence against "scrubbed into the last
+        // few seconds → fired the crossfade". An older delta-based
+        // `isNaturalProgression` heuristic also gated the trigger,
+        // but it had a false-negative mode that turned out to be the
+        // root cause of "иногда скипается без перехода": background-
+        // tab `timeupdate` throttling produces deltas in the multi-
+        // second range, the heuristic flagged that as "unnatural",
+        // and the trigger was suppressed for the entire end-of-track
+        // window. The track ended, `onEnded` saw no in-flight fade,
+        // and called `next()` for a hard switch. Dropped the
+        // heuristic entirely; `sinceSeek` already covers the scrub
+        // case authoritatively.
         b.lastRealT[slot] = realT;
 
         // Suppress setProgress while the browser is still resolving a
@@ -1708,7 +1712,6 @@ export function useAudioPlayer() {
         if (
           crossfade
           && !crossfadingRef.current
-          && isNaturalProgression
           && !audio.seeking
           && sinceSeek > AUTO_CROSSFADE_SEEK_GUARD_MS
           && isFinite(dur)
