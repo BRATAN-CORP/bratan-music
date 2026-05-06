@@ -431,7 +431,7 @@ export function FullscreenPlayer() {
           >
 
           <div
-            className="relative z-[20] flex items-center justify-between px-5 py-4"
+            className="relative z-[20] flex items-center justify-between px-5 pb-4"
             // Sheet-dismiss drag is wired on the inner wrapper one
             // level up. The header still listens for pointer events
             // normally so its buttons keep working; empty space
@@ -448,7 +448,18 @@ export function FullscreenPlayer() {
             // nowhere for the browser to scroll anyway — letting JS
             // own all gestures here makes the wrapper's `drag='y'`
             // see vertical pan events and run the dismiss reliably.
-            style={{ touchAction: 'none' }}
+            //
+            // `paddingTop` keeps the original 1rem rhythm (`py-4`) but
+            // adds the PWA notch / status-bar inset on top so the
+            // close (chevron-down) button isn't hidden behind the
+            // iPhone notch when the app is installed. The variable
+            // resolves to `0px` in browser tabs so the on-screen
+            // position is unchanged outside PWA mode — see
+            // `globals.scss` for the `--pwa-safe-top` definition.
+            style={{
+              touchAction: 'none',
+              paddingTop: 'calc(1rem + var(--pwa-safe-top))',
+            }}
           >
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label={t('fullscreenPlayer.minimize')}>
               <ChevronDown size={20} />

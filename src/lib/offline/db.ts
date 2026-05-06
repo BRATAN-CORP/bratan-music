@@ -33,15 +33,20 @@ import type {
   OfflineAlbum,
   OfflinePlaylist,
   OfflineTrack,
+  SyncQueueEntry,
 } from './types';
 
 const DB_NAME = 'bratan-offline';
-const DB_VERSION = 1;
+/** Bumped to 2 in PR #5 to add the `syncQueue` store used by the
+ *  offline-action replay loop (likes / play history / etc. that
+ *  the user performed while offline). */
+const DB_VERSION = 2;
 
 export const STORE_TRACKS = 'tracks';
 export const STORE_ALBUMS = 'albums';
 export const STORE_PLAYLISTS = 'playlists';
 export const STORE_META = 'meta';
+export const STORE_SYNC_QUEUE = 'syncQueue';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -73,6 +78,14 @@ export function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_SYNC_QUEUE)) {
+        // PR #5: replay queue for offline likes / play history.
+        // Keyed by an enqueued UUID; rows are processed FIFO via
+        // the `enqueuedAt` index so a flush always replays in
+        // chronological order.
+        const store = db.createObjectStore(STORE_SYNC_QUEUE, { keyPath: 'id' });
+        store.createIndex('byEnqueuedAt', 'enqueuedAt', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -217,12 +230,59 @@ export async function deleteMeta(key: string): Promise<void> {
   await tx(STORE_META, 'readwrite', (store) => reqAsPromise(store.delete(key)));
 }
 
+// ───────────────────────── sync queue ──────────────────────────
+
+export async function putSyncEntry(entry: SyncQueueEntry): Promise<void> {
+  await tx(STORE_SYNC_QUEUE, 'readwrite', (store) => reqAsPromise(store.put(entry)));
+}
+
+export async function deleteSyncEntry(id: string): Promise<void> {
+  await tx(STORE_SYNC_QUEUE, 'readwrite', (store) => reqAsPromise(store.delete(id)));
+}
+
+/** Cursor-walk the queue in FIFO order via the `byEnqueuedAt` index.
+ *  Done as a single full-store scan because the queue is on the
+ *  order of dozens of entries, not thousands. */
+export async function listSyncEntries(): Promise<SyncQueueEntry[]> {
+  const db = await openDB();
+  return new Promise<SyncQueueEntry[]>((resolve, reject) => {
+    const transaction = db.transaction(STORE_SYNC_QUEUE, 'readonly');
+    const store = transaction.objectStore(STORE_SYNC_QUEUE);
+    const idx = store.index('byEnqueuedAt');
+    const out: SyncQueueEntry[] = [];
+    const req = idx.openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) {
+        resolve(out);
+        return;
+      }
+      out.push(cursor.value as SyncQueueEntry);
+      cursor.continue();
+    };
+    req.onerror = () =>
+      reject(req.error ?? new Error('IndexedDB cursor failed'));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
+  });
+}
+
+export async function countSyncEntries(): Promise<number> {
+  return tx(STORE_SYNC_QUEUE, 'readonly', (store) => reqAsPromise(store.count()));
+}
+
 /** Wipe every record from every store. Used by the logout path so a
  *  user signing in on a shared device doesn't inherit the previous
  *  user's offline library. */
 export async function clearAll(): Promise<void> {
   const db = await openDB();
-  const stores = [STORE_TRACKS, STORE_ALBUMS, STORE_PLAYLISTS, STORE_META];
+  const stores = [
+    STORE_TRACKS,
+    STORE_ALBUMS,
+    STORE_PLAYLISTS,
+    STORE_META,
+    STORE_SYNC_QUEUE,
+  ];
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(stores, 'readwrite');
     for (const name of stores) {

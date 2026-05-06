@@ -13,6 +13,7 @@ import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { OnboardingTour } from '@/components/features/OnboardingTour';
 import { RoomConnectedBadge } from '@/components/features/RoomConnectedBadge';
+import { OfflineBanner } from '@/components/features/OfflineBanner';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { DislikesBootstrap } from '@/components/system/DislikesBootstrap';
@@ -27,6 +28,7 @@ import { ExploreListPage } from '@/app/explore/list';
 import { TidalPlaylistPage } from '@/app/explore/playlist';
 import { LibraryPage } from '@/app/library/page';
 import { UploadsPage } from '@/app/library/uploads/page';
+import { DownloadedPlaylistPage } from '@/app/library/downloaded/page';
 import { ProfilePage } from '@/app/profile/page';
 import { AiPlaylistPage } from '@/app/ai/page';
 import { DailyPlaylistPreviewPage } from '@/app/daily/page';
@@ -112,6 +114,7 @@ function AppLayout() {
   // and Sidebar is parked sticky-below-Header so it still feels pinned.
   return (
     <div className="flex min-h-dvh flex-col">
+      <OfflineBanner />
       {/* Header has been retired — the desktop sidebar carries the
           brandmark + nav, and on mobile the bottom dock owns navigation.
           The previous sticky top bar duplicated the search affordance
@@ -119,7 +122,18 @@ function AppLayout() {
           short viewports. */}
       <div className="flex flex-1">
         <Sidebar />
-        <main className="min-w-0 flex-1 pb-44 lg:pb-32">
+        {/*
+         * `pt-safe` adds an iOS-PWA notch / status-bar inset on top of
+         * the existing page padding. The variable resolves to `0px`
+         * inside Telegram WebApp and regular browser tabs (display-mode:
+         * browser) so the layout stays byte-for-byte identical there;
+         * it picks up `env(safe-area-inset-top)` only when launched as
+         * a standalone PWA. See `globals.scss` for the variable
+         * definition. This single hook covers every sub-page back
+         * button, sticky header and hero gradient that currently
+         * rendered under the iPhone notch when the app was installed.
+         */}
+        <main className="pt-safe min-w-0 flex-1 pb-44 lg:pb-32">
           <PageTransition>
             <Outlet />
           </PageTransition>
@@ -159,6 +173,7 @@ const router = createBrowserRouter(
         { path: 'explore/playlist/:uuid', element: <TidalPlaylistPage /> },
         { path: 'library', element: <LibraryPage /> },
         { path: 'library/uploads', element: <UploadsPage /> },
+        { path: 'library/downloaded', element: <DownloadedPlaylistPage /> },
         { path: 'profile', element: <ProfilePage /> },
         { path: 'ai', element: <AiPlaylistPage /> },
         { path: 'daily/:id', element: <DailyPlaylistPreviewPage /> },

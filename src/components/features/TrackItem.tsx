@@ -6,6 +6,7 @@ import { useTrackPlayback, useTrackHoverPrefetch } from '@/hooks/usePlaybackSync
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackInlineActions } from '@/components/features/TrackInlineActions';
+import { OfflineBadge } from '@/components/features/OfflineBadge';
 import { useT } from '@/i18n';
 
 interface TrackItemProps {
@@ -122,6 +123,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
             </span>
           )}
           <span className="truncate">{track.title}</span>
+          <OfflineBadge trackId={track.id} size={14} />
         </p>
         <p className="truncate text-xs text-muted-foreground">
           <ArtistLinks

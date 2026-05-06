@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { enqueueSync } from '@/lib/offline/syncQueue';
 import type { Track } from '@/types';
 
 export interface DailyPlaylist {
@@ -161,6 +162,19 @@ export interface PlayLogPayload {
 }
 
 export async function logPlay(payload: PlayLogPayload): Promise<void> {
+  // Offline path: drop the beacon into the replay queue so the
+  // significant-play event makes it back to the worker once
+  // connectivity returns. The worker's per-track dedup window is
+  // generous enough that a delayed beacon doesn't double-count.
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    try {
+      await enqueueSync({ kind: 'log-play', payload });
+    } catch {
+      // swallow — we never want history to surface errors at the
+      // call site (`flushPrevious` runs in a track-change cleanup).
+    }
+    return;
+  }
   // Best-effort: don't surface failures, the history beacon is decorative.
   try {
     await api.post(`/history/play`, payload);
