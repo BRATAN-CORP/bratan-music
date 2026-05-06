@@ -91,11 +91,22 @@ const DISCOVERY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 // transiently returned an error.
 const DISCOVERY_NEGATIVE_CACHE_TTL_S = 60 * 60; // 1 hour
 const DISCOVERY_CACHE_PREFIX = 'tidal-track-formats:';
-// When the discovery endpoint returns a structural failure (404 —
-// endpoint not accessible with the current auth; or 403), we set a
-// global breaker that suppresses ALL subsequent discovery calls for
-// the TTL below. This avoids paying 1 wasted RTT per cold track when
-// the endpoint simply can't work right now.
+// When the discovery endpoint returns a global-auth failure (401 /
+// 403 from openapi.tidal.com — bearer revoked, region-block, etc.),
+// we trip a global breaker that suppresses ALL subsequent discovery
+// calls for the TTL below. This avoids paying 1 wasted RTT per cold
+// track while the endpoint simply can't work for anyone.
+//
+// 404 specifically does NOT trip the breaker. `trackManifests/<id>`
+// returns 404 for edge-case individual tracks (DRM-only, region-
+// locked, catalogue-pruned). Tripping a global hour-long breaker
+// on a single track's 404 used to globally degrade cold-track
+// resolution to the legacy ladder (up to 4 sequential 500–700 ms
+// upstream calls per track), which surfaced as the user-visible
+// "ждать по 3-5 секунд перед проигрышем". Per-track negative
+// caching (DISCOVERY_NEGATIVE_CACHE_TTL_S) handles the "don't keep
+// asking about this dead track" case without globally degrading
+// the rest of the catalogue.
 const DISCOVERY_BREAKER_KEY = 'tidal-discovery-breaker';
 const DISCOVERY_BREAKER_TTL_S = 60 * 60; // 1 hour
 
@@ -353,13 +364,29 @@ export class TidalWeb {
       console.warn(
         `[TidalWeb] discoverQualities ${trackId} non-OK status=${res.status} body=${detail}`,
       );
-      // Structural 4xx (403, 404) means the endpoint is unreachable
-      // with the current auth. Trip the global breaker so every
-      // subsequent cold track skips discovery for the next hour.
-      // Same skip-on-download policy: a download fan-out shouldn't
-      // burn the breaker write either, since the play path has had
-      // ample opportunity to set it during normal listening.
-      if ((res.status === 403 || res.status === 404) && !this.skipCacheWrites) {
+      // Trip the global breaker only on 401 / 403 — those signal that
+      // the bearer or whatever cross-region auth `openapi.tidal.com`
+      // requires has stopped working *globally*, in which case
+      // suppressing every subsequent cold-track call for the next hour
+      // is a real win.
+      //
+      // Critically we do NOT trip the breaker on 404. The
+      // `trackManifests/<id>` endpoint legitimately returns 404 for
+      // individual edge-case tracks — DRM-only, region-locked,
+      // catalogue-pruned — and tripping the global breaker on a
+      // single track's 404 caused every other COLD track in the next
+      // hour to fall back through the legacy ladder (up to 4 sequential
+      // upstream RTTs of 500–700 ms each), which is what the user was
+      // seeing as "треки стали как будто дольше загружаться, жду по
+      // 3-5 секунд перед проигрышем". The per-track negative-cache
+      // (DISCOVERY_NEGATIVE_CACHE_TTL_S, 1 h) already handles the
+      // "don't keep re-asking openapi about this specific dead track"
+      // case without globally degrading discovery for everyone else.
+      //
+      // Same skip-on-download policy: a bulk download fan-out
+      // shouldn't burn the breaker write either, since the play path
+      // has had ample opportunity to set it during normal listening.
+      if ((res.status === 401 || res.status === 403) && !this.skipCacheWrites) {
         await this.tripDiscoveryBreaker();
       }
       return finalize([]);
