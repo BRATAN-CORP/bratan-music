@@ -32,7 +32,16 @@ export function Sidebar() {
     });
 
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-border bg-background py-6 lg:flex">
+    <aside
+      // `paddingTop` adds the PWA-only safe-area inset on TOP of the
+      // existing 1.5rem (`py-6`) gap so the brandmark + nav don't
+      // render under the system status bar on a desktop installed
+      // PWA. The variable is `0px` in normal browser tabs so the
+      // current desktop layout is unchanged. The `paddingBottom`
+      // stays at 1.5rem via Tailwind below.
+      style={{ paddingTop: 'calc(1.5rem + var(--pwa-safe-top))' }}
+      className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-border bg-background pb-6 lg:flex"
+    >
       {/* Brand mark — only shown on desktop, where the sidebar is the
           home for both navigation and identity. The accent dot scales up
           on hover, mirroring the original Header micro-interaction. */}

@@ -4,6 +4,79 @@
 
 @import 'tokens';
 
+/*
+ * PWA-aware safe-area insets.
+ *
+ * `index.html` sets `viewport-fit=cover` and the iOS PWA flags
+ * (`apple-mobile-web-app-capable=yes`,
+ * `apple-mobile-web-app-status-bar-style=black-translucent`). When
+ * the app is launched from the home screen on iOS that combination
+ * draws the system status bar (clock, battery, notch / Dynamic
+ * Island) DIRECTLY ON TOP of the page — every interactive control
+ * that lives near the top edge (back buttons inside sub-pages, the
+ * fullscreen player's close button, sticky page headers) ends up
+ * physically un-tappable because the notch overlays them. Same idea
+ * for the bottom edge on devices with the home-indicator strip.
+ *
+ * We expose the four insets as variables that resolve to `0px` in a
+ * regular browser tab (so the visible layout stays byte-for-byte the
+ * same as today) and pick up the real `env(safe-area-inset-*)` values
+ * once the page is launched as a PWA in any of the standalone display
+ * modes. Components apply `var(--pwa-safe-*)` via the `pt-safe` /
+ * `pb-safe` utilities below (or directly inside `calc(...)` when they
+ * already own a base padding) so the inset is added on top of their
+ * existing spacing without the need to special-case the value at every
+ * call site.
+ *
+ * Telegram WebApp / regular mobile Safari tabs report
+ * `display-mode: browser` and stay on the `0px` defaults — exactly
+ * the user's request that the design "не изменилось" outside PWA.
+ */
+:root {
+  --pwa-safe-top: 0px;
+  --pwa-safe-bottom: 0px;
+  --pwa-safe-left: 0px;
+  --pwa-safe-right: 0px;
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+  :root {
+    --pwa-safe-top: env(safe-area-inset-top, 0px);
+    --pwa-safe-bottom: env(safe-area-inset-bottom, 0px);
+    --pwa-safe-left: env(safe-area-inset-left, 0px);
+    --pwa-safe-right: env(safe-area-inset-right, 0px);
+  }
+}
+
+@layer utilities {
+  /*
+   * Convenience helpers for the most common patterns. These are
+   * intentionally additive — they only set `padding-top` (or
+   * `padding-bottom` …) to the inset value, so a parent that
+   * already has its own `py-4` / `pt-6` keeps its rhythm and just
+   * gets the extra notch-clearance on top.
+   *
+   * Use the `safe` variants on standalone fixed surfaces (the
+   * fullscreen player header, the desktop sidebar) where the
+   * existing class list is just decorative borders / colours; use
+   * `pt-[calc(theme(spacing.4)+var(--pwa-safe-top))]` style
+   * arbitrary values on rows that have a baseline padding to
+   * preserve.
+   */
+  .pt-safe {
+    padding-top: var(--pwa-safe-top);
+  }
+  .pb-safe {
+    padding-bottom: var(--pwa-safe-bottom);
+  }
+  .pl-safe {
+    padding-left: var(--pwa-safe-left);
+  }
+  .pr-safe {
+    padding-right: var(--pwa-safe-right);
+  }
+}
+
 *,
 *::before,
 *::after {
