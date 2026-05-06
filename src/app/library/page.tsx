@@ -9,6 +9,9 @@ import { CreatePlaylistDialog } from '@/components/features/CreatePlaylistDialog
 import { OfflineLibraryTab } from '@/components/features/OfflineLibraryTab';
 import { usePlaylists, useLikedAlbums, useLikedArtists } from '@/hooks/useLibrary';
 import { useUploads } from '@/hooks/useUploads';
+import { useOnline } from '@/hooks/useOnline';
+import { useOfflineHydration } from '@/hooks/useOfflineActions';
+import { useOfflineStore } from '@/store/offline';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
@@ -39,6 +42,23 @@ export function LibraryPage() {
   const { data: artistsData } = useLikedArtists();
   const [showCreate, setShowCreate] = useState(false);
   const [tab, setTab] = useState<Tab>('playlists');
+
+  // When the device drops the network, the existing playlist / album /
+  // artist queries either return stale data (if React Query had a
+  // cache hit) or nothing at all. Filter both lists down to whatever
+  // is in the offline cache so the user sees only the things that
+  // will actually play.
+  useOfflineHydration();
+  const online = useOnline();
+  const savedAlbumIds = useOfflineStore((s) => s.savedAlbumIds);
+  const savedPlaylistIds = useOfflineStore((s) => s.savedPlaylistIds);
+
+  const visiblePlaylists = online
+    ? playlists ?? []
+    : (playlists ?? []).filter((pl) => savedPlaylistIds.has(pl.id));
+  const visibleAlbums = online
+    ? albumsData?.items ?? []
+    : (albumsData?.items ?? []).filter((al) => savedAlbumIds.has(al.id));
 
   return (
     <AuthGuard>
@@ -103,9 +123,9 @@ export function LibraryPage() {
 
             {isLoading ? (
               <p className="text-sm text-muted-foreground">{t('library.loadingShort')}</p>
-            ) : playlists?.length ? (
+            ) : visiblePlaylists.length ? (
               <div className="flex flex-col gap-2">
-                {playlists.map((pl) => (
+                {visiblePlaylists.map((pl) => (
                   <PlaylistCard key={pl.id} playlist={pl} />
                 ))}
               </div>
@@ -119,9 +139,9 @@ export function LibraryPage() {
 
         {tab === 'albums' && (
           <>
-            {albumsData?.items?.length ? (
+            {visibleAlbums.length ? (
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                {albumsData.items.map((album) => (
+                {visibleAlbums.map((album) => (
                   <AlbumCard
                     key={album.id}
                     album={{

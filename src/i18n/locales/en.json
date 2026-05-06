@@ -1578,6 +1578,9 @@
     "saveToDevice": "Save to device",
     "savedToDevice": "Saved to device",
     "removedFromDevice": "Removed from device",
-    "downloadCancelled": "Download cancelled"
+    "downloadCancelled": "Download cancelled",
+    "bannerOffline": "You're offline — showing saved content only",
+    "filterShowOnlyDownloaded": "Only downloaded",
+    "filterShowAll": "Show all"
   }
 }

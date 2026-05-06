@@ -13,6 +13,7 @@ import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { OnboardingTour } from '@/components/features/OnboardingTour';
 import { RoomConnectedBadge } from '@/components/features/RoomConnectedBadge';
+import { OfflineBanner } from '@/components/features/OfflineBanner';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { DislikesBootstrap } from '@/components/system/DislikesBootstrap';
@@ -113,6 +114,7 @@ function AppLayout() {
   // and Sidebar is parked sticky-below-Header so it still feels pinned.
   return (
     <div className="flex min-h-dvh flex-col">
+      <OfflineBanner />
       {/* Header has been retired — the desktop sidebar carries the
           brandmark + nav, and on mobile the bottom dock owns navigation.
           The previous sticky top bar duplicated the search affordance

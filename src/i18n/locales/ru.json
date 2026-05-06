@@ -1578,6 +1578,9 @@
     "saveToDevice": "Сохранить на устройство",
     "savedToDevice": "Сохранено на устройство",
     "removedFromDevice": "Удалено с устройства",
-    "downloadCancelled": "Загрузка отменена"
+    "downloadCancelled": "Загрузка отменена",
+    "bannerOffline": "Вы офлайн — показывается только сохранённое",
+    "filterShowOnlyDownloaded": "Только загруженные",
+    "filterShowAll": "Показать все"
   }
 }
