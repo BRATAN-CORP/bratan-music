@@ -246,6 +246,13 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
       ref={containerRef}
       onWheel={() => setAutoScroll(false)}
       onTouchMove={() => setAutoScroll(false)}
+      // `data-allow-pan-y` opts back into native vertical scrolling
+      // inside the fullscreen-drag-zone (which globally pins
+      // `touch-action: none` on every descendant so the swipe-down
+      // dismiss works on every empty pixel of the player). Without
+      // this attribute the lyrics scroller would inherit `none` and
+      // the user couldn't manually scroll through verses on touch.
+      data-allow-pan-y
       className="relative h-full overflow-y-auto px-5 py-10 sm:px-8"
       style={{
         WebkitMaskImage: SCROLL_MASK,

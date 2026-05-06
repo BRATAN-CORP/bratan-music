@@ -432,7 +432,7 @@
     "actions": "Track actions",
     "startRadio": "Start a track radio",
     "shareCopied": "Link copied",
-    "download": "Download",
+    "download": "Download file",
     "uploadOwn": "Upload your version",
     "goToArtist": "Go to artist",
     "goToAlbum": "Go to album",
@@ -1573,14 +1573,21 @@
   },
   "offline": {
     "listenOffline": "Listen offline",
-    "removeFromDevice": "Remove from device",
+    "removeFromDevice": "Remove from offline",
     "cancelDownload": "Cancel download",
-    "saveToDevice": "Save to device",
-    "savedToDevice": "Saved to device",
-    "removedFromDevice": "Removed from device",
+    "saveToDevice": "Listen offline",
+    "savedToDevice": "Available offline",
+    "removedFromDevice": "Removed from offline",
     "downloadCancelled": "Download cancelled",
     "bannerOffline": "You're offline — showing saved content only",
+    "toastOffline": "You're offline",
+    "toastOnline": "Back online",
     "filterShowOnlyDownloaded": "Only downloaded",
     "filterShowAll": "Show all"
+  },
+  "appUpdate": {
+    "available": "New version available",
+    "availableHint": "Your downloaded tracks will be kept",
+    "reload": "Reload"
   }
 }

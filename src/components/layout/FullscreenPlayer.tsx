@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
+  ArrowDownToLine, ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
   SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check, Ban, RotateCcw,
 } from 'lucide-react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
@@ -24,6 +24,7 @@ import { useToggleDislike } from '@/hooks/useDislikes';
 import { useAuthStore } from '@/store/auth';
 import { useTrack } from '@/hooks/useTrack';
 import { useTouchOnlyDevice } from '@/hooks/useCoarsePointer';
+import { useIsTrackSavedOffline, useTrackDownloadJob, useOfflineActions } from '@/hooks/useOfflineActions';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
@@ -117,6 +118,28 @@ export function FullscreenPlayer() {
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
+
+  // Offline-save state for the kebab "Слушать офлайн" menu item.
+  // Mirrors the logic in `TrackKebabMenu` so the fullscreen kebab
+  // exposes the same offline toggle the user reaches through the
+  // per-track menu — the previous version of the kebab only had the
+  // file-download action ("Скачать файл"), which is a different
+  // affordance that the user explicitly asked us to disambiguate.
+  const trackSavedOffline = useIsTrackSavedOffline(currentTrack?.id ?? '');
+  const trackDownloadJob = useTrackDownloadJob(currentTrack?.id ?? '');
+  const isTrackDownloadingOffline =
+    trackDownloadJob && (trackDownloadJob.status === 'queued' || trackDownloadJob.status === 'downloading');
+  const { saveTrack: saveTrackOffline, unsaveTrack: unsaveTrackOffline, cancelTrack: cancelTrackOffline } = useOfflineActions();
+  const handleOfflineToggle = () => {
+    if (!currentTrack) return;
+    if (isTrackDownloadingOffline) {
+      cancelTrackOffline(currentTrack.id);
+    } else if (trackSavedOffline) {
+      void unsaveTrackOffline(currentTrack.id);
+    } else {
+      void saveTrackOffline(currentTrack);
+    }
+  };
 
   const toggleDislike = useToggleDislike();
   // `touchOnly` is stricter than the legacy `useCoarsePointer` —
@@ -404,7 +427,16 @@ export function FullscreenPlayer() {
               return so a short pull pings back tactilely instead of
               snapping. */}
           <motion.div
-            className="relative flex h-full flex-col"
+            // `fullscreen-drag-zone` pins `touch-action: none` on this
+            // wrapper AND forces every descendant to inherit (see
+            // `globals.scss`). Without that, default `touch-action:
+            // auto` on inner divs lets the browser claim vertical
+            // pans as native scroll on any "background" pixel — the
+            // user's "swipe works every other time" repro. Sliders
+            // (volume / progress / EQ band gain) opt back in to
+            // native pans through `[data-allow-pan-y]`; same for the
+            // lyrics scroller via the same opt-in.
+            className="fullscreen-drag-zone relative flex h-full flex-col"
             drag={reduce ? false : 'y'}
             dragControls={sheetDragControls}
             dragListener={false}
@@ -622,6 +654,22 @@ export function FullscreenPlayer() {
                   icon={shareCopied ? <Check size={14} className="text-[var(--color-accent)]" /> : <Share2 size={14} />}
                 >
                   {shareCopied ? t('track.shareCopied') : t('track.share')}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { handleOfflineToggle(); setMoreOpen(false); }}
+                  icon={
+                    isTrackDownloadingOffline
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : trackSavedOffline
+                        ? <Check size={14} className="text-[var(--color-accent)]" />
+                        : <ArrowDownToLine size={14} />
+                  }
+                >
+                  {isTrackDownloadingOffline
+                    ? t('offline.cancelDownload')
+                    : trackSavedOffline
+                      ? t('offline.removeFromDevice')
+                      : t('offline.listenOffline')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { handleDownload(); setMoreOpen(false); }}
@@ -1093,6 +1141,13 @@ export function FullscreenPlayer() {
 
             <div className="flex w-full max-w-md flex-col gap-2">
               <div
+                role="slider"
+                aria-label={t('player.seek')}
+                aria-valuemin={0}
+                aria-valuemax={duration || 0}
+                aria-valuenow={progress || 0}
+                tabIndex={-1}
+                data-no-sheet-drag
                 className="group/progress relative flex h-6 cursor-pointer touch-none items-center select-none"
                 onPointerDown={(e) => {
                   e.currentTarget.setPointerCapture(e.pointerId);

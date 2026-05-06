@@ -4,7 +4,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, Heart,
   MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
-  Download, Upload, Disc, Ban, RotateCcw,
+  Download, Upload, Disc, Ban, RotateCcw, ArrowDownToLine,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -17,6 +17,7 @@ import { useToggleLike } from '@/hooks/useLibrary';
 import { useDislikesStore } from '@/store/dislikes';
 import { useToggleDislike } from '@/hooks/useDislikes';
 import { useAuthStore } from '@/store/auth';
+import { useIsTrackSavedOffline, useTrackDownloadJob, useOfflineActions } from '@/hooks/useOfflineActions';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
@@ -93,6 +94,28 @@ export function Player() {
   const isAuthed = useAuthStore((s) => Boolean(s.user));
   const trackDisliked = useDislikesStore((s) => Boolean(currentTrack && s.tracks.has(currentTrack.id)));
   const toggleDislike = useToggleDislike();
+
+  // Mini-player kebab now exposes the same "Слушать офлайн" toggle as
+  // the per-track menu and the fullscreen kebab so the offline-save
+  // affordance is reachable from every surface that owns a Track.
+  // The previous version only had "Скачать файл" (browser MP3
+  // download), which the user reported as confusing because it
+  // doesn't enable offline playback inside the app.
+  const trackSavedOffline = useIsTrackSavedOffline(currentTrack?.id ?? '');
+  const trackDownloadJob = useTrackDownloadJob(currentTrack?.id ?? '');
+  const isTrackDownloadingOffline =
+    trackDownloadJob && (trackDownloadJob.status === 'queued' || trackDownloadJob.status === 'downloading');
+  const { saveTrack: saveTrackOffline, unsaveTrack: unsaveTrackOffline, cancelTrack: cancelTrackOffline } = useOfflineActions();
+  const handleOfflineToggle = () => {
+    if (!currentTrack) return;
+    if (isTrackDownloadingOffline) {
+      cancelTrackOffline(currentTrack.id);
+    } else if (trackSavedOffline) {
+      void unsaveTrackOffline(currentTrack.id);
+    } else {
+      void saveTrackOffline(currentTrack);
+    }
+  };
 
   const [menuOpen, setMenuOpenRaw] = useState(false);
   // The kebab can drill into a per-artist picker for multi-credit
@@ -502,6 +525,22 @@ export function Player() {
                   icon={radioBusy ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
                 >
                   {t('track.startRadio')}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => { handleOfflineToggle(); setMenuOpen(false); }}
+                  icon={
+                    isTrackDownloadingOffline
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : trackSavedOffline
+                        ? <Check size={14} className="text-[var(--color-accent)]" />
+                        : <ArrowDownToLine size={14} />
+                  }
+                >
+                  {isTrackDownloadingOffline
+                    ? t('offline.cancelDownload')
+                    : trackSavedOffline
+                      ? t('offline.removeFromDevice')
+                      : t('offline.listenOffline')}
                 </MenuItem>
                 <MenuItem
                   onClick={() => { handleDownload(); setMenuOpen(false); }}
