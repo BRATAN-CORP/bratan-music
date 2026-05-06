@@ -9,7 +9,37 @@ import { Marquee } from '@/components/ui/Marquee';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
+import type { Track } from '@/types';
 import { useT, type TranslationKey } from '@/i18n';
+
+/**
+ * `<CoverFallback>` wrapper that resolves the cover URL through the
+ * offline cache so saved tracks keep painting real artwork even when
+ * the device is offline. Falls back to the network URL when the
+ * track isn't saved offline. Lifted into its own component so we
+ * can call the `useOfflineCoverUrl` hook once per track inside the
+ * `SwipeTrackStrip` render prop (current + prev + next slots).
+ */
+function StripCover({
+  track,
+  alt,
+  initialsClassName,
+}: {
+  track: Track;
+  alt: string;
+  initialsClassName?: string;
+}) {
+  const coverUrl = useOfflineCoverUrl('track', track.id, track.coverUrl);
+  return (
+    <CoverFallback
+      src={coverUrl}
+      name={track.title || track.artist || 'Track'}
+      alt={alt}
+      initialsClassName={initialsClassName}
+    />
+  );
+}
 
 /**
  * Horizontal inset (px) applied to the timeline thumb so it never
@@ -217,9 +247,8 @@ export function MobileBottomDock() {
                       tabIndex={position === 'current' ? 0 : -1}
                       className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-white/10"
                     >
-                      <CoverFallback
-                        src={track.coverUrl}
-                        name={track.title || track.artist || 'Track'}
+                      <StripCover
+                        track={track}
                         alt={track.title}
                         initialsClassName="text-[10px]"
                       />

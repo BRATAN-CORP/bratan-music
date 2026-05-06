@@ -5,6 +5,7 @@ import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { useT } from '@/i18n';
 
 interface QueueDialogProps {
@@ -153,6 +154,11 @@ function QueueRow({
 }: RowProps) {
   const t = useT();
   const banned = useIsTrackBanned(track);
+  // Prefer the locally-stored cover blob when the track is saved
+  // offline so the queue keeps painting real artwork even when the
+  // device is offline (otherwise the network URL fails and the
+  // browser falls back to its broken-image glyph).
+  const coverUrl = useOfflineCoverUrl('track', track.id, track.coverUrl);
   return (
     <Reorder.Item
       value={track}
@@ -192,9 +198,9 @@ function QueueRow({
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
         aria-label={t('queue.playTrack', { title: track.title })}
       >
-        {track.coverUrl ? (
+        {coverUrl ? (
           <img
-            src={track.coverUrl}
+            src={coverUrl}
             alt=""
             className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] object-cover"
           />
