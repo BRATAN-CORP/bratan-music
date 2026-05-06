@@ -1565,5 +1565,14 @@
     "canvasUnavailable": "This browser can't open a 2D canvas",
     "compressFailed": "Couldn't compress the image down to the size limit.",
     "readFailed": "Couldn't read the image file"
+  },
+  "offline": {
+    "listenOffline": "Listen offline",
+    "removeFromDevice": "Remove from device",
+    "cancelDownload": "Cancel download",
+    "saveToDevice": "Save to device",
+    "savedToDevice": "Saved to device",
+    "removedFromDevice": "Removed from device",
+    "downloadCancelled": "Download cancelled"
   }
 }
