@@ -119,6 +119,29 @@ export class TidalWeb {
   }
 
   /**
+   * Per-call options that change cache-write behaviour.
+   *
+   * `skipCacheWrites=true` is set by the offline-download path so a
+   * batch save (album / playlist) doesn't fan a write storm into the
+   * `tidal-track-formats:` and `tidal-track-quality:` KV namespaces.
+   * The cloudflare free tier caps KV writes at 1000 / namespace /
+   * day; a 200-track playlist save was burning 400 of those slots
+   * (one for discovery + one for the picked quality, per cold
+   * track), and once the daily quota was exhausted EVERY write site
+   * across the worker started failing for ALL users — hence the
+   * "один юзер качает плейлист → весь сервис ложится" symptom
+   * the user reported. Cache READS still happen (we still benefit
+   * from a previously-warmed entry) and the play path still WRITES
+   * (so listening to a track normally still warms the cache for
+   * subsequent plays / downloads). Only the download path is
+   * downgraded to read-only against the cache.
+   */
+  private skipCacheWrites = false;
+  setSkipCacheWrites(skip: boolean): void {
+    this.skipCacheWrites = skip;
+  }
+
+  /**
    * Resolve the best playable stream for a track.
    *
    * Discovers the track's available qualities in a single round trip
@@ -181,8 +204,11 @@ export class TidalWeb {
     // Memoise the resolved quality in the existing
     // `tidal-track-quality:` KV namespace too, so if discovery ever
     // fails for this track in the future the legacy ladder fallback
-    // also lands in one round trip.
-    await this.writeCachedQuality(trackId, target);
+    // also lands in one round trip. Suppressed on download requests
+    // (see {@link skipCacheWrites}).
+    if (!this.skipCacheWrites) {
+      await this.writeCachedQuality(trackId, target);
+    }
 
     return {
       url: manifest.urls[0],
@@ -232,8 +258,11 @@ export class TidalWeb {
           continue;
         }
         // Memoise the working quality so the next call to this track
-        // skips the upper rungs of the ladder.
-        await this.writeCachedQuality(trackId, quality);
+        // skips the upper rungs of the ladder. Suppressed on download
+        // requests (see {@link skipCacheWrites}).
+        if (!this.skipCacheWrites) {
+          await this.writeCachedQuality(trackId, quality);
+        }
         return {
           url: manifest.urls[0],
           quality,
@@ -290,11 +319,15 @@ export class TidalWeb {
     // populated results are cached long (30d) like the spec asked.
     const finalize = async (qualities: string[]): Promise<DiscoveredQualities> => {
       const value: DiscoveredQualities = { qualities };
-      await this.writeDiscoveryCache(
-        trackId,
-        value,
-        qualities.length > 0 ? DISCOVERY_CACHE_TTL_S : DISCOVERY_NEGATIVE_CACHE_TTL_S,
-      );
+      // Bulk-download path: read but don't write. See
+      // {@link skipCacheWrites} for the KV-quota rationale.
+      if (!this.skipCacheWrites) {
+        await this.writeDiscoveryCache(
+          trackId,
+          value,
+          qualities.length > 0 ? DISCOVERY_CACHE_TTL_S : DISCOVERY_NEGATIVE_CACHE_TTL_S,
+        );
+      }
       return value;
     };
 
@@ -323,7 +356,10 @@ export class TidalWeb {
       // Structural 4xx (403, 404) means the endpoint is unreachable
       // with the current auth. Trip the global breaker so every
       // subsequent cold track skips discovery for the next hour.
-      if (res.status === 403 || res.status === 404) {
+      // Same skip-on-download policy: a download fan-out shouldn't
+      // burn the breaker write either, since the play path has had
+      // ample opportunity to set it during normal listening.
+      if ((res.status === 403 || res.status === 404) && !this.skipCacheWrites) {
         await this.tripDiscoveryBreaker();
       }
       return finalize([]);

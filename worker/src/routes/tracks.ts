@@ -239,7 +239,18 @@ tracks.get('/:id/stream', async (c) => {
   // (it can be lower than `requested` when the track only has clear
   // audio for HIGH/LOW). The resolver memoises the working quality in
   // KV so repeat calls for the same track skip the upper rungs.
-  const resolved = await tidal.resolveStream(id, quality);
+  //
+  // `?download=1` is set by the offline-download client path
+  // (`src/lib/offline/streamResolver.ts`). It switches the underlying
+  // TidalWeb resolver to read-only against the per-track cache so a
+  // bulk save (album / playlist) doesn't fan a write storm into the
+  // KV namespace. With Cloudflare's free 1000-writes/day cap a single
+  // 200-track playlist save would otherwise burn 400 of those slots
+  // and brick stream resolution for every other user for the rest of
+  // the day. See `TidalWeb.setSkipCacheWrites` for the full
+  // rationale.
+  const isDownload = c.req.query('download') === '1';
+  const resolved = await tidal.resolveStream(id, quality, isDownload);
   const proxied = `${origin}/tracks/audio?url=${encodeURIComponent(resolved.url)}`;
 
   // Memoise the resolved URL in-process for the next play of this
