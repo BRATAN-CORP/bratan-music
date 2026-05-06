@@ -89,8 +89,18 @@ async function resolveOnce(
   }
 
   try {
+    // `download=1` tells the worker this resolution is part of an
+    // offline-save batch, so it should READ but not WRITE the
+    // per-track KV caches (`tidal-track-formats:` /
+    // `tidal-track-quality:`). Without the flag a 200-track playlist
+    // save burns ~400 of the 1000 daily KV writes the free Cloudflare
+    // tier permits namespace-wide; once that quota is exhausted every
+    // write site across the worker starts failing and the service is
+    // effectively offline for every other user for the rest of the
+    // day. See `worker/src/services/tidal/TidalWeb.ts ::
+    // setSkipCacheWrites` for the full rationale.
     const res = await api.get<{ url: string }>(
-      `/tracks/${trackId}/stream?quality=${encodeURIComponent(quality)}`,
+      `/tracks/${trackId}/stream?quality=${encodeURIComponent(quality)}&download=1`,
     );
     return { url: res.url, quality };
   } catch (err) {

@@ -639,9 +639,20 @@ export class TidalService implements MusicService {
    * Same as `getStreamUrl` but returns the actual quality the ladder
    * resolved to (e.g. caller asks for HI_RES_LOSSLESS, the track only
    * has a clear stream at HIGH, returned `quality` reads `HIGH`).
+   *
+   * `forDownload=true` switches the underlying TidalWeb cache layer
+   * to read-only mode for this resolution so a bulk save (album /
+   * playlist download) doesn't burn the daily KV write quota and
+   * take the worker offline for every other user. See
+   * {@link TidalWeb.setSkipCacheWrites} for the full rationale.
    */
-  async resolveStream(trackId: string, quality?: string) {
-    return this.web.resolveStream(trackId, quality ?? 'HIGH');
+  async resolveStream(trackId: string, quality?: string, forDownload = false) {
+    if (forDownload) this.web.setSkipCacheWrites(true);
+    try {
+      return await this.web.resolveStream(trackId, quality ?? 'HIGH');
+    } finally {
+      if (forDownload) this.web.setSkipCacheWrites(false);
+    }
   }
 
   async getDownloadUrl(trackId: string): Promise<string> {
