@@ -321,7 +321,7 @@ function WaveHero({
         glareStrength={0.45}
         className="rounded-[var(--radius-xl)]"
       >
-      <div className="group min-w-0 rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
+      <div className="group isolate min-w-0 rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
         <div className="relative isolate overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
           {/* Static idle gradient — same two-corner signature as the
               SubscriptionCard reference in /profile. */}
