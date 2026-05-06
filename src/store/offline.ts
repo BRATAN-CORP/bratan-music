@@ -52,6 +52,11 @@ interface OfflineState {
   hydrate: () => Promise<void>;
   /** Update a single saved-id set without re-scanning IndexedDB. */
   applyEvent: (event: DownloadEvent) => void;
+  /** Bump the `version` counter so subscribers keyed on it (e.g.
+   *  `useOfflineCoverUrl`) re-run their derivations. Used by
+   *  out-of-band IndexedDB writers like `coverBackfill` that mutate
+   *  rows without going through the downloads-event bus. */
+  bump: () => void;
 }
 
 export const useOfflineStore = create<OfflineState>((set, get) => ({
@@ -140,6 +145,10 @@ export const useOfflineStore = create<OfflineState>((set, get) => ({
         break;
       }
     }
+  },
+
+  bump: () => {
+    set({ version: get().version + 1 });
   },
 }));
 

@@ -189,17 +189,62 @@ export async function fetchAudioBlob(
 }
 
 /** Fetch a cover image as a blob so the saved track / album / playlist
- *  renders offline. Best-effort — failures are swallowed, the caller
- *  just stores the track without a local cover. */
+ *  renders offline.
+ *
+ *  Cover URLs almost always live on `resources.tidal.com` (Tidal's
+ *  CloudFront-fronted S3 image bucket) which does **not** send
+ *  `Access-Control-Allow-Origin` headers. The previous shape used a
+ *  default-mode `fetch(url)` (mode: 'cors'), which the browser
+ *  rejected outright with a CORS error — the catch swallowed it and
+ *  the track was stored with `coverBlob: undefined`. Hours later,
+ *  with the device offline, `useOfflineCoverUrl` had nothing to hand
+ *  to `<img src>`, the network URL fallback failed, and the user
+ *  saw the generic Disc3 / initials fallback. That's the
+ *  "обложки в офлайне не работают" bug.
+ *
+ *  Strategy:
+ *    1. Try CORS first. Hosts that *do* send ACAO (our own worker
+ *       proxy, user-uploaded R2 covers with the right CORS rules,
+ *       a few CloudFront covers when configured) succeed and we
+ *       get a fully-typed `image/jpeg` Blob with size + mime.
+ *    2. On CORS rejection (the dominant case for resources.tidal.com),
+ *       retry as `mode: 'no-cors'`. The response is opaque — we
+ *       can't read headers / status / `.text()` — but `.blob()`
+ *       still returns the actual binary. The opaque Blob is fine
+ *       to put in IndexedDB and feed to `URL.createObjectURL` for
+ *       `<img>` rendering offline.
+ *
+ *  Best-effort throughout — any error returns null and the caller
+ *  saves the track without a local cover. */
 export async function fetchCoverBlob(
   url: string | undefined | null,
 ): Promise<{ blob: Blob; mimeType: string } | null> {
   if (!url) return null;
+  // 1) CORS path. Pulls from the HTTP cache when the same URL was
+  //    rendered by an earlier `<img>` so we don't pay the bandwidth
+  //    twice on save.
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    const res = await fetch(url, { cache: 'force-cache' });
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) {
+        const mimeType = res.headers.get('content-type') ?? blob.type ?? 'image/jpeg';
+        return { blob, mimeType };
+      }
+    }
+  } catch {
+    // CORS rejected — fall through to no-cors below.
+  }
+  // 2) No-cors fallback. Required for resources.tidal.com which
+  //    serves images without ACAO headers. Opaque response, but
+  //    `.blob()` returns the actual binary on every browser we
+  //    target (Chrome / Firefox / Safari / iOS Safari / Telegram
+  //    WebView).
+  try {
+    const res = await fetch(url, { mode: 'no-cors', cache: 'force-cache' });
     const blob = await res.blob();
-    const mimeType = res.headers.get('content-type') ?? blob.type ?? 'image/jpeg';
+    if (blob.size === 0) return null;
+    const mimeType = blob.type || 'image/jpeg';
     return { blob, mimeType };
   } catch {
     return null;
