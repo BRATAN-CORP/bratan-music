@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { enqueueSync } from '@/lib/offline/syncQueue';
 import type { Track } from '@/types';
 
 export interface DailyPlaylist {
@@ -167,7 +168,6 @@ export async function logPlay(payload: PlayLogPayload): Promise<void> {
   // generous enough that a delayed beacon doesn't double-count.
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     try {
-      const { enqueueSync } = await import('@/lib/offline/syncQueue');
       await enqueueSync({ kind: 'log-play', payload });
     } catch {
       // swallow — we never want history to surface errors at the
