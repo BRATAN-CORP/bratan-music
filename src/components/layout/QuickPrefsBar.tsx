@@ -55,7 +55,7 @@ export function QuickPrefsBar() {
   return (
     <div
       className="pointer-events-none fixed right-3 z-40 flex items-center gap-2 sm:right-5"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+      style={{ top: 'calc(var(--pwa-safe-top) + 0.75rem)' }}
     >
       {/* Theme toggle — circular ghost button with cross-faded
           sun/moon. Sized down on phones so it sits beside the

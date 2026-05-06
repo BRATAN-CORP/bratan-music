@@ -46,7 +46,7 @@ export function RoomConnectedBadge() {
           className="fixed right-3 z-40 sm:right-6"
           // Sit just below the safe-area inset on iOS notches and
           // give a little breathing room on Android / desktop too.
-          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+          style={{ top: 'calc(var(--pwa-safe-top) + 0.75rem)' }}
         >
           <Link
             to={`/rooms/${roomId}`}
