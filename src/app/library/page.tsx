@@ -43,7 +43,6 @@ export function LibraryPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <div
           className="flex items-end justify-between gap-4 border-b border-border pb-4"
-          data-tour-id="tour-library"
         >
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
@@ -59,7 +58,11 @@ export function LibraryPage() {
           )}
         </div>
 
-        <div className="flex gap-2 border-b border-border pb-3">
+        {/* Tour target sits on the tabs row — that's the actual feature
+            the body copy is describing ("likes / playlists / history"),
+            not the page heading. Previously highlighted the title block
+            which had nothing to do with the explanation. */}
+        <div className="flex gap-2 border-b border-border pb-3" data-tour-id="tour-library">
           {tabs.map((tt) => (
             <button
               key={tt.key}

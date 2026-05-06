@@ -181,7 +181,7 @@ function AiPlaylistPromo() {
   // fully interactive throughout the hover.
   return (
     <Reveal>
-      <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10">
+      <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10" data-tour-id="tour-ai">
         <TiltCard
           intensity={6}
           hoverScale={1}
@@ -417,6 +417,7 @@ function WaveHero({
                     variant="outline"
                     size="lg"
                     onClick={() => setSettingsOpen(true)}
+                    data-tour-id="tour-wave-settings"
                     className="relative min-w-0 flex-1 gap-2 sm:flex-none"
                     aria-label={t('home.waveSettingsOpen')}
                   >
@@ -938,7 +939,7 @@ function DailyPlaylistsSection() {
   });
 
   return (
-    <section className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-10">
+    <section className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-10" data-tour-id="tour-daily">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
@@ -1153,6 +1154,9 @@ function RecentSection() {
     queryFn: () => fetchRecentPlays(12),
     staleTime: 30_000,
   });
+  // tour-recent target sits on the inner <section /> below — keeps the
+  // spotlight off the early-return null branch when the user has no
+  // recent plays yet.
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
 
@@ -1170,7 +1174,7 @@ function RecentSection() {
   };
 
   return (
-    <section className="relative mx-auto w-full max-w-6xl px-4 py-10 pb-16 sm:px-6 lg:px-10">
+    <section className="relative mx-auto w-full max-w-6xl px-4 py-10 pb-16 sm:px-6 lg:px-10" data-tour-id="tour-recent">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
