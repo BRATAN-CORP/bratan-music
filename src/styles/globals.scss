@@ -77,6 +77,44 @@
   }
 }
 
+/*
+ * Fullscreen-player drag zone — owns vertical pan-to-dismiss.
+ *
+ * Background: the fullscreen player's inner wrapper has motion's
+ * `drag='y'` for swipe-down-to-collapse. Motion sets a sensible
+ * `touch-action: pan-x` on the wrapper itself, but `touch-action`
+ * is NOT inherited in CSS — every descendant defaults to `auto`,
+ * which lets the browser claim vertical pans as native scroll the
+ * moment the user's finger lands on a "background" gap (the area
+ * between the cover and the title row, the empty pixels around
+ * the transport buttons, anywhere that isn't a button or slider).
+ * The browser fires `pointercancel` on motion's drag pipeline
+ * before the first `pointermove`, so the dismiss never starts —
+ * the user reported it as "works every other time" because the
+ * exact pixel hit determined whether the gesture took or not.
+ *
+ * Fix: pin `touch-action: none` on the drag zone and force every
+ * descendant to inherit, so JS owns every gesture across the
+ * entire surface. Sliders / scrollable overlays (lyrics) opt
+ * back into native pans via `[data-allow-pan-y]` /
+ * `[data-allow-pan-x]`. The inner cover keeps its own
+ * `touch-action: none` and motion's per-axis drags coexist —
+ * the cover's `drag='x'` (next/prev) sees horizontal motion,
+ * vertical motion bubbles to the wrapper's `drag='y'`.
+ */
+.fullscreen-drag-zone {
+  touch-action: none;
+}
+.fullscreen-drag-zone * {
+  touch-action: inherit;
+}
+.fullscreen-drag-zone [data-allow-pan-y] {
+  touch-action: pan-y;
+}
+.fullscreen-drag-zone [data-allow-pan-x] {
+  touch-action: pan-x;
+}
+
 *,
 *::before,
 *::after {

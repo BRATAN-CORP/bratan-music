@@ -83,14 +83,26 @@ export function LibraryPage() {
         {/* Tour target sits on the tabs row — that's the actual feature
             the body copy is describing ("likes / playlists / history"),
             not the page heading. Previously highlighted the title block
-            which had nothing to do with the explanation. */}
-        <div className="flex gap-2 border-b border-border pb-3" data-tour-id="tour-library">
+            which had nothing to do with the explanation.
+            
+            The row is horizontally scrollable: on narrow viewports
+            (mobile portrait, especially with the iPhone safe-area
+            padding chewing into the visible width) the four chips
+            wouldn't fit and the rightmost one ("Загруженное") got
+            visually clipped by the page padding. `overflow-x-auto`
+            + `shrink-0` on each chip lets the user swipe through
+            them, while `scrollbar-thin` (in `globals.scss`) keeps
+            the scrollbar from looking like a dev-tool. */}
+        <div
+          className="-mx-4 flex gap-2 overflow-x-auto border-b border-border px-4 pb-3 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          data-tour-id="tour-library"
+        >
           {tabs.map((tt) => (
             <button
               key={tt.key}
               type="button"
               onClick={() => setTab(tt.key)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                 tab === tt.key
                   ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'

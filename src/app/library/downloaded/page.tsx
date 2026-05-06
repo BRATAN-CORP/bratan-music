@@ -108,9 +108,11 @@ export function DownloadedPlaylistPage() {
               <ArrowDownToLine size={48} />
             </div>
             <div className="flex flex-col justify-end gap-3">
-              <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-                {t('library.serviceLabel')}
-              </span>
+              {/* Previously kicker'd "Сервисный плейлист" — that read as
+                  internal jargon to the user. The page title alone
+                  ("Загруженное" + the offline icon to the left) is
+                  enough context. Keeping the column structure so
+                  the play button below stays bottom-aligned. */}
               <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
                 {t('library.downloadedPlaylist')}
               </h1>

@@ -134,6 +134,21 @@ function ToastCard({ toast }: { toast: Toast }) {
           )}
           <div className="break-words text-foreground/95">{toast.message}</div>
         </div>
+        {toast.action && (
+          // Primary CTA — used by app-update toasts ("Reload"),
+          // confirmation undos, etc. Tone-coloured to read as the
+          // active action; the X dismiss stays subdued next to it.
+          <button
+            type="button"
+            onClick={() => {
+              toast.action!.onClick();
+              if (!toast.action!.keepOpen) dismiss(toast.id);
+            }}
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition-colors ${cls.iconWrap} ${cls.icon} ring-[currentColor]/25 hover:bg-[currentColor]/15`}
+          >
+            {toast.action.label}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => dismiss(toast.id)}

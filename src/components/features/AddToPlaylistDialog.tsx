@@ -129,7 +129,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
               </Button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            <div data-allow-pan-y className="min-h-0 flex-1 overflow-y-auto p-2">
               {isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
                   <Loader2 size={14} className="animate-spin" /> {t('common.loading')}

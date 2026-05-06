@@ -13,7 +13,8 @@ import { PageTransition } from '@/components/ui/PageTransition';
 import { SubscriptionDialog } from '@/components/features/SubscriptionDialog';
 import { OnboardingTour } from '@/components/features/OnboardingTour';
 import { RoomConnectedBadge } from '@/components/features/RoomConnectedBadge';
-import { OfflineBanner } from '@/components/features/OfflineBanner';
+import { OfflineToastWatcher } from '@/components/features/OfflineToastWatcher';
+import { AppUpdateWatcher } from '@/components/features/AppUpdateWatcher';
 import { GlassFilter } from '@/components/ui/liquid-glass-button';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { DislikesBootstrap } from '@/components/system/DislikesBootstrap';
@@ -114,7 +115,19 @@ function AppLayout() {
   // and Sidebar is parked sticky-below-Header so it still feels pinned.
   return (
     <div className="flex min-h-dvh flex-col">
-      <OfflineBanner />
+      {/* Connectivity status is now driven through the global toast
+          store (`OfflineToastWatcher`) instead of a sticky banner — the
+          previous always-visible strip lived under the iPhone notch
+          when the app was installed as a PWA, and the user can't
+          read text that's behind the status bar. The toast surface
+          announces transitions briefly and gets out of the way. */}
+      <OfflineToastWatcher />
+      {/* Detects new service-worker versions and pushes a toast with
+          a "Reload" action so the user can pick up frontend updates
+          on next launch without reinstalling the PWA. IndexedDB
+          (offline tracks / metadata) is independent of the SW cache,
+          so updating the frontend never deletes saved music. */}
+      <AppUpdateWatcher />
       {/* Header has been retired — the desktop sidebar carries the
           brandmark + nav, and on mobile the bottom dock owns navigation.
           The previous sticky top bar duplicated the search affordance

@@ -2,6 +2,22 @@ import { create } from 'zustand';
 
 export type ToastTone = 'error' | 'warn' | 'info' | 'success';
 
+/**
+ * Optional CTA button rendered inside a toast.
+ *
+ * Used for "actionable" notifications where the user is expected to
+ * accept or trigger something (e.g. "App update available — Reload").
+ * The `onClick` runs first, then the host dismisses the toast unless
+ * `keepOpen` is set (rare — most actions navigate or reload, in
+ * which case the dismiss is irrelevant).
+ */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+  /** When true, do NOT auto-dismiss the toast after the click. */
+  keepOpen?: boolean;
+}
+
 export interface Toast {
   /** Stable id used as React key and dismiss handle. Auto-generated. */
   id: string;
@@ -13,6 +29,8 @@ export interface Toast {
    *  clicks the close button. Defaults to 4000 (errors → 5000). */
   duration: number;
   createdAt: number;
+  /** Optional primary CTA shown next to the dismiss button. */
+  action?: ToastAction;
 }
 
 export interface ToastInput {
@@ -21,6 +39,9 @@ export interface ToastInput {
   title?: string;
   /** Override the default tone-based duration. `0` = sticky. */
   duration?: number;
+  /** Optional primary CTA. Sticky toasts (duration: 0) get the
+   *  action treated as the only way to acknowledge them. */
+  action?: ToastAction;
 }
 
 interface ToastState {
@@ -69,6 +90,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
       title: input.title,
       duration: input.duration ?? DEFAULT_DURATIONS[tone],
       createdAt: Date.now(),
+      action: input.action,
     };
     set((s) => {
       // Drop the oldest if we're over the cap. Keeping the most

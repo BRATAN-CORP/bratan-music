@@ -432,7 +432,7 @@
     "actions": "Действия с треком",
     "startRadio": "Запустить волну",
     "shareCopied": "Ссылка скопирована",
-    "download": "Скачать",
+    "download": "Скачать файл",
     "uploadOwn": "Загрузить свою версию",
     "goToArtist": "Перейти к артисту",
     "goToAlbum": "Перейти к альбому",
@@ -1573,14 +1573,21 @@
   },
   "offline": {
     "listenOffline": "Слушать офлайн",
-    "removeFromDevice": "Удалить с устройства",
+    "removeFromDevice": "Удалить из офлайн",
     "cancelDownload": "Отменить загрузку",
-    "saveToDevice": "Сохранить на устройство",
-    "savedToDevice": "Сохранено на устройство",
-    "removedFromDevice": "Удалено с устройства",
+    "saveToDevice": "Слушать офлайн",
+    "savedToDevice": "Доступен офлайн",
+    "removedFromDevice": "Удалено из офлайн",
     "downloadCancelled": "Загрузка отменена",
     "bannerOffline": "Вы офлайн — показывается только сохранённое",
+    "toastOffline": "Вы офлайн",
+    "toastOnline": "Снова в сети",
     "filterShowOnlyDownloaded": "Только загруженные",
     "filterShowAll": "Показать все"
+  },
+  "appUpdate": {
+    "available": "Доступна новая версия",
+    "availableHint": "Загруженные треки сохранятся",
+    "reload": "Обновить"
   }
 }

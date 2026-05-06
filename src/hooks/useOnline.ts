@@ -2,8 +2,9 @@
  * Reactive `navigator.onLine` hook.
  *
  * Used by:
- *   - `OfflineBanner` to show a "Вы офлайн" strip at the top of the
- *     screen when connectivity drops.
+ *   - `OfflineToastWatcher` to push a transient "Вы офлайн" /
+ *     "Снова в сети" toast through the global toast store when
+ *     connectivity flips.
  *   - `LibraryPage` to silently swap out the network-driven album /
  *     playlist queries for the offline cache when there's no network.
  *
