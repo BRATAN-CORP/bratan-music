@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { getSavedAlbumWithTracks } from '@/lib/offline/storage';
+import { networkOrLocal } from '@/lib/offline/networkOrLocal';
 import type { Track, Album, Artist } from '@/types';
 
 const PAGE_SIZE = 50;
@@ -65,22 +66,18 @@ export function useTrackRadio(id: string) {
 export function useAlbum(id: string) {
   return useQuery({
     queryKey: ['album', id],
-    queryFn: async () => {
-      // Skip the network entirely when the browser already knows
-      // it's offline — `api.get` would just timeout / fail.
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        const local = await getSavedAlbumWithTracks(id);
-        if (local) return local as AlbumDetail;
-        throw new Error('offline-album-not-saved');
-      }
-      try {
-        return await api.get<AlbumDetail>(`/albums/${id}`);
-      } catch (err) {
-        const local = await getSavedAlbumWithTracks(id);
-        if (local) return local as AlbumDetail;
-        throw err;
-      }
-    },
+    // `networkOrLocal` falls back to the IDB snapshot the moment the
+    // network call exceeds its 5-second budget, so an offline /
+    // half-online device hydrates the album page from the user's
+    // saved download instantly instead of sitting on a blank
+    // spinner waiting for the browser-default ~60-second `fetch`
+    // timeout. That blank-spinner symptom was reported by the user
+    // as "офлайн: скачанные альбомы не открываются".
+    queryFn: () =>
+      networkOrLocal(
+        () => api.get<AlbumDetail>(`/albums/${id}`),
+        async () => (await getSavedAlbumWithTracks(id)) as AlbumDetail | null,
+      ),
     enabled: !!id,
     // The album-detail data we'd render from the offline cache is
     // identical to itself across re-fetches; let React Query keep
