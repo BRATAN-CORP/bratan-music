@@ -145,6 +145,22 @@ interface PlayerState {
    *  useAuthStore.logout so the bottom player disappears immediately
    *  after sign-out without leaking the previous user's state. */
   reset: () => void;
+  /**
+   * Optional "end of queue" handler installed by `usePlayHistoryLogger`.
+   * `next()` and `nextManual()` consult it the moment they would
+   * otherwise stop / wrap because the queue is exhausted. If the
+   * handler returns `true` it is taking responsibility for whatever
+   * happens next (typically: async-fetch wave/continue tracks, append
+   * to the queue, then `setTrack` the first new track) and the store
+   * action returns without applying its built-in fallback. If `false`
+   * (or no handler is registered, e.g. logged-out state, SSR), the
+   * built-in fallback runs:
+   *   - `next()` stops at the end of the queue.
+   *   - `nextManual()` wraps to track 0.
+   * Decoupling the actual fetch+advance from the player store keeps
+   * the recommendations module out of zustand's dependency graph. */
+  endHandler: (() => boolean) | null;
+  setEndHandler: (handler: (() => boolean) | null) => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
@@ -162,6 +178,9 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   streamVersion: 0,
   _seekToZero: 0,
   playHistory: [],
+  endHandler: null,
+
+  setEndHandler: (handler) => set({ endHandler: handler }),
 
   bumpStream: () => set((s) => ({ streamVersion: s.streamVersion + 1, progress: 0 })),
 
@@ -322,6 +341,15 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       } else if (repeat === 'all') {
         nextIdx = 0;
       } else {
+        // End of queue with repeat='off'. Give the optional end
+        // handler a chance to extend the queue (infinite playback,
+        // wave continuation) — if it accepts, it's responsible for
+        // calling setQueue/setTrack asynchronously, so we just bail
+        // out here. The fallback (do nothing, player stops) only
+        // runs when no handler is registered or the handler
+        // declines.
+        const handler = get().endHandler;
+        if (handler && handler()) return;
         return;
       }
       const candidate = queue[nextIdx];
@@ -353,9 +381,17 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       } else if (probe < queue.length - 1) {
         nextIdx = probe + 1;
       } else {
-        // End of queue — wrap regardless of repeat mode. The user
-        // pressed skip-forward expecting *something* to play, and
-        // the queue is non-empty.
+        // End of queue. Try the end handler first — when infinite
+        // playback is on it'll fetch wave/continue tracks, append
+        // them to the queue and `setTrack` the first new one. If
+        // it accepts (returns true), we bail out and let the async
+        // path drive playback so the user doesn't see a flash of
+        // track-1 before the wave kicks in. Without a handler
+        // (logged out, infinite playback off, or fetch already in
+        // flight from a prior tap) we wrap to track 0 so the user
+        // doesn't get a no-op skip on a non-empty queue.
+        const handler = get().endHandler;
+        if (handler && handler()) return;
         nextIdx = 0;
       }
       const candidate = queue[nextIdx];
