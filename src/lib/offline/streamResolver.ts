@@ -226,13 +226,54 @@ export async function fetchAudioBlob(
  *
  *  Best-effort throughout — any error returns null and the caller
  *  saves the track without a local cover. */
+/** Hosts whose cover URLs we proxy through `/covers/proxy` to bypass
+ *  the missing `Access-Control-Allow-Origin` headers on the upstream
+ *  CDN. See `worker/src/routes/covers.ts` for the full rationale. */
+const COVER_PROXY_HOSTS = /^(?:resources\.tidal\.com|.+\.tidal\.com)$/i;
+
+/** Rewrite a cover URL so the worker fetches it server-side and re-
+ *  serves it with proper CORS headers. URLs that already point at
+ *  our worker (R2-uploaded covers, our own proxy) are returned
+ *  unchanged. URLs on hosts outside the allowlist are also returned
+ *  unchanged so user-uploaded R2 covers / future CDN hosts continue
+ *  working without a worker round-trip. */
+function maybeProxyCoverUrl(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (!COVER_PROXY_HOSTS.test(parsed.hostname)) return url;
+  return `${API_BASE}/covers/proxy?url=${encodeURIComponent(url)}`;
+}
+
 export async function fetchCoverBlob(
   url: string | undefined | null,
 ): Promise<{ blob: Blob; mimeType: string } | null> {
   if (!url) return null;
-  // 1) CORS path. Pulls from the HTTP cache when the same URL was
-  //    rendered by an earlier `<img>` so we don't pay the bandwidth
-  //    twice on save.
+  const fetchUrl = maybeProxyCoverUrl(url);
+  // 1) CORS path through the worker proxy. The worker's
+  //    `corsMiddleware` attaches `ACAO: *` to every response, so a
+  //    `fetch(...)` from the page origin reads body + headers
+  //    cleanly. `cache: 'force-cache'` reuses any HTTP cache entry
+  //    populated by an earlier `<img>` render of the same URL.
+  try {
+    const res = await fetch(fetchUrl, { cache: 'force-cache' });
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) {
+        const mimeType = res.headers.get('content-type') ?? blob.type ?? 'image/jpeg';
+        return { blob, mimeType };
+      }
+    }
+  } catch {
+    // Network or proxy error — fall through to the no-cors / direct
+    // path below so we don't regress hosts that DO send ACAO.
+  }
+  // 2) Direct CORS path against the original URL. R2-uploaded covers
+  //    on our own bucket, custom-CDN covers, and a few CloudFront
+  //    edges with permissive ACAO succeed here.
   try {
     const res = await fetch(url, { cache: 'force-cache' });
     if (res.ok) {
@@ -245,11 +286,10 @@ export async function fetchCoverBlob(
   } catch {
     // CORS rejected — fall through to no-cors below.
   }
-  // 2) No-cors fallback. Required for resources.tidal.com which
-  //    serves images without ACAO headers. Opaque response, but
-  //    `.blob()` returns the actual binary on every browser we
-  //    target (Chrome / Firefox / Safari / iOS Safari / Telegram
-  //    WebView).
+  // 3) No-cors last-ditch. Returns an opaque response — body bytes
+  //    are technically readable via `.blob()` on Chromium and
+  //    Firefox, but the size / mime are unreliable so we treat any
+  //    zero-byte result as a hard miss.
   try {
     const res = await fetch(url, { mode: 'no-cors', cache: 'force-cache' });
     const blob = await res.blob();
