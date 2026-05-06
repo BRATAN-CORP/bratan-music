@@ -720,7 +720,9 @@
     "tracks": "{count} треков",
     "duration": "{duration}",
     "releaseYear": "{year}",
-    "compilation": "Сборник"
+    "compilation": "Сборник",
+    "playAria": "Слушать «{title}»",
+    "pauseAria": "Пауза «{title}»"
   },
   "daily": {
     "title": "Bratan Daily",

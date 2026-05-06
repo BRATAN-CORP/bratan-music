@@ -720,7 +720,9 @@
     "tracks": "{count} tracks",
     "duration": "{duration}",
     "releaseYear": "{year}",
-    "compilation": "Compilation"
+    "compilation": "Compilation",
+    "playAria": "Play {title}",
+    "pauseAria": "Pause {title}"
   },
   "daily": {
     "title": "Bratan Daily",
