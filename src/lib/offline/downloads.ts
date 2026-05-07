@@ -129,13 +129,19 @@ class DownloadsManager {
     this.events.emit({ type: 'album-saved', albumId: album.id });
 
     this.recordJob(job, 'downloading');
-    const { succeeded, failed } = await this.runBatchInOrder(parent, tracks, job);
+    // Skip tracks already saved for this collection so a re-tap on a
+    // partially-saved album resumes the missing ones instead of
+    // rewriting the whole batch end-to-end.
+    const pending = await filterTracksToDownload(tracks, parent);
+    await this.runBatchInOrder(parent, pending, job);
 
-    this.recordJob(job, failed === tracks.length && tracks.length > 0 ? 'failed' : 'completed');
-    if (failed === tracks.length && tracks.length > 0) {
-      job.error = 'All tracks failed to download';
-    }
-    void succeeded;
+    // *Verify* every track id is actually in IndexedDB before we
+    // declare the album "fully saved". Without this the parent job
+    // could complete with `succeeded === N` while a write transaction
+    // silently rolled back (out-of-quota, IDB connection broken,
+    // page hidden mid-write on iOS Safari) — the user would see the
+    // checkmark but the album would only have a few tracks on disk.
+    await this.finalizeBatch(job, tracks.map((t) => t.id));
   }
 
   async enqueuePlaylist(playlist: Playlist, tracks: Track[]): Promise<void> {
@@ -171,13 +177,39 @@ class DownloadsManager {
     this.events.emit({ type: 'playlist-saved', playlistId: playlist.id });
 
     this.recordJob(job, 'downloading');
-    const { succeeded, failed } = await this.runBatchInOrder(parent, tracks, job);
+    const pending = await filterTracksToDownload(tracks, parent);
+    await this.runBatchInOrder(parent, pending, job);
 
-    this.recordJob(job, failed === tracks.length && tracks.length > 0 ? 'failed' : 'completed');
-    if (failed === tracks.length && tracks.length > 0) {
-      job.error = 'All tracks failed to download';
+    // See `enqueueAlbum` — verify every expected track is actually
+    // committed before declaring "fully saved".
+    await this.finalizeBatch(job, tracks.map((t) => t.id));
+  }
+
+  /**
+   * Decide the final job status by re-reading IndexedDB. The
+   * succeeded / failed counters from `runBatchInOrder` only know
+   * about the tracks dispatched in *this* call — re-saves of an
+   * already-partial album, or tracks failed in a previous attempt,
+   * stay invisible to those counters. Reading the actual store gives
+   * us a single source of truth so the checkmark reflects on-disk
+   * state, not in-memory bookkeeping.
+   */
+  private async finalizeBatch(job: DownloadJob, expectedTrackIds: string[]): Promise<void> {
+    // Cancellations are terminal — don't overwrite them with a
+    // status derived from however many tracks happened to land
+    // before the user pressed cancel.
+    const latest = this.jobs.get(job.jobId);
+    if (latest && latest.status === 'cancelled') return;
+    const missing = await findMissingTrackIds(expectedTrackIds);
+    if (missing.length === 0) {
+      this.recordJob(job, 'completed');
+      return;
     }
-    void succeeded;
+    job.error =
+      missing.length === expectedTrackIds.length && expectedTrackIds.length > 0
+        ? 'All tracks failed to download'
+        : `Saved ${expectedTrackIds.length - missing.length} of ${expectedTrackIds.length}; ${missing.length} failed`;
+    this.recordJob(job, 'failed');
   }
 
   /**
@@ -308,6 +340,32 @@ class DownloadsManager {
     }
   }
 
+  /**
+   * Variant of `removeAlbum` that drops only the album metadata row
+   * but keeps the underlying audio blobs. The user picked
+   * "Удалить только альбом" in the unsave dialog — they want the
+   * songs to stay on the device but the album page should no longer
+   * show as saved. Each child track's `collections` cross-reference
+   * is scrubbed of `album:<id>` so a future prune won't follow the
+   * dangling parent reference.
+   */
+  async removeAlbumKeepTracks(albumId: string): Promise<void> {
+    this.cancel(`album:${albumId}`);
+    const album = await db.getAlbum(albumId);
+    if (!album) {
+      this.events.emit({ type: 'album-deleted', albumId });
+      return;
+    }
+    await db.deleteAlbum(albumId);
+    for (const tid of album.trackIds) {
+      const t = await db.getTrack(tid);
+      if (!t) continue;
+      const remaining = t.collections.filter((c) => c !== `album:${albumId}`);
+      await db.putTrack({ ...t, collections: remaining });
+    }
+    this.events.emit({ type: 'album-deleted', albumId });
+  }
+
   async removePlaylist(playlistId: string): Promise<void> {
     this.cancel(`playlist:${playlistId}`);
     const playlist = await db.getPlaylist(playlistId);
@@ -332,6 +390,92 @@ class DownloadsManager {
     for (const tid of orphanedTrackIds) {
       this.events.emit({ type: 'track-deleted', trackId: tid });
     }
+  }
+
+  /** See `removeAlbumKeepTracks`. */
+  async removePlaylistKeepTracks(playlistId: string): Promise<void> {
+    this.cancel(`playlist:${playlistId}`);
+    const playlist = await db.getPlaylist(playlistId);
+    if (!playlist) {
+      this.events.emit({ type: 'playlist-deleted', playlistId });
+      return;
+    }
+    await db.deletePlaylist(playlistId);
+    for (const tid of playlist.trackIds) {
+      const t = await db.getTrack(tid);
+      if (!t) continue;
+      const remaining = t.collections.filter((c) => c !== `playlist:${playlistId}`);
+      await db.putTrack({ ...t, collections: remaining });
+    }
+    this.events.emit({ type: 'playlist-deleted', playlistId });
+  }
+
+  /**
+   * Re-run a previously-failed batch by downloading only the tracks
+   * that aren't on disk yet and updating the parent's `trackIds` to
+   * cover any newly-added members. Used for two distinct cases:
+   *
+   *   1. The user tapped the offline-button on an already-saved
+   *      collection where the previous attempt left some tracks
+   *      missing (network drop, iOS Safari quota glitch). The
+   *      checkmark was painted by Bug #1's verification fix, but
+   *      the user still wants those missing tracks on disk.
+   *
+   *   2. New tracks landed on the upstream playlist / album after
+   *      the user originally saved it. The list view shows the new
+   *      track, but it's not in the offline copy. Re-tapping
+   *      "download" should fill in the gap, not re-download the
+   *      whole batch.
+   *
+   * In both cases we rewrite the parent's `trackIds` to the current
+   * server-side order, then dispatch only the missing track ids
+   * through `runBatchInOrder`. The cover blob is not refetched —
+   * it's still the right cover for the same album / playlist.
+   */
+  async resumeAlbum(album: Album, tracks: Track[]): Promise<void> {
+    const parent = `album:${album.id}`;
+    const existing = await db.getAlbum(album.id);
+    if (!existing) {
+      // Fall back to a full save — the album row was lost.
+      await this.enqueueAlbum(album, tracks);
+      return;
+    }
+    const jobId = parent;
+    const job = this.makeJob(jobId, 'album', album.id);
+    this.recordJob(job, 'queued');
+
+    await db.putAlbum({ ...existing, trackIds: tracks.map((t) => t.id) });
+
+    this.recordJob(job, 'downloading');
+    const pending = await filterTracksToDownload(tracks, parent);
+    await this.runBatchInOrder(parent, pending, job);
+
+    await this.finalizeBatch(job, tracks.map((t) => t.id));
+  }
+
+  async resumePlaylist(playlist: Playlist, tracks: Track[]): Promise<void> {
+    const parent = `playlist:${playlist.id}`;
+    const existing = await db.getPlaylist(playlist.id);
+    if (!existing) {
+      await this.enqueuePlaylist(playlist, tracks);
+      return;
+    }
+    const jobId = parent;
+    const job = this.makeJob(jobId, 'playlist', playlist.id);
+    this.recordJob(job, 'queued');
+
+    await db.putPlaylist({
+      ...existing,
+      trackCount: playlist.trackCount,
+      name: playlist.name,
+      trackIds: tracks.map((t) => t.id),
+    });
+
+    this.recordJob(job, 'downloading');
+    const pending = await filterTracksToDownload(tracks, parent);
+    await this.runBatchInOrder(parent, pending, job);
+
+    await this.finalizeBatch(job, tracks.map((t) => t.id));
   }
 
   /** Snapshot of every known job — used by the zustand store on
@@ -529,6 +673,74 @@ async function borrowParentCover(
     /* fall through — caller treats null as "no cover". */
   }
   return null;
+}
+
+/**
+ * Walk a list of expected track ids and return the subset that
+ * isn't currently in IndexedDB. Used by `finalizeBatch` to verify
+ * the actual on-disk state of an album / playlist save before
+ * declaring the parent job "completed".
+ *
+ * Reads each row directly via `db.getTrack` rather than dumping the
+ * whole tracks store and intersecting — for the typical 10–50 track
+ * album / playlist this is a handful of `IDBObjectStore.get(key)`
+ * calls (each O(log n)), versus a full table scan that grows with
+ * the user's entire offline library.
+ */
+async function findMissingTrackIds(trackIds: string[]): Promise<string[]> {
+  const missing: string[] = [];
+  for (const id of trackIds) {
+    try {
+      const row = await db.getTrack(id);
+      if (!row || !row.audioBlob) missing.push(id);
+    } catch {
+      missing.push(id);
+    }
+  }
+  return missing;
+}
+
+/**
+ * Filter a list of tracks down to those that aren't already saved
+ * for the given parent collection. The track is considered "saved
+ * for this parent" when (a) the row exists in IndexedDB AND (b) the
+ * `collections` cross-reference already lists this parent. The
+ * second check avoids a subtle bug where the same track id is on
+ * the device under a different collection (e.g. user saved it
+ * directly, then later saves the album that contains it) — without
+ * the parent reference, a future `removeAlbum` would skip detaching
+ * it.
+ *
+ * Used by both first-time saves (where it's almost always a no-op
+ * since nothing is on disk yet) and the resume / incremental flows
+ * (where it skips re-downloading already-saved tracks).
+ */
+async function filterTracksToDownload(tracks: Track[], parent: string): Promise<Track[]> {
+  const pending: Track[] = [];
+  for (const track of tracks) {
+    let row: OfflineTrack | null = null;
+    try {
+      row = await db.getTrack(track.id);
+    } catch {
+      row = null;
+    }
+    if (!row || !row.audioBlob) {
+      pending.push(track);
+      continue;
+    }
+    if (!row.collections.includes(parent)) {
+      // Already saved on the device but missing the parent
+      // cross-reference — patch the row in place so future prunes
+      // know this collection now references it. No re-download
+      // needed; the audio blob is already there.
+      try {
+        await db.putTrack({ ...row, collections: mergeCollections(row.collections, parent) });
+      } catch {
+        /* non-fatal — caller still finishes the rest of the batch */
+      }
+    }
+  }
+  return pending;
 }
 
 /** Module-scoped singleton — the manager owns global state (active
