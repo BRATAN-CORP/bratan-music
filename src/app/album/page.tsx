@@ -11,6 +11,7 @@ import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
 
@@ -57,7 +58,7 @@ export function AlbumPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">{t('albumPage.loading')}</p>
+          <PageLoader label={t('albumPage.loading')} />
         ) : album ? (
           <>
             {/* Hero, mirrored from the artist page: the cover doubles

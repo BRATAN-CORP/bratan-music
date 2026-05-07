@@ -9,6 +9,7 @@ import { usePlayerStore } from '@/store/player';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { useT } from '@/i18n';
@@ -61,7 +62,7 @@ export function TrackPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">{t('track.loading')}</p>
+          <PageLoader label={t('track.loading')} />
         ) : track ? (
           <>
             <div className="mb-10 flex flex-col gap-6 border-b border-border pb-10 sm:flex-row">

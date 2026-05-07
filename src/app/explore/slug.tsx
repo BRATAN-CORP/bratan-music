@@ -1,7 +1,8 @@
 import { useParams, Link } from 'react-router-dom';
-import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronLeft } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { ExploreModules } from '@/components/features/ExploreModules';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { useExplorePage } from '@/hooks/useExplore';
 import { useT } from '@/i18n';
 
@@ -26,12 +27,7 @@ export function ExploreSlugPage() {
           </h1>
         </div>
 
-        {isLoading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" />
-            {t('exploreSlug.loading')}
-          </div>
-        )}
+        {isLoading && <PageLoader label={t('exploreSlug.loading')} />}
 
         {error && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">

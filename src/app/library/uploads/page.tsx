@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { CoverFallback } from '@/components/ui/CoverFallback';
+import { PageLoader } from '@/components/ui/PageLoader';
 import {
   useCreateUpload,
   useDeleteUpload,
@@ -107,7 +108,7 @@ export function UploadsPage() {
         </div>
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">{t('uploads.loading')}</p>
+          <PageLoader label={t('uploads.loading')} />
         ) : data && data.length > 0 ? (
           <div className="flex flex-col gap-1">
             {data.map((u) => (
