@@ -2,7 +2,30 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Icon set is exhaustive on purpose. With `base: '/bratan-music/'`
+      iOS Safari's auto-discovery for `apple-touch-icon.png` looks at
+      the site root (`bratan-corp.github.io/apple-touch-icon.png`) and
+      misses the file living under the project subpath. We declare
+      every surface explicitly so the favicon swap from #361 actually
+      reaches every chrome:
+
+        - SVG icon — modern browsers, theme-adaptive (light/dark).
+        - .ico fallback — older Edge/Chromium and crawlers.
+        - 192/512 PNG — bookmarks, hi-DPI tab tiles, app launchers.
+        - apple-touch-icon — iOS home screen, share-sheet tile.
+
+      The PWA manifest is referenced directly too (vite-plugin-pwa
+      injects it into the build output); explicit `<link>` lets the
+      iOS standalone PWA pick the same accent tile when launched
+      from the home screen.
+    -->
     <link rel="icon" type="image/svg+xml" href="/bratan-music/favicon.svg" />
+    <link rel="icon" type="image/x-icon" sizes="any" href="/bratan-music/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/bratan-music/pwa-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/bratan-music/pwa-512x512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/bratan-music/apple-touch-icon.png" />
+    <link rel="manifest" href="/bratan-music/manifest.webmanifest" />
     <!--
       `maximum-scale=1, user-scalable=no` is intentional. Mobile Safari
       ignores it in normal browser tabs (so users can still pinch-zoom
