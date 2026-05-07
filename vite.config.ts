@@ -9,7 +9,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      // Service-worker pre-cache list. Only PWA-shaped assets — the
+      // favicon is SVG and is served as a regular module asset, no
+      // need to cache it twice. `favicon.ico` is intentionally absent
+      // because the project no longer ships one (favicon is strictly
+      // SVG per the product brief).
+      includeAssets: ['apple-touch-icon.png'],
       manifest: {
         name: 'BRATAN MUSIC',
         short_name: 'BRATAN',
