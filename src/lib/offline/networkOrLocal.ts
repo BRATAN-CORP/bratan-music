@@ -130,15 +130,18 @@ export async function networkOrLocal<T>(
     // We may have just been told the entity is saved (the user came
     // here via "Загруженное" → click → detail page) but a transient
     // IDB hiccup at cold-start handed us a `null` on step 1. Retry
-    // once after a short delay before throwing — the delay covers
-    // a freshly-mounted IDB transaction queue / a save that's
-    // currently mid-write. Without this retry the page falls back
-    // to "альбом не найден" on the very first cold-start tap into
-    // an offline-saved entity. Reported as "иногда при клике на
+    // a few times with growing back-off before throwing — the delay
+    // covers a freshly-mounted IDB transaction queue / a save that's
+    // currently mid-write / a synthesis path that needs `db.listTracks`
+    // to land first. Without this retry the page falls back to
+    // "альбом не найден" on the very first cold-start tap into an
+    // offline-saved entity. Reported as "иногда при клике на
     // оффлайн альбом / плейлист пишется, что не найден".
-    await delay(150);
-    const retry = await safeFetchLocal(fetchLocal);
-    if (retry) return retry;
+    for (const ms of [100, 250, 500]) {
+      await delay(ms);
+      const retry = await safeFetchLocal(fetchLocal);
+      if (retry) return retry;
+    }
     throw new Error('offline-not-saved');
   }
 

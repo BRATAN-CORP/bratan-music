@@ -41,6 +41,8 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useOfflineStore } from '@/store/offline';
 import * as db from '@/lib/offline/db';
+import { fetchCoverBlob } from '@/lib/offline/streamResolver';
+import type { OfflineAlbum, OfflinePlaylist, OfflineTrack } from '@/lib/offline/types';
 
 type OfflineCoverKind = 'track' | 'album' | 'playlist';
 
@@ -187,6 +189,63 @@ export function useOfflineCoverUrl(
         if (albumBlob) return albumBlob;
         const playlistBlob = await readBlobFromCollections(track?.collections);
         if (playlistBlob) return playlistBlob;
+      }
+
+      // Last-ditch on-the-fly heal: when we have a saved entity but
+      // no usable blob anywhere (own row + parent fallbacks all
+      // missing) AND the device is currently online, refetch the
+      // cover from the network and persist it back to IDB. The
+      // user sees a placeholder for the next paint cycle and the
+      // real cover appears as soon as the fetch settles. The
+      // `coverBackfill` pass already does this on `online` events,
+      // but it only runs once per session and only catches entries
+      // it sees on its initial sweep — opening an album mid-session
+      // whose cover failed at download time wouldn't be covered
+      // until the next reconnect tick. This per-render heal closes
+      // that gap. Reported as "обложек все равно нет в офлайне".
+      const onlineNow = typeof navigator === 'undefined' || navigator.onLine !== false;
+      if (onlineNow && entity) {
+        const url =
+          (entity as { coverUrl?: string | null }).coverUrl ?? null;
+        if (url) {
+          const cover = await fetchCoverBlob(url);
+          if (cover) {
+            try {
+              if (kind === 'track') {
+                await db.putTrack({
+                  ...(entity as OfflineTrack),
+                  coverBlob: cover.blob,
+                  coverBytes: cover.bytes,
+                  coverMimeType: cover.mimeType,
+                });
+              } else if (kind === 'album') {
+                await db.putAlbum({
+                  ...(entity as OfflineAlbum),
+                  coverBlob: cover.blob,
+                  coverBytes: cover.bytes,
+                  coverMimeType: cover.mimeType,
+                });
+              } else {
+                await db.putPlaylist({
+                  ...(entity as OfflinePlaylist),
+                  coverBlob: cover.blob,
+                  coverBytes: cover.bytes,
+                  coverMimeType: cover.mimeType,
+                });
+              }
+              // Bump the offline store so any other consumers
+              // (track lists, mini-player) re-derive their covers
+              // from the freshly-healed row instead of holding the
+              // null result.
+              useOfflineStore.getState().bump();
+            } catch {
+              // IDB write failure shouldn't gate showing the cover
+              // for THIS render — return the blob anyway and let
+              // the next online tick retry the persist.
+            }
+            return cover.blob;
+          }
+        }
       }
 
       return null;

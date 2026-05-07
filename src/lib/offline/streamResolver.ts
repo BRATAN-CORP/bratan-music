@@ -231,6 +231,76 @@ export async function fetchAudioBlob(
  *  CDN. See `worker/src/routes/covers.ts` for the full rationale. */
 const COVER_PROXY_HOSTS = /^(?:resources\.tidal\.com|.+\.tidal\.com)$/i;
 
+/** Number of attempts we make per cover URL before giving up. The
+ *  Tidal CDN occasionally 5xxs individual image URLs under load
+ *  (especially during a multi-track album save which fans out a few
+ *  dozen requests in a tight burst). One isolated failure used to
+ *  permanently store the track without a cover, so the next online
+ *  cover-backfill pass had to refetch — and if backfill itself hit
+ *  the same blip the user could end up with covers missing for the
+ *  whole session. With short retries the per-track save almost
+ *  always lands on the first attempt and the user never sees a
+ *  cover-less row. */
+const COVER_FETCH_MAX_ATTEMPTS = 3;
+const COVER_FETCH_RETRY_BASE_MS = 200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Try a single cover fetch path once. Returns the resolved bytes
+ *  on a 200-with-non-empty-body, or `null` for any failure mode
+ *  (network, CORS, opaque-zero-body) so the caller can move on to
+ *  the next path. Centralised so retries can re-issue a path
+ *  without duplicating the response-shape parsing. */
+async function tryCoverFetchOnce(
+  url: string,
+  init?: RequestInit,
+): Promise<{ blob: Blob; bytes: ArrayBuffer; mimeType: string } | null> {
+  try {
+    const res = await fetch(url, init);
+    // For `mode: 'no-cors'` the response is opaque — `.ok` and
+    // `.status` always read as `false` / `0`. Still valid: the body
+    // bytes can usually be read via `.arrayBuffer()` on Chromium /
+    // Firefox. Treat any non-empty body as success.
+    if (init?.mode === 'no-cors') {
+      const bytes = await res.arrayBuffer();
+      if (bytes.byteLength === 0) return null;
+      const mimeType = 'image/jpeg';
+      return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
+    }
+    if (!res.ok) return null;
+    const bytes = await res.arrayBuffer();
+    if (bytes.byteLength === 0) return null;
+    const mimeType = res.headers.get('content-type') ?? 'image/jpeg';
+    return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
+  } catch {
+    return null;
+  }
+}
+
+/** Retry wrapper around `tryCoverFetchOnce`. Drops the
+ *  `cache: 'force-cache'` hint on retries so a poisoned negative
+ *  HTTP cache entry from a prior failed attempt doesn't keep
+ *  serving null on every retry. */
+async function tryCoverFetchWithRetries(
+  url: string,
+  init: RequestInit,
+): Promise<{ blob: Blob; bytes: ArrayBuffer; mimeType: string } | null> {
+  for (let attempt = 0; attempt < COVER_FETCH_MAX_ATTEMPTS; attempt++) {
+    const opts: RequestInit = { ...init };
+    if (attempt > 0) {
+      delete (opts as { cache?: RequestCache }).cache;
+    }
+    const result = await tryCoverFetchOnce(url, opts);
+    if (result) return result;
+    if (attempt + 1 < COVER_FETCH_MAX_ATTEMPTS) {
+      await sleep(COVER_FETCH_RETRY_BASE_MS * (attempt + 1));
+    }
+  }
+  return null;
+}
+
 /** Rewrite a cover URL so the worker fetches it server-side and re-
  *  serves it with proper CORS headers. URLs that already point at
  *  our worker (R2-uploaded covers, our own proxy) are returned
@@ -270,46 +340,31 @@ export async function fetchCoverBlob(
   //    `corsMiddleware` attaches `ACAO: *` to every response, so a
   //    `fetch(...)` from the page origin reads body + headers
   //    cleanly. `cache: 'force-cache'` reuses any HTTP cache entry
-  //    populated by an earlier `<img>` render of the same URL.
-  try {
-    const res = await fetch(fetchUrl, { cache: 'force-cache' });
-    if (res.ok) {
-      const bytes = await res.arrayBuffer();
-      if (bytes.byteLength > 0) {
-        const mimeType = res.headers.get('content-type') ?? 'image/jpeg';
-        return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
-      }
-    }
-  } catch {
-    // Network or proxy error — fall through to the no-cors / direct
-    // path below so we don't regress hosts that DO send ACAO.
-  }
+  //    populated by an earlier `<img>` render of the same URL; a
+  //    poisoned negative entry is dropped on retries inside
+  //    `tryCoverFetchWithRetries`.
+  const proxied = await tryCoverFetchWithRetries(fetchUrl, {
+    cache: 'force-cache',
+  });
+  if (proxied) return proxied;
   // 2) Direct CORS path against the original URL. R2-uploaded covers
   //    on our own bucket, custom-CDN covers, and a few CloudFront
   //    edges with permissive ACAO succeed here.
-  try {
-    const res = await fetch(url, { cache: 'force-cache' });
-    if (res.ok) {
-      const bytes = await res.arrayBuffer();
-      if (bytes.byteLength > 0) {
-        const mimeType = res.headers.get('content-type') ?? 'image/jpeg';
-        return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
-      }
-    }
-  } catch {
-    // CORS rejected — fall through to no-cors below.
+  if (fetchUrl !== url) {
+    const direct = await tryCoverFetchWithRetries(url, {
+      cache: 'force-cache',
+    });
+    if (direct) return direct;
   }
   // 3) No-cors last-ditch. Returns an opaque response — body bytes
-  //    are technically readable via `.blob()` on Chromium and
-  //    Firefox, but the size / mime are unreliable so we treat any
-  //    zero-byte result as a hard miss.
-  try {
-    const res = await fetch(url, { mode: 'no-cors', cache: 'force-cache' });
-    const bytes = await res.arrayBuffer();
-    if (bytes.byteLength === 0) return null;
-    const mimeType = 'image/jpeg';
-    return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
-  } catch {
-    return null;
-  }
+  //    are technically readable via `.arrayBuffer()` on Chromium
+  //    and Firefox, but the size / mime are unreliable so any
+  //    zero-byte result is treated as a hard miss inside
+  //    `tryCoverFetchOnce`.
+  const opaque = await tryCoverFetchWithRetries(url, {
+    mode: 'no-cors',
+    cache: 'force-cache',
+  });
+  if (opaque) return opaque;
+  return null;
 }
