@@ -97,41 +97,46 @@ export function SplashScreen({ minDurationMs = MIN_DURATION_MS }: SplashScreenPr
       {visible && (
         <motion.div
           aria-hidden
-          className="fixed inset-0 z-[9999] flex items-center justify-center"
-          style={{ backgroundColor: '#0a0a0c' }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden"
+          // `--color-bg` is the same surface every other page sits on,
+          // so the splash → first-paint transition is just the blobs
+          // dissolving rather than a colour swap. Theme-adaptive:
+          // light theme paints `#f7f7f5`, dark theme `#0a0a0c`.
+          style={{ backgroundColor: 'var(--color-bg)' }}
           initial={false}
           exit={{ opacity: 0, transition: { duration: 0.45, ease: [0.4, 0, 0.2, 1] } }}
         >
-          {/* Soft accent ambience — same palette family as the
-              loader / Aurora hero, so the cold-start surface
-              telegraphs "you're in the right app" before any
-              data has rendered. */}
+          {/* Aurora ambience — exactly mirrors the home / landing
+              hero (`.aurora` in globals.scss) so the cold-start
+              surface and the first rendered route share the same
+              palette and motion. The class drives two `::before` /
+              `::after` accent blobs with `aurora-1` / `aurora-2`
+              keyframes already vetted for performance on iOS Safari.
+              We only mount it when the OS isn't asking for reduced
+              motion — globals.scss kills the animation in that case
+              anyway, but skipping the layer entirely also drops the
+              two extra paints. */}
+          {!reduce && <div className="aurora" />}
+
+          {/* Soft top-centre highlight — Linear-style spotlight that
+              draws the eye toward the brand mark without competing
+              with the rotating aurora blobs underneath. */}
           {!reduce && (
-            <>
-              <motion.div
-                className="pointer-events-none absolute -top-40 left-1/2 h-[640px] w-[820px] -translate-x-1/2 rounded-full blur-3xl"
-                style={{
-                  background:
-                    'radial-gradient(ellipse, rgba(30, 217, 95, 0.32) 0%, transparent 65%)',
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6 }}
-              />
-              <motion.div
-                className="pointer-events-none absolute -bottom-32 right-[-20%] h-[480px] w-[640px] rounded-full blur-3xl"
-                style={{
-                  background:
-                    'radial-gradient(circle, rgba(126, 137, 232, 0.22) 0%, transparent 70%)',
-                }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.7, delay: 0.1 }}
-              />
-            </>
+            <motion.div
+              className="pointer-events-none absolute left-1/2 top-[-12%] h-[640px] w-[820px] -translate-x-1/2 rounded-full blur-3xl"
+              style={{
+                background:
+                  'radial-gradient(ellipse, var(--color-accent-glow) 0%, transparent 65%)',
+                opacity: 0.9,
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.9 }}
+              transition={{ duration: 0.6 }}
+            />
           )}
+
           <motion.div
-            className="relative flex flex-col items-center gap-6"
+            className="relative z-10 flex flex-col items-center gap-6"
             initial={{ opacity: 0, y: 8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
@@ -142,27 +147,42 @@ export function SplashScreen({ minDurationMs = MIN_DURATION_MS }: SplashScreenPr
                   className="absolute -inset-10 rounded-full blur-2xl"
                   style={{
                     background:
-                      'radial-gradient(circle, rgba(30, 217, 95, 0.55) 0%, transparent 70%)',
+                      'radial-gradient(circle, var(--color-accent) 0%, transparent 70%)',
+                    opacity: 0.4,
                   }}
-                  animate={{ opacity: [0.5, 0.95, 0.5], scale: [0.9, 1.1, 0.9] }}
+                  animate={{ opacity: [0.25, 0.55, 0.25], scale: [0.9, 1.1, 0.9] }}
                   transition={{ duration: 2.0, repeat: Infinity, ease: 'easeInOut' }}
                 />
               )}
-              <BrandLogo
-                size={120}
-                pulse
-                className="relative z-10 drop-shadow-[0_8px_32px_rgba(30,217,95,0.45)]"
-              />
+              {/* Halo bound to the live accent token via the wrapper
+                  so it tracks the favicon swap (same SVG, same
+                  `--color-accent`) without forcing `BrandLogo` to
+                  expose a `style` prop. */}
+              <div
+                className="relative z-10"
+                style={{ filter: 'drop-shadow(0 8px 32px var(--color-accent-glow))' }}
+              >
+                <BrandLogo size={120} pulse />
+              </div>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <p className="text-base font-semibold tracking-[0.4em] text-white/90">BRATAN</p>
-              <p className="text-[11px] font-medium uppercase tracking-[0.35em] text-white/50">
+              <p
+                className="text-base font-semibold tracking-[0.4em]"
+                style={{ color: 'var(--color-text)' }}
+              >
+                BRATAN
+              </p>
+              <p
+                className="text-[11px] font-medium uppercase tracking-[0.35em]"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
                 MUSIC
               </p>
             </div>
             {!reduce && (
               <motion.div
-                className="mt-2 h-0.5 w-24 overflow-hidden rounded-full bg-white/10"
+                className="mt-2 h-0.5 w-24 overflow-hidden rounded-full"
+                style={{ backgroundColor: 'var(--color-border)' }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.35 }}
@@ -171,7 +191,7 @@ export function SplashScreen({ minDurationMs = MIN_DURATION_MS }: SplashScreenPr
                   className="block h-full"
                   style={{
                     background:
-                      'linear-gradient(90deg, transparent, rgba(30, 217, 95, 0.95), transparent)',
+                      'linear-gradient(90deg, transparent, var(--color-accent), transparent)',
                   }}
                   initial={{ x: '-100%', width: '50%' }}
                   animate={{ x: '200%' }}
