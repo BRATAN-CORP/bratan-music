@@ -153,28 +153,62 @@ function offlineTrackToNetworkTrack(t: OfflineTrack): Track {
  * partially-finished download) are silently skipped — the user
  * still gets to play and inspect everything they actually have on
  * device, ordered by the album's original `trackIds` list.
+ *
+ * Synthesis fallback
+ * ------------------
+ * When the album shell row itself isn't in IndexedDB (the user
+ * saved tracks individually from the 3-dot menu without ever
+ * pressing "Save album"; or the album row was evicted by a partial
+ * unsave; or the IDB transaction was rolled back mid-save), we
+ * walk every saved track for a `track.albumId === id` match and
+ * stitch a virtual album from the resulting set. The user reported
+ * "при клике на офлайн альбом — не удалось загрузить" hitting them
+ * after exactly this scenario: tracks present, album shell missing.
  */
 export async function getSavedAlbumWithTracks(
   id: string,
 ): Promise<(Album & { tracks: Track[] }) | null> {
   const album = await db.getAlbum(id);
-  if (!album) return null;
-  const tracks: Track[] = [];
-  for (const tid of album.trackIds) {
-    const t = await db.getTrack(tid);
-    if (t) tracks.push(offlineTrackToNetworkTrack(t));
+  if (album) {
+    const tracks: Track[] = [];
+    for (const tid of album.trackIds) {
+      const t = await db.getTrack(tid);
+      if (t) tracks.push(offlineTrackToNetworkTrack(t));
+    }
+    return {
+      id: album.id,
+      title: album.title,
+      artist: album.artist,
+      artistId: album.artistId,
+      artists: album.artists,
+      releaseType: album.releaseType,
+      coverUrl: album.coverUrl,
+      coverVideoUrl: album.coverVideoUrl,
+      releaseDate: album.releaseDate,
+      tracks,
+    };
   }
+  // Synthesis path: stitch a virtual album from any saved tracks
+  // that point at this albumId. Cheap full-store scan — typical
+  // offline libraries hold tens to a few hundred tracks. Sorted by
+  // savedAt to give a deterministic order matching the order the
+  // user actually downloaded the tracks.
+  const allTracks = await db.listTracks();
+  const matching = allTracks.filter((t) => t.albumId === id);
+  const [head] = matching;
+  if (!head) return null;
+  matching.sort((a, b) => (a.savedAt ?? 0) - (b.savedAt ?? 0));
   return {
-    id: album.id,
-    title: album.title,
-    artist: album.artist,
-    artistId: album.artistId,
-    artists: album.artists,
-    releaseType: album.releaseType,
-    coverUrl: album.coverUrl,
-    coverVideoUrl: album.coverVideoUrl,
-    releaseDate: album.releaseDate,
-    tracks,
+    id,
+    title: head.album ?? '',
+    artist: head.artist,
+    artistId: head.artistId ?? '',
+    artists: head.artists,
+    releaseType: undefined,
+    coverUrl: head.coverUrl,
+    coverVideoUrl: head.coverVideoUrl,
+    releaseDate: undefined,
+    tracks: matching.map(offlineTrackToNetworkTrack),
   };
 }
 
@@ -183,32 +217,65 @@ export async function getSavedAlbumWithTracks(
  * shape — same role as `getSavedAlbumWithTracks`, scoped to the
  * playlist detail page. The playlist's `trackIds` ordering is
  * preserved so the offline view matches the order the user saved.
+ *
+ * Synthesis fallback
+ * ------------------
+ * When the playlist shell row itself isn't in IndexedDB but at
+ * least one saved track carries this playlist in its
+ * `collections` cross-reference (`["playlist:<id>", …]`), build a
+ * virtual playlist from those tracks. We don't have a saved name
+ * in this case, so the placeholder is empty — the playlist page
+ * falls back to a generic header but the user still gets a
+ * functional track list and playback instead of "не удалось
+ * загрузить".
  */
 export async function getSavedPlaylistWithTracks(
   id: string,
 ): Promise<(Playlist & { tracks: Track[] }) | null> {
   const playlist = await db.getPlaylist(id);
-  if (!playlist) return null;
-  const tracks: Track[] = [];
-  for (const tid of playlist.trackIds) {
-    const t = await db.getTrack(tid);
-    if (t) tracks.push(offlineTrackToNetworkTrack(t));
+  if (playlist) {
+    const tracks: Track[] = [];
+    for (const tid of playlist.trackIds) {
+      const t = await db.getTrack(tid);
+      if (t) tracks.push(offlineTrackToNetworkTrack(t));
+    }
+    return {
+      id: playlist.id,
+      name: playlist.name,
+      trackCount: playlist.trackCount,
+      isLiked: playlist.isLiked,
+      coverUrl: playlist.coverUrl ?? null,
+      pinnedAt: playlist.pinnedAt ?? null,
+      updatedAt: playlist.updatedAt,
+      isPublic: playlist.isPublic,
+      shareToken: playlist.shareToken,
+      sourceKind: playlist.sourceKind,
+      sourcePlaylistId: playlist.sourcePlaylistId,
+      sourceUserId: playlist.sourceUserId,
+      readOnly: playlist.readOnly,
+      tracks,
+    };
   }
+  const allTracks = await db.listTracks();
+  const ref = `playlist:${id}`;
+  const matching = allTracks.filter((t) => t.collections?.includes(ref));
+  if (matching.length === 0) return null;
+  matching.sort((a, b) => (a.savedAt ?? 0) - (b.savedAt ?? 0));
   return {
-    id: playlist.id,
-    name: playlist.name,
-    trackCount: playlist.trackCount,
-    isLiked: playlist.isLiked,
-    coverUrl: playlist.coverUrl ?? null,
-    pinnedAt: playlist.pinnedAt ?? null,
-    updatedAt: playlist.updatedAt,
-    isPublic: playlist.isPublic,
-    shareToken: playlist.shareToken,
-    sourceKind: playlist.sourceKind,
-    sourcePlaylistId: playlist.sourcePlaylistId,
-    sourceUserId: playlist.sourceUserId,
-    readOnly: playlist.readOnly,
-    tracks,
+    id,
+    name: '',
+    trackCount: matching.length,
+    isLiked: false,
+    coverUrl: matching[0]?.coverUrl ?? null,
+    pinnedAt: null,
+    updatedAt: matching[0]?.savedAt ?? Date.now(),
+    isPublic: false,
+    shareToken: null,
+    sourceKind: null,
+    sourcePlaylistId: null,
+    sourceUserId: null,
+    readOnly: false,
+    tracks: matching.map(offlineTrackToNetworkTrack),
   };
 }
 

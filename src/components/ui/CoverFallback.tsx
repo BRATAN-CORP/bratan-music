@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fallbackGradient, nameInitials } from '@/lib/coverFallback';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +34,19 @@ interface SmartImageProps {
  */
 export function CoverFallback({ src, name, alt, className, initialsClassName, loading = 'lazy' }: SmartImageProps) {
   const [errored, setErrored] = useState(false);
+  // Reset the error flag whenever `src` changes. Without this, the
+  // very first failed `<img>` load (e.g. the network URL fallback
+  // from `useOfflineCoverUrl` while the IDB blob query is still in
+  // flight, or while the device is offline) sticks `errored=true`
+  // forever — when the offline blob URL eventually arrives in a
+  // later render the gradient initials are still painted and the
+  // user never sees the real cover. Reported as "в миниплеере
+  // обложки не отображаются" while track lists / library covers
+  // worked because their queries had already resolved before the
+  // first paint.
+  useEffect(() => {
+    setErrored(false);
+  }, [src]);
   const showImage = !!src && !errored;
   if (showImage) {
     return (
