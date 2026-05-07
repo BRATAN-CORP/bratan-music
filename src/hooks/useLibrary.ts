@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { downloads } from '@/lib/offline/downloads';
 import { enqueueSync } from '@/lib/offline/syncQueue';
 import { getSavedPlaylistWithTracks } from '@/lib/offline/storage';
 import { networkOrLocal } from '@/lib/offline/networkOrLocal';
@@ -84,8 +85,17 @@ export function usePlaylist(id: string) {
     // "офлайн: скачанные плейлисты не открываются". `navigator.onLine`
     // is too unreliable on Telegram WebView / mobile to be the only
     // signal, so we race and fall back regardless.
-    queryFn: () =>
-      networkOrLocal(
+    queryFn: () => {
+      // Mirror `useAlbum`: while a download is in flight the IDB
+      // row only carries the partial track list, so preferring it
+      // would make the playlist page visibly drop tracks the moment
+      // the first one finishes downloading. Skip the IDB read while
+      // a job is active so the page keeps rendering the full track
+      // list with per-track download rings.
+      const job = downloads.getJob(`playlist:${id}`);
+      const isDownloading =
+        !!job && (job.status === 'queued' || job.status === 'downloading');
+      return networkOrLocal(
         async () => {
           const data = await api.get<PlaylistWithTracks>(`/playlists/${id}`);
           // Detail-view fetch refreshes the backend's cached
@@ -100,7 +110,9 @@ export function usePlaylist(id: string) {
           return data;
         },
         async () => (await getSavedPlaylistWithTracks(id)) as PlaylistWithTracks | null,
-      ),
+        { skipLocal: isDownloading },
+      );
+    },
     enabled: !!id,
   });
 }

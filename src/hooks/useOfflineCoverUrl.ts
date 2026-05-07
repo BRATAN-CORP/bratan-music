@@ -44,14 +44,47 @@ import * as db from '@/lib/offline/db';
 
 type OfflineCoverKind = 'track' | 'album' | 'playlist';
 
-/** Treat zero-byte / opaque blobs as missing — `<img>` cannot decode
- *  them and the user sees the broken-image glyph. Centralised so the
- *  same predicate is used for direct lookups and parent-collection
- *  fallbacks. */
-function pickUsableBlob(blob: Blob | undefined | null): Blob | null {
+/** Distill a usable Blob out of a saved IDB row regardless of which
+ *  storage shape the row was written in. Returns a brand-new in-memory
+ *  Blob constructed from the structured-cloned `coverBytes`
+ *  ArrayBuffer when present, falling back to materialising bytes from
+ *  the legacy `coverBlob` so iOS Safari (which sometimes evicts the
+ *  Blob's backing store while keeping the shell alive) gets a fresh
+ *  in-memory Blob to feed `URL.createObjectURL`. Returns `null` for
+ *  zero-byte / unreadable rows so the caller can fall through to the
+ *  parent-collection fallback or the placeholder glyph. */
+async function pickUsableBlob(
+  source:
+    | { coverBlob?: Blob; coverBytes?: ArrayBuffer; coverMimeType?: string }
+    | null
+    | undefined,
+): Promise<Blob | null> {
+  if (!source) return null;
+  const mime = source.coverMimeType ?? source.coverBlob?.type ?? 'image/jpeg';
+  if (source.coverBytes && source.coverBytes.byteLength > 0) {
+    return new Blob([source.coverBytes], { type: mime });
+  }
+  const blob = source.coverBlob;
   if (!blob) return null;
   if (typeof blob.size === 'number' && blob.size === 0) return null;
-  return blob;
+  // Re-materialise the legacy Blob's underlying bytes synchronously
+  // into an in-memory ArrayBuffer, then build a fresh Blob from that.
+  // iOS Safari WKWebView (15-17, including the standalone PWA shell)
+  // occasionally evicts a Blob's file-backed bytes between page
+  // loads while keeping the Blob shell alive — `URL.createObjectURL`
+  // on the resurrected Blob then yields a URL `<img>` can no longer
+  // decode and the user falls back to the placeholder glyph offline.
+  // Reading via `.arrayBuffer()` forces WebKit to load the bytes and
+  // the resulting fresh Blob survives the next eviction cycle. The
+  // `coverBackfill` pass will commit these bytes back to IDB on the
+  // next online tick so subsequent reads skip this rematerialisation.
+  try {
+    const bytes = await blob.arrayBuffer();
+    if (bytes.byteLength === 0) return null;
+    return new Blob([bytes], { type: mime });
+  } catch {
+    return null;
+  }
 }
 
 /** Pull a usable cover blob from the parent album row, if any. Used
@@ -66,7 +99,7 @@ async function readBlobFromAlbumId(
   if (!albumId) return null;
   try {
     const album = await db.getAlbum(albumId);
-    return pickUsableBlob(album?.coverBlob);
+    return await pickUsableBlob(album);
   } catch {
     return null;
   }
@@ -85,7 +118,7 @@ async function readBlobFromCollections(
     const id = c.slice('playlist:'.length);
     try {
       const playlist = await db.getPlaylist(id);
-      const blob = pickUsableBlob(playlist?.coverBlob);
+      const blob = await pickUsableBlob(playlist);
       if (blob) return blob;
     } catch {
       // Skip unreadable rows; the next collection might still have a
@@ -129,7 +162,7 @@ export function useOfflineCoverUrl(
           : kind === 'album'
             ? await db.getAlbum(id)
             : await db.getPlaylist(id);
-      const direct = pickUsableBlob(entity?.coverBlob);
+      const direct = await pickUsableBlob(entity);
       if (direct) return direct;
 
       // Pre-PR-#350 saves wrote *zero-byte* opaque-response Blobs
@@ -143,14 +176,11 @@ export function useOfflineCoverUrl(
       // the user reported as missing ("обложки в офлайн режиме всё
       // равно не отображаются").
       //
-      // For tracks specifically the fallback is structural: the
-      // track inherits the album cover for non-singles (and the
-      // playlist cover for shared playlists), so we can borrow the
-      // parent collection's blob to paint the row even when the
-      // per-track blob never made it to IDB. The parent blobs are
-      // saved BEFORE the track loop runs, so an album save where
-      // the track-level fetches all 403'd still leaves a usable
-      // album.coverBlob for us to fall back on.
+      // For tracks AND albums / playlists alike, fall back to a
+      // parent collection's cover when the entity's own blob is
+      // missing or unrenderable. Tracks structurally share artwork
+      // with their album / playlist, so this keeps offline track
+      // rows intact even when the per-track CDN fetch failed.
       if (kind === 'track') {
         const track = entity as { albumId?: string; collections?: string[] } | null;
         const albumBlob = await readBlobFromAlbumId(track?.albumId);
@@ -210,15 +240,30 @@ export function useBlobObjectUrl(
     // cover while online and the next `coverBackfill` pass heals
     // the saved row.
     const usable = blob && (typeof blob.size !== 'number' || blob.size > 0);
-    if (usable) {
-      const obj = URL.createObjectURL(blob);
-      setUrl(obj);
-      return () => {
-        URL.revokeObjectURL(obj);
-      };
+    if (!usable) {
+      setUrl(fallback ?? undefined);
+      return undefined;
     }
-    setUrl(fallback ?? undefined);
-    return undefined;
+    // Re-materialise bytes via `arrayBuffer()` and rebuild a fresh
+    // in-memory Blob — iOS Safari sometimes evicts the original
+    // Blob's backing store while keeping the shell alive, so a
+    // direct `URL.createObjectURL(blob)` would yield an undecodable
+    // URL on PWA standalone offline reads. See `useOfflineCoverUrl`
+    // for the full rationale.
+    let cancelled = false;
+    let obj: string | null = null;
+    blob.arrayBuffer().then((bytes) => {
+      if (cancelled) return;
+      const fresh = new Blob([bytes], { type: blob.type || 'image/jpeg' });
+      obj = URL.createObjectURL(fresh);
+      setUrl(obj);
+    }).catch(() => {
+      if (!cancelled) setUrl(fallback ?? undefined);
+    });
+    return () => {
+      cancelled = true;
+      if (obj) URL.revokeObjectURL(obj);
+    };
   }, [blob, fallback]);
   return url;
 }

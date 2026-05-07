@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { downloads } from '@/lib/offline/downloads';
 import { getSavedAlbumWithTracks } from '@/lib/offline/storage';
 import { networkOrLocal } from '@/lib/offline/networkOrLocal';
 import type { Track, Album, Artist } from '@/types';
@@ -73,11 +74,28 @@ export function useAlbum(id: string) {
     // spinner waiting for the browser-default ~60-second `fetch`
     // timeout. That blank-spinner symptom was reported by the user
     // as "офлайн: скачанные альбомы не открываются".
-    queryFn: () =>
-      networkOrLocal(
+    queryFn: () => {
+      // While a download is in flight, the IDB row only carries the
+      // album shell + tracks already committed (`enqueueAlbum`
+      // writes the shell upfront so "Загруженное" can show the
+      // album mid-download). If we let `networkOrLocal` prefer that
+      // snapshot a focus / reconnect refetch would replace the
+      // full network track list with the partial saved one and the
+      // user would see the album page "lose" tracks the moment the
+      // first one finishes downloading. Skip the IDB read while a
+      // job is active so the page keeps rendering the full track
+      // list with per-track download rings — exactly the symptom
+      // reported as "после загрузки одного трека страничка альбома
+      // перерендеривается и я вижу только загруженные треки".
+      const job = downloads.getJob(`album:${id}`);
+      const isDownloading =
+        !!job && (job.status === 'queued' || job.status === 'downloading');
+      return networkOrLocal(
         () => api.get<AlbumDetail>(`/albums/${id}`),
         async () => (await getSavedAlbumWithTracks(id)) as AlbumDetail | null,
-      ),
+        { skipLocal: isDownloading },
+      );
+    },
     enabled: !!id,
     // The album-detail data we'd render from the offline cache is
     // identical to itself across re-fetches; let React Query keep

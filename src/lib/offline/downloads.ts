@@ -109,7 +109,7 @@ class DownloadsManager {
     // Persist the album shell first so a user that opens
     // "Загруженное" mid-download sees the album with a partial
     // track list rather than nothing at all.
-    const coverBlob = await fetchCoverBlob(album.coverUrl);
+    const cover = await fetchCoverBlob(album.coverUrl);
     await db.putAlbum({
       id: album.id,
       title: album.title,
@@ -121,8 +121,9 @@ class DownloadsManager {
       coverVideoUrl: album.coverVideoUrl,
       releaseDate: album.releaseDate,
       trackIds: tracks.map((t) => t.id),
-      coverBlob: coverBlob?.blob,
-      coverMimeType: coverBlob?.mimeType,
+      coverBlob: cover?.blob,
+      coverBytes: cover?.bytes,
+      coverMimeType: cover?.mimeType,
       savedAt: Date.now(),
     });
     this.events.emit({ type: 'album-saved', albumId: album.id });
@@ -146,7 +147,7 @@ class DownloadsManager {
     // Resolve cover from playlist or first track, mirroring the
     // upstream Cover priority used elsewhere.
     const coverUrl = playlist.coverUrl ?? tracks[0]?.coverUrl ?? null;
-    const coverBlob = await fetchCoverBlob(coverUrl);
+    const cover = await fetchCoverBlob(coverUrl);
     await db.putPlaylist({
       id: playlist.id,
       name: playlist.name,
@@ -162,8 +163,9 @@ class DownloadsManager {
       sourceUserId: playlist.sourceUserId,
       readOnly: playlist.readOnly,
       trackIds: tracks.map((t) => t.id),
-      coverBlob: coverBlob?.blob,
-      coverMimeType: coverBlob?.mimeType,
+      coverBlob: cover?.blob,
+      coverBytes: cover?.bytes,
+      coverMimeType: cover?.mimeType,
       savedAt: Date.now(),
     });
     this.events.emit({ type: 'playlist-saved', playlistId: playlist.id });
@@ -210,8 +212,22 @@ class DownloadsManager {
   ): Promise<{ succeeded: number; failed: number }> {
     let succeeded = 0;
     let failed = 0;
+    // Per-track progress in [0..1] for the track currently being
+    // fetched. Reset to 0 at the top of each iteration so the
+    // parent ring doesn't briefly snap back when we move on to the
+    // next track. Without this slot the parent progress only
+    // advanced on full-track boundaries, so a 12-track album that
+    // hadn't yet finished its first track sat visibly stuck at 0%
+    // for the entire first track — reported as "индикатор
+    // загрузки не показывается при батчевой загрузке".
+    let currentTrackProgress = 0;
     const reportProgress = () => {
-      job.progress = tracks.length === 0 ? 1 : (succeeded + failed) / tracks.length;
+      const total = tracks.length;
+      const completed = succeeded + failed;
+      // Fold the in-flight track's fractional progress into the
+      // parent so the ring fills smoothly across the whole batch.
+      const fractional = total === 0 ? 0 : currentTrackProgress / total;
+      job.progress = total === 0 ? 1 : Math.min(1, completed / total + fractional);
       this.events.emit({ type: 'job-changed', job });
     };
     for (const t of tracks) {
@@ -221,12 +237,18 @@ class DownloadsManager {
       // explicitly cancelled — a cancellation just stops the loop.
       const latest = this.jobs.get(job.jobId);
       if (latest && latest.status === 'cancelled') break;
+      currentTrackProgress = 0;
+      reportProgress();
       try {
-        await this.runTrack(`track:${t.id}`, t, parent);
+        await this.runTrack(`track:${t.id}`, t, parent, (p) => {
+          currentTrackProgress = p;
+          reportProgress();
+        });
         succeeded++;
       } catch {
         failed++;
       } finally {
+        currentTrackProgress = 0;
         reportProgress();
       }
     }
@@ -355,7 +377,12 @@ class DownloadsManager {
     this.events.emit({ type: 'queue-changed' });
   }
 
-  private async runTrack(jobId: string, track: Track, parent?: string): Promise<void> {
+  private async runTrack(
+    jobId: string,
+    track: Track,
+    parent?: string,
+    onProgress?: (progress: number) => void,
+  ): Promise<void> {
     const job = this.makeJob(jobId, 'track', track.id);
     this.recordJob(job, 'queued');
     this.recordJob(job, 'downloading');
@@ -369,12 +396,14 @@ class DownloadsManager {
       const { blob, mimeType } = await fetchAudioBlob(resolved.url, {
         signal: ctrl.signal,
         onProgress: (received, total) => {
-          job.progress = total ? Math.min(0.99, received / total) : Math.min(0.95, received / 5_000_000);
+          const p = total ? Math.min(0.99, received / total) : Math.min(0.95, received / 5_000_000);
+          job.progress = p;
           this.events.emit({ type: 'job-changed', job });
+          onProgress?.(p);
         },
       });
 
-      let coverBlob = await fetchCoverBlob(track.coverUrl);
+      let cover = await fetchCoverBlob(track.coverUrl);
 
       // If the per-track cover fetch failed (Tidal's CDN sometimes
       // 403s individual image URLs even when the same album-level
@@ -386,11 +415,11 @@ class DownloadsManager {
       // covers happened to fail. Reported as "обложки в офлайн
       // режиме всё равно не отображаются — на загруженном плейлисте
       // работают".
-      if (!coverBlob && parent) {
-        coverBlob = await borrowParentCover(parent);
+      if (!cover && parent) {
+        cover = await borrowParentCover(parent);
       }
-      if (!coverBlob && track.albumId) {
-        coverBlob = await borrowParentCover(`album:${track.albumId}`);
+      if (!cover && track.albumId) {
+        cover = await borrowParentCover(`album:${track.albumId}`);
       }
 
       // If the track is already saved (e.g. user explicitly saved it
@@ -416,8 +445,9 @@ class DownloadsManager {
         audioBlob: blob,
         mimeType,
         quality: resolved.quality,
-        coverBlob: coverBlob?.blob,
-        coverMimeType: coverBlob?.mimeType,
+        coverBlob: cover?.blob,
+        coverBytes: cover?.bytes,
+        coverMimeType: cover?.mimeType,
         savedAt: existing?.savedAt ?? Date.now(),
         lastAccessAt: existing?.lastAccessAt ?? Date.now(),
         byteLength: blob.size,
@@ -455,22 +485,44 @@ function mergeCollections(existing: string[] | undefined, parent: string | undef
  *  row in IndexedDB so we can re-use it when an individual track's
  *  cover fetch fails. Returns `null` when the parent isn't found
  *  yet, when the parent itself has no usable blob, or on any IDB
- *  read error — the caller treats `null` as "no cover available". */
+ *  read error — the caller treats `null` as "no cover available".
+ *
+ *  Returns BOTH the legacy `Blob` and the iOS-safe `bytes:
+ *  ArrayBuffer` so the caller can persist both fields on the child
+ *  track row (see `OfflineTrack.coverBytes`). When the parent only
+ *  has the legacy `coverBlob` (saved before the bytes field shipped)
+ *  we materialise the bytes on the fly via `blob.arrayBuffer()`. */
 async function borrowParentCover(
   parent: string,
-): Promise<{ blob: Blob; mimeType: string } | null> {
+): Promise<{ blob: Blob; bytes: ArrayBuffer; mimeType: string } | null> {
   try {
     if (parent.startsWith('album:')) {
       const album = await db.getAlbum(parent.slice('album:'.length));
       const blob = album?.coverBlob;
+      const bytes = album?.coverBytes;
+      const mimeType = album?.coverMimeType ?? 'image/jpeg';
+      if (bytes && bytes.byteLength > 0) {
+        return { blob: blob ?? new Blob([bytes], { type: mimeType }), bytes, mimeType };
+      }
       if (blob && (!('size' in blob) || blob.size > 0)) {
-        return { blob, mimeType: album?.coverMimeType ?? 'image/jpeg' };
+        const buf = await blob.arrayBuffer().catch(() => null);
+        if (buf && buf.byteLength > 0) {
+          return { blob, bytes: buf, mimeType };
+        }
       }
     } else if (parent.startsWith('playlist:')) {
       const playlist = await db.getPlaylist(parent.slice('playlist:'.length));
       const blob = playlist?.coverBlob;
+      const bytes = playlist?.coverBytes;
+      const mimeType = playlist?.coverMimeType ?? 'image/jpeg';
+      if (bytes && bytes.byteLength > 0) {
+        return { blob: blob ?? new Blob([bytes], { type: mimeType }), bytes, mimeType };
+      }
       if (blob && (!('size' in blob) || blob.size > 0)) {
-        return { blob, mimeType: playlist?.coverMimeType ?? 'image/jpeg' };
+        const buf = await blob.arrayBuffer().catch(() => null);
+        if (buf && buf.byteLength > 0) {
+          return { blob, bytes: buf, mimeType };
+        }
       }
     }
   } catch {

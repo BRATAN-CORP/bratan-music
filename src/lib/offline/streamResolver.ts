@@ -248,9 +248,22 @@ function maybeProxyCoverUrl(url: string): string {
   return `${API_BASE}/covers/proxy?url=${encodeURIComponent(url)}`;
 }
 
+/**
+ *  The returned shape carries BOTH a `Blob` and the same bytes as a
+ *  raw `ArrayBuffer`. iOS Safari (15-17, including the standalone PWA
+ *  WKWebView) occasionally evicts a Blob's backing bytes while
+ *  keeping the Blob shell alive — `URL.createObjectURL` on the
+ *  resurrected Blob then yields a URL that `<img>` can no longer
+ *  decode and the user reverts to the placeholder glyph offline. By
+ *  also handing the caller the structured-cloneable `ArrayBuffer`
+ *  we let `db.putAlbum` / `db.putTrack` persist a path that doesn't
+ *  rely on the Blob backing store at all; `useOfflineCoverUrl`
+ *  reconstructs an in-memory `Blob` from those bytes at render time
+ *  and the cover survives the WebKit eviction cycle.
+ */
 export async function fetchCoverBlob(
   url: string | undefined | null,
-): Promise<{ blob: Blob; mimeType: string } | null> {
+): Promise<{ blob: Blob; bytes: ArrayBuffer; mimeType: string } | null> {
   if (!url) return null;
   const fetchUrl = maybeProxyCoverUrl(url);
   // 1) CORS path through the worker proxy. The worker's
@@ -261,10 +274,10 @@ export async function fetchCoverBlob(
   try {
     const res = await fetch(fetchUrl, { cache: 'force-cache' });
     if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 0) {
-        const mimeType = res.headers.get('content-type') ?? blob.type ?? 'image/jpeg';
-        return { blob, mimeType };
+      const bytes = await res.arrayBuffer();
+      if (bytes.byteLength > 0) {
+        const mimeType = res.headers.get('content-type') ?? 'image/jpeg';
+        return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
       }
     }
   } catch {
@@ -277,10 +290,10 @@ export async function fetchCoverBlob(
   try {
     const res = await fetch(url, { cache: 'force-cache' });
     if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 0) {
-        const mimeType = res.headers.get('content-type') ?? blob.type ?? 'image/jpeg';
-        return { blob, mimeType };
+      const bytes = await res.arrayBuffer();
+      if (bytes.byteLength > 0) {
+        const mimeType = res.headers.get('content-type') ?? 'image/jpeg';
+        return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
       }
     }
   } catch {
@@ -292,10 +305,10 @@ export async function fetchCoverBlob(
   //    zero-byte result as a hard miss.
   try {
     const res = await fetch(url, { mode: 'no-cors', cache: 'force-cache' });
-    const blob = await res.blob();
-    if (blob.size === 0) return null;
-    const mimeType = blob.type || 'image/jpeg';
-    return { blob, mimeType };
+    const bytes = await res.arrayBuffer();
+    if (bytes.byteLength === 0) return null;
+    const mimeType = 'image/jpeg';
+    return { blob: new Blob([bytes], { type: mimeType }), bytes, mimeType };
   } catch {
     return null;
   }
