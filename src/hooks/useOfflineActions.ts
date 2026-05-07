@@ -73,9 +73,20 @@ export interface OfflineActions {
   saveTrack: (track: Track) => Promise<void>;
   unsaveTrack: (trackId: string) => Promise<void>;
   saveAlbum: (album: Album, tracks: Track[]) => Promise<void>;
+  /** Drop the album row AND every audio blob exclusively held by it. */
   unsaveAlbum: (albumId: string) => Promise<void>;
+  /** Drop the album row but keep every saved track on the device.
+   *  Used by the unsave-confirmation dialog's "keep tracks" branch. */
+  unsaveAlbumKeepTracks: (albumId: string) => Promise<void>;
+  /** Re-run a previous batch save downloading only the tracks that
+   *  aren't on disk yet. Used by the "Download missing" pill that
+   *  appears when an album has new upstream tracks or a previous
+   *  attempt left some tracks missing. */
+  resumeAlbum: (album: Album, tracks: Track[]) => Promise<void>;
   savePlaylist: (playlist: Playlist, tracks: Track[]) => Promise<void>;
   unsavePlaylist: (playlistId: string) => Promise<void>;
+  unsavePlaylistKeepTracks: (playlistId: string) => Promise<void>;
+  resumePlaylist: (playlist: Playlist, tracks: Track[]) => Promise<void>;
   cancelTrack: (trackId: string) => void;
   cancelAlbum: (albumId: string) => void;
   cancelPlaylist: (playlistId: string) => void;
@@ -104,12 +115,28 @@ export function useOfflineActions(): OfflineActions {
     await downloads.removeAlbum(albumId);
   }, []);
 
+  const unsaveAlbumKeepTracks = useCallback(async (albumId: string) => {
+    await downloads.removeAlbumKeepTracks(albumId);
+  }, []);
+
+  const resumeAlbum = useCallback(async (album: Album, tracks: Track[]) => {
+    await downloads.resumeAlbum(album, tracks);
+  }, []);
+
   const savePlaylist = useCallback(async (playlist: Playlist, tracks: Track[]) => {
     await downloads.enqueuePlaylist(playlist, tracks);
   }, []);
 
   const unsavePlaylist = useCallback(async (playlistId: string) => {
     await downloads.removePlaylist(playlistId);
+  }, []);
+
+  const unsavePlaylistKeepTracks = useCallback(async (playlistId: string) => {
+    await downloads.removePlaylistKeepTracks(playlistId);
+  }, []);
+
+  const resumePlaylist = useCallback(async (playlist: Playlist, tracks: Track[]) => {
+    await downloads.resumePlaylist(playlist, tracks);
   }, []);
 
   const cancelTrack = useCallback((trackId: string) => {
@@ -126,8 +153,40 @@ export function useOfflineActions(): OfflineActions {
 
   return {
     saveTrack, unsaveTrack,
-    saveAlbum, unsaveAlbum,
-    savePlaylist, unsavePlaylist,
+    saveAlbum, unsaveAlbum, unsaveAlbumKeepTracks, resumeAlbum,
+    savePlaylist, unsavePlaylist, unsavePlaylistKeepTracks, resumePlaylist,
     cancelTrack, cancelAlbum, cancelPlaylist,
   };
+}
+
+/**
+ * Live count of tracks that are listed in a saved album / playlist
+ * but missing their audio blob in IndexedDB. Used by the offline
+ * action button to show a "Download N missing" pill when some
+ * tracks didn't make it onto the device.
+ *
+ * Returns `null` while the count is still being computed (first
+ * render), `0` when everything is on disk, and a positive integer
+ * when something needs filling in. The hook re-runs whenever the
+ * caller-provided `expectedTrackIds` changes (e.g. upstream playlist
+ * gained a new track) AND whenever the offline store's `version`
+ * counter bumps so it reflects new downloads / removals without a
+ * full re-render of the parent surface.
+ */
+export function useMissingOfflineTrackCount(
+  expectedTrackIds: readonly string[] | null,
+): number | null {
+  const hydrated = useOfflineHydration();
+  const savedTrackIds = useOfflineStore((s) => s.savedTrackIds);
+  // `version` is bumped on every applyEvent — guarantees this
+  // re-runs when a track-saved / track-deleted event lands without
+  // having to wire up a separate effect.
+  useOfflineStore((s) => s.version);
+  if (!hydrated) return null;
+  if (!expectedTrackIds) return null;
+  let missing = 0;
+  for (const id of expectedTrackIds) {
+    if (!savedTrackIds.has(id)) missing++;
+  }
+  return missing;
 }

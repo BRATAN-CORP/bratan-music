@@ -94,6 +94,50 @@ export async function unsavePlaylist(id: string): Promise<void> {
 }
 
 /**
+ * Variant of `unsaveAlbum` that drops only the album metadata row
+ * but keeps every audio blob already saved on the device. The tracks
+ * stay in the offline library as if the user had saved each one
+ * individually — the per-track `collections` cross-reference is
+ * scrubbed of `album:<id>` so the next round of pruning won't latch
+ * onto the now-deleted parent.
+ *
+ * Used by the "delete only the collection, keep tracks" branch of
+ * the unsave-confirmation dialog.
+ */
+export async function unsaveAlbumKeepTracks(id: string): Promise<void> {
+  const album = await db.getAlbum(id);
+  if (!album) return;
+  await db.deleteAlbum(id);
+  await detachCollectionFromTracks(album.trackIds, `album:${id}`);
+}
+
+export async function unsavePlaylistKeepTracks(id: string): Promise<void> {
+  const playlist = await db.getPlaylist(id);
+  if (!playlist) return;
+  await db.deletePlaylist(id);
+  await detachCollectionFromTracks(playlist.trackIds, `playlist:${id}`);
+}
+
+/**
+ * Walk a list of track ids and detach the given collection from each
+ * one's `collections` array WITHOUT deleting any track. If detaching
+ * leaves the track with no other collection references we leave it
+ * as a directly-saved row (empty `collections` array) instead of
+ * removing it — that's the point of "keep tracks".
+ */
+async function detachCollectionFromTracks(
+  trackIds: string[],
+  removedParent: string,
+): Promise<void> {
+  for (const trackId of trackIds) {
+    const track = await db.getTrack(trackId);
+    if (!track) continue;
+    const remaining = track.collections.filter((c) => c !== removedParent);
+    await db.putTrack({ ...track, collections: remaining });
+  }
+}
+
+/**
  * Walk a list of track ids and delete the ones that are no longer
  * referenced by any saved collection AND were not directly saved by
  * the user (`collections` includes only the just-removed parent).

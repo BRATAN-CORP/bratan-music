@@ -166,6 +166,17 @@ interface AudioBundle {
    * hook.
    */
   crossfadeAttemptedTrackId: string | null;
+  /**
+   * Per-slot Object URL minted from `URL.createObjectURL(blob)`,
+   * tracked here so we can `URL.revokeObjectURL` it the next time the
+   * slot's `audio.src` is replaced. Tracking PER SLOT (not just the
+   * active one) is what lets the crossfade preload mint a blob URL
+   * for an offline-saved next track into the INACTIVE slot and still
+   * get cleanly revoked when the slot is recycled. Failing to revoke
+   * leaks the underlying audio Blob (FLAC tracks can be ~100 MB) for
+   * the lifetime of the tab.
+   */
+  slotBlobUrls: Record<Slot, string | null>;
 }
 
 /** How long after a user seek to keep the auto-end-of-track crossfade
@@ -280,6 +291,7 @@ function getBundle(): AudioBundle {
       lastRealT: { a: 0, b: 0 },
       lastSeekAt: { a: 0, b: 0 },
       crossfadeAttemptedTrackId: null,
+      slotBlobUrls: { a: null, b: null },
     };
   }
   return bundle;
@@ -533,6 +545,53 @@ export function primeAudioForPlay(): void {
 
 function inactiveSlot(b: AudioBundle): Slot {
   return b.active === 'a' ? 'b' : 'a';
+}
+
+/**
+ * Drop the offline-blob Object URL currently held by a slot, if any.
+ * Idempotent — safe to call before any `audio.src` rewrite, including
+ * on a slot that was last loaded from a network URL (no-op).
+ */
+function releaseSlotBlobUrl(b: AudioBundle, slot: Slot): void {
+  const url = b.slotBlobUrls[slot];
+  if (!url) return;
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    /* no-op — URL was never registered or already revoked */
+  }
+  b.slotBlobUrls[slot] = null;
+}
+
+/**
+ * Resolve a track to a playable URL, preferring the offline-saved
+ * Blob over the network. Used by every code path that wants to feed
+ * an audio element — the initial load, the crossfade preload, and
+ * the end-of-track crossfade fallback — so all three behave
+ * identically when the track is on disk. Without this the preload +
+ * crossfade fell through to `fetchStreamUrl`, which silently failed
+ * when fully offline and forced the auto-fade path to take a hard
+ * cut into the next track at full volume.
+ *
+ * Returns a fresh `URL.createObjectURL(blob)` for the offline path;
+ * the caller MUST stash it on `b.slotBlobUrls[slot]` (via
+ * `releaseSlotBlobUrl` + assignment) so it is later revoked when the
+ * slot is recycled.
+ */
+async function resolveSourceForTrack(
+  track: { id: string; source?: string; streamUrl?: string },
+  quality: string,
+): Promise<{ url: string; isBlob: boolean }> {
+  try {
+    const offline = await getSavedTrack(track.id);
+    if (offline) {
+      return { url: URL.createObjectURL(offline.audioBlob), isBlob: true };
+    }
+  } catch {
+    /* fall through to network — IDB read failures must not block
+       playback */
+  }
+  return { url: await fetchStreamUrl(track, quality), isBlob: false };
 }
 
 
@@ -872,17 +931,6 @@ export function useAudioPlayer() {
 
   const loadingRef = useRef<string | null>(null);
   const crossfadingRef = useRef(false);
-  /** Active blob: URL for the currently loaded offline track, kept around
-   *  so we can `URL.revokeObjectURL` it the next time we swap tracks.
-   *  Failing to revoke leaks the entire audio Blob (FLAC files can be
-   *  ~100 MB) for the lifetime of the tab. */
-  const currentBlobUrlRef = useRef<string | null>(null);
-  const releaseCurrentBlobUrl = () => {
-    if (currentBlobUrlRef.current) {
-      URL.revokeObjectURL(currentBlobUrlRef.current);
-      currentBlobUrlRef.current = null;
-    }
-  };
   // The "attempted-once" gate that prevents busy-looping the crossfade
   // trigger every timeupdate (e.g. on a flaky network) lives on the
   // bundle as `b.crossfadeAttemptedTrackId` so module-scope helpers
@@ -989,11 +1037,10 @@ export function useAudioPlayer() {
     }
     audio.pause();
 
-    // Drop any blob URL we minted for the previous track first; we only
-    // ever keep one alive at a time and the new src is about to take
-    // its place either as a blob: URL (offline path below) or a
-    // network URL (network path below).
-    releaseCurrentBlobUrl();
+    // Drop any blob URL we minted for the previous track first; the
+    // new src is about to take its place either as a blob: URL
+    // (offline path below) or a network URL (network path below).
+    releaseSlotBlobUrl(b, slot);
 
     // Try each quality level in the fallback chain.
     let url: string | null = null;
@@ -1013,7 +1060,7 @@ export function useAudioPlayer() {
       if (loadingRef.current !== trackId) return;
       if (offline) {
         const blobUrl = URL.createObjectURL(offline.audioBlob);
-        currentBlobUrlRef.current = blobUrl;
+        b.slotBlobUrls[slot] = blobUrl;
         audio.crossOrigin = null;
         const ok = await tryLoadSrc(audio, blobUrl);
         if (loadingRef.current !== trackId) return;
@@ -1027,11 +1074,11 @@ export function useAudioPlayer() {
         } else {
           // Blob load failed (rare — corrupt blob, OOM). Drop the URL
           // and fall through to the network ladder.
-          releaseCurrentBlobUrl();
+          releaseSlotBlobUrl(b, slot);
         }
       }
     } catch {
-      releaseCurrentBlobUrl();
+      releaseSlotBlobUrl(b, slot);
     }
     // Skip the network fallback ladder entirely if the offline blob
     // is already loaded into the audio element (loaded === true).
@@ -1317,6 +1364,11 @@ export function useAudioPlayer() {
       b.crossfadingInto = null;
       b.crossfadeKind = null;
       safePause(inactiveSlot(b));
+      // Throw away whatever was preloaded into the inactive slot — we
+      // are about to re-load the active slot for a different track
+      // and the preload may have minted a blob URL we don't want to
+      // leak.
+      releaseSlotBlobUrl(b, inactiveSlot(b));
       b.loaded[inactiveSlot(b)] = null;
       if (versionBumped) b.loaded[b.active] = null;
       // Drop any pending restore-seek left over from an earlier track
@@ -1505,16 +1557,47 @@ export function useAudioPlayer() {
     // addresses.
     try {
       if (!preloaded) {
-        const url = await fetchStreamUrl(nextTrack, tidalQuality);
-        if (!crossfadingRef.current) return;
+        // Resolve through `resolveSourceForTrack` so a saved-offline
+        // next track plays from its IndexedDB blob, identical to the
+        // initial-load offline-first path. Without this, the auto
+        // crossfade hit `fetchStreamUrl` and silently failed when the
+        // user was fully offline — the user heard "track ends, hard
+        // cut, dead silence" instead of a smooth fade into the next
+        // saved track.
+        const resolved = await resolveSourceForTrack(nextTrack, tidalQuality);
+        if (!crossfadingRef.current) {
+          if (resolved.isBlob) {
+            try { URL.revokeObjectURL(resolved.url); } catch { /* ignore */ }
+          }
+          return;
+        }
         if (b.playPromises[incoming]) {
           try { await b.playPromises[incoming]; } catch { /* ignore */ }
         }
         audio.pause();
         ensureAudioGraph();
         setSlotGain(incoming, 0);
-        const ok = await tryLoadSrc(audio, url);
+        // crossOrigin is read at `audio.src` assignment time, so flip
+        // it BEFORE tryLoadSrc. blob: URLs reject crossOrigin entirely
+        // (the response has no `Access-Control-Allow-Origin` header)
+        // — we have to clear the attribute or Safari will refuse the
+        // load.
+        audio.crossOrigin = resolved.isBlob ? null : 'anonymous';
+        // The slot may already hold a stale blob URL from a previous
+        // preload that didn't get consumed. Revoke it before pointing
+        // the slot at the new src.
+        releaseSlotBlobUrl(b, incoming);
+        if (resolved.isBlob) {
+          b.slotBlobUrls[incoming] = resolved.url;
+        }
+        const ok = await tryLoadSrc(audio, resolved.url);
         if (!crossfadingRef.current || !ok) {
+          if (!ok && resolved.isBlob) {
+            // Couldn't decode the offline blob (rare — corrupt row,
+            // OOM). Drop the URL so the slot doesn't keep a dangling
+            // reference.
+            releaseSlotBlobUrl(b, incoming);
+          }
           if (!ok) {
             // Couldn't decode the incoming stream — fall back to a hard
             // switch on natural end so the user isn't left in silence.
@@ -1579,6 +1662,50 @@ export function useAudioPlayer() {
 
       await Promise.all([outgoingRamp, incomingRamp]);
       if (!crossfadingRef.current) return; // cancelled
+
+      // User-action guard: did the user steer somewhere else during
+      // the ramp window? `previous()` / `next()` / `jumpToQueue()` /
+      // `setTrack()` update the store synchronously, but the React
+      // effect that processes the change can race our own
+      // ramp-completion microtask. If the store now points to anything
+      // other than our intended next track (and isn't still on the
+      // outgoing track either, which would just mean the effect
+      // hasn't dispatched yet), the user has chosen a different
+      // destination — defer to that and abort the promotion so we
+      // don't silently overwrite their choice with `setTrack(nextTrack)`.
+      //
+      // This is the fix for "press prev within the last n seconds
+      // of a crossfading track and the back button does nothing":
+      // without this guard, the in-flight auto-fade's promotion
+      // landed AFTER `previous()` had updated the store, then
+      // `setTrack(nextTrack)` quietly stomped the user's choice and
+      // playback continued through to the next track instead.
+      const liveCurrentId = usePlayerStore.getState().currentTrack?.id;
+      if (
+        liveCurrentId
+        && liveCurrentId !== currentTrack.id
+        && liveCurrentId !== nextTrack.id
+      ) {
+        // Tear down the incoming slot — it briefly started playing
+        // nextTrack during the ramp, but the user has already moved
+        // on. Restore the outgoing slot's gain so the upcoming
+        // track-change effect's `loadTrack(activeSlot, …)` for the
+        // user's actual choice doesn't run on top of a half-faded
+        // gain. The effect will pause + reload that slot a moment
+        // later, but we need a sane starting state in the meantime.
+        cancelRamp();
+        safePause(incoming);
+        setSlotGain(incoming, 0);
+        releaseSlotBlobUrl(b, incoming);
+        b.loaded[incoming] = null;
+        b.crossfadingInto = null;
+        b.crossfadeKind = null;
+        crossfadingRef.current = false;
+        const ps = usePlayerStore.getState();
+        setSlotGain(b.active, ps.muted ? 0 : ps.volume);
+        return;
+      }
+
       teardown(true);
       setTrack(nextTrack);
       // Hand the timeline + duration surfaces over to the new active
@@ -1644,15 +1771,40 @@ export function useAudioPlayer() {
     let cancelled = false;
     (async () => {
       try {
-        const url = await fetchStreamUrl(nextTrack, tidalQuality);
-        if (cancelled || crossfadingRef.current) return;
+        // Try the offline cache first so a saved next track is
+        // pre-buffered from its IndexedDB blob — this is what makes
+        // offline crossfade feel identical to online: by the time the
+        // outgoing track ends, the inactive slot already has the
+        // local blob decoded into the audio element.
+        const resolved = await resolveSourceForTrack(nextTrack, tidalQuality);
+        if (cancelled || crossfadingRef.current) {
+          if (resolved.isBlob) {
+            try { URL.revokeObjectURL(resolved.url); } catch { /* ignore */ }
+          }
+          return;
+        }
         const audio = b.audios[incoming];
         ensureAudioGraph();
         setSlotGain(incoming, 0);
         audio.pause();
-        audio.crossOrigin = 'anonymous';
-        const ok = await tryLoadSrc(audio, url);
-        if (cancelled || !ok) return;
+        // blob: URLs must clear the crossOrigin attribute — the
+        // response carries no CORS headers and Safari refuses the
+        // load otherwise.
+        audio.crossOrigin = resolved.isBlob ? null : 'anonymous';
+        // Drop any blob URL still parked on this slot from a previous
+        // preload that never got consumed (e.g. the queue advanced
+        // past nextTrack before the crossfade fired).
+        releaseSlotBlobUrl(b, incoming);
+        if (resolved.isBlob) {
+          b.slotBlobUrls[incoming] = resolved.url;
+        }
+        const ok = await tryLoadSrc(audio, resolved.url);
+        if (cancelled || !ok) {
+          if (!ok && resolved.isBlob) {
+            releaseSlotBlobUrl(b, incoming);
+          }
+          return;
+        }
         try { audio.currentTime = 0; } catch { /* ignore */ }
         // Record the preload in module state only. We intentionally
         // don't touch `b.loaded[incoming]` — that would make the
@@ -2063,13 +2215,16 @@ export function useAudioPlayer() {
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : currentTrack ? 'paused' : 'none';
   }, [isPlaying, currentTrack]);
 
-  // Revoke any outstanding offline blob URL on unmount so a hot-reload
-  // (or component teardown during logout) doesn't leak the audio Blob
-  // for the rest of the tab's life. `releaseCurrentBlobUrl` is a stable
-  // closure over a ref — safe to skip the deps array.
+  // Revoke any outstanding offline blob URLs on unmount so a hot-reload
+  // (or component teardown during logout) doesn't leak the audio Blobs
+  // for the rest of the tab's life. Both slots may carry a blob URL
+  // (the active slot from `loadTrack`, the inactive slot from a
+  // pending preload), so release both.
   useEffect(() => {
     return () => {
-      releaseCurrentBlobUrl();
+      const b = getBundle();
+      releaseSlotBlobUrl(b, 'a');
+      releaseSlotBlobUrl(b, 'b');
     };
   }, []);
 
