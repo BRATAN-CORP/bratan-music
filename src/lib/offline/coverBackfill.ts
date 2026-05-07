@@ -49,11 +49,26 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** A `Blob` is "missing" for our purposes if there is no Blob at
+ *  all OR if the Blob is zero bytes. The earlier `no-cors` shape of
+ *  `fetchCoverBlob` returned an *opaque* Response whose `.blob()`
+ *  came back at zero bytes on Safari / WebKit; we wrote that empty
+ *  Blob to IndexedDB which is now truthy but unrenderable — the
+ *  `<img>` element fires `onerror` and the user sees the fallback
+ *  glyph. Treating zero-byte blobs as missing lets the new
+ *  proxy-aware `fetchCoverBlob` heal them on the next backfill
+ *  pass. */
+function needsBackfill(blob: Blob | undefined): boolean {
+  if (!blob) return true;
+  if (typeof blob.size === 'number' && blob.size === 0) return true;
+  return false;
+}
+
 async function backfillTracks(): Promise<number> {
   let updated = 0;
   const tracks = await db.listTracks();
   for (const track of tracks) {
-    if (track.coverBlob || !track.coverUrl) continue;
+    if (!needsBackfill(track.coverBlob) || !track.coverUrl) continue;
     const cover = await fetchCoverBlob(track.coverUrl);
     if (!cover) continue;
     await db.putTrack({
@@ -71,7 +86,7 @@ async function backfillAlbums(): Promise<number> {
   let updated = 0;
   const albums = await db.listAlbums();
   for (const album of albums) {
-    if (album.coverBlob || !album.coverUrl) continue;
+    if (!needsBackfill(album.coverBlob) || !album.coverUrl) continue;
     const cover = await fetchCoverBlob(album.coverUrl);
     if (!cover) continue;
     await db.putAlbum({
@@ -89,7 +104,7 @@ async function backfillPlaylists(): Promise<number> {
   let updated = 0;
   const playlists = await db.listPlaylists();
   for (const playlist of playlists) {
-    if (playlist.coverBlob || !playlist.coverUrl) continue;
+    if (!needsBackfill(playlist.coverBlob) || !playlist.coverUrl) continue;
     const cover = await fetchCoverBlob(playlist.coverUrl);
     if (!cover) continue;
     await db.putPlaylist({

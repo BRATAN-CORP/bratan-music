@@ -98,7 +98,17 @@ covers.get('/proxy', async (c) => {
     const v = upstream.headers.get(k);
     if (v) out.set(k, v);
   }
-  out.set('cache-control', 'public, max-age=2592000, immutable');
+  // Only attach the immutable long-cache directive to successful
+  // responses. Caching a transient upstream 403 / 404 / 5xx for 30
+  // days would brick a working cover the next time upstream comes
+  // back, and would also poison any client / Cloudflare edge cache
+  // entries with a permanent error. For non-2xx we set `no-store`
+  // so the next request re-attempts upstream.
+  if (upstream.ok) {
+    out.set('cache-control', 'public, max-age=2592000, immutable');
+  } else {
+    out.set('cache-control', 'no-store');
+  }
   // Mirror the audio proxy's CORS exposure so the client can read
   // content-length for progress reporting if it ever wants to.
   out.set('access-control-expose-headers', 'Content-Length, Content-Type, ETag');
