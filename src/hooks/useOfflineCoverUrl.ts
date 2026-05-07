@@ -78,7 +78,17 @@ export function useOfflineCoverUrl(
           : kind === 'album'
             ? await db.getAlbum(id)
             : await db.getPlaylist(id);
-      return entity?.coverBlob ?? null;
+      const blob = entity?.coverBlob;
+      // Pre-PR-#350 saves wrote *zero-byte* opaque-response Blobs
+      // into IndexedDB (Safari / WebKit issue with `mode: 'no-cors'`
+      // — the response is opaque and `.blob()` returns size 0). Those
+      // blobs are truthy but unrenderable: `<img src=blob:...>` fires
+      // `onerror` and the user sees the fallback glyph. Treat them
+      // as missing so the network fallback wins until the next
+      // `coverBackfill` pass heals them.
+      if (!blob) return null;
+      if (typeof blob.size === 'number' && blob.size === 0) return null;
+      return blob;
     },
     // Cover blobs don't change after download — only on a brand-new
     // save, which bumps `version` and invalidates the key. So we can
@@ -122,7 +132,14 @@ export function useBlobObjectUrl(
 ): string | undefined {
   const [url, setUrl] = useState<string | undefined>(() => fallback ?? undefined);
   useEffect(() => {
-    if (blob) {
+    // Same zero-byte guard as `useOfflineCoverUrl` — pre-PR-#350
+    // saves wrote opaque 0-byte Blobs to IDB, and `URL.createObjectURL`
+    // on those blobs yields a URL the `<img>` element can't decode.
+    // Fall back to the network URL so the user at least sees the
+    // cover while online and the next `coverBackfill` pass heals
+    // the saved row.
+    const usable = blob && (typeof blob.size !== 'number' || blob.size > 0);
+    if (usable) {
       const obj = URL.createObjectURL(blob);
       setUrl(obj);
       return () => {
