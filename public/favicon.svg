@@ -1,5 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#1db954"/>
-  <path d="M22 19.5c0-1.1.9-2 2-2 .35 0 .69.09.99.27l16 9.5c1.34.79 1.34 2.67 0 3.46l-16 9.5c-.3.18-.64.27-.99.27-1.1 0-2-.9-2-2v-19z" fill="#0f0f0f"/>
-  <text x="32" y="56" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="700" fill="#0f0f0f" letter-spacing="0.5">BRATAN</text>
+  <!--
+    Adaptive accent — light theme uses the marketing accent (#5E6AD2),
+    dark theme switches to the dark-mode accent (#7E89E8) so the icon
+    pops against both system browser chromes. Mirrors the
+    `--color-accent` token in src/styles/_tokens.scss byte-for-byte.
+  -->
+  <style>
+    .bg { fill: #5E6AD2; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #7E89E8; }
+    }
+  </style>
+  <rect class="bg" width="64" height="64" rx="14"/>
+  <path d="M22 19.5c0-1.1.9-2 2-2 .35 0 .69.09.99.27l16 9.5c1.34.79 1.34 2.67 0 3.46l-16 9.5c-.3.18-.64.27-.99.27-1.1 0-2-.9-2-2v-19z" fill="#ffffff"/>
+  <text x="32" y="56" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="700" fill="#ffffff" letter-spacing="0.5">BRATAN</text>
 </svg>

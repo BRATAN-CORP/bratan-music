@@ -46,13 +46,17 @@ export function BrandLogo({
       aria-hidden
     >
       <defs>
-        {/* Subtle inner gradient on the green tile — gives the brand
+        {/* Subtle inner gradient on the accent tile — gives the brand
             mark a modicum of depth even at favicon resolutions. The
-            stops use the BRATAN green family so the logo reads as
-            the same palette across the favicon, splash and loader. */}
+            stops are bound to the live `--color-accent` /
+            `--color-accent-hover` CSS tokens so the logo always reads
+            as the current theme's accent across the favicon, splash
+            and loader. Falls back to the light-mode accent (#5E6AD2)
+            when CSS variables aren't resolved yet (e.g. the static
+            boot SVG that renders before React mounts). */}
         <linearGradient id="brand-logo-fill" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#1ed95f" />
-          <stop offset="100%" stopColor="#179645" />
+          <stop offset="0%" stopColor="var(--color-accent, #5E6AD2)" />
+          <stop offset="100%" stopColor="var(--color-accent-hover, #4f5bc4)" />
         </linearGradient>
       </defs>
       {animate ? (
@@ -72,15 +76,15 @@ export function BrandLogo({
       {animate ? (
         <motion.path
           d="M22 19.5c0-1.1.9-2 2-2 .35 0 .69.09.99.27l16 9.5c1.34.79 1.34 2.67 0 3.46l-16 9.5c-.3.18-.64.27-.99.27-1.1 0-2-.9-2-2v-19z"
-          fill="#0f0f0f"
-          initial={{ opacity: 0.7 }}
-          animate={{ opacity: [0.7, 1, 0.7] }}
+          fill="#ffffff"
+          initial={{ opacity: 0.78 }}
+          animate={{ opacity: [0.78, 1, 0.78] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
         />
       ) : (
         <path
           d="M22 19.5c0-1.1.9-2 2-2 .35 0 .69.09.99.27l16 9.5c1.34.79 1.34 2.67 0 3.46l-16 9.5c-.3.18-.64.27-.99.27-1.1 0-2-.9-2-2v-19z"
-          fill="#0f0f0f"
+          fill="#ffffff"
         />
       )}
       <text
@@ -90,7 +94,7 @@ export function BrandLogo({
         fontFamily="system-ui, -apple-system, sans-serif"
         fontSize={9}
         fontWeight={700}
-        fill="#0f0f0f"
+        fill="#ffffff"
         letterSpacing={0.5}
       >
         BRATAN
