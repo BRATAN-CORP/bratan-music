@@ -60,6 +60,19 @@ export interface NetworkOrLocalOptions {
   /** How long to wait for the network before failing. Set to
    *  `Infinity` to disable the timeout. */
   networkTimeoutMs?: number;
+  /** When true, skip the IDB snapshot read entirely and go straight
+   *  to the network. Used by hooks that detect an in-flight download
+   *  for the entity — during a download the IDB row only carries the
+   *  partial track list (the album/playlist shell is committed
+   *  upfront so the "Загруженное" tab can render the entity mid-
+   *  download), so preferring it here would replace the full
+   *  network track list with the partial saved one and the album
+   *  page would visibly "lose" the un-downloaded tracks. Reported as
+   *  "после загрузки одного трека страница альбома перерендеривается
+   *  и я вижу только загруженные треки". The IDB snapshot is still
+   *  consulted as a last-resort fallback when the network call
+   *  fails. */
+  skipLocal?: boolean;
 }
 
 async function safeFetchLocal<T>(
@@ -80,32 +93,52 @@ function isOnline(): boolean {
   return typeof navigator === 'undefined' || navigator.onLine !== false;
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function networkOrLocal<T>(
   fetchNetwork: () => Promise<T>,
   fetchLocal: () => Promise<T | null>,
   opts: NetworkOrLocalOptions = {},
 ): Promise<T> {
-  const { networkTimeoutMs = DEFAULT_NETWORK_TIMEOUT_MS } = opts;
+  const { networkTimeoutMs = DEFAULT_NETWORK_TIMEOUT_MS, skipLocal = false } = opts;
 
   // 1) Always read the IDB snapshot first. If the entity is saved
   //    offline this is instant; if it isn't we fall through with a
-  //    null result.
-  const local = await safeFetchLocal(fetchLocal);
-  if (local) {
-    // We deliberately do NOT fire a background `fetchNetwork()` here.
-    // For a saved entity the React-Query staleTime + the user's
-    // own page navigations are enough to refresh the snapshot the
-    // next time the network is healthy; firing a fire-and-forget
-    // network call from inside `queryFn` would (a) trigger an
-    // `/auth/refresh` rotation if the access token is expired,
-    // potentially racing with other in-flight requests, and
-    // (b) cost mobile data on every page open even though the
-    // user already has the entity downloaded.
-    return local;
+  //    null result. Skipped when an active download for the entity
+  //    is in flight — see `NetworkOrLocalOptions.skipLocal`.
+  if (!skipLocal) {
+    const local = await safeFetchLocal(fetchLocal);
+    if (local) {
+      // We deliberately do NOT fire a background `fetchNetwork()` here.
+      // For a saved entity the React-Query staleTime + the user's
+      // own page navigations are enough to refresh the snapshot the
+      // next time the network is healthy; firing a fire-and-forget
+      // network call from inside `queryFn` would (a) trigger an
+      // `/auth/refresh` rotation if the access token is expired,
+      // potentially racing with other in-flight requests, and
+      // (b) cost mobile data on every page open even though the
+      // user already has the entity downloaded.
+      return local;
+    }
   }
 
-  // 2) No local snapshot. We need the network.
+  // 2) No local snapshot (or local intentionally skipped). We need
+  //    the network — unless the device is offline.
   if (!isOnline()) {
+    // We may have just been told the entity is saved (the user came
+    // here via "Загруженное" → click → detail page) but a transient
+    // IDB hiccup at cold-start handed us a `null` on step 1. Retry
+    // once after a short delay before throwing — the delay covers
+    // a freshly-mounted IDB transaction queue / a save that's
+    // currently mid-write. Without this retry the page falls back
+    // to "альбом не найден" on the very first cold-start tap into
+    // an offline-saved entity. Reported as "иногда при клике на
+    // оффлайн альбом / плейлист пишется, что не найден".
+    await delay(150);
+    const retry = await safeFetchLocal(fetchLocal);
+    if (retry) return retry;
     throw new Error('offline-not-saved');
   }
 
@@ -131,6 +164,14 @@ export async function networkOrLocal<T>(
     // misleading error if a save happened to land mid-flight.
     const lateLocal = await safeFetchLocal(fetchLocal);
     if (lateLocal) return lateLocal;
+    // If the first attempt didn't see anything, give the IDB
+    // queue another tick and try once more — `safeFetchLocal`
+    // returns null for transient transaction errors and we'd
+    // rather keep the user on the saved snapshot than show
+    // "не найден" because of a 50 ms race.
+    await delay(150);
+    const retryLocal = await safeFetchLocal(fetchLocal);
+    if (retryLocal) return retryLocal;
     throw err;
   }
 }

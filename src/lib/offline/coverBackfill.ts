@@ -49,35 +49,72 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** A `Blob` is "missing" for our purposes if there is no Blob at
- *  all OR if the Blob is zero bytes. The earlier `no-cors` shape of
- *  `fetchCoverBlob` returned an *opaque* Response whose `.blob()`
- *  came back at zero bytes on Safari / WebKit; we wrote that empty
- *  Blob to IndexedDB which is now truthy but unrenderable — the
- *  `<img>` element fires `onerror` and the user sees the fallback
- *  glyph. Treating zero-byte blobs as missing lets the new
- *  proxy-aware `fetchCoverBlob` heal them on the next backfill
- *  pass. */
-function needsBackfill(blob: Blob | undefined): boolean {
+/** A cover entry needs a fresh network refetch when:
+ *    • it has no `coverBlob` at all, OR the Blob is zero bytes —
+ *      the earlier `no-cors` shape of `fetchCoverBlob` returned an
+ *      *opaque* Response whose `.blob()` came back at zero bytes on
+ *      Safari / WebKit; we wrote that empty Blob to IndexedDB which
+ *      is now truthy but unrenderable, and `<img>` fires `onerror`
+ *      so the user sees the placeholder glyph. */
+function needsBlobRefetch(blob: Blob | undefined): boolean {
   if (!blob) return true;
   if (typeof blob.size === 'number' && blob.size === 0) return true;
   return false;
+}
+
+/** A cover entry needs the iOS-safe `coverBytes` ArrayBuffer
+ *  populated when it has a usable `coverBlob` but no bytes mirror.
+ *  These are entries saved before the bytes field shipped. iOS
+ *  Safari occasionally evicts a Blob's backing bytes while keeping
+ *  the Blob shell alive, so the cover stops rendering on PWA
+ *  standalone offline reads. We heal by materialising bytes from
+ *  the existing Blob via `blob.arrayBuffer()` — no network needed. */
+function missingBytesMirror(
+  blob: Blob | undefined,
+  bytes: ArrayBuffer | undefined,
+): boolean {
+  if (bytes && bytes.byteLength > 0) return false;
+  if (blob && (!('size' in blob) || blob.size > 0)) return true;
+  return false;
+}
+
+async function materialiseBytesFromBlob(
+  blob: Blob | undefined,
+): Promise<ArrayBuffer | null> {
+  if (!blob) return null;
+  try {
+    const buf = await blob.arrayBuffer();
+    return buf.byteLength > 0 ? buf : null;
+  } catch {
+    return null;
+  }
 }
 
 async function backfillTracks(): Promise<number> {
   let updated = 0;
   const tracks = await db.listTracks();
   for (const track of tracks) {
-    if (!needsBackfill(track.coverBlob) || !track.coverUrl) continue;
-    const cover = await fetchCoverBlob(track.coverUrl);
-    if (!cover) continue;
-    await db.putTrack({
-      ...track,
-      coverBlob: cover.blob,
-      coverMimeType: cover.mimeType,
-    });
-    updated++;
-    await sleep(10);
+    if (needsBlobRefetch(track.coverBlob)) {
+      if (!track.coverUrl) continue;
+      const cover = await fetchCoverBlob(track.coverUrl);
+      if (!cover) continue;
+      await db.putTrack({
+        ...track,
+        coverBlob: cover.blob,
+        coverBytes: cover.bytes,
+        coverMimeType: cover.mimeType,
+      });
+      updated++;
+      await sleep(10);
+      continue;
+    }
+    if (missingBytesMirror(track.coverBlob, track.coverBytes)) {
+      const bytes = await materialiseBytesFromBlob(track.coverBlob);
+      if (!bytes) continue;
+      await db.putTrack({ ...track, coverBytes: bytes });
+      updated++;
+      await sleep(10);
+    }
   }
   return updated;
 }
@@ -86,16 +123,27 @@ async function backfillAlbums(): Promise<number> {
   let updated = 0;
   const albums = await db.listAlbums();
   for (const album of albums) {
-    if (!needsBackfill(album.coverBlob) || !album.coverUrl) continue;
-    const cover = await fetchCoverBlob(album.coverUrl);
-    if (!cover) continue;
-    await db.putAlbum({
-      ...album,
-      coverBlob: cover.blob,
-      coverMimeType: cover.mimeType,
-    });
-    updated++;
-    await sleep(10);
+    if (needsBlobRefetch(album.coverBlob)) {
+      if (!album.coverUrl) continue;
+      const cover = await fetchCoverBlob(album.coverUrl);
+      if (!cover) continue;
+      await db.putAlbum({
+        ...album,
+        coverBlob: cover.blob,
+        coverBytes: cover.bytes,
+        coverMimeType: cover.mimeType,
+      });
+      updated++;
+      await sleep(10);
+      continue;
+    }
+    if (missingBytesMirror(album.coverBlob, album.coverBytes)) {
+      const bytes = await materialiseBytesFromBlob(album.coverBlob);
+      if (!bytes) continue;
+      await db.putAlbum({ ...album, coverBytes: bytes });
+      updated++;
+      await sleep(10);
+    }
   }
   return updated;
 }
@@ -104,16 +152,27 @@ async function backfillPlaylists(): Promise<number> {
   let updated = 0;
   const playlists = await db.listPlaylists();
   for (const playlist of playlists) {
-    if (!needsBackfill(playlist.coverBlob) || !playlist.coverUrl) continue;
-    const cover = await fetchCoverBlob(playlist.coverUrl);
-    if (!cover) continue;
-    await db.putPlaylist({
-      ...playlist,
-      coverBlob: cover.blob,
-      coverMimeType: cover.mimeType,
-    });
-    updated++;
-    await sleep(10);
+    if (needsBlobRefetch(playlist.coverBlob)) {
+      if (!playlist.coverUrl) continue;
+      const cover = await fetchCoverBlob(playlist.coverUrl);
+      if (!cover) continue;
+      await db.putPlaylist({
+        ...playlist,
+        coverBlob: cover.blob,
+        coverBytes: cover.bytes,
+        coverMimeType: cover.mimeType,
+      });
+      updated++;
+      await sleep(10);
+      continue;
+    }
+    if (missingBytesMirror(playlist.coverBlob, playlist.coverBytes)) {
+      const bytes = await materialiseBytesFromBlob(playlist.coverBlob);
+      if (!bytes) continue;
+      await db.putPlaylist({ ...playlist, coverBytes: bytes });
+      updated++;
+      await sleep(10);
+    }
   }
   return updated;
 }

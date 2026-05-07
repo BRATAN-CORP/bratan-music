@@ -6,6 +6,7 @@ import { useAlbum } from '@/hooks/useTrack';
 import { ShareButton } from '@/components/features/ShareButton';
 import { AlbumOfflineButton } from '@/components/features/OfflineActionButton';
 import { useToggleAlbumLike } from '@/hooks/useLibrary';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
@@ -22,6 +23,13 @@ export function AlbumPage() {
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const albumLike = useToggleAlbumLike();
   const liked = album ? albumLike.isLiked(album.id) : false;
+  // Resolve the hero cover from the offline cache when the album is
+  // saved — keeps the iconic art visible on iOS Safari even when the
+  // remote URL no longer reaches Tidal's CDN (slow cellular, captive
+  // portal, expired auth). The hook also handles the iOS Safari
+  // Blob-eviction case by re-materialising bytes from the saved
+  // `coverBytes` ArrayBuffer.
+  const heroCoverUrl = useOfflineCoverUrl('album', album?.id, album?.coverUrl);
 
   // Hero "Play" button: shows Pause when any track from this album is the
   // current player track, and clicking toggles instead of restarting.
@@ -60,11 +68,11 @@ export function AlbumPage() {
                 If there is no cover at all, a soft accent radial keeps
                 the hero from looking flat. */}
             <div className="relative isolate -mx-4 mb-10 overflow-hidden border-b border-border px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
-              {album.coverUrl ? (
+              {heroCoverUrl ? (
                 <div
                   aria-hidden
                   className="pointer-events-none absolute -inset-[15%] -z-10 bg-cover bg-center blur-2xl saturate-150 opacity-60"
-                  style={{ backgroundImage: `url(${album.coverUrl})` }}
+                  style={{ backgroundImage: `url(${heroCoverUrl})` }}
                 />
               ) : (
                 <div
@@ -81,9 +89,9 @@ export function AlbumPage() {
                 className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-25"
               />
               <div className="flex flex-col gap-6 sm:flex-row">
-              {album.coverUrl ? (
+              {heroCoverUrl ? (
                 <img
-                  src={album.coverUrl}
+                  src={heroCoverUrl}
                   alt={album.title}
                   className="h-48 w-48 rounded-[var(--radius-md)] border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
                 />

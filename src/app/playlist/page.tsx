@@ -9,6 +9,7 @@ import { SharePlaylistDialog } from '@/components/features/SharePlaylistDialog';
 import { PlaylistCoverButton } from '@/components/features/PlaylistCoverButton';
 import { PlaylistOfflineButton } from '@/components/features/OfflineActionButton';
 import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/useLibrary';
+import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
@@ -56,6 +57,16 @@ export function PlaylistPage() {
   const hideRemoveMenu = Boolean(playlist?.isLiked) || isLinked;
   const canRename = Boolean(playlist && !playlist.isLiked && !isLinked);
   const canShare = Boolean(playlist && !playlist.isLiked && !isLinked);
+  // Resolve the hero cover from the offline cache when the playlist
+  // is saved — keeps the iconic art visible on iOS Safari even when
+  // the remote URL no longer reaches Tidal's CDN. The hook also
+  // handles the iOS Safari Blob-eviction case by re-materialising
+  // bytes from the saved `coverBytes` ArrayBuffer.
+  const heroCoverUrl = useOfflineCoverUrl(
+    'playlist',
+    playlist?.id,
+    playlist?.coverUrl,
+  );
 
   useEffect(() => {
     setLocalTracks(tracks);
@@ -145,9 +156,9 @@ export function PlaylistPage() {
           <>
             <div className="mb-8 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:gap-6">
               <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-card text-muted-foreground sm:h-40 sm:w-40">
-                {playlist.coverUrl ? (
+                {heroCoverUrl ? (
                   <img
-                    src={playlist.coverUrl}
+                    src={heroCoverUrl}
                     alt={t('playlistPage.coverAlt', { name: displayName })}
                     className="h-full w-full object-cover"
                   />

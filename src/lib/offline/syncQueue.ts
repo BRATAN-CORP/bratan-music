@@ -197,20 +197,57 @@ export async function flushSyncQueue(): Promise<void> {
   }
 }
 
-/** Wire the queue to `navigator.onLine`. Mounted once from
- *  `wireOfflineBridge` at app boot. */
+/** Wire the queue to `navigator.onLine` plus a few extra recovery
+ *  paths because the `online` event alone is unreliable in real
+ *  PWA usage:
+ *
+ *   • `online` event — fires when the OS network stack flips back
+ *      online. Works on desktop browsers; on iOS Safari PWA
+ *      standalone it is famously *not* dispatched after the
+ *      WKWebView is resumed from a suspended state, so the queue
+ *      would sit forever even though connectivity has returned.
+ *      Reported as "офлайн-лайки не отправляются после появления
+ *      интернета".
+ *
+ *   • `visibilitychange` (visible) — fires every time the user
+ *      comes back to the PWA from the iOS app switcher / from
+ *      another tab. The most reliable signal we have on iOS that
+ *      the WKWebView has been resumed; we re-check `navigator
+ *      .onLine` and flush.
+ *
+ *   • `focus` — covers the desktop case where the user returns
+ *      from another window.
+ *
+ *   • Periodic poll (every 30s) — last-ditch belt-and-braces for
+ *      the rare environment where neither of the events above
+ *      fires (e.g. embedded WKWebView wrappers that swallow
+ *      lifecycle hooks). Cheap because the flush short-circuits
+ *      to a no-op when the queue is empty. */
 export function startSyncQueueAutoFlush(): () => void {
   if (typeof window === 'undefined') return () => undefined;
-  const onOnline = () => {
-    void flushSyncQueue();
+  const tryFlush = () => {
+    if (typeof navigator === 'undefined' || navigator.onLine) {
+      void flushSyncQueue();
+    }
   };
-  window.addEventListener('online', onOnline);
-  // Also run once on boot to drain anything queued from a previous
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') tryFlush();
+  };
+  window.addEventListener('online', tryFlush);
+  window.addEventListener('focus', tryFlush);
+  document.addEventListener('visibilitychange', onVisible);
+  // Run once on boot to drain anything queued from a previous
   // session.
-  if (navigator.onLine) {
-    void flushSyncQueue();
-  }
+  tryFlush();
+  // Belt-and-braces poll. 30s is far below the user's tolerance
+  // for "I liked a track an hour ago and it still hasn't shown
+  // up in my Library" while still being lazy enough that the
+  // empty-queue no-op doesn't show up on a CPU profile.
+  const interval = window.setInterval(tryFlush, 30_000);
   return () => {
-    window.removeEventListener('online', onOnline);
+    window.removeEventListener('online', tryFlush);
+    window.removeEventListener('focus', tryFlush);
+    document.removeEventListener('visibilitychange', onVisible);
+    window.clearInterval(interval);
   };
 }

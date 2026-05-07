@@ -53,6 +53,18 @@ export interface OfflineTrack {
    *  with no network. Optional because the cover may have been
    *  unavailable at download time. */
   coverBlob?: Blob;
+  /** Same cover bytes as `coverBlob` but stored as a structured-
+   *  cloned `ArrayBuffer` instead of a `Blob`. Required because
+   *  iOS Safari (15-17, including the standalone PWA WKWebView)
+   *  occasionally evicts the file-backed Blob's underlying bytes
+   *  while keeping the Blob shell alive — `URL.createObjectURL`
+   *  on the resurrected Blob then yields a URL that `<img>` can
+   *  no longer decode and the user falls back to the Disc3 /
+   *  initials placeholder offline. ArrayBuffer-typed entries are
+   *  inline in the IDB record, so iOS reloads the full bytes on
+   *  every read. We reconstruct a fresh in-memory `Blob` from
+   *  these bytes at render time in `useOfflineCoverUrl`. */
+  coverBytes?: ArrayBuffer;
   coverMimeType?: string;
   /** Wall-clock timestamp at which the track was saved offline.
    *  Used to sort the "Загруженное" service playlist newest-first
@@ -89,6 +101,9 @@ export interface OfflineAlbum {
   trackIds: string[];
   /** Cached cover image so the album tile renders offline. */
   coverBlob?: Blob;
+  /** Bytes form of the same cover, stored alongside `coverBlob`
+   *  for iOS Safari resilience (see `OfflineTrack.coverBytes`). */
+  coverBytes?: ArrayBuffer;
   coverMimeType?: string;
   savedAt: number;
 }
@@ -112,6 +127,9 @@ export interface OfflinePlaylist {
   readOnly?: boolean;
   trackIds: string[];
   coverBlob?: Blob;
+  /** Bytes form of the same cover, stored alongside `coverBlob`
+   *  for iOS Safari resilience (see `OfflineTrack.coverBytes`). */
+  coverBytes?: ArrayBuffer;
   coverMimeType?: string;
   savedAt: number;
 }
