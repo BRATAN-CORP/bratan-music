@@ -1,39 +1,53 @@
 /**
- * "Network if quick, otherwise the IndexedDB snapshot" wrapper for
+ * "Local snapshot first, network as background refresh" wrapper for
  * detail-page queries (album / playlist / track / artist).
  *
  * Why this exists
  * ---------------
- * The previous `useAlbum` / `usePlaylist` shape only reached for the
- * offline IDB snapshot in two cases:
+ * The previous shape ("network if quick, otherwise IDB") had three
+ * symptoms that converged on the same user-visible bug — saved
+ * collections refusing to open from `/album/:id` or `/playlist/:id`
+ * even when the row was sitting in IndexedDB the whole time:
  *
- *   1. `navigator.onLine === false`. Reliable on desktop, but on
- *      mobile / WebView (and especially in Telegram's in-app
- *      browser, our primary platform) it routinely reports `true`
- *      even when the device has zero connectivity.
- *   2. After `await api.get(...)` finally rejected. Without an
- *      explicit timeout the underlying `fetch` waits for the browser
- *      default (~60s) before failing, so an offline user sat on a
- *      blank loading screen for a full minute before the page
- *      hydrated from the IndexedDB cache. Reported as
- *      "офлайн: скачанные плейлисты/альбомы не открываются".
+ *   1. `navigator.onLine === false` is unreliable on iOS / Telegram
+ *      WebView / Chrome PWA. The user reported the bug AFTER the
+ *      previous fix that already special-cased that flag, and the
+ *      browser kept reporting `true` while truly offline — so the
+ *      offline branch never engaged.
+ *
+ *   2. Online but unhealthy paths (DNS hijacks, captive portals,
+ *      worker cold-starts, expired auth where `/auth/refresh` itself
+ *      hangs) made `fetch` resolve with errors or stall past the
+ *      5-second timeout, then the helper would hand the timeout
+ *      branch a `null` local because the IDB lookup hadn't completed
+ *      yet — and the page bottomed out on "альбом не найден" even
+ *      though the row existed.
+ *
+ *   3. The previous racing logic tried the network first by design.
+ *      For an entity the user explicitly downloaded, paying any
+ *      network cost before showing the saved data was always a UX
+ *      regression — especially on mobile where the round-trip can
+ *      easily blow the 5-second budget.
  *
  * What this helper does
  * ---------------------
- *   - When `navigator.onLine` is explicitly `false` and the entity
- *     exists in IDB, return the IDB snapshot synchronously without
- *     touching the network.
- *   - Otherwise, race the network call against a short timeout
- *     (`networkTimeoutMs`, default 5000). If the network responds in
- *     time we use it. If the timeout fires first AND the entity is
- *     in IDB, render the IDB snapshot immediately and let the
- *     network call complete in the background — its result is
- *     written into the React-Query cache via the next `refetch`,
- *     not awaited here, so the user always sees content within a
- *     few seconds.
- *   - If neither network nor IDB has anything we re-throw the
- *     network error (or `offline-not-saved`) so the page can show
- *     its "не найден" copy.
+ *   - Always issues the local IDB lookup FIRST. IDB reads are
+ *     <10 ms even on cheap phones and never depend on the network
+ *     state, so this is the fastest possible path to a paint.
+ *   - If the local snapshot exists, returns it immediately. The
+ *     caller (React Query) records `data`, `isError` stays false,
+ *     and the page renders the saved entity. If the device is
+ *     online we kick off `fetchNetwork` in the background — its
+ *     result is discarded here, but React Query's automatic
+ *     background refetch on next mount will pick up the fresh
+ *     server copy via its own scheduling.
+ *   - If the local snapshot is missing we fall through to the
+ *     network. With `navigator.onLine === false`, we throw
+ *     `offline-not-saved` straight away. Otherwise we await the
+ *     network with a hard timeout so a hung `fetch` can't pin the
+ *     loading skeleton forever.
+ *   - On every network failure we re-check IDB once more (in case a
+ *     parallel download just landed) before surfacing the error.
  *
  * The shape is intentionally entity-agnostic — pass it a
  * `fetchNetwork` thunk and a `fetchLocal` thunk and it does the
@@ -43,9 +57,27 @@
 const DEFAULT_NETWORK_TIMEOUT_MS = 5000;
 
 export interface NetworkOrLocalOptions {
-  /** How long to wait for the network before falling back to IDB.
-   *  Set to `Infinity` to disable the timeout. */
+  /** How long to wait for the network before failing. Set to
+   *  `Infinity` to disable the timeout. */
   networkTimeoutMs?: number;
+}
+
+async function safeFetchLocal<T>(
+  fetchLocal: () => Promise<T | null>,
+): Promise<T | null> {
+  try {
+    return await fetchLocal();
+  } catch {
+    // IDB transactions can reject under storage pressure / private
+    // mode / quota errors. Treat any failure as "no local snapshot"
+    // so the helper falls through to the network path instead of
+    // bubbling an internal error to React Query.
+    return null;
+  }
+}
+
+function isOnline(): boolean {
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
 }
 
 export async function networkOrLocal<T>(
@@ -55,59 +87,50 @@ export async function networkOrLocal<T>(
 ): Promise<T> {
   const { networkTimeoutMs = DEFAULT_NETWORK_TIMEOUT_MS } = opts;
 
-  // 1) Hard-offline path. `navigator.onLine === false` is a strong
-  //    "no network" signal — every browser sets it on airplane-mode
-  //    / disabled-NIC. Skip the network request entirely so the
-  //    page paints from IDB instantly.
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    const local = await fetchLocal();
-    if (local) return local;
+  // 1) Always read the IDB snapshot first. If the entity is saved
+  //    offline this is instant; if it isn't we fall through with a
+  //    null result.
+  const local = await safeFetchLocal(fetchLocal);
+  if (local) {
+    // We deliberately do NOT fire a background `fetchNetwork()` here.
+    // For a saved entity the React-Query staleTime + the user's
+    // own page navigations are enough to refresh the snapshot the
+    // next time the network is healthy; firing a fire-and-forget
+    // network call from inside `queryFn` would (a) trigger an
+    // `/auth/refresh` rotation if the access token is expired,
+    // potentially racing with other in-flight requests, and
+    // (b) cost mobile data on every page open even though the
+    // user already has the entity downloaded.
+    return local;
+  }
+
+  // 2) No local snapshot. We need the network.
+  if (!isOnline()) {
     throw new Error('offline-not-saved');
   }
 
-  // 2) Online path. Race the network against the timeout. Issue the
-  //    local lookup eagerly so it's ready to short-circuit when the
-  //    timeout fires.
+  // 3) Race the network against the timeout. We do this here (and
+  //    not in step 1) because step 1 already won the race for
+  //    offline-saved entities — only un-saved entities reach this
+  //    point, and for those a hung fetch must not pin the loading
+  //    skeleton forever.
   const networkPromise = fetchNetwork();
-  // Settle the local lookup unconditionally — it's a cheap IDB read
-  // and we'll need the result whether the network wins or times out.
-  const localPromise = fetchLocal().catch(() => null);
-
-  // Sentinel that resolves with `'timeout'` after the budget. Use
-  // `Promise.race` over a real `AbortController` because we still
-  // want the network call to complete in the background so the next
-  // `refetch` in React Query gets the fresh value. Aborting here
-  // would discard that work.
-  const timeoutPromise = new Promise<{ kind: 'timeout' }>((resolve) => {
-    if (networkTimeoutMs === Infinity) return; // never resolve
-    setTimeout(() => resolve({ kind: 'timeout' }), networkTimeoutMs);
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    if (networkTimeoutMs === Infinity) return;
+    setTimeout(
+      () => reject(new Error('network-timeout')),
+      networkTimeoutMs,
+    );
   });
 
-  const winner = await Promise.race([
-    networkPromise.then(
-      (data) => ({ kind: 'network' as const, data }),
-      (err) => ({ kind: 'network-error' as const, err: err as unknown }),
-    ),
-    timeoutPromise,
-  ]);
-
-  if (winner.kind === 'network') return winner.data;
-
-  if (winner.kind === 'network-error') {
-    // Hard network failure — try IDB. If we have a snapshot, use it.
-    // Otherwise re-throw the original error so React Query surfaces
-    // it to the caller's `isError` branch.
-    const local = await localPromise;
-    if (local) return local;
-    throw winner.err;
+  try {
+    return await Promise.race([networkPromise, timeoutPromise]);
+  } catch (err) {
+    // One last check: maybe a parallel download committed the row
+    // to IDB while we were waiting. Cheap to re-read; saves us a
+    // misleading error if a save happened to land mid-flight.
+    const lateLocal = await safeFetchLocal(fetchLocal);
+    if (lateLocal) return lateLocal;
+    throw err;
   }
-
-  // winner.kind === 'timeout' — we hit the budget without a network
-  // response. Show the IDB snapshot if we have one.
-  const local = await localPromise;
-  if (local) return local;
-  // No snapshot to fall back to. Wait the rest of the budget out on
-  // the network promise. If it resolves, surface that; if it rejects,
-  // let React Query show the error state.
-  return networkPromise;
 }
