@@ -14,8 +14,14 @@ export default defineConfig({
         name: 'BRATAN MUSIC',
         short_name: 'BRATAN',
         description: 'Музыкальный стриминговый сервис',
-        theme_color: '#1db954',
-        background_color: '#0f0f0f',
+        // Mirrors `--color-accent` (light) — the same accent purple the
+        // rest of the app uses across buttons / splash / loader. PWA
+        // splash uses theme_color for the OS status bar tint and
+        // background_color for the launch surface; the legacy
+        // Spotify-green / off-black pair was the source of the
+        // "лого зелёного цвета а не акцентного" feedback.
+        theme_color: '#5E6AD2',
+        background_color: '#0a0a0c',
         display: 'standalone',
         scope: '/bratan-music/',
         start_url: '/bratan-music/',
