@@ -16,6 +16,7 @@ import { toast } from '@/store/toast';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
 
@@ -68,7 +69,7 @@ export function ArtistPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">{t('artistPage.loading')}</p>
+          <PageLoader label={t('artistPage.loading')} />
         ) : artist ? (
           <>
             {/* Hero with blurred ambience layer derived from the artist

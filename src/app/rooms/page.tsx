@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Switch } from '@/components/ui/Switch';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
@@ -150,8 +151,8 @@ function RoomPageInner() {
 
   if (!id || initialQuery.isLoading || !initial) {
     return (
-      <div className="flex min-h-[60dvh] items-center justify-center text-sm text-muted-foreground">
-        {t('rooms.page.loading')}
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
+        <PageLoader label={t('rooms.page.loading')} />
       </div>
     );
   }

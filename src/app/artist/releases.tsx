@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { useArtist, useArtistAlbumsInfinite, useArtistSinglesInfinite } from '@/hooks/useTrack';
 import { useT } from '@/i18n';
 
@@ -99,12 +100,7 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
           )}
         </div>
 
-        {active.isLoading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" />
-            {t('artistReleases.loading')}
-          </div>
-        )}
+        {active.isLoading && <PageLoader label={t('artistReleases.loading')} />}
 
         {active.error && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">

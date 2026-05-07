@@ -5,6 +5,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
 import { TrackItem } from '@/components/features/TrackItem';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { useExplorePage, useExploreList } from '@/hooks/useExplore';
 import { usePlayerStore } from '@/store/player';
 import { useT } from '@/i18n';
@@ -127,12 +128,7 @@ export function ExploreListPage() {
           )}
         </div>
 
-        {pageLoading && (
-          <div className="flex items-center justify-center gap-2 py-20 text-xs text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" />
-            {t('exploreList.loading')}
-          </div>
-        )}
+        {pageLoading && <PageLoader label={t('exploreList.loading')} />}
 
         {(pageError || listError) && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">

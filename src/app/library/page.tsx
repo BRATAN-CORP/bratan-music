@@ -13,6 +13,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { useOfflineHydration } from '@/hooks/useOfflineActions';
 import { useOfflineStore } from '@/store/offline';
 import { Button } from '@/components/ui/Button';
+import { PageLoader } from '@/components/ui/PageLoader';
 import { useT } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
 
@@ -134,7 +135,7 @@ export function LibraryPage() {
             </Link>
 
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">{t('library.loadingShort')}</p>
+              <PageLoader label={t('library.loadingShort')} />
             ) : visiblePlaylists.length ? (
               <div className="flex flex-col gap-2">
                 {visiblePlaylists.map((pl) => (
