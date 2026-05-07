@@ -374,7 +374,24 @@ class DownloadsManager {
         },
       });
 
-      const coverBlob = await fetchCoverBlob(track.coverUrl);
+      let coverBlob = await fetchCoverBlob(track.coverUrl);
+
+      // If the per-track cover fetch failed (Tidal's CDN sometimes
+      // 403s individual image URLs even when the same album-level
+      // cover succeeds — observed when many tracks save in quick
+      // succession), borrow the parent album / playlist cover that
+      // we already wrote to IDB before this loop started. The user
+      // sees a consistent album cover on every offline row instead
+      // of the broken-image glyph on the tracks whose individual
+      // covers happened to fail. Reported as "обложки в офлайн
+      // режиме всё равно не отображаются — на загруженном плейлисте
+      // работают".
+      if (!coverBlob && parent) {
+        coverBlob = await borrowParentCover(parent);
+      }
+      if (!coverBlob && track.albumId) {
+        coverBlob = await borrowParentCover(`album:${track.albumId}`);
+      }
 
       // If the track is already saved (e.g. user explicitly saved it
       // first, then the parent album save started), merge the
@@ -432,6 +449,34 @@ function mergeCollections(existing: string[] | undefined, parent: string | undef
   const set = new Set<string>(existing ?? []);
   if (parent) set.add(parent);
   return Array.from(set);
+}
+
+/** Fetch the cover blob already stored on the parent album / playlist
+ *  row in IndexedDB so we can re-use it when an individual track's
+ *  cover fetch fails. Returns `null` when the parent isn't found
+ *  yet, when the parent itself has no usable blob, or on any IDB
+ *  read error — the caller treats `null` as "no cover available". */
+async function borrowParentCover(
+  parent: string,
+): Promise<{ blob: Blob; mimeType: string } | null> {
+  try {
+    if (parent.startsWith('album:')) {
+      const album = await db.getAlbum(parent.slice('album:'.length));
+      const blob = album?.coverBlob;
+      if (blob && (!('size' in blob) || blob.size > 0)) {
+        return { blob, mimeType: album?.coverMimeType ?? 'image/jpeg' };
+      }
+    } else if (parent.startsWith('playlist:')) {
+      const playlist = await db.getPlaylist(parent.slice('playlist:'.length));
+      const blob = playlist?.coverBlob;
+      if (blob && (!('size' in blob) || blob.size > 0)) {
+        return { blob, mimeType: playlist?.coverMimeType ?? 'image/jpeg' };
+      }
+    }
+  } catch {
+    /* fall through — caller treats null as "no cover". */
+  }
+  return null;
 }
 
 /** Module-scoped singleton — the manager owns global state (active

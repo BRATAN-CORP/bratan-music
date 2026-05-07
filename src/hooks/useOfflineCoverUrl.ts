@@ -44,6 +44,57 @@ import * as db from '@/lib/offline/db';
 
 type OfflineCoverKind = 'track' | 'album' | 'playlist';
 
+/** Treat zero-byte / opaque blobs as missing — `<img>` cannot decode
+ *  them and the user sees the broken-image glyph. Centralised so the
+ *  same predicate is used for direct lookups and parent-collection
+ *  fallbacks. */
+function pickUsableBlob(blob: Blob | undefined | null): Blob | null {
+  if (!blob) return null;
+  if (typeof blob.size === 'number' && blob.size === 0) return null;
+  return blob;
+}
+
+/** Pull a usable cover blob from the parent album row, if any. Used
+ *  as a fallback when a track's own `coverBlob` is missing — most
+ *  non-single tracks share artwork with their album anyway, so this
+ *  is the cheapest way to keep offline track lists / the player
+ *  visually intact while the next `coverBackfill` pass heals the
+ *  per-track row. */
+async function readBlobFromAlbumId(
+  albumId: string | undefined,
+): Promise<Blob | null> {
+  if (!albumId) return null;
+  try {
+    const album = await db.getAlbum(albumId);
+    return pickUsableBlob(album?.coverBlob);
+  } catch {
+    return null;
+  }
+}
+
+/** Walk the track's `collections` list (`["album:123","playlist:abc"]`)
+ *  for any saved playlist that still carries a renderable cover blob.
+ *  Last-ditch fallback before we give up and let the caller render
+ *  the placeholder glyph. */
+async function readBlobFromCollections(
+  collections: string[] | undefined,
+): Promise<Blob | null> {
+  if (!collections || collections.length === 0) return null;
+  for (const c of collections) {
+    if (!c.startsWith('playlist:')) continue;
+    const id = c.slice('playlist:'.length);
+    try {
+      const playlist = await db.getPlaylist(id);
+      const blob = pickUsableBlob(playlist?.coverBlob);
+      if (blob) return blob;
+    } catch {
+      // Skip unreadable rows; the next collection might still have a
+      // healthy blob.
+    }
+  }
+  return null;
+}
+
 /**
  * @param kind     Which IndexedDB store to look the entity up in.
  * @param id       Entity id. `null`/`undefined` short-circuits to fallback.
@@ -78,17 +129,37 @@ export function useOfflineCoverUrl(
           : kind === 'album'
             ? await db.getAlbum(id)
             : await db.getPlaylist(id);
-      const blob = entity?.coverBlob;
+      const direct = pickUsableBlob(entity?.coverBlob);
+      if (direct) return direct;
+
       // Pre-PR-#350 saves wrote *zero-byte* opaque-response Blobs
       // into IndexedDB (Safari / WebKit issue with `mode: 'no-cors'`
       // — the response is opaque and `.blob()` returns size 0). Those
       // blobs are truthy but unrenderable: `<img src=blob:...>` fires
-      // `onerror` and the user sees the fallback glyph. Treat them
-      // as missing so the network fallback wins until the next
-      // `coverBackfill` pass heals them.
-      if (!blob) return null;
-      if (typeof blob.size === 'number' && blob.size === 0) return null;
-      return blob;
+      // `onerror` and the user sees the fallback glyph. The
+      // `coverBackfill` pass heals them when the device next comes
+      // online, but until that lands we still need to render *some*
+      // cover for the offline player and track list — exactly what
+      // the user reported as missing ("обложки в офлайн режиме всё
+      // равно не отображаются").
+      //
+      // For tracks specifically the fallback is structural: the
+      // track inherits the album cover for non-singles (and the
+      // playlist cover for shared playlists), so we can borrow the
+      // parent collection's blob to paint the row even when the
+      // per-track blob never made it to IDB. The parent blobs are
+      // saved BEFORE the track loop runs, so an album save where
+      // the track-level fetches all 403'd still leaves a usable
+      // album.coverBlob for us to fall back on.
+      if (kind === 'track') {
+        const track = entity as { albumId?: string; collections?: string[] } | null;
+        const albumBlob = await readBlobFromAlbumId(track?.albumId);
+        if (albumBlob) return albumBlob;
+        const playlistBlob = await readBlobFromCollections(track?.collections);
+        if (playlistBlob) return playlistBlob;
+      }
+
+      return null;
     },
     // Cover blobs don't change after download — only on a brand-new
     // save, which bumps `version` and invalidates the key. So we can
