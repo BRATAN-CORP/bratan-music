@@ -692,22 +692,38 @@ function rampGain(
   const ms = Math.max(1, durationMs);
 
   // GRAPH-LESS PATH (iOS / `ctxFailed`): no Web Audio. Animate
-  // `audio.volume` directly via RAF. Hidden tabs stall RAF, so snap
-  // the final value and resolve immediately — the visible-tab fade
-  // path will recover next time.
+  // `audio.volume` directly. We can't use `requestAnimationFrame`
+  // here because RAF is paused in background tabs and on a locked
+  // iOS screen — a previous revision short-circuited this path with
+  // `audio.volume = toV` whenever `document.hidden`, which made
+  // every iOS-background crossfade collapse into an instant jump
+  // (the user reported "иногда плавно, иногда обрывками. конкретно
+  // ИОС"). The macOS / iOS `<audio>` engine continues to run
+  // `setInterval` ticks while playing media in the background,
+  // throttled but still firing every ~250 ms even with the screen
+  // locked, which is more than enough to render an audibly smooth
+  // 4–8 s equal-power fade. We use a `setInterval` driver here AND
+  // a final `setTimeout` to guarantee the ramp lands on `toV`
+  // exactly even if a tick is missed at the very end of the window
+  // due to throttling.
   if (!ctx || !gainNode) {
     audio.volume = fromV;
-    if (typeof document !== 'undefined' && document.hidden) {
-      audio.volume = toV;
-      return Promise.resolve();
-    }
     return new Promise((resolve) => {
       const start = performance.now();
-      let rafId = 0;
       let cancelled = false;
+      // ~16ms in foreground, throttled to ~250ms in iOS background,
+      // but the *value* we land each tick is interpolated from the
+      // wall-clock delta, so a slow tick is still on-curve — we
+      // just render a coarser fade. The endpoint `setTimeout` below
+      // guarantees we land exactly on `toV` at the end of the
+      // window even if `setInterval` is throttled to once every 1s.
+      let intervalId: ReturnType<typeof setInterval> | null = null;
+      let timerId: ReturnType<typeof setTimeout> | null = null;
       const finish = () => {
         if (cancelled) return;
         cancelled = true;
+        if (intervalId !== null) clearInterval(intervalId);
+        if (timerId !== null) clearTimeout(timerId);
         audio.volume = toV;
         if (activeRamps[slot]?.resolve === resolve) activeRamps[slot] = null;
         resolve();
@@ -717,11 +733,15 @@ function rampGain(
         const t = (performance.now() - start) / ms;
         if (t >= 1) { finish(); return; }
         audio.volume = curveValueAt(fromV, toV, t, curve);
-        rafId = window.requestAnimationFrame(tick);
       };
-      rafId = window.requestAnimationFrame(tick);
+      intervalId = setInterval(tick, 16);
+      timerId = setTimeout(finish, ms);
       activeRamps[slot] = {
-        teardown: () => { cancelled = true; window.cancelAnimationFrame(rafId); },
+        teardown: () => {
+          cancelled = true;
+          if (intervalId !== null) clearInterval(intervalId);
+          if (timerId !== null) clearTimeout(timerId);
+        },
         resolve,
       };
     });
