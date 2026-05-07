@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Upload as UploadIcon, Disc3, User, Heart } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
@@ -48,17 +48,15 @@ function isValidTab(value: string | null | undefined): value is Tab {
   return value !== null && value !== undefined && VALID_TABS.has(value as Tab);
 }
 
-function readInitialTab(searchParam: string | null): Tab {
-  if (isValidTab(searchParam)) return searchParam;
-  if (typeof sessionStorage !== 'undefined') {
-    try {
-      const stored = sessionStorage.getItem(TAB_STORAGE_KEY);
-      if (isValidTab(stored)) return stored;
-    } catch {
-      // Private mode / disabled storage — silently fall back.
-    }
+function readStoredTab(): Tab | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const stored = sessionStorage.getItem(TAB_STORAGE_KEY);
+    return isValidTab(stored) ? stored : null;
+  } catch {
+    // Private mode / disabled storage — silently fall back.
+    return null;
   }
-  return 'playlists';
 }
 
 // Picks the right Russian/English plural form for the "N tracks" label.
@@ -78,48 +76,75 @@ export function LibraryPage() {
   const { data: artistsData } = useLikedArtists();
   const [showCreate, setShowCreate] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => readInitialTab(searchParams.get('tab')));
 
-  // Sync the active tab back into both `sessionStorage` and the URL
-  // so a deep-link / back-button traversal restores the user's
-  // exact spot. URL is the canonical source — sessionStorage is the
-  // fallback when the user lands on plain `/library` without a
-  // `?tab=` (e.g. tapping the bottom-nav Library icon mid-session
-  // after they were last on Albums). `replace` keeps the history
-  // entry count flat so Back doesn't bounce through every tab the
-  // user clicked through.
+  // The active tab is DERIVED from the URL — the URL is the single
+  // source of truth. Earlier we kept it in `useState` and ran two
+  // separate `useEffect`s to mirror state ↔ URL, but the two effects
+  // raced after the user clicked a tab: the "URL → state" mirror
+  // would read the OLD `searchParams` (still ?tab=artists) on the
+  // same render that the "state → URL" mirror was about to overwrite,
+  // call `setTab('artists')`, and revert the user's click. The
+  // user-visible symptom was "the Albums and Artists tabs feel sticky
+  // — the page snaps back to them when I try to switch to anything
+  // else". Deriving the tab eliminates the race entirely; React
+  // Router's `searchParams` is itself the only piece of state.
+  const urlTab = searchParams.get('tab');
+  const tab: Tab = isValidTab(urlTab) ? urlTab : 'playlists';
+
+  // Persist the active tab into `sessionStorage` so re-entering the
+  // Library page from elsewhere (e.g. tapping the Library icon in
+  // the bottom nav while we are already on `/library`) lands on the
+  // user's last-viewed tab instead of the default. We write here
+  // (not inside `setTab`) so deep-link arrivals like
+  // `/library?tab=artists` also seed the cross-mount memory.
   useEffect(() => {
-    if (typeof sessionStorage !== 'undefined') {
-      try {
-        sessionStorage.setItem(TAB_STORAGE_KEY, tab);
-      } catch {
-        /* private mode — non-fatal. */
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+      sessionStorage.setItem(TAB_STORAGE_KEY, tab);
+    } catch {
+      /* private mode — non-fatal. */
+    }
+  }, [tab]);
+
+  // First-mount restore: when the user lands on `/library` with no
+  // `?tab=` query and `sessionStorage` remembers a non-default tab,
+  // hop the URL to that tab so the rendered content matches what the
+  // user was last looking at. Runs at most once per mount via
+  // `restoredRef` so subsequent navigations to `/library` (without
+  // a tab query) don't re-bounce — that path is for the user
+  // explicitly leaving a tab.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (urlTab !== null) return;
+    const stored = readStoredTab();
+    if (stored && stored !== 'playlists') {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', stored);
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Single writer: the only place that mutates the active tab. Goes
+  // through the URL so the change is observable to the rest of the
+  // app (back/forward stack, share sheet, deep-link copy).
+  const setTab = useCallback(
+    (newTab: Tab) => {
+      const next = new URLSearchParams(searchParams);
+      if (newTab === 'playlists') {
+        // Default tab — keep the URL clean (`/library` with no
+        // query). Avoids littering the address bar / share-sheet
+        // copy with a redundant `?tab=playlists`.
+        next.delete('tab');
+      } else {
+        next.set('tab', newTab);
       }
-    }
-    const current = searchParams.get('tab');
-    if (current === tab) return;
-    const next = new URLSearchParams(searchParams);
-    if (tab === 'playlists') {
-      // Default tab — keep the URL clean (`/library` with no
-      // query). Avoids littering the address bar / share-sheet
-      // copy with a redundant `?tab=playlists`.
-      next.delete('tab');
-    } else {
-      next.set('tab', tab);
-    }
-    setSearchParams(next, { replace: true });
-  }, [tab, searchParams, setSearchParams]);
-
-  // Mirror back: if the user navigates with a fresh `?tab=` in the
-  // URL (back/forward, deep-link share), pick that up so the
-  // visible tab follows. Without this the URL and the rendered tab
-  // could diverge after history navigation.
-  useEffect(() => {
-    const fromUrl = searchParams.get('tab');
-    if (isValidTab(fromUrl) && fromUrl !== tab) {
-      setTab(fromUrl);
-    }
-  }, [searchParams, tab]);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   // When the device drops the network, the existing playlist / album /
   // artist queries either return stale data (if React Query had a

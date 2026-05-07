@@ -16,12 +16,18 @@
  *     reorganised their library, not that they want to free space.
  *
  * Glass + motion styling matches `CreatePlaylistDialog` for visual
- * consistency. The sheet is rendered into the normal React tree
- * (no portal) since the parent surfaces — album / playlist hero —
- * already sit at z-index 0 and there's no overflow:hidden ancestor
- * that would clip the scrim.
+ * consistency. Rendered through a `document.body` portal so the
+ * scrim escapes any parent stacking context (the album / playlist
+ * hero, the page-transition wrapper, …) and lands above the mobile
+ * bottom dock + fullscreen-player surfaces. Without the portal the
+ * sheet was visually pinned to the bottom of the viewport AND
+ * partially occluded by elements that paint after it but live in a
+ * sibling stacking context — bug report from the offline-storage
+ * flow ("кнопка удалить из офлайн снизу и ее перекрывают другие
+ * элементы").
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trash2, X, FolderMinus, Loader2 } from 'lucide-react';
 import { useT } from '@/i18n';
@@ -94,12 +100,24 @@ export function UnsaveConfirmDialog({
     ? t('offline.unsaveOptionKeepTracksAlbumDescription')
     : t('offline.unsaveOptionKeepTracksPlaylistDescription');
 
-  return (
+  // Body portal: paint above the mobile bottom dock (z-40), the
+  // fullscreen-player chrome (z-50) and any page-transition stacking
+  // context. The dialog used to be rendered inline with `z-50` and
+  // `items-end` on mobile, which dropped it behind the mini-player
+  // dock and tied its "above-ness" to whatever ancestor wrapped the
+  // call site. Going through `document.body` + a higher z-index
+  // (z-[90], below toasts at z-[80]…wait — toasts at z-[80] are
+  // *user-feedback*, this dialog is *user-action*; we deliberately
+  // sit above them at z-[90] so a stale "saved!" toast can't occlude
+  // the destructive-action explanation).
+  if (typeof document === 'undefined') return null;
+
+  const dialog = (
     <AnimatePresence>
       {open && (
         <motion.div
           key="scrim"
-          className="liquid-glass-scrim fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+          className="liquid-glass-scrim fixed inset-0 z-[90] flex items-center justify-center p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -111,10 +129,10 @@ export function UnsaveConfirmDialog({
         >
           <motion.div
             key="sheet"
-            className="liquid-glass w-full max-w-md rounded-[var(--radius-lg)] p-6"
-            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            className="liquid-glass w-full max-w-md rounded-[var(--radius-lg)] p-6 shadow-[0_24px_64px_-24px_rgba(0,0,0,0.55)]"
+            initial={{ opacity: 0, y: 12, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 380, damping: 32 }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -173,6 +191,8 @@ export function UnsaveConfirmDialog({
       )}
     </AnimatePresence>
   );
+
+  return createPortal(dialog, document.body);
 }
 
 interface DialogChoiceButtonProps {
