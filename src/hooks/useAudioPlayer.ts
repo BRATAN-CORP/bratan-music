@@ -1230,8 +1230,24 @@ export function useAudioPlayer() {
     if (b.loaded[inactiveSlot(b)] === currentTrack.id && !versionBumped) {
       // Promote the inactive (now-playing) slot.
       const newActive = inactiveSlot(b);
+      const oldActive = b.active;
+      // Tear down BOTH in-flight ramps before we touch any gains.
+      // Without this, the iOS graph-less ramp path keeps a
+      // `setInterval` tick alive that writes `audio.volume` onto the
+      // wrong slot — once we promote, the outgoing-ramp tick lands on
+      // what is NOW the active slot and drives it back toward 0 over
+      // the rest of the original fade window. The user-visible
+      // symptom on iOS background offline playback was "next/prev in
+      // the Media Center makes the UI flip but the new track is mute /
+      // the old track keeps playing for the rest of the crossfade
+      // window". cancelRamp resolves both ramp promises (so
+      // startCrossfade's awaited Promise.all fires immediately and
+      // hits its `if (!crossfadingRef.current) return;` early-out
+      // BEFORE the user-action guard), and stops the timer-driven
+      // volume writes so the gains we set below stick.
+      cancelRamp();
       // Make sure old slot is silent + paused.
-      safePause(b.active);
+      safePause(oldActive);
       b.active = newActive;
       // Use the user's CURRENT stored volume, not a hard-coded 1.
       // The previous `setSlotGain(newActive, 1)` was responsible for
@@ -1241,9 +1257,11 @@ export function useAudioPlayer() {
       // regardless of the user's slider.
       const ps = usePlayerStore.getState();
       setSlotGain(newActive, ps.muted ? 0 : ps.volume);
-      setSlotGain(inactiveSlot(b), 0);
+      setSlotGain(oldActive, 0);
       crossfadingRef.current = false;
       b.crossfadingInto = null;
+      b.crossfadeKind = null;
+      b.crossfadeAttemptedTrackId = null;
       // Update mediaSession metadata.
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
