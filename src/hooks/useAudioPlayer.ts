@@ -1662,6 +1662,50 @@ export function useAudioPlayer() {
 
       await Promise.all([outgoingRamp, incomingRamp]);
       if (!crossfadingRef.current) return; // cancelled
+
+      // User-action guard: did the user steer somewhere else during
+      // the ramp window? `previous()` / `next()` / `jumpToQueue()` /
+      // `setTrack()` update the store synchronously, but the React
+      // effect that processes the change can race our own
+      // ramp-completion microtask. If the store now points to anything
+      // other than our intended next track (and isn't still on the
+      // outgoing track either, which would just mean the effect
+      // hasn't dispatched yet), the user has chosen a different
+      // destination — defer to that and abort the promotion so we
+      // don't silently overwrite their choice with `setTrack(nextTrack)`.
+      //
+      // This is the fix for "press prev within the last n seconds
+      // of a crossfading track and the back button does nothing":
+      // without this guard, the in-flight auto-fade's promotion
+      // landed AFTER `previous()` had updated the store, then
+      // `setTrack(nextTrack)` quietly stomped the user's choice and
+      // playback continued through to the next track instead.
+      const liveCurrentId = usePlayerStore.getState().currentTrack?.id;
+      if (
+        liveCurrentId
+        && liveCurrentId !== currentTrack.id
+        && liveCurrentId !== nextTrack.id
+      ) {
+        // Tear down the incoming slot — it briefly started playing
+        // nextTrack during the ramp, but the user has already moved
+        // on. Restore the outgoing slot's gain so the upcoming
+        // track-change effect's `loadTrack(activeSlot, …)` for the
+        // user's actual choice doesn't run on top of a half-faded
+        // gain. The effect will pause + reload that slot a moment
+        // later, but we need a sane starting state in the meantime.
+        cancelRamp();
+        safePause(incoming);
+        setSlotGain(incoming, 0);
+        releaseSlotBlobUrl(b, incoming);
+        b.loaded[incoming] = null;
+        b.crossfadingInto = null;
+        b.crossfadeKind = null;
+        crossfadingRef.current = false;
+        const ps = usePlayerStore.getState();
+        setSlotGain(b.active, ps.muted ? 0 : ps.volume);
+        return;
+      }
+
       teardown(true);
       setTrack(nextTrack);
       // Hand the timeline + duration surfaces over to the new active
