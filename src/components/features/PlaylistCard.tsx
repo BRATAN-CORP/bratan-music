@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { Playlist } from '@/types';
 import { useDeletePlaylist, usePinPlaylist } from '@/hooks/useLibrary';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
+import { CardDownloadOverlay } from '@/components/features/CardDownloadOverlay';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu } from '@/components/ui/PopoverMenu';
 import { RenamePlaylistDialog } from './RenamePlaylistDialog';
@@ -76,7 +77,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
           to={`/playlist/${playlist.id}`}
           className="flex items-center gap-4 border border-border bg-card px-4 py-3 transition-colors hover:bg-secondary rounded-[var(--radius-md)]"
         >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border bg-background text-muted-foreground">
             {coverUrl ? (
               <img
                 src={coverUrl}
@@ -89,6 +90,10 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
             ) : (
               <ListMusic size={18} />
             )}
+            {/* Live progress badge while the playlist is being saved
+                offline. Compact so the title beside it stays
+                readable on a 12 px row. */}
+            <CardDownloadOverlay kind="playlist" id={playlist.id} compact />
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{displayName}</p>
