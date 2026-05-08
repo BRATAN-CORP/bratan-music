@@ -16,6 +16,7 @@ import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { MetaChip } from '@/components/ui/MetaChip';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useT, type TranslationKey } from '@/i18n';
@@ -259,9 +260,7 @@ export function LandingPage() {
       <section className="relative mx-auto max-w-6xl px-4 pb-20 pt-12 sm:px-6 sm:pt-0 lg:px-10">
         <Reveal className="mb-10 flex items-end justify-between gap-6 border-b border-border pb-4">
           <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              {t('landing.featuresEyebrow')}
-            </span>
+            <Eyebrow>{t('landing.featuresEyebrow')}</Eyebrow>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-4xl">{t('landing.featuresTitle')}</h2>
           </div>
           <p className="hidden max-w-md text-sm text-muted-foreground sm:block">

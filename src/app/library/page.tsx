@@ -14,6 +14,7 @@ import { useOfflineHydration } from '@/hooks/useOfflineActions';
 import { useOfflineStore } from '@/store/offline';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useT } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
 
@@ -170,9 +171,7 @@ export function LibraryPage() {
           className="flex items-end justify-between gap-4 border-b border-border pb-4"
         >
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              {t('library.collectionLabel')}
-            </span>
+            <Eyebrow>{t('library.collectionLabel')}</Eyebrow>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('library.title')}</h1>
           </div>
           {tab === 'playlists' && (

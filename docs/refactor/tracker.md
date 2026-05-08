@@ -58,7 +58,8 @@
 | 10  | `devin/1778247302-refactor-accent-magenta-token` | Unify accent→magenta gradient via `--color-accent-magenta` | merged | [#387](https://github.com/BRATAN-CORP/bratan-music/pull/387) |
 | 11  | `devin/1778247755-refactor-stale-token-refs` | Align stale `--color-on-accent` / `--color-warning` refs and `rgba(99,102,241,…)` accent-glow fallbacks with `_tokens.scss` | merged | [#388](https://github.com/BRATAN-CORP/bratan-music/pull/388) |
 | 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | merged | [#389](https://github.com/BRATAN-CORP/bratan-music/pull/389) |
-| 13  | `devin/1778249618-meta-chip-component`       | Extract `<MetaChip>` for the 9 "info pill" duplicates (eyebrows above section H2s)                                        | open   | _(opens after push)_ |
+| 13  | `devin/1778249618-meta-chip-component`       | Extract `<MetaChip>` for the 9 "info pill" duplicates (eyebrows above section H2s)                                        | merged | [#390](https://github.com/BRATAN-CORP/bratan-music/pull/390) |
+| 14  | `devin/1778250082-eyebrow-dedup`             | Migrate 9 inline `Eyebrow`-pattern spans to existing `<Eyebrow>` (text-xs uppercase tracking-[0.25em])                    | open   | _(opens after push)_ |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -225,6 +226,18 @@
   per-сайт (`gap-1.5` в `/daily`, отсутствие `w-fit` у DOM-обёрток
   внутри flex-row) пробрасывается через `className`. Продолжение
   запроса "везде использовать одинаковые компоненты, меньше хардкода".
+- 2026-05-08T14:20Z — PR #13 (#390) смерджен в `main`. CI зелёный.
+- 2026-05-08T14:23Z — PR #14 (`<Eyebrow>` dedup) подготовлен.
+  Класс-string `text-xs font-medium uppercase tracking-[0.25em]
+  text-muted-foreground` уже жил в `Eyebrow` (`SectionHeading.tsx`),
+  но дублировался **9 раз** на сайтах, которые при этом им не пользовались
+  (page-hero eyebrows / search / library / uploads / track / profile /
+  shared / explore-playlist / authguard). Замена inline-`<span>` на
+  `<Eyebrow>` без визуальных изменений; компонент уже рендерит `<span>`.
+  Не тронуты 3 сайта-якоря с hover-стилем
+  (`artist/releases.tsx`, `explore/list.tsx`, `explore/slug.tsx` —
+  `<a>`/`<Link>`, не `<span>`) и `FullscreenPlayer.tsx:509`
+  (player-поверхность, hard constraint).
 
 ---
 
@@ -239,6 +252,7 @@
 | 2026-05-08 ~13:36       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #10 (--color-accent-magenta token, 3 sites, #387) |
 | 2026-05-08 ~13:43       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #11 (align stale token refs / fallbacks, #388)   |
 | 2026-05-08 ~14:05       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #12 (KV write-budget — seedCache + 7d TTLs, #389) |
-| 2026-05-08 ~14:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #13 (`<MetaChip>` — DRY 9 inline eyebrow pills)   |
+| 2026-05-08 ~14:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #13 (`<MetaChip>` — DRY 9 inline eyebrow pills, #390) |
+| 2026-05-08 ~14:23       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #14 (`<Eyebrow>` — DRY 9 inline tracking-[0.25em] spans) |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

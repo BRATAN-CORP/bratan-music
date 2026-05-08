@@ -10,6 +10,7 @@ import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { useT } from '@/i18n';
@@ -74,7 +75,7 @@ export function TrackPage() {
                 />
               )}
               <div className="flex flex-col justify-end gap-3">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('track.pageEyebrow')}</span>
+                <Eyebrow>{t('track.pageEyebrow')}</Eyebrow>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{track.title}</h1>
                 <div className="text-sm text-muted-foreground">
                   <ArtistLinks

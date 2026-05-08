@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, Library, ListMusic, Loader2, Lock, Play } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useSharedPlaylist, useSavePlaylistFromShare } from '@/hooks/useShare';
 import { usePlayerStore } from '@/store/player';
@@ -123,9 +124,7 @@ export function SharedPlaylistPage() {
                 )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-                  {t('sharedPage.eyebrow')}
-                </span>
+                <Eyebrow>{t('sharedPage.eyebrow')}</Eyebrow>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{data.name}</h1>
                 <p className="text-xs text-muted-foreground">
                   {data.owner ? <>{t('sharedPage.authorPrefix')} <span className="text-foreground">{data.owner.name}</span> · </> : null}

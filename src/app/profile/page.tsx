@@ -9,6 +9,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { MetaChip } from '@/components/ui/MetaChip';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 import { useSettingsStore, TIDAL_QUALITY_LABEL_KEYS, type TidalQuality } from '@/store/settings';
@@ -423,9 +424,7 @@ function IdentityHero({
             initialsClassName="text-2xl"
           />
           <div className="min-w-0">
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-              {t('profile.label')}
-            </span>
+            <Eyebrow>{t('profile.label')}</Eyebrow>
             <h1 className="mt-0.5 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
               {name ?? username ?? t('profile.fallbackName')}
             </h1>

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ListMusic, Loader2, Pause, Play, Plus } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePlaylistTracks } from '@/hooks/useExplore';
 import { useSaveTidalPlaylist } from '@/hooks/useShare';
 import { usePlaylistsList } from '@/hooks/useLibrary';
@@ -169,9 +170,7 @@ export function TidalPlaylistPage() {
                 )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-                  {t('explorePlaylist.subtitleTidal')}
-                </span>
+                <Eyebrow>{t('explorePlaylist.subtitleTidal')}</Eyebrow>
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                   {meta?.title ?? t('explorePlaylist.fallbackTitle')}
                 </h1>
