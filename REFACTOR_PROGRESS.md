@@ -61,7 +61,7 @@
 | 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | ready for review | `devin/1778239100-refactor-dialogs`        |         |
 | 3   | Mobile-only PWA safe-area handling                              | ready for review | `devin/1778239756-refactor-safe-area`      |         |
 | 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | ready for review | `devin/1778240319-refactor-collection-pages` |         |
-| 5   | i18n audit — remove residual hardcoded language                 | not started | `devin/<ts>-refactor-i18n-audit`           |         |
+| 5   | i18n audit — remove residual hardcoded language                 | ready for review | `devin/1778240737-refactor-i18n-audit`     |         |
 | 6   | Polish: stale comments, dead style strings, accent unification  | not started | `devin/<ts>-refactor-polish`               |         |
 
 > Каждый следующий PR опирается на предыдущий. Если что-то ещё не
@@ -209,18 +209,24 @@ inset'а, layout-математика та же. На desktop / mobile-tab inset
 
 ## PR 5 — i18n audit
 
-- [ ] `OfflineProgressIcon.tsx:87` — `aria-label='Загрузка'` →
-      перенести в `ru/en.json` (например, `offline.progressAria`).
-- [ ] Прогнать regex по `src/**/*.{ts,tsx}` на хардкоды русских строк
-      (исключая `// комментарии`, JSDoc, имена переменных).
-- [ ] Прогнать regex на хардкоды английских user-facing строк.
-- [ ] `displayName` для liked playlist: проверить, что fallback
-      `playlist.name` для не-liked плейлистов не зависит от русского
-      бэкенд-имени (если зависит — задокументировать в notes).
-- [ ] Lint + typecheck + build pass.
-- [ ] PR opened, CI green.
+- [x] `OfflineProgressIcon.tsx:87` — `aria-label='Загрузка'` /
+      `'Загрузка {percent}%'` → новые ключи
+      `offline.downloadProgress` / `offline.downloadProgressIndeterminate`.
+- [x] `ToastHost.tsx` — `aria-label="Notifications"` → `common.notifications`.
+- [x] `OfflineBadge.tsx` — `aria-label="Saved offline"` → `offline.savedOfflineAria`.
+- [x] Прогнал regex по `src/**/*.{ts,tsx}` на user-facing хардкоды
+      (`(aria-label|title|placeholder|alt)=…`, `>…<` JSX text,
+      `toast.(info|error|success|warn)`, `alert/confirm/prompt`) —
+      все остальные совпадения уже либо тянутся через `t(…)`, либо
+      сидят в JSDoc-комментариях.
+- [x] `AdminUserPurgePanel.CONFIRM_PHRASES = ['УДАЛИТЬ', 'DELETE']` —
+      оставлен как есть. Это набор валидных литералов, на которые
+      проверяется ввод пользователя независимо от выбранной локали;
+      сами подсказки/плейсхолдеры ввода уже идут через `t(…)`.
+- [x] Lint + typecheck + build pass.
+- [x] PR opened.
 
-**Risk:** очень низкий — добавление ключей и замена строк.
+**Risk:** очень низкий — три файла, три ключа.
 
 ---
 

@@ -11,7 +11,8 @@
     "retry": "Попробовать ещё раз",
     "confirm": "Подтвердить",
     "yes": "Да",
-    "no": "Нет"
+    "no": "Нет",
+    "notifications": "Уведомления"
   },
   "nav": {
     "home": "Главная",
@@ -1601,7 +1602,10 @@
     "unsaveOptionKeepTracksAlbumDescription": "Уберёт альбом из офлайна, но все скачанные треки останутся доступны.",
     "unsaveOptionKeepTracksPlaylistDescription": "Уберёт плейлист из офлайна, но все скачанные треки останутся доступны.",
     "unsaveCancel": "Отмена",
-    "unsaveWorking": "Удаляем…"
+    "unsaveWorking": "Удаляем…",
+    "downloadProgress": "Загрузка {percent}%",
+    "downloadProgressIndeterminate": "Загрузка",
+    "savedOfflineAria": "Доступно офлайн"
   },
   "appUpdate": {
     "available": "Доступна новая версия",

@@ -11,7 +11,8 @@
     "retry": "Try again",
     "confirm": "Confirm",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "notifications": "Notifications"
   },
   "nav": {
     "home": "Home",
@@ -1601,7 +1602,10 @@
     "unsaveOptionKeepTracksAlbumDescription": "Drops the album view but keeps every saved song available offline.",
     "unsaveOptionKeepTracksPlaylistDescription": "Drops the playlist view but keeps every saved song available offline.",
     "unsaveCancel": "Cancel",
-    "unsaveWorking": "Removing…"
+    "unsaveWorking": "Removing…",
+    "downloadProgress": "Downloading {percent}%",
+    "downloadProgressIndeterminate": "Downloading",
+    "savedOfflineAria": "Saved offline"
   },
   "appUpdate": {
     "available": "New version available",
