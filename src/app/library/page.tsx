@@ -171,8 +171,18 @@ export function LibraryPage() {
       <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         {/* Hero header — soft accent radial behind so the page reads as
             part of the same family as /album, /artist, /playlist (whose
-            <PageHero> uses the same accent-glow ambience). */}
-        <section className="relative isolate -mx-4 overflow-hidden px-4 pb-5 pt-4 sm:-mx-6 sm:px-6 sm:pb-6 lg:-mx-10 lg:px-10">
+            <PageHero> uses the same accent-glow ambience).
+
+            The pair `-mx-N -mt-N` negates the consumer wrapper's
+            `p-4 sm:p-6 lg:p-10` so the ambience layer (radial glow +
+            bottom fade) reaches every viewport edge instead of being
+            clipped by the wrapper. The bumped `pt-8 sm:pt-10 lg:pt-14`
+            puts the eyebrow / title back at the same visual position
+            (parent-pad + previous pt-4), so downstream content
+            doesn't shift. PWA `pt-safe` lives at the app-shell layer
+            outside this hero so the system status-bar inset is
+            preserved. */}
+        <section className="relative isolate -mx-4 -mt-4 overflow-hidden px-4 pb-5 pt-8 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pb-6 sm:pt-10 lg:-mx-10 lg:-mt-10 lg:px-10 lg:pt-14">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(70%_120%_at_15%_0%,var(--color-accent-glow),transparent_70%)] opacity-50"
