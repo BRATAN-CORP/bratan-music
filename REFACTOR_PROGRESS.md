@@ -1,11 +1,11 @@
 # BRATAN MUSIC — Frontend Refactor Plan & Progress
 
-> Live progress file. Updated after every meaningful step so any other
-> agent (Claude / Devin) can pick up where this session left off.
->
-> The file lives in the repo. Each refactor PR (`devin/<ts>-refactor-*`)
-> updates this file as part of its diff so the latest open PR always
-> shows the current state of the world.
+> **STATUS — Historical / superseded (since PR #378, 2026-05-08).**
+> Этот файл — оригинальный план refactor sprint'а. Все 6 PR-ов из
+> "PR breakdown" ниже уже смерджены, плюс 11 follow-up'ов сверху плана.
+> **Для актуального статуса смотри [`docs/refactor/tracker.md`](docs/refactor/tracker.md).**
+> Этот файл больше не обновляется live; держим его как
+> исторический контекст изначального плана.
 
 ---
 
@@ -55,17 +55,19 @@
 
 ## PR breakdown
 
-| #   | PR title                                                        | Status      | Branch                                     | PR link |
-| --- | --------------------------------------------------------------- | ----------- | ------------------------------------------ | ------- |
-| 1   | Foundation: design tokens + shared UI primitives                | ready for review | `devin/1778237470-refactor-foundation`     |         |
-| 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | not started | `devin/<ts>-refactor-dialogs`              |         |
-| 3   | Unified PWA safe-area handling                                  | not started | `devin/<ts>-refactor-safe-area`            |         |
-| 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | not started | `devin/<ts>-refactor-collection-pages`     |         |
-| 5   | i18n audit — remove residual hardcoded language                 | not started | `devin/<ts>-refactor-i18n-audit`           |         |
-| 6   | Polish: stale comments, dead style strings, accent unification  | not started | `devin/<ts>-refactor-polish`               |         |
+| #   | PR title                                                        | Status | Branch                                     | PR link |
+| --- | --------------------------------------------------------------- | ------ | ------------------------------------------ | ------- |
+| 1   | Foundation: design tokens + shared UI primitives                | merged | `devin/1778237470-refactor-foundation`     | [#373](https://github.com/BRATAN-CORP/bratan-music/pull/373) |
+| 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | merged | `devin/<ts>-refactor-dialogs`              | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
+| 3   | Unified PWA safe-area handling                                  | merged | `devin/<ts>-refactor-safe-area`            | [#380](https://github.com/BRATAN-CORP/bratan-music/pull/380) |
+| 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | merged | `devin/<ts>-refactor-collection-pages`     | [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381) |
+| 5   | i18n audit — remove residual hardcoded language                 | merged | `devin/<ts>-refactor-i18n-audit`           | [#382](https://github.com/BRATAN-CORP/bratan-music/pull/382) |
+| 6   | Polish: stale comments, dead style strings, accent unification  | merged | `devin/<ts>-refactor-polish`               | [#384](https://github.com/BRATAN-CORP/bratan-music/pull/384) |
 
-> Каждый следующий PR опирается на предыдущий. Если что-то ещё не
-> смерджили, новый PR ставлю поверх его ветки и помечаю "stacked".
+> 6 follow-up PR-ов (PR #7..#17 — token-pass, KV write-budget,
+> MetaChip / Eyebrow dedup, iOS PWA mediaSession, comment cleanup) —
+> вне рамок исходного плана. Полный список с #-ссылками и handoff log:
+> [`docs/refactor/tracker.md`](docs/refactor/tracker.md).
 
 ---
 
@@ -235,50 +237,50 @@ mode прогоняем все три страницы на mobile + desktop, с
 
 ## Open questions для пользователя
 
-(Отмечаю звёздочкой `*` критичные.)
+> Все 8 вопросов разрешены — см. соответствующие `Resolved decisions`
+> 1–7 в [`docs/refactor/tracker.md`](docs/refactor/tracker.md).
 
-1. \* **Новый CTA-цвет.** Сейчас `--color-accent: #5E6AD2` (лиловый),
-   а в плеере прогресс-бар — gradient `accent → sub-accent (#c2185b
-   малиновый) → accent`. Это намеренно, или хочешь, чтобы везде был
-   только `accent`? Я не трогаю до твоего ответа.
-2. **Шрифт серифа.** `--font-serif: Instrument Serif` подключён, но я
-   не вижу, где он реально используется. Удалить или оставить как
-   запас?
-3. **`liquid-glass` vs `liquid-glass-scrim`.** Это фирменный стиль
-   модалок, я их сохраняю. Если хочешь, в PR 6 могу унифицировать
-   параметры (blur, tint, border-color) — сейчас они разъезжаются
-   на 1-2 px между диалогами.
-4. **`Bratan Music` brandmark в Sidebar.** Он сейчас вшит как
-   текстовая строка. Если в будущем планируешь rebranding, могу
-   вынести в i18n как `brand.name` — или оставить как
-   константу в коде?
-5. **Анимации входа на album/artist/playlist hero.** Сейчас они
-   мелькают мгновенно. В PR 4 могу добавить лёгкий fade-up через
-   `motion` (как у player'а). Делать или оставить как есть?
-6. **PWA top-inset на не-mobile-PWA.** В `globals.scss` инсет
-   применяется только при `@media (display-mode: standalone) and
-   (pointer: coarse)`. Это значит desktop-PWA на маке не получает
-   top-inset. Так задумано (десктоп-PWA не имеет чёлки)? Или
-   выровнять под "всегда applies in standalone"?
-7. **`OnboardingTour`.** Туда не лезу (в нём свои стили). Если
-   хочешь, в PR 6 пропишу его под новые токены.
-8. **Шрифты в `index.html`** — тебя устраивает Inter+Instrument
-   Serif или планируется другая пара?
+1. \* **Новый CTA-цвет.** → **Resolved (decision #1):** `--color-accent
+   #5E6AD2` остаётся canonical, gradient `accent → magenta → accent` в
+   плеере намеренный, унифицирован через `--color-accent-magenta` в
+   PR #387.
+2. **Шрифт серифа `Instrument Serif`.** → **Resolved (decision #6):**
+   оставить как есть, без rebrand'а. Используется как fallback /
+   reserved token, удалять не надо.
+3. **`liquid-glass` vs `liquid-glass-scrim`.** → **Resolved (decision
+   #7):** унифицирован в PR #379 при миграции диалогов на `<Modal>` /
+   `<Sheet>` примитивы.
+4. **`Bratan Music` brandmark.** → **Resolved (decision #5):** оставить
+   константой в коде, rebranding не планируется.
+5. **Анимации входа на album/artist/playlist hero.** → **Resolved
+   (decision #2):** лёгкий fade-up через `motion` добавлен в PR #381.
+6. **PWA top-inset на не-mobile-PWA.** → **Resolved (decision #3):**
+   текущее поведение `@media (display-mode: standalone) and (pointer:
+   coarse)` оставлено намеренно — desktop-PWA не имеет чёлки.
+7. **`OnboardingTour`.** → **Resolved (decision #4):** переведён под
+   новые токены в PR #384, плюс iOS-fix комментарии собраны в
+   PR #395.
+8. **Шрифты в `index.html`.** → **Resolved (decision #6):** Inter +
+   Instrument Serif — без изменений.
 
 ---
 
 ## Live status
 
+> **All milestones merged. Live tracker moved to**
+> [`docs/refactor/tracker.md`](docs/refactor/tracker.md).
+
 - [x] Repo cloned, deps installed, baseline lint/typecheck pass.
 - [x] Discovery done — план зафиксирован выше.
 - [x] Plan attached to user message.
-- [x] **PR 1 ready for review.** `devin/1778237470-refactor-foundation`.
-- [ ] PR 2 in flight (next).
-- [ ] PR 3 in flight.
-- [ ] PR 4 in flight.
-- [ ] PR 5 in flight.
-- [ ] PR 6 in flight.
-- [ ] Final summary + recording offer.
+- [x] **PR 1 merged.** [#373](https://github.com/BRATAN-CORP/bratan-music/pull/373).
+- [x] **PR 2 merged.** [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379).
+- [x] **PR 3 merged.** [#380](https://github.com/BRATAN-CORP/bratan-music/pull/380).
+- [x] **PR 4 merged.** [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381).
+- [x] **PR 5 merged.** [#382](https://github.com/BRATAN-CORP/bratan-music/pull/382).
+- [x] **PR 6 merged.** [#384](https://github.com/BRATAN-CORP/bratan-music/pull/384).
+- [x] Follow-up'ы (PR #7..#17) — все merged, см. `tracker.md` Roadmap.
 
-_Last updated: 2026-05-08 by Devin session
-`https://app.devin.ai/sessions/dcf6f7fd063d4797bbfd49edc769aa7a`._
+_File frozen as historical 2026-05-08 by Devin session
+`https://app.devin.ai/sessions/7f10684789d747179251e486ffb73fe1`.
+Live state continues in `docs/refactor/tracker.md`._

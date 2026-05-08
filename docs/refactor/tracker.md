@@ -62,7 +62,8 @@
 | 14  | `devin/1778250082-eyebrow-dedup`             | Migrate 9 inline `Eyebrow`-pattern spans to existing `<Eyebrow>` (text-xs uppercase tracking-[0.25em])                    | merged | [#391](https://github.com/BRATAN-CORP/bratan-music/pull/391) |
 | 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | merged | [#393](https://github.com/BRATAN-CORP/bratan-music/pull/393) |
 | 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | merged | [#394](https://github.com/BRATAN-CORP/bratan-music/pull/394) |
-| 17  | `devin/1778252772-comment-cleanup-pass`      | Comment cleanup pass — collapse multi-paragraph narrative docstrings in 10 non-audio-engine files (preserve rationale / quirk / edge-case docs) | open | [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395) |
+| 17  | `devin/1778252772-comment-cleanup-pass`      | Comment cleanup pass — collapse multi-paragraph narrative docstrings in 10 non-audio-engine files (preserve rationale / quirk / edge-case docs) | merged | [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395) |
+| 18  | `devin/1778263961-docs-sync-tracker`         | Docs sync — close stale statuses / placeholders in tracker, daily-changes, REFACTOR_PROGRESS                                                    | open   | —                                                            |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -295,6 +296,27 @@
   `Player.tsx`, `FullscreenPlayer.tsx`, `Equalizer.tsx`,
   `LyricsPanel.tsx`) — hard constraint, не тронут. Diff: 10 файлов,
   +632/−1472 (нетто −840 строк).
+- 2026-05-08T17:56Z — PR #17 (#395) смерджен в `main`. CI зелёный.
+- 2026-05-08T18:10Z — PR #18 (docs sync) подготовлен.
+  Чистый markdown-pass без правок кода. Аудит выявил три расхождения
+  между докой и реальным `main`:
+  1. `tracker.md` держал PR #17 как `open`, по факту merged как
+     [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395)
+     (HEAD на `main` — `5d1dcb4`).
+  2. `daily-changes/2026-05-08.md` содержал 7 placeholder-строк
+     `*(будет добавлен после открытия)*` для уже смердженных PR
+     (#378, #385, #388, #389, #390, #391, #393); записи для PR #16
+     (#394) и PR #17 (#395) отсутствовали целиком.
+  3. `REFACTOR_PROGRESS.md` не актуализировался с момента PR #373:
+     PR breakdown 2–6 был помечен `not started`, "Live status" —
+     `[ ] in flight`, хотя в реальности PR 1–17 все смерджены через
+     `tracker.md`. "Open questions для пользователя" 1, 3–8 уже
+     отвечены `Resolved decisions` 1–7 (Q2 про Instrument Serif —
+     "оставить как есть" по decision #6).
+  Audio engine (`useAudioPlayer.ts`, `Player.tsx`, `FullscreenPlayer.tsx`,
+  `Equalizer.tsx`, `LyricsPanel.tsx`) и security-конфигурация (HMAC,
+  CORS allowlist, RLS, parameterized SQL) не тронуты — это
+  markdown-only PR.
 
 ---
 
@@ -312,6 +334,8 @@
 | 2026-05-08 ~14:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #13 (`<MetaChip>` — DRY 9 inline eyebrow pills, #390) |
 | 2026-05-08 ~14:23       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #14 (`<Eyebrow>` — DRY 9 inline tracking-[0.25em] spans, #391) |
 | 2026-05-08 ~14:32       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #15 (`<Eyebrow>` polymorphic — `as` prop + dedup 3 link-eyebrows) |
-| 2026-05-08 ~14:55       | `1a56046f-8dc5-4e06-b779-25be387e9447` (текущий)    | PR #16 (iOS PWA mediaSession sync — fix Control Center play/pause desync во время crossfade) |
+| 2026-05-08 ~14:55       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #16 (iOS PWA mediaSession sync — fix Control Center play/pause desync во время crossfade) |
+| 2026-05-08 ~15:25       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #17 (#395) — comment cleanup pass, 10 non-audio-engine файлов, нетто −840 строк |
+| 2026-05-08 ~18:10       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #18 (docs sync) — закрыт стейл-статус PR #17, заполнены 7 placeholder PR-ссылок в `2026-05-08.md`, добавлены записи PR #16 / PR #17, `REFACTOR_PROGRESS.md` помечен historical |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
