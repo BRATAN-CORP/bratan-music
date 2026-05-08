@@ -54,7 +54,8 @@
 | 6   | `devin/1778244723-refactor-polish`           | --shadow-cover token, hero shadows                   | merged   | [#383](https://github.com/BRATAN-CORP/bratan-music/pull/383)    |
 | 7   | `devin/1778244958-refactor-cleanup`          | Trim historical PR# references from inline comments  | merged   | [#384](https://github.com/BRATAN-CORP/bratan-music/pull/384)    |
 | 8   | `devin/1778246144-refactor-daily-variant`    | DRY daily-playlist variant theme + plural helper     | merged   | [#385](https://github.com/BRATAN-CORP/bratan-music/pull/385)    |
-| 9   | `devin/1778247026-refactor-shadow-accent-token` | Tokenize accent-glow elevation pair (`--shadow-accent`)  | open     | _(opens after push)_                                            |
+| 9   | `devin/1778247026-refactor-shadow-accent-token` | Tokenize accent-glow elevation pair (`--shadow-accent`)  | merged   | [#386](https://github.com/BRATAN-CORP/bratan-music/pull/386)    |
+| 10  | `devin/1778247302-refactor-accent-magenta-token` | Unify accent→magenta gradient via `--color-accent-magenta` | open  | _(opens after push)_                                            |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -69,6 +70,14 @@
 `shadow-[0_4px_16px_-4px_var(--color-accent-glow)]` дублировалась в
 `Button` (primary), `MobileBottomDock` (play) и `ArtistPicker`
 (selected badge). Вынесена в `--shadow-accent` / `--shadow-accent-strong`.
+
+`#10` — продолжение того же запроса + "акцентные цвета — везде одинаковые":
+три разных оттенка магенты в "accent → magenta" градиенте — `fuchsia-500`
+(#d946ef) в `rooms/list` и `ai/page`, плюс CSS-named `fuchsia` (#ff00ff)
+в `QuickPrefsBar`. Сведено к единому токену `--color-accent-magenta`
+(light: `#d946ef`, dark: `#e879f9`). Принципиальное решение: НЕ
+переиспользуем `--color-sub-accent` (#c2185b) — он зарезервирован за
+плеером по AGENTS.md decision #1.
 
 ---
 
@@ -127,7 +136,7 @@
   вынесены в новый `src/lib/dailyVariant.ts`. Из `home/page.tsx`
   убран осиротевший импорт `Heart` из lucide-react.
 - 2026-05-08T13:25Z — PR #8 (#385) смерджен в `main`. CI зелёный.
-- 2026-05-08T13:30Z — PR #9 (shadow-accent token) подготовлен.
+- 2026-05-08T13:30Z — PR #9 (shadow-accent token, #386) смерджен.
   Добавлены `--shadow-accent` / `--shadow-accent-strong` в
   `_tokens.scss`. `Button` (primary), `MobileBottomDock` (play)
   и `ArtistPicker` (selected badge) переехали с inline-строк
@@ -135,6 +144,14 @@
   `shadow-[0_4px_16px_-4px_var(--color-accent-glow)]` на токены.
   Уникальный `0 4px 20px -4px` в `app/rooms/list.tsx` — намеренно
   оставлен (другая геометрия, hero-иконка).
+- 2026-05-08T13:36Z — PR #10 (accent-magenta token) подготовлен.
+  Добавлен `--color-accent-magenta` (`#d946ef` light, `#e879f9`
+  dark) в `_tokens.scss`. `app/rooms/list.tsx`, `app/ai/page.tsx`
+  и `components/layout/QuickPrefsBar.tsx` теперь все используют
+  один и тот же оттенок магенты в accent-градиенте. Раньше было
+  два разных значения (`fuchsia-500` против CSS-named `fuchsia`).
+  Не перепутать с PR #9 (`--shadow-accent`) — это другой токен,
+  про elevation; PR #10 — про цветовую палитру.
 
 ---
 
@@ -145,6 +162,7 @@
 | 2026-05-08 ~11:30       | `dcf6f7fd-063d-4797-bbfd-49edc769aa7a`              | PR #373 (foundation), `REFACTOR_PROGRESS.md`        |
 | 2026-05-08 ~11:50       | `9363824c-19ed-41b2-9915-dac317a5a082`              | knowledge base (AGENTS.md + docs/), tracker.md      |
 | 2026-05-08 ~13:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | sync tracker (PR #2..#7 merged) + PR #8             |
-| 2026-05-08 ~13:30       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #9 (--shadow-accent token, 3 sites)              |
+| 2026-05-08 ~13:30       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #9 (--shadow-accent token, 3 sites, #386)        |
+| 2026-05-08 ~13:36       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #10 (--color-accent-magenta token, 3 sites)      |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

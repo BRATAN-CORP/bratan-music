@@ -142,7 +142,7 @@ function RoomsListInner() {
         />
         <div className="relative">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-magenta)] text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
               <Headphones size={14} />
             </span>
             {t('rooms.list.eyebrow')}

@@ -257,7 +257,7 @@ function Inner() {
             <div className="overflow-hidden rounded-[var(--radius-2xl)] border border-border bg-card">
               <div className="flex flex-col gap-4 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-fuchsia-500 text-white">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-magenta)] text-white">
                     <ListMusic size={20} />
                   </div>
                   <div className="min-w-0">
