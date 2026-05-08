@@ -309,7 +309,20 @@
     "downloadedPlaylist": "Downloaded",
     "serviceLabel": "Service playlist",
     "noDownloadsTitle": "Nothing saved offline yet",
-    "noDownloadsHint": "Open a track, album, or playlist and tap \"Listen offline\""
+    "noDownloadsHint": "Open a track, album, or playlist and tap \"Listen offline\"",
+    "summaryEmpty": "Time to start your collection",
+    "summaryPlaylists": "{count} playlists",
+    "summaryAlbums": "{count} albums",
+    "summaryArtists": "{count} artists",
+    "statPlaylists": "Playlists",
+    "statAlbums": "Albums",
+    "statArtists": "Artists",
+    "statDownloaded": "Downloaded",
+    "openCta": "Open",
+    "emptyPlaylistsTitle": "Your playlists will live here",
+    "emptyPlaylistsDescription": "Create your first playlist and fill it with the tracks you love. Start from a curated mix or build it from scratch.",
+    "emptyAlbumsDescription": "Save albums to come back to them in one tap. They'll show up right here.",
+    "emptyArtistsDescription": "Like an artist on their page and they'll appear here with quick access to their catalog."
   },
   "playlist": {
     "loading": "Loading playlist…",
