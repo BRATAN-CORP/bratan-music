@@ -46,7 +46,7 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
       layer="elevated"
       align="sheet"
       labelledBy={titleId}
-      panelClassName="max-w-[720px] flex flex-col border border-border bg-card rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+      panelClassName="max-w-[720px] flex flex-col border border-border bg-card rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <DetailHeader
         titleId={titleId}

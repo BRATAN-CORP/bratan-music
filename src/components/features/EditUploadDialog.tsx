@@ -82,7 +82,7 @@ export function EditUploadDialog({ upload, open, onClose }: Props) {
       onClose={onClose}
       align="sheet"
       labelledBy={titleId}
-      panelClassName="max-w-md flex flex-col gap-4 p-5 pb-[calc(20px+env(safe-area-inset-bottom))] sm:pb-5"
+      panelClassName="max-w-md flex flex-col gap-4 p-5 pb-[calc(20px+var(--pwa-safe-bottom))] sm:pb-5"
     >
       <ModalHeader
         titleId={titleId}

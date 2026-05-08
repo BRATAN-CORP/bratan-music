@@ -81,7 +81,7 @@ export function BannedListDialog({ open, onClose, kind }: Props) {
       onClose={onClose}
       align="sheet"
       labelledBy={titleId}
-      panelClassName="max-w-[560px] flex flex-col rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+      panelClassName="max-w-[560px] flex flex-col rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <header className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
