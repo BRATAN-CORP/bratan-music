@@ -11,7 +11,10 @@
     "retry": "Try again",
     "confirm": "Confirm",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "notifications": "Notifications",
+    "online": "Online",
+    "savedOffline": "Saved for offline"
   },
   "nav": {
     "home": "Home",
@@ -1572,6 +1575,8 @@
     "readFailed": "Couldn't read the image file"
   },
   "offline": {
+    "downloading": "Downloading",
+    "downloadingPercent": "Downloading {{percent}}%",
     "listenOffline": "Listen offline",
     "removeFromDevice": "Remove from offline",
     "cancelDownload": "Cancel download",
