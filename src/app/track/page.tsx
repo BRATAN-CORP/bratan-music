@@ -9,7 +9,7 @@ import { usePlayerStore } from '@/store/player';
 import { useTrackPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { Skeleton, TrackListSkeleton } from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
@@ -63,7 +63,7 @@ export function TrackPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <PageLoader label={t('track.loading')} />
+          <TrackPageSkeleton />
         ) : track ? (
           <>
             <div className="mb-10 flex flex-col gap-6 border-b border-border pb-10 sm:flex-row">
@@ -129,5 +129,36 @@ export function TrackPage() {
         )}
       </div>
     </AuthGuard>
+  );
+}
+
+/**
+ * Page-level skeleton mirroring the live track page hero (192px
+ * square cover + eyebrow / title / artist / album / actions) plus
+ * the "similar" radio tracklist below.
+ */
+function TrackPageSkeleton() {
+  return (
+    <>
+      <div className="mb-10 flex flex-col gap-6 border-b border-border pb-10 sm:flex-row">
+        <Skeleton className="h-48 w-48 rounded-[var(--radius-md)]" />
+        <div className="flex flex-col justify-end gap-3">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-10 w-72 max-w-full" />
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 w-32" />
+          <div className="flex gap-2 pt-2">
+            <Skeleton className="h-9 w-32 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+          </div>
+        </div>
+      </div>
+      <section>
+        <Skeleton className="mb-4 h-4 w-32" />
+        <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+          <TrackListSkeleton count={6} />
+        </div>
+      </section>
+    </>
   );
 }

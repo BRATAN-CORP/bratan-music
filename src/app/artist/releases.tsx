@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { AlbumGridSkeleton } from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useArtist, useArtistAlbumsInfinite, useArtistSinglesInfinite } from '@/hooks/useTrack';
 import { useT } from '@/i18n';
@@ -102,7 +102,7 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
           )}
         </div>
 
-        {active.isLoading && <PageLoader label={t('artistReleases.loading')} />}
+        {active.isLoading && <AlbumGridSkeleton count={10} />}
 
         {active.error && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
