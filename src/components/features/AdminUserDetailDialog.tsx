@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import type { AdminUserStats } from '@/types/admin';
 
@@ -63,9 +64,7 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
         {isLoading && !data ? (
-          <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-            <Loader2 size={14} className="mr-2 animate-spin" /> {t('admin.detail.loading')}
-          </div>
+          <DetailBodySkeleton />
         ) : error ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <AlertOctagon size={28} className="text-destructive" />
@@ -484,6 +483,42 @@ function DetailBody({
           </pre>
         )}
       </Section>
+    </div>
+  );
+}
+
+/**
+ * Loading-state mirror of `<DetailBody>`. Lays out the same six
+ * vertical sections (identity / sub / actions / storage / library /
+ * sessions) with skeleton tiles so the dialog opens at the right
+ * height and doesn't jolt when data lands.
+ */
+function DetailBodySkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-14 w-14 rounded-full" />
+        <div className="flex flex-1 flex-col gap-2">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 rounded-[var(--radius-md)]" />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-9 w-28 rounded-full" />
+        ))}
+      </div>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-24" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-3 w-full" />
+        ))}
+      </div>
     </div>
   );
 }

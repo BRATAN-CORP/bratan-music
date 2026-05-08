@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { CoverFallback } from '@/components/ui/CoverFallback';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { TrackListSkeleton } from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import {
   useCreateUpload,
@@ -109,7 +109,7 @@ export function UploadsPage() {
         </div>
 
         {isLoading ? (
-          <PageLoader label={t('uploads.loading')} />
+          <TrackListSkeleton count={6} />
         ) : data && data.length > 0 ? (
           <div className="flex flex-col gap-1">
             {data.map((u) => (

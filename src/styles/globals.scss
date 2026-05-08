@@ -385,6 +385,42 @@ img {
   100% { background-position: -200% 0; }
 }
 
+/* Soft horizontal sweep used by `<Skeleton>` to lift the shape from
+   a flat `animate-pulse` block into a shimmering bone-card. The base
+   colour comes from the consumer (`background-color: var(--color-bg-muted)`);
+   the `::after` overlay sweeps a translucent highlight across it, scaled
+   to twice the width so each pass animates from off-screen-right to
+   off-screen-left. Reduced-motion users get a static dim layer. */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    var(--color-hover-overlay-strong) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
+  pointer-events: none;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
 .glass {
   background: var(--color-surface-elevated);
   backdrop-filter: blur(20px) saturate(180%);

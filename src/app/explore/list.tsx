@@ -5,7 +5,12 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
 import { TrackItem } from '@/components/features/TrackItem';
-import { PageLoader } from '@/components/ui/PageLoader';
+import {
+  TrackListSkeleton,
+  AlbumGridSkeleton,
+  ArtistGridSkeleton,
+  PlaylistGridSkeleton,
+} from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePage, useExploreList } from '@/hooks/useExplore';
 import { usePlayerStore } from '@/store/player';
@@ -130,7 +135,14 @@ export function ExploreListPage() {
           )}
         </div>
 
-        {pageLoading && <PageLoader label={t('exploreList.loading')} />}
+        {pageLoading && (
+          // Type-aware loading skeleton: while we wait for the parent
+          // explore page to resolve we don't yet know whether the
+          // module is tracks / albums / artists / playlists, so default
+          // to the densest grid layout. Once `module` lands the live
+          // `<ListView>` below picks up — same shapes, no layout shift.
+          <AlbumGridSkeleton count={10} />
+        )}
 
         {(pageError || listError) && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">
@@ -151,7 +163,11 @@ export function ExploreListPage() {
         )}
 
         {module && module.type !== 'pageLinks' && (
-          <ListView type={module.type} items={allItems} />
+          listLoading && allItems.length === 0 ? (
+            <ListSkeleton type={module.type} />
+          ) : (
+            <ListView type={module.type} items={allItems} />
+          )
         )}
 
         {/* Infinite-scroll sentinel + loading indicator. Only rendered
@@ -170,6 +186,29 @@ export function ExploreListPage() {
       </div>
     </AuthGuard>
   );
+}
+
+/**
+ * Per-type loading skeleton matching the live `<ListView>` shapes.
+ * Tracks as a vertical list, albums / artists / playlists as the
+ * same responsive grids the live view uses — so the placeholder
+ * occupies the same vertical band the data will fill.
+ */
+function ListSkeleton({
+  type,
+}: {
+  type: Exclude<ExploreModuleType, 'pageLinks'>;
+}) {
+  if (type === 'tracks') {
+    return (
+      <div className="rounded-[var(--radius-md)] border border-border bg-background">
+        <TrackListSkeleton count={8} />
+      </div>
+    );
+  }
+  if (type === 'albums') return <AlbumGridSkeleton count={10} />;
+  if (type === 'artists') return <ArtistGridSkeleton count={12} />;
+  return <PlaylistGridSkeleton count={10} />;
 }
 
 /**
