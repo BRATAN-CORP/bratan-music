@@ -2036,17 +2036,89 @@ export function useAudioPlayer() {
           ?? (nativeMsg ? t('player.errors.withMessage', { message: nativeMsg }) : t('player.errors.generic'));
         setError(msg);
       };
+      // iOS PWA / lock-screen Control Center desync defence.
+      //
+      // The play/pause button shown in iOS Now-Playing is driven by
+      // `navigator.mediaSession.playbackState`. Our React effect sets
+      // that from the store's `isPlaying` flag, which is fine while
+      // the user is the only one toggling playback. But on a long
+      // background-listening session iOS can pause the underlying
+      // <audio> element on its own — audio session interruptions
+      // (incoming call, alarm, AirPods disconnect, AVAudioSession
+      // route change), Safari WebKit's page-suspension when the PWA
+      // is backgrounded for a while, or the OS reclaiming audio
+      // focus. The store never hears about that, so:
+      //   - `playbackState` stays `'playing'` while audio is silent;
+      //   - the lock-screen icon and the in-app play/pause button
+      //     show opposite states;
+      //   - the user taps Play in Control Center but iOS sends our
+      //     `pause` action handler (it dispatches the OPPOSITE of
+      //     whatever `playbackState` advertises), so playback never
+      //     resumes and the user reports "music just stopped on its
+      //     own and the system play button does the wrong thing".
+      //
+      // The crossfade setting compounds the problem: when both slots
+      // are active during the fade, an iOS-side pause that lands on
+      // the inactive slot mid-fade leaves the engine in a state
+      // where the next-track promotion never plays, and the user
+      // sees playback "ставится на стоп в рандомный момент".
+      //
+      // Authoritative source of truth for `playbackState` is the
+      // <audio> element itself — wire native `play`/`pause` events
+      // and reflect them onto MediaSession + the store. Heavy gating
+      // is required: the engine LEGITIMATELY pauses slots during
+      // crossfades, fallback retries, track-loads and natural end
+      // of track, and we must not let those routine transitions
+      // flicker the lock-screen icon or flip the store's isPlaying
+      // flag (which would then snowball into a real pause via the
+      // play/pause toggle effect).
+      const onAudioPlay = () => {
+        if (!isOwnerSlot()) return;
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'playing';
+        }
+      };
+      const onAudioPause = () => {
+        if (!isOwnerSlot()) return;
+        // Routine engine-driven pauses: crossfade transitions, an
+        // in-flight track load, and the quality-fallback retry loop
+        // all pause slots as part of their normal flow. Skip the
+        // sync — the store / mediaSession effect already reflects
+        // the user's actual intent for these.
+        if (crossfadingRef.current || b.crossfadingInto !== null) return;
+        if (loadingRef.current !== null) return;
+        if (fallbackInProgressRef.current) return;
+        // Natural end of track fires `pause` together with `ended`;
+        // `onEnded` advances via `next()` (or repeats), which both
+        // keep the store in `isPlaying = true`. Don't preempt that.
+        if (audio.ended) return;
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'paused';
+        }
+        // If iOS auto-paused (interruption, route change, suspended
+        // tab), drop the store's `isPlaying` flag so (a) the in-app
+        // play button stops lying and (b) Control Center's NEXT tap
+        // resumes via our `play` action handler instead of being
+        // interpreted as a pause.
+        if (usePlayerStore.getState().isPlaying) {
+          usePlayerStore.getState().pause();
+        }
+      };
       audio.addEventListener('timeupdate', onTimeUpdate);
       audio.addEventListener('durationchange', onDurationChange);
       audio.addEventListener('loadedmetadata', onLoadedMetadata);
       audio.addEventListener('ended', onEnded);
       audio.addEventListener('error', onError);
+      audio.addEventListener('play', onAudioPlay);
+      audio.addEventListener('pause', onAudioPause);
       return () => {
         audio.removeEventListener('timeupdate', onTimeUpdate);
         audio.removeEventListener('durationchange', onDurationChange);
         audio.removeEventListener('loadedmetadata', onLoadedMetadata);
         audio.removeEventListener('ended', onEnded);
         audio.removeEventListener('error', onError);
+        audio.removeEventListener('play', onAudioPlay);
+        audio.removeEventListener('pause', onAudioPause);
       };
     };
     const offA = wireSlot('a');
