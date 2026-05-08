@@ -68,7 +68,10 @@ export function SwipeTrackStrip({ children, className = '', threshold = 0.28 }: 
       duration: 0.22,
       ease: [0.4, 0, 0.2, 1],
       onComplete: () => {
-        if (direction === 'prev') previous();
+        // Mini-player swipe is an explicit navigation gesture —
+        // force-skip the 3 s rewind threshold so a swipe mid-track
+        // always lands on the previous song.
+        if (direction === 'prev') previous(true);
         else nextManual();
         // The store update will re-render this component with new
         // current/prev/next; the effect above will reset x to 0 and

@@ -123,7 +123,23 @@ interface PlayerState {
    *  the first track when at the end of the queue, even with repeat='off'
    *  — the queue is non-empty so the user expects *something* to play. */
   nextManual: () => void;
-  previous: () => void;
+  /**
+   * "Back" — semantics depend on `force`:
+   * - `force = false` (default, button / mediaSession): if the user is
+   *   past the 3 s mark in the current track, restart it from 0
+   *   (Spotify / Apple Music idiom — mid-track "back" means "start
+   *   over", not "previous song"). Within the first 3 s, fall through
+   *   to the prev-track path: pop the play-history stack, then walk
+   *   the queue, then (no neighbour, but still past 3 s) rewind.
+   * - `force = true` (gesture: mini-player swipe / fullscreen cover
+   *   drag): always treat as "previous track", regardless of
+   *   `progress`. Gestures are an explicit navigation intent — the
+   *   user has just dragged the cover off-screen — and must never
+   *   restart the current track.
+   *
+   * `mediaSession.previoustrack` (system media controls / lock screen
+   * / Bluetooth headset) shares the button path: `force=false`. */
+  previous: (force?: boolean) => void;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   toggleShuffle: () => void;
@@ -379,8 +395,25 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     }
   },
 
-  previous: () => {
+  previous: (force = false) => {
     const { queue, currentTrack, progress, _seekToZero, repeat, playHistory } = get();
+    // Threshold-based "rewind to 0" idiom for button / mediaSession
+    // presses (Spotify / Apple Music): mid-track "back" means "start
+    // this track over", not "go to the previous song". Within the
+    // first 3 s the press still means "previous track" — the user is
+    // either correcting an accidental skip-forward or quickly
+    // walking back through the queue.
+    //
+    // Gestures (`force = true`) bypass this entirely: a horizontal
+    // swipe on the mini-player strip or a drag on the fullscreen
+    // cover is an explicit navigation intent that has already moved
+    // the cover off-screen, so restarting the current track would
+    // feel like the gesture was eaten.
+    const REWIND_THRESHOLD_SEC = 3;
+    if (!force && progress >= REWIND_THRESHOLD_SEC) {
+      set({ progress: 0, _seekToZero: _seekToZero + 1 });
+      return;
+    }
     // Primary path: pop the play-history stack. Every state
     // transition that promotes a new currentTrack pushes here, so
     // popping survives queue mutations / crossfade slot churn /
@@ -437,10 +470,17 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       return;
     }
 
-    // No valid neighbour — fall back to "rewind current to 0" if the
-    // current track is more than 3s in. Within the first 3 seconds we
-    // intentionally do nothing (no neighbour, nothing to rewind).
-    if (progress > 3) {
+    // No valid neighbour — last-resort rewind only on the button
+    // path (`force=false`) and only past the 3 s threshold. The
+    // `>= REWIND_THRESHOLD_SEC` pre-check above already handled the
+    // common case; we get here when `progress < REWIND_THRESHOLD_SEC`
+    // AND the queue/history walk found nothing to switch to. Within
+    // the first 3 s with no neighbour we deliberately do nothing — a
+    // tap that early reads as "previous track", not "rewind". For
+    // gestures, "no neighbour" means "no previous track to swipe to";
+    // the cover-snap-back animation already gives the user feedback
+    // that the gesture had no target, so the store stays a no-op.
+    if (!force && progress > REWIND_THRESHOLD_SEC) {
       set({ progress: 0, _seekToZero: _seekToZero + 1 });
     }
   },

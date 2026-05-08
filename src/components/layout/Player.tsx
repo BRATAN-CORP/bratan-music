@@ -440,7 +440,7 @@ export function Player() {
               <Button onClick={toggleShuffle} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label={t('player.shuffle')}>
                 <Shuffle size={15} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
               </Button>
-              <Button onClick={previous} variant="ghost" size="icon" aria-label={t('player.previous')}>
+              <Button onClick={() => previous()} variant="ghost" size="icon" aria-label={t('player.previous')}>
                 <SkipBack size={16} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
