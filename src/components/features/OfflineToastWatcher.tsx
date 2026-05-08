@@ -28,6 +28,14 @@ export function OfflineToastWatcher() {
   const online = useOnline();
   const isFirstMount = useRef(true);
   const lastToastId = useRef<string | null>(null);
+  // Tracks the LAST `online` value we acted on. Prevents this effect
+  // from firing a phantom "Снова в сети" / "Вы офлайн" toast when its
+  // dependency list re-runs for a reason OTHER than a real
+  // connectivity flip — most notably the `t` identity change that
+  // happens on every interface-language switch (i18n re-build →
+  // `useT()` returns a new function → effect re-runs with the same
+  // `online` value).
+  const lastOnline = useRef(online);
 
   useEffect(() => {
     const dismissPrev = () => {
@@ -39,6 +47,7 @@ export function OfflineToastWatcher() {
 
     if (isFirstMount.current) {
       isFirstMount.current = false;
+      lastOnline.current = online;
       // Only announce the initial state if we boot offline — opening
       // the app online is the silent default and shouldn't generate
       // a toast.
@@ -47,6 +56,9 @@ export function OfflineToastWatcher() {
       }
       return;
     }
+
+    if (lastOnline.current === online) return;
+    lastOnline.current = online;
 
     dismissPrev();
     if (online) {
