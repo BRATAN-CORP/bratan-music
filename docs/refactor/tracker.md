@@ -47,7 +47,7 @@
 | --- | --------------------------------------- | ---------------------------------------------------- | ------------- | --------------------------------------------------------------- |
 | 1   | `devin/1778237470-refactor-foundation`  | Foundation: tokens + Modal/Sheet/PageHero/IconButton | merged        | [#373](https://github.com/BRATAN-CORP/bratan-music/pull/373)    |
 | 0.5 | `devin/1778241532-knowledge-base`       | Obsidian-style knowledge base (AGENTS.md + docs/)    | open / CI green | [#378](https://github.com/BRATAN-CORP/bratan-music/pull/378)  |
-| 2   | `devin/<ts>-refactor-dialogs`           | Migrate dialogs to `<Modal>`/`<Sheet>`               | not started   | —                                                               |
+| 2   | `devin/1778242810-refactor-dialogs`     | Migrate dialogs to `<Modal>`/`<Sheet>`               | open / awaiting CI | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
 | 3   | `devin/<ts>-refactor-safe-area`         | Unified PWA safe-area handling                       | not started   | —                                                               |
 | 4   | `devin/<ts>-refactor-collection-pages`  | Album/Artist/Playlist → `<PageHero>` + IconButton    | not started   | —                                                               |
 | 5   | `devin/<ts>-refactor-i18n-audit`        | Eliminate residual hardcoded language strings        | not started   | —                                                               |
@@ -83,7 +83,8 @@
 ## Live status
 
 - 2026-05-08T11:55Z — knowledge base + tracker созданы (PR #378). CI зелёный.
-- 2026-05-08T—:—Z — PR #2 (dialogs) не начат.
+- 2026-05-08T12:33Z — PR #2 (dialogs, #379) открыт. 11 диалогов мигрированы
+  на `<Modal>`/`<Sheet>` (см. описание PR). Ожидает CI.
 
 ---
 
