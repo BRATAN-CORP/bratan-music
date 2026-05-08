@@ -279,14 +279,15 @@ export function MobileBottomDock() {
                       </button>
                       {position === 'current' && hasMultiCredit(track.artists, track.artist) ? (
                         <div className="block w-full overflow-hidden text-left text-xs text-muted-foreground">
-                          <span className="block truncate">
+                          <Marquee contentKey={track.id + ':artists'}>
                             <ArtistLinks
+                              nowrap
                               artists={track.artists}
                               fallbackName={track.artist}
                               fallbackId={track.artistId}
                               className="hover:text-foreground hover:underline"
                             />
-                          </span>
+                          </Marquee>
                         </div>
                       ) : position === 'current' && track.artistId ? (
                         <button

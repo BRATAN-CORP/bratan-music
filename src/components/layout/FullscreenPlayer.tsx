@@ -506,7 +506,24 @@ export function FullscreenPlayer() {
             <Button variant="ghost" size="icon" onClick={closeFullscreen} aria-label={t('fullscreenPlayer.minimize')}>
               <ChevronDown size={20} />
             </Button>
-            <span className="pointer-events-none absolute inset-x-0 top-0 flex h-full items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
+            {/* `top-0 h-full` made the centred label span the entire
+                header box including the parent's `paddingTop:
+                calc(1rem + var(--pwa-safe-top))` — so on PWA iOS the
+                vertical centre of the label sat above the icon row,
+                visibly drifting up relative to the close / kebab
+                buttons (which the parent flex centres over the
+                content area, BELOW the safe-area inset). Anchoring
+                the label between the parent's actual padding edges
+                gives it the same vertical band as the icons on every
+                platform: paddingTop matches the parent and `bottom`
+                mirrors `pb-4`. */}
+            <span
+              className="pointer-events-none absolute inset-x-0 flex items-center justify-center text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground"
+              style={{
+                top: 'calc(1rem + var(--pwa-safe-top))',
+                bottom: '1rem',
+              }}
+            >
               {t('fullscreenPlayer.nowPlaying')}
             </span>
             <div className="flex items-center gap-1">
@@ -1123,13 +1140,15 @@ export function FullscreenPlayer() {
                     default and the text drifted to the left edge. */}
                 {hasMultiCredit(currentTrack.artists, currentTrack.artist) ? (
                   <div className="block w-full text-center text-sm text-muted-foreground sm:text-base">
-                    <ArtistLinks
-                      artists={currentTrack.artists}
-                      fallbackName={currentTrack.artist}
-                      fallbackId={currentTrack.artistId}
-                      className="hover:text-foreground hover:underline"
-                      wrapperClassName="justify-center"
-                    />
+                    <Marquee contentKey={currentTrack.id + ':artists'}>
+                      <ArtistLinks
+                        nowrap
+                        artists={currentTrack.artists}
+                        fallbackName={currentTrack.artist}
+                        fallbackId={currentTrack.artistId}
+                        className="hover:text-foreground hover:underline"
+                      />
+                    </Marquee>
                   </div>
                 ) : currentTrack.artistId ? (
                   <button

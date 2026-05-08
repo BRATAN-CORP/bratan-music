@@ -1,13 +1,27 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from 'motion/react';
 
 interface MarqueeProps {
-  /** Text to display. If it overflows the container, a slow slide animation
-   *  reveals the hidden tail every `pause` ms. We accept a string (not
-   *  ReactNode) because we measure `scrollWidth` against `clientWidth`
-   *  to decide whether to animate, and that needs a stable single child
-   *  with predictable layout. */
-  text: string;
+  /** Plain text payload — the original API. If `children` is also
+   *  provided, `children` wins and `text` only feeds the default
+   *  `aria-label`. */
+  text?: string;
+  /** Custom inline content. Use this when the marquee row needs to
+   *  hold something more than a string — e.g. a row of clickable
+   *  artist `<Link>`s separated by commas. The component still
+   *  measures `scrollWidth` of the inner span vs the wrapper's
+   *  `clientWidth` and animates when the content overflows; the
+   *  consumer is responsible for keeping the rendered tree on a
+   *  single line (`whitespace-nowrap`, `display: inline`, etc.). */
+  children?: ReactNode;
+  /** Stable identity of the current content. Used to trigger a
+   *  synchronous re-measure when the content changes — the existing
+   *  `ResizeObserver` handles size-only changes already, but a
+   *  next-track swap arrives via React reconciliation and we want
+   *  the animation timing to reset on the same paint as the new
+   *  text. Defaults to `text`. Pass e.g. `track.id` when using
+   *  `children`. */
+  contentKey?: string;
   className?: string;
   /** Idle pause at each end before sliding, in ms. */
   pause?: number;
@@ -44,6 +58,8 @@ interface MarqueeProps {
  */
 export function Marquee({
   text,
+  children,
+  contentKey,
   className = '',
   pause = 3500,
   speed = 32,
@@ -54,6 +70,11 @@ export function Marquee({
   const innerRef = useRef<HTMLSpanElement | null>(null);
   const [overflow, setOverflow] = useState(0);
   const reduce = useReducedMotion();
+
+  // Synchronous measure trigger. `contentKey` (or `text` for the
+  // legacy single-string callsites) flips on each next-track swap;
+  // the `ResizeObserver` below catches mid-life size changes too.
+  const measureKey = contentKey ?? text ?? '';
 
   useLayoutEffect(() => {
     const wrapper = wrapperRef.current;
@@ -69,7 +90,7 @@ export function Marquee({
     ro.observe(wrapper);
     ro.observe(inner);
     return () => ro.disconnect();
-  }, [text]);
+  }, [measureKey]);
 
   // Re-trigger measure after fonts load (text width changes once the
   // custom font swaps in from fallback).
@@ -86,7 +107,7 @@ export function Marquee({
       setOverflow(diff > 4 ? Math.ceil(diff) : 0);
     });
     return () => { cancelled = true; };
-  }, [text]);
+  }, [measureKey]);
 
   const distance = overflow > 0 ? overflow + 8 : 0;
   const slideTime = distance / speed; // seconds
@@ -170,7 +191,7 @@ export function Marquee({
     <span
       ref={wrapperRef}
       className={'relative block w-full max-w-full min-w-0 whitespace-nowrap ' + className}
-      aria-label={ariaLabel ?? text}
+      aria-label={ariaLabel ?? text ?? undefined}
       style={{
         // Horizontal-only clipping. The box must never report a content
         // width larger than its container — a long inline-block child's
@@ -209,7 +230,7 @@ export function Marquee({
           // inner span clean — its only job is the marquee transform.
         }}
       >
-        {text}
+        {children ?? text}
       </motion.span>
     </span>
   );

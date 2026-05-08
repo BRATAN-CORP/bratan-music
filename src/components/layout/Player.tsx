@@ -398,14 +398,15 @@ export function Player() {
                 </button>
                 {hasMultiCredit(currentTrack.artists, currentTrack.artist) ? (
                   <div className="block w-full overflow-hidden text-xs text-muted-foreground">
-                    <span className="block truncate">
+                    <Marquee contentKey={currentTrack.id + ':artists'}>
                       <ArtistLinks
+                        nowrap
                         artists={currentTrack.artists}
                         fallbackName={currentTrack.artist}
                         fallbackId={currentTrack.artistId}
                         className="hover:text-foreground hover:underline"
                       />
-                    </span>
+                    </Marquee>
                   </div>
                 ) : currentTrack.artistId ? (
                   <button
