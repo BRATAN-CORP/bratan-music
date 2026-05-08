@@ -309,20 +309,7 @@
     "downloadedPlaylist": "Загруженное",
     "serviceLabel": "Сервисный плейлист",
     "noDownloadsTitle": "Пока ничего не сохранено офлайн",
-    "noDownloadsHint": "Откройте трек, альбом или плейлист и нажмите «Слушать офлайн»",
-    "summaryEmpty": "Пора собрать свою коллекцию",
-    "summaryPlaylists": "{count} плейлистов",
-    "summaryAlbums": "{count} альбомов",
-    "summaryArtists": "{count} артистов",
-    "statPlaylists": "Плейлисты",
-    "statAlbums": "Альбомы",
-    "statArtists": "Артисты",
-    "statDownloaded": "Загружено",
-    "openCta": "Открыть",
-    "emptyPlaylistsTitle": "Здесь будут ваши плейлисты",
-    "emptyPlaylistsDescription": "Создайте первый плейлист и наполните его любимыми треками. Можно начать с готовой подборки или собрать с нуля.",
-    "emptyAlbumsDescription": "Сохраняйте альбомы, чтобы возвращаться к ним в один клик. Они появятся здесь.",
-    "emptyArtistsDescription": "Лайкните любимого артиста на его странице — и он появится в этом разделе с быстрым доступом к каталогу."
+    "noDownloadsHint": "Откройте трек, альбом или плейлист и нажмите «Слушать офлайн»"
   },
   "playlist": {
     "loading": "Загружаем плейлист…",
