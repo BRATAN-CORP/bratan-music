@@ -109,7 +109,7 @@ export function QuickPrefsBar() {
               whileTap={reduce ? undefined : { scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 600, damping: 30 }}
               className={`relative inline-flex h-8 min-w-[2.25rem] items-center justify-center rounded-full px-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/60 sm:h-9 sm:min-w-[2.5rem] ${
-                active ? 'text-[var(--color-on-accent,_white)]' : 'text-muted-foreground hover:text-foreground'
+                active ? 'text-[var(--color-text-on-accent)]' : 'text-muted-foreground hover:text-foreground'
               }`}
               aria-label={t(option.nameKey)}
             >
@@ -121,7 +121,7 @@ export function QuickPrefsBar() {
                     background:
                       'linear-gradient(135deg, var(--color-accent) 0%, color-mix(in oklab, var(--color-accent) 85%, var(--color-accent-magenta)) 100%)',
                     boxShadow:
-                      '0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px -6px var(--color-accent-glow, rgba(99,102,241,0.45))',
+                      '0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px -6px var(--color-accent-glow)',
                   }}
                   transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                   aria-hidden
