@@ -11,6 +11,8 @@ import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHero } from '@/components/ui/PageHero';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
@@ -61,72 +63,49 @@ export function AlbumPage() {
           <PageLoader label={t('albumPage.loading')} />
         ) : album ? (
           <>
-            {/* Hero, mirrored from the artist page: the cover doubles
-                as a blurred ambience layer that bleeds beyond the
-                visible bounds (so the soft blur radius is fully behind
-                the parent's overflow-hidden mask — no ragged feathered
-                edges) plus a soft top-down vignette and accent radial.
-                If there is no cover at all, a soft accent radial keeps
-                the hero from looking flat. */}
-            <div className="relative isolate -mx-4 mb-10 overflow-hidden border-b border-border px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
-              {heroCoverUrl ? (
+            <PageHero
+              ambience={heroCoverUrl ? (
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute -inset-[15%] -z-10 bg-cover bg-center blur-2xl saturate-150 opacity-60"
+                  className="absolute -inset-[15%] bg-cover bg-center blur-2xl saturate-150 opacity-60"
                   style={{ backgroundImage: `url(${heroCoverUrl})` }}
                 />
-              ) : (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(80%_120%_at_30%_0%,var(--color-accent-glow),transparent_70%)] opacity-40"
-                />
-              )}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/10 via-[var(--color-bg)]/35 to-[var(--color-bg)]"
-              />
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-25"
-              />
-              <div className="flex flex-col gap-6 sm:flex-row">
-              {heroCoverUrl ? (
+              ) : undefined}
+              cover={heroCoverUrl ? (
                 <img
                   src={heroCoverUrl}
                   alt={album.title}
-                  className="h-48 w-48 rounded-[var(--radius-md)] border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
+                  className="h-40 w-40 rounded-[var(--radius-md)] border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-48 sm:w-48"
                 />
               ) : (
-                <div className="flex h-48 w-48 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-secondary/60 shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]">
+                <div className="flex h-40 w-40 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-secondary/60 shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-48 sm:w-48">
                   <Disc3 size={36} className="text-muted-foreground" />
                 </div>
               )}
-              <div className="flex flex-col justify-end gap-3">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('albumPage.eyebrow')}</span>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{album.title}</h1>
-                {album.artists && album.artists.length > 1 ? (
-                  <div className="text-sm text-muted-foreground">
-                    {album.artists.map((a, i) => (
-                      <span key={a.id + ':' + i}>
-                        <Link
-                          to={`/artist/${a.id}`}
-                          className="hover:text-foreground hover:underline"
-                        >
-                          {a.name}
-                        </Link>
-                        {i < album.artists!.length - 1 && ', '}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <Link to={`/artist/${album.artistId}`} className="text-sm text-muted-foreground hover:text-foreground">
-                    {album.artist}
-                  </Link>
-                )}
-                {album.releaseDate && (
-                  <p className="text-xs text-muted-foreground">{album.releaseDate}</p>
-                )}
-                <div className="flex items-center gap-2 pt-2">
+              eyebrow={t('albumPage.eyebrow')}
+              title={album.title}
+              subtitle={album.artists && album.artists.length > 1 ? (
+                <>
+                  {album.artists.map((a, i) => (
+                    <span key={a.id + ':' + i}>
+                      <Link
+                        to={`/artist/${a.id}`}
+                        className="hover:text-foreground hover:underline"
+                      >
+                        {a.name}
+                      </Link>
+                      {i < album.artists!.length - 1 && ', '}
+                    </span>
+                  ))}
+                </>
+              ) : (
+                <Link to={`/artist/${album.artistId}`} className="hover:text-foreground">
+                  {album.artist}
+                </Link>
+              )}
+              meta={album.releaseDate ?? null}
+              actions={
+                <>
                   <Button onClick={handlePlayAll}>
                     {isCollectionPlaying ? (
                       <>
@@ -138,18 +117,14 @@ export function AlbumPage() {
                       </>
                     )}
                   </Button>
-                  <button
-                    type="button"
+                  <IconButton
+                    tone="accent"
+                    active={liked}
                     onClick={() => albumLike.toggle({ id: album.id, title: album.title, artist: album.artist, artistId: album.artistId, coverUrl: album.coverUrl })}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
-                      liked
-                        ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
-                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
-                    }`}
                     aria-label={liked ? t('albumPage.unlike') : t('albumPage.like')}
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
-                  </button>
+                  </IconButton>
                   <AlbumOfflineButton album={album} tracks={album.tracks ?? []} />
                   <ShareButton
                     path={`/album/${album.id}`}
@@ -157,10 +132,9 @@ export function AlbumPage() {
                     shareText={`${album.title} — ${album.artist}`}
                     ariaLabel={t('albumPage.shareAria')}
                   />
-                </div>
-              </div>
-              </div>
-            </div>
+                </>
+              }
+            />
 
             <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
               {album.tracks?.map((track, i) => (

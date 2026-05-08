@@ -16,6 +16,8 @@ import { toast } from '@/store/toast';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHero } from '@/components/ui/PageHero';
 import { PageLoader } from '@/components/ui/PageLoader';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
@@ -72,27 +74,18 @@ export function ArtistPage() {
           <PageLoader label={t('artistPage.loading')} />
         ) : artist ? (
           <>
-            {/* Hero with blurred ambience layer derived from the artist
-                photo — mirrors the FullscreenPlayer's pattern (blurred
-                cover image + saturate boost + soft dark vignette) so the
-                page picks up the artist's dominant colour without losing
-                the rest of the layout's neutral chrome. The blurred
-                image is keyed by the artist id so a navigation between
-                artists crossfades the ambience instead of snapping. */}
-            <div className="relative isolate -mx-4 mb-10 overflow-hidden px-4 pb-10 pt-6 sm:-mx-6 sm:px-6 sm:pt-10 lg:-mx-10 lg:px-10">
-              {heroPhoto ? (
+            <PageHero
+              ambience={heroPhoto ? (
                 <AnimatePresence initial={false} mode="sync">
-                  {/* Bleed the blurred backdrop ~15 % past every edge so
-                      the soft blur radius is fully behind the parent's
-                      overflow-hidden mask — kills the "ragged feathered
-                      edge" the user reported on the desktop hero. The
-                      blur drops from 3xl→2xl since the over-bleed gives
-                      us more usable surface to spread softness across,
-                      and the opacity ramps up slightly to compensate. */}
+                  {/* Cross-fade the blurred portrait between artists so
+                      navigation doesn't snap. The bleed past every edge
+                      keeps the soft blur radius fully behind the parent
+                      overflow-hidden mask — fixes the ragged feathered
+                      edge previously reported on desktop. */}
                   <motion.div
                     key={artist.id + ':bg'}
                     aria-hidden
-                    className="pointer-events-none absolute -inset-[15%] -z-10 bg-cover bg-center blur-2xl saturate-150"
+                    className="absolute -inset-[15%] bg-cover bg-center blur-2xl saturate-150"
                     style={{ backgroundImage: `url(${heroPhoto})` }}
                     initial={reduce ? { opacity: 0.6, scale: 1 } : { opacity: 0, scale: 1.08 }}
                     animate={{ opacity: 0.6, scale: 1 }}
@@ -100,43 +93,21 @@ export function ArtistPage() {
                     transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1] }}
                   />
                 </AnimatePresence>
-              ) : (
-                /* No artist photo — fall back to a soft accent radial so
-                   the hero still feels different from a flat page bg. */
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(80%_120%_at_30%_0%,var(--color-accent-glow),transparent_70%)] opacity-40"
-                />
-              )}
-              {/* Two-layer overlay: a subtle dark wash for legibility on
-                  bright photos, plus a vertical fade into the page bg so
-                  the hero melts into the next section instead of ending
-                  on a hard border. The accent-tinted radial keeps a hint
-                  of brand colour when the photo is desaturated. */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/10 via-[var(--color-bg)]/35 to-[var(--color-bg)]"
-              />
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-25"
-              />
-
-              <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-end">
-              {heroPhoto ? (
+              ) : undefined}
+              cover={heroPhoto ? (
                 <img
                   src={heroPhoto}
                   alt={artist.name}
-                  className="h-40 w-40 rounded-full border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
+                  className="h-32 w-32 rounded-full border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-40 sm:w-40"
                   onError={() => setHeroImgFailed(true)}
                 />
               ) : (
                 <FallbackAvatar name={artist.name} />
               )}
-              <div className="flex flex-col gap-3">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('artistPage.eyebrow')}</span>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{artist.name}</h1>
-                <div className="flex items-center gap-2 pt-2">
+              eyebrow={t('artistPage.eyebrow')}
+              title={artist.name}
+              actions={
+                <>
                   <Button onClick={handlePlayAll}>
                     {isCollectionPlaying ? (
                       <>
@@ -148,20 +119,17 @@ export function ArtistPage() {
                       </>
                     )}
                   </Button>
-                  <button
-                    type="button"
+                  <IconButton
+                    tone="accent"
+                    active={liked}
                     onClick={() => artistLike.toggle({ id: artist.id, name: artist.name, imageUrl: artist.imageUrl })}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
-                      liked
-                        ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
-                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
-                    }`}
                     aria-label={liked ? t('artistPage.unfollow') : t('artistPage.follow')}
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    tone="danger"
+                    active={artistDisliked}
                     onClick={() => {
                       const wasDisliked = artistDisliked;
                       toggleDislike.mutate(
@@ -181,11 +149,6 @@ export function ArtistPage() {
                       );
                     }}
                     disabled={toggleDislike.isPending}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-all active:scale-90 ${
-                      artistDisliked
-                        ? 'border-[var(--color-danger)]/30 bg-[var(--color-danger-muted)] text-[var(--color-danger)]'
-                        : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
-                    }`}
                     aria-label={artistDisliked
                       ? t('dislike.artistUnban', { name: artist.name })
                       : t('dislike.artistBan', { name: artist.name })}
@@ -194,7 +157,7 @@ export function ArtistPage() {
                       : t('dislike.artistBan', { name: artist.name })}
                   >
                     {artistDisliked ? <RotateCcw size={16} /> : <Ban size={16} />}
-                  </button>
+                  </IconButton>
                   {radio?.items?.length ? (
                     <button
                       type="button"
@@ -211,10 +174,10 @@ export function ArtistPage() {
                     shareText={t('artistPage.shareText', { name: artist.name })}
                     ariaLabel={t('artistPage.shareAria')}
                   />
-                </div>
-              </div>
-              </div>
-            </div>
+                </>
+              }
+              className="border-b-0"
+            />
 
             {artist.topTracks?.length > 0 && (
               <section className="mb-12">
