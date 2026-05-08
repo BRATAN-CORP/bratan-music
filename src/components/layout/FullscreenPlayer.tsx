@@ -823,7 +823,10 @@ export function FullscreenPlayer() {
                 if (info.offset.x < -90 || info.velocity.x < -500) {
                   nextManual();
                 } else if (info.offset.x > 90 || info.velocity.x > 500) {
-                  previous();
+                  // Cover drag is an explicit navigation gesture —
+                  // force-skip the 3 s rewind threshold so a swipe
+                  // mid-track always lands on the previous song.
+                  previous(true);
                 }
               }}
               initial={reduce ? false : { opacity: 0, scale: 0.92 }}
@@ -1224,7 +1227,7 @@ export function FullscreenPlayer() {
               <Button variant="ghost" size="icon" onClick={toggleShuffle} aria-label={t('player.shuffle')}>
                 <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
-              <Button variant="ghost" size="icon" onClick={previous} aria-label={t('fullscreenPlayer.back')} className="h-12 w-12">
+              <Button variant="ghost" size="icon" onClick={() => previous()} aria-label={t('fullscreenPlayer.back')} className="h-12 w-12">
                 <SkipBack size={22} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>

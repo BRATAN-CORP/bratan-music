@@ -63,7 +63,8 @@
 | 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | merged | [#393](https://github.com/BRATAN-CORP/bratan-music/pull/393) |
 | 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | merged | [#394](https://github.com/BRATAN-CORP/bratan-music/pull/394) |
 | 17  | `devin/1778252772-comment-cleanup-pass`      | Comment cleanup pass — collapse multi-paragraph narrative docstrings in 10 non-audio-engine files (preserve rationale / quirk / edge-case docs) | merged | [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395) |
-| 18  | `devin/1778263961-docs-sync-tracker`         | Docs sync — close stale statuses / placeholders in tracker, daily-changes, REFACTOR_PROGRESS                                                    | open   | —                                                            |
+| 18  | `devin/1778263961-docs-sync-tracker`         | Docs sync — close stale statuses / placeholders in tracker, daily-changes, REFACTOR_PROGRESS                                                    | merged | [#396](https://github.com/BRATAN-CORP/bratan-music/pull/396)    |
+| 19  | `devin/1778265136-prev-track-threshold`      | Player "previous" 3 s rewind threshold + gesture override — button / mediaSession respect threshold; mini-player swipe + fullscreen cover drag bypass via `previous(true)` | open   | —                                                            |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -317,6 +318,27 @@
   `Equalizer.tsx`, `LyricsPanel.tsx`) и security-конфигурация (HMAC,
   CORS allowlist, RLS, parameterized SQL) не тронуты — это
   markdown-only PR.
+- 2026-05-08T18:34Z — PR #19 (player "previous" threshold) подготовлен.
+  Под явный bug-report пользователя ("кнопка назад на середине трека
+  багуется"): `store.previous()` всегда отдавал предыдущий трек, даже
+  если пользователь только что услышал 30-ю секунду — это противоречит
+  Spotify/Apple Music идиоме "<3 s = prev, ≥3 s = restart".
+  Фикс изолирован в трёх точках:
+  1. `src/store/player.ts` — `previous(force = false)`. Кнопка /
+     `mediaSession.previoustrack` (force=false): при `progress >= 3 s`
+     рестартим текущий трек через `_seekToZero` нудж, в первые 3 s —
+     старая логика "поп history → walk queue". Жесты (force=true)
+     игнорируют threshold — гесть-навигация это уже явный intent.
+  2. `Player.tsx` (мини-плеер SkipBack), `FullscreenPlayer.tsx`
+     (фуллскрин SkipBack) — `onClick={() => previous()}` без аргумента.
+  3. `FullscreenPlayer.tsx` (обложка drag-x onDragEnd) и
+     `SwipeTrackStrip.tsx` (мини-плеер свайп commit) — `previous(true)`.
+  Audio-engine core (crossfade, EQ, lyrics, mediaSession metadata,
+  `_seekToZero` слот-эффект в `useAudioPlayer.ts`) — нетронут;
+  `mediaSession.previoustrack` handler в `useAudioPlayer.ts:2247`
+  уже жил в `() => store().previous()`, falsy `force` приходит сам.
+  Security-конфигурация — нетронута. Точечный фикс под bug-report,
+  как и PR #16 (#394) на mediaSession.
 
 ---
 
@@ -336,6 +358,7 @@
 | 2026-05-08 ~14:32       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #15 (`<Eyebrow>` polymorphic — `as` prop + dedup 3 link-eyebrows) |
 | 2026-05-08 ~14:55       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #16 (iOS PWA mediaSession sync — fix Control Center play/pause desync во время crossfade) |
 | 2026-05-08 ~15:25       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #17 (#395) — comment cleanup pass, 10 non-audio-engine файлов, нетто −840 строк |
-| 2026-05-08 ~18:10       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #18 (docs sync) — закрыт стейл-статус PR #17, заполнены 7 placeholder PR-ссылок в `2026-05-08.md`, добавлены записи PR #16 / PR #17, `REFACTOR_PROGRESS.md` помечен historical |
+| 2026-05-08 ~18:10       | `7f10684789d747179251e486ffb73fe1`                  | PR #18 (#396) — docs sync: закрыт стейл-статус PR #17, заполнены 7 placeholder PR-ссылок в `2026-05-08.md`, добавлены записи PR #16 / PR #17, `REFACTOR_PROGRESS.md` помечен historical |
+| 2026-05-08 ~18:34       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #19 (player "previous" threshold) — `previous(force?)` в `store/player.ts`: <3 s → prev track, ≥3 s → rewind to 0, gesture (`force=true`) всегда → prev. 3 callsite-обновления (Player.tsx, FullscreenPlayer.tsx button + drag, SwipeTrackStrip.tsx). Audio-engine core / security — нетронуты. |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
