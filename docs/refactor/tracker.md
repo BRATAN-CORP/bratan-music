@@ -64,8 +64,7 @@
 | 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | merged | [#394](https://github.com/BRATAN-CORP/bratan-music/pull/394) |
 | 17  | `devin/1778252772-comment-cleanup-pass`      | Comment cleanup pass — collapse multi-paragraph narrative docstrings in 10 non-audio-engine files (preserve rationale / quirk / edge-case docs) | merged | [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395) |
 | 18  | `devin/1778263961-docs-sync-tracker`         | Docs sync — close stale statuses / placeholders in tracker, daily-changes, REFACTOR_PROGRESS                                                    | merged | [#396](https://github.com/BRATAN-CORP/bratan-music/pull/396)    |
-| 19  | `devin/1778265136-prev-track-threshold`      | Player "previous" 3 s rewind threshold + gesture override — button / mediaSession respect threshold; mini-player swipe + fullscreen cover drag bypass via `previous(true)` | merged | [#397](https://github.com/BRATAN-CORP/bratan-music/pull/397) |
-| 20  | `devin/1778267378-library-redesign-liquidglass` | Library redesign — WebGL `liquidglass` hero (animated gradient blobs + refraction) + `<Tabs/>` (Radix shadcn-style) + 4-up clickable stats row + polished empty states (rotating concentric rings + accent halo + contextual CTAs) + motion-staggered grids; SCSS `.liquid-glass` recipe upgraded with iridescent shimmer / soft highlight (z-index:-1 pseudo-elements inside isolation-isolate stacking context — all 12 existing call-sites inherit cosmetically without code changes) | open | [#398](https://github.com/BRATAN-CORP/bratan-music/pull/398) |
+| 19  | `devin/1778265136-prev-track-threshold`      | Player "previous" 3 s rewind threshold + gesture override — button / mediaSession respect threshold; mini-player swipe + fullscreen cover drag bypass via `previous(true)` | open   | —                                                            |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -340,63 +339,6 @@
   уже жил в `() => store().previous()`, falsy `force` приходит сам.
   Security-конфигурация — нетронута. Точечный фикс под bug-report,
   как и PR #16 (#394) на mediaSession.
-- 2026-05-08T18:50Z — PR #19 (#397) смерджен в `main`. CI зелёный.
-- 2026-05-08T19:25Z — PR #20 (library redesign + glass cosmetic upgrade)
-  подготовлен. Под явный запрос пользователя — "сделай редизайн
-  раздела библиотеки, так чтобы все было красиво на полном экране и
-  на мобиле, сейчас там как-то пустовато … также везде где
-  используется glass сделать миграцию на @ybouane/liquidglass".
-  Стратегия — **гибрид**, утверждена пользователем как «один крупный
-  PR», что override'ит scoped-PR guideline в AGENTS.md (записано
-  явно).
-  1. **WebGL `liquidglass` только на library hero** — у upstream-либы
-     жёсткие архитектурные ограничения: glass-элементы должны быть
-     direct children root'а, root растеризуется per-frame через
-     `html-to-image`, single WebGL контекст per root. Modal /
-     popover / toast portals несовместимы (отдельные WebGL контексты
-     на mobile = drop frames + батарея). Library hero — единственное
-     место, где ограничения соблюдены И визуальная отдача оправдана.
-     Wrapper в `src/components/ui/liquid-glass.tsx` —
-     `LiquidGlassRoot` + `LiquidGlassPanel` с feature-gate'ом на
-     WebGL support + `prefers-reduced-motion`, fallback на CSS
-     рецепт. Идеомпотентно: `LiquidGlass.init()` вызывается в
-     `useLayoutEffect`, `destroy()` на unmount.
-  2. **`.liquid-glass` SCSS recipe** — добавлены `::before`
-     (conic-gradient iridescent shimmer, screen blend, 18s
-     rotate keyframes) + `::after` (135° highlight stripe,
-     overlay blend) на `z-index: -1` внутри уже существующего
-     `isolation: isolate` stacking context. **Все 12 существующих
-     консьюмеров** (`Player.tsx`, `FullscreenPlayer.tsx`, `Modal`,
-     `ToastHost`, `Equalizer`, dock, popovers, `PlaylistCard` delete
-     dialog, `AddToPlaylistDialog`, `OnboardingTour`,
-     `MobileBottomDock`, `home/page.tsx`) автоматически получают
-     обновлённый look без правок markup'а. Используется `z-index: -1`
-     именно потому, что положительные значения сломали бы
-     Tailwind `.absolute` utility на детях (одна из причин — почему
-     ранний `> *` rule был заменён). Variant-модификаторы
-     `.liquid-glass--soft` / `.liquid-glass--aggressive` для нового
-     hero / stats / empty states.
-  3. **Library page rewrite** — `LibraryHero` (анимированные
-     радиальные blob'ы indigo + magenta + cyan + grid backdrop +
-     WebGL panel с заголовком, summary-line, primary CTA),
-     `LibraryStatsRow` (4 кликабельные карточки с counts —
-     каждая хопает в свою вкладку, активная подсвечена ring'ом),
-     `LibraryEmptyState` (вращающиеся концентрические rings +
-     accent halo + контекстуальный CTA per tab). `<Tabs/>` —
-     shadcn-style обёртка над `@radix-ui/react-tabs`. AnimatePresence
-     + `motion.div` (220ms cubic) между табами; staggered grid'ы для
-     albums / artists.
-  4. **Audio engine** — `Player.tsx` / `FullscreenPlayer.tsx` НЕ
-     модифицированы. Cosmetic upgrade приходит через `.liquid-glass`
-     SCSS наследование. Hard constraint AGENTS.md соблюдён.
-  5. **Security** — нетронуто (нет правок auth/JWT/CORS/RLS/SQL).
-  6. **i18n** — 14 новых ключей per locale (ru + en) для hero
-     summary, stats labels, empty-state copy. Все юзер-видимые
-     строки через `useT()`.
-  7. **Deps** — `@ybouane/liquidglass@1.0.3`, `html-to-image`
-     (transitive — нужно для per-frame DOM-to-canvas capture),
-     `@radix-ui/react-tabs@1.1.13`. Bundle: +22 kB minified
-     (приемлемо для визуальной отдачи).
 
 ---
 
@@ -417,7 +359,6 @@
 | 2026-05-08 ~14:55       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #16 (iOS PWA mediaSession sync — fix Control Center play/pause desync во время crossfade) |
 | 2026-05-08 ~15:25       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #17 (#395) — comment cleanup pass, 10 non-audio-engine файлов, нетто −840 строк |
 | 2026-05-08 ~18:10       | `7f10684789d747179251e486ffb73fe1`                  | PR #18 (#396) — docs sync: закрыт стейл-статус PR #17, заполнены 7 placeholder PR-ссылок в `2026-05-08.md`, добавлены записи PR #16 / PR #17, `REFACTOR_PROGRESS.md` помечен historical |
-| 2026-05-08 ~18:34       | `7f10684789d747179251e486ffb73fe1`                  | PR #19 (#397) — `previous(force?)` в `store/player.ts`: <3 s → prev track, ≥3 s → rewind to 0, gesture (`force=true`) всегда → prev. 3 callsite-обновления (Player.tsx, FullscreenPlayer.tsx button + drag, SwipeTrackStrip.tsx). Audio-engine core / security — нетронуты. |
-| 2026-05-08 ~19:25       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #20 (#398) — library redesign + glass cosmetic upgrade. WebGL `liquidglass` hero panel (анимированные blob'ы + refraction) + Radix-based `<Tabs/>` + 4-up `LibraryStatsRow` + `LibraryEmptyState` с rotating concentric rings; `.liquid-glass` SCSS recipe iridescent shimmer / highlight stripe (z-index: -1 pseudo-elements — все 12 консьюмеров inherit). 14 новых i18n ключей. Audio-engine core / security — нетронуты (cosmetic-only — Player.tsx / FullscreenPlayer.tsx наследуют через SCSS). Strategy: «один крупный PR» по явному выбору пользователя. |
+| 2026-05-08 ~18:34       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #19 (player "previous" threshold) — `previous(force?)` в `store/player.ts`: <3 s → prev track, ≥3 s → rewind to 0, gesture (`force=true`) всегда → prev. 3 callsite-обновления (Player.tsx, FullscreenPlayer.tsx button + drag, SwipeTrackStrip.tsx). Audio-engine core / security — нетронуты. |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
