@@ -98,7 +98,7 @@ export function ArtistPage() {
                 <img
                   src={heroPhoto}
                   alt={artist.name}
-                  className="h-32 w-32 rounded-full border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-40 sm:w-40"
+                  className="h-32 w-32 rounded-full border border-white/10 object-cover shadow-[var(--shadow-cover)] sm:h-40 sm:w-40"
                   onError={() => setHeroImgFailed(true)}
                 />
               ) : (
@@ -270,7 +270,7 @@ function FallbackAvatar({ name }: { name: string }) {
   const hue = Math.abs(hash) % 360;
   return (
     <div
-      className="flex h-40 w-40 items-center justify-center rounded-full border border-white/10 text-3xl font-semibold tracking-wide text-white shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]"
+      className="flex h-40 w-40 items-center justify-center rounded-full border border-white/10 text-3xl font-semibold tracking-wide text-white shadow-[var(--shadow-cover)]"
       style={{
         background: `radial-gradient(120% 120% at 30% 25%, hsl(${hue} 65% 45% / 0.95), hsl(${(hue + 40) % 360} 55% 22%))`,
       }}

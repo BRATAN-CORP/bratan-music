@@ -75,10 +75,10 @@ export function AlbumPage() {
                 <img
                   src={heroCoverUrl}
                   alt={album.title}
-                  className="h-40 w-40 rounded-[var(--radius-md)] border border-white/10 object-cover shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-48 sm:w-48"
+                  className="h-40 w-40 rounded-[var(--radius-md)] border border-white/10 object-cover shadow-[var(--shadow-cover)] sm:h-48 sm:w-48"
                 />
               ) : (
-                <div className="flex h-40 w-40 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-secondary/60 shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-48 sm:w-48">
+                <div className="flex h-40 w-40 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-secondary/60 shadow-[var(--shadow-cover)] sm:h-48 sm:w-48">
                   <Disc3 size={36} className="text-muted-foreground" />
                 </div>
               )}

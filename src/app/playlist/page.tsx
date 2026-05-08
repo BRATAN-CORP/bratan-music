@@ -165,7 +165,7 @@ export function PlaylistPage() {
                 />
               ) : undefined}
               cover={
-                <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-white/10 bg-card text-muted-foreground shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-40 sm:w-40">
+                <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-white/10 bg-card text-muted-foreground shadow-[var(--shadow-cover)] sm:h-40 sm:w-40">
                   {heroCoverUrl ? (
                     <img
                       src={heroCoverUrl}

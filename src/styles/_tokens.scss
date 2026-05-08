@@ -45,6 +45,12 @@
   --shadow-md:  0 8px 24px -8px rgba(12, 12, 13, 0.10), 0 2px 6px rgba(12, 12, 13, 0.04);
   --shadow-lg:  0 24px 64px -16px rgba(12, 12, 13, 0.18), 0 4px 12px rgba(12, 12, 13, 0.06);
   --shadow-glow: 0 0 0 1px var(--color-accent-glow), 0 12px 36px -8px var(--color-accent-glow);
+  /* Drop shadow used by every album/artist/playlist hero cover and the
+     downloaded-library cover swatch. Single token so designers can
+     re-tune the lift in one place instead of chasing duplicated
+     `shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]` strings across the
+     hero pages. */
+  --shadow-cover: 0 18px 48px -16px rgba(0, 0, 0, 0.55);
 
   --radius-sm:  6px;
   --radius-md:  10px;
@@ -159,6 +165,7 @@
   --shadow-md:  0 8px 24px -8px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
   --shadow-lg:  0 24px 64px -16px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.35);
   --shadow-glow: 0 0 0 1px var(--color-accent-glow), 0 16px 48px -8px var(--color-accent-glow);
+  --shadow-cover: 0 18px 48px -16px rgba(0, 0, 0, 0.7);
 
   --player-bg:     rgba(15, 15, 18, 0.85);
 
