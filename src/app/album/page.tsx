@@ -13,7 +13,7 @@ import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PageHero } from '@/components/ui/PageHero';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { Skeleton, TrackListSkeleton } from '@/components/ui/Skeleton';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
 
@@ -60,7 +60,7 @@ export function AlbumPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <PageLoader label={t('albumPage.loading')} />
+          <AlbumPageSkeleton />
         ) : album ? (
           <>
             <PageHero
@@ -147,5 +147,37 @@ export function AlbumPage() {
         )}
       </div>
     </AuthGuard>
+  );
+}
+
+/**
+ * Page-level skeleton mirroring the live album page (PageHero with a
+ * 160px square cover, eyebrow + title + subtitle + meta + action
+ * buttons, followed by a tracklist). Renders the same vertical band
+ * the data will fill in so swapping skeleton → live doesn't shift
+ * layout.
+ */
+function AlbumPageSkeleton() {
+  return (
+    <>
+      <div className="mb-10 flex flex-col gap-6 border-b border-border pb-10 sm:flex-row sm:items-end">
+        <Skeleton className="h-40 w-40 rounded-[var(--radius-md)] sm:h-48 sm:w-48" />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-9 w-2/3" />
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-3 w-24" />
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <Skeleton className="h-9 w-32 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+          </div>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+        <TrackListSkeleton count={8} />
+      </div>
+    </>
   );
 }

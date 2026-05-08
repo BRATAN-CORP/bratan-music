@@ -18,7 +18,7 @@ import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PageHero } from '@/components/ui/PageHero';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { Skeleton, TrackListSkeleton, AlbumGridSkeleton } from '@/components/ui/Skeleton';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
 
@@ -71,7 +71,7 @@ export function ArtistPage() {
     <AuthGuard>
       <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-10">
         {isLoading ? (
-          <PageLoader label={t('artistPage.loading')} />
+          <ArtistPageSkeleton />
         ) : artist ? (
           <>
             <PageHero
@@ -248,6 +248,44 @@ export function ArtistPage() {
         )}
       </div>
     </AuthGuard>
+  );
+}
+
+/**
+ * Page-level skeleton mirroring the artist page (round avatar +
+ * eyebrow / title / actions, top tracks list, albums grid). Pre-
+ * allocates the same vertical bands the live data fills in.
+ */
+function ArtistPageSkeleton() {
+  return (
+    <>
+      <div className="mb-12 flex flex-col items-start gap-6 border-b border-border pb-10 sm:flex-row sm:items-end">
+        <Skeleton className="h-32 w-32 rounded-full sm:h-40 sm:w-40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-9 w-2/3 max-w-md" />
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <Skeleton className="h-9 w-32 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+            <Skeleton className="h-9 w-24 rounded-full" />
+            <Skeleton className="h-9 w-9 rounded-full" />
+          </div>
+        </div>
+      </div>
+
+      <section className="mb-12">
+        <Skeleton className="mb-4 h-4 w-32" />
+        <div className="overflow-hidden rounded-[var(--radius-md)] border border-border">
+          <TrackListSkeleton count={6} />
+        </div>
+      </section>
+
+      <section className="mb-12">
+        <Skeleton className="mb-4 h-4 w-24" />
+        <AlbumGridSkeleton count={5} />
+      </section>
+    </>
   );
 }
 

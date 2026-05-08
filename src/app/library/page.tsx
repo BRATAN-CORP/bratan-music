@@ -14,7 +14,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { useOfflineHydration } from '@/hooks/useOfflineActions';
 import { useOfflineStore } from '@/store/offline';
 import { Button } from '@/components/ui/Button';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { PlaylistRowListSkeleton } from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useT } from '@/i18n';
 import type { TranslationKey } from '@/i18n';
@@ -278,7 +278,7 @@ export function LibraryPage() {
                 </Link>
 
                 {isLoading ? (
-                  <PageLoader label={t('library.loadingShort')} />
+                  <PlaylistRowListSkeleton count={6} />
                 ) : visiblePlaylists.length ? (
                   <div className="flex flex-col gap-2">
                     {visiblePlaylists.map((pl) => (

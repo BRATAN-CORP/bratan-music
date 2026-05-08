@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { AlertCircle, ChevronLeft } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { ExploreModules } from '@/components/features/ExploreModules';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { ExploreFeedSkeleton } from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePage } from '@/hooks/useExplore';
 import { useT } from '@/i18n';
@@ -29,7 +29,7 @@ export function ExploreSlugPage() {
           </h1>
         </div>
 
-        {isLoading && <PageLoader label={t('exploreSlug.loading')} />}
+        {isLoading && <ExploreFeedSkeleton count={3} />}
 
         {error && (
           <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-14 text-center">

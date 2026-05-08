@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { Switch } from '@/components/ui/Switch';
-import { PageLoader } from '@/components/ui/PageLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
@@ -150,11 +150,7 @@ function RoomPageInner() {
   };
 
   if (!id || initialQuery.isLoading || !initial) {
-    return (
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
-        <PageLoader label={t('rooms.page.loading')} />
-      </div>
-    );
+    return <RoomPageSkeleton />;
   }
 
   const track = remoteState?.track ?? null;
@@ -350,6 +346,57 @@ function RoomPageInner() {
           <li>{t('rooms.page.howWorksItem2')}</li>
           <li>{t('rooms.page.howWorksItem3')}</li>
         </ul>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * Page-level skeleton mirroring the live room page (header / now-
+ * playing card with 160px cover + progress / members chips row /
+ * track-picker section / chat panel). Pre-allocates the same
+ * vertical bands the data fills in.
+ */
+function RoomPageSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 flex flex-col gap-2">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-8 w-56 max-w-full" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Skeleton className="h-9 w-24 rounded-full" />
+          <Skeleton className="h-9 w-24 rounded-full" />
+        </div>
+      </div>
+
+      <section className="rounded-[var(--radius-lg)] border border-border bg-card p-5 sm:p-7">
+        <div className="grid gap-5 sm:grid-cols-[160px_1fr] sm:gap-6">
+          <Skeleton className="aspect-square w-full rounded-[var(--radius-md)] sm:w-40" />
+          <div className="flex min-w-0 flex-col gap-3">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-7 w-2/3" />
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="mt-2 h-1.5 w-full rounded-full" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <Skeleton className="mb-3 h-3 w-32" />
+        <div className="flex flex-wrap gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-32 rounded-full" />
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <Skeleton className="mb-3 h-3 w-40" />
+        <Skeleton className="h-12 w-full rounded-[var(--radius-md)]" />
       </section>
     </div>
   );

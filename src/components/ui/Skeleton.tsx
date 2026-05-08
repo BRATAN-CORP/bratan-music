@@ -73,6 +73,36 @@ export function PlaylistSkeleton() {
 }
 
 /**
+ * Mirrors `<PlaylistCard>` (the horizontal row layout used in the
+ * library Playlists tab). Square thumbnail + title + meta row +
+ * trailing kebab. Used as the loading state for the library list
+ * so the skeleton occupies the same vertical band as the live
+ * cards once they land.
+ */
+export function PlaylistRowSkeleton() {
+  return (
+    <div className="flex items-center gap-4 rounded-[var(--radius-md)] border border-border bg-card px-4 py-3">
+      <Skeleton className="h-12 w-12 rounded-[var(--radius-sm)]" />
+      <div className="min-w-0 flex-1 flex flex-col gap-1.5">
+        <Skeleton className="h-3 w-1/2" />
+        <Skeleton className="h-2.5 w-20" />
+      </div>
+      <Skeleton className="h-8 w-8 rounded-[var(--radius-sm)]" />
+    </div>
+  );
+}
+
+export function PlaylistRowListSkeleton({ count = 6 }: CountProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <PlaylistRowSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/**
  * Mirrors `<UserRow>` in `src/app/admin/page.tsx`. Used as the
  * loading state for the admin user list — same column grid (`1fr +
  * five fixed-width columns` on lg+, single-column on mobile) so the
