@@ -19,8 +19,7 @@ import { useT } from '@/i18n';
  * react-query cache (the parent explore page already fetched it),
  * fetches tracks via the dedicated `/explore/playlists/:uuid/tracks`
  * worker endpoint, and offers a one-tap "Сохранить в библиотеку"
- * action that uses the existing linked-playlist save flow from PR
- * #131.
+ * action that uses the existing linked-playlist save flow.
  */
 export function TidalPlaylistPage() {
   const t = useT();
