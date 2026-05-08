@@ -52,7 +52,7 @@
 | 4   | `devin/1778244500-refactor-collection-pages` | Album/Artist/Playlist → `<PageHero>` + IconButton | open / awaiting CI | [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381) |
 | 5   | `devin/1778244750-refactor-i18n-audit`  | Eliminate residual hardcoded language strings        | open / awaiting CI | [#382](https://github.com/BRATAN-CORP/bratan-music/pull/382) |
 | 6   | `devin/1778244723-refactor-polish`      | --shadow-cover token, hero shadows                   | open / awaiting CI | [#383](https://github.com/BRATAN-CORP/bratan-music/pull/383) |
-| 7   | `devin/<ts>-refactor-cleanup`           | Cleanup: outdated multiline comments, dead imports   | in progress   | —                                                               |
+| 7   | `devin/1778244958-refactor-cleanup`     | Trim historical PR# references from inline comments  | open / awaiting CI | [#384](https://github.com/BRATAN-CORP/bratan-music/pull/384) |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -101,6 +101,12 @@
   `shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]` строк заменены на
   `shadow-[var(--shadow-cover)]` (album/artist/playlist hero +
   downloaded library swatch). База на PR #5.
+- 2026-05-08T12:58Z — PR #7 (cleanup, #384) открыт. Удалены
+  устаревшие ссылки на номера PR (#120, #287, #131) из
+  многострочных комментариев в `Marquee`, `TiltCard`,
+  `app/rooms/list.tsx`, `app/explore/playlist.tsx` — фиксы давно
+  смерджены, нарратив "первая попытка / надёжный фикс" заменён на
+  чистое описание текущего поведения. База на PR #6.
 
 ---
 
