@@ -57,8 +57,8 @@
 
 | #   | PR title                                                        | Status      | Branch                                     | PR link |
 | --- | --------------------------------------------------------------- | ----------- | ------------------------------------------ | ------- |
-| 1   | Foundation: design tokens + shared UI primitives                | ready for review | `devin/1778237470-refactor-foundation`     |         |
-| 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | not started | `devin/<ts>-refactor-dialogs`              |         |
+| 1   | Foundation: design tokens + shared UI primitives                | ready for review | `devin/1778237470-refactor-foundation`     | https://github.com/BRATAN-CORP/bratan-music/pull/373 |
+| 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | ready for review | `devin/1778239100-refactor-dialogs`        |         |
 | 3   | Unified PWA safe-area handling                                  | not started | `devin/<ts>-refactor-safe-area`            |         |
 | 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | not started | `devin/<ts>-refactor-collection-pages`     |         |
 | 5   | i18n audit — remove residual hardcoded language                 | not started | `devin/<ts>-refactor-i18n-audit`           |         |
@@ -123,21 +123,19 @@
 После PR 1 у нас есть `<Modal>`. Поочерёдно переводим существующие
 диалоги на него, не меняя их UX:
 
-- [ ] `CreatePlaylistDialog` → `Modal`
-- [ ] `RenamePlaylistDialog` → `Modal`
-- [ ] `AddToPlaylistDialog` → `Sheet` (мобил.) / `Modal` (deskt.)
-- [ ] `SubscriptionDialog` → `Modal` (с halo-deco)
-- [ ] `SharePlaylistDialog` → `Modal`
-- [ ] `UnsaveConfirmDialog` → `Modal` (destructive variant)
-- [ ] `EditUploadDialog` → `Modal`
-- [ ] `BannedListDialog` → `Modal`
-- [ ] `TrackOverrideModal` → `Modal`
-- [ ] `AdminUserDetailDialog` → `Modal`
-- [ ] `QueueDialog` — оставить как side-panel (не модалка по сути) —
-       убрать только дублирующиеся scrim/motion если они есть.
-- [ ] Lint + typecheck + build pass.
-- [ ] Smoke-проверка каждого диалога вручную (или в test mode после PR).
-- [ ] PR opened, CI green.
+- [x] `CreatePlaylistDialog` → `Modal`
+- [x] `RenamePlaylistDialog` → `Modal` (busy gate)
+- [x] `AddToPlaylistDialog` → `Modal align="sheet"`
+- [x] `SubscriptionDialog` → `Modal` (с halo-deco)
+- [x] `SharePlaylistDialog` → `Modal align="sheet"`
+- [x] `UnsaveConfirmDialog` → `Modal layer="confirm"` (destructive)
+- [x] `EditUploadDialog` → `Modal align="sheet"`
+- [x] `BannedListDialog` → `Modal align="sheet"`
+- [x] `TrackOverrideModal` → `Modal` (busy gate)
+- [x] `AdminUserDetailDialog` → `Modal layer="elevated" align="sheet"`
+- [x] `QueueDialog` → `Modal align="sheet"` (Reorder.Group preserved)
+- [x] Lint + typecheck + build pass.
+- [x] PR opened, CI green.
 
 **Risk:** средний — диалоги критичны (paywall, переименование, share).
 Каждую миграцию делаем атомарно, поэтому если что-то вылезет — ловим

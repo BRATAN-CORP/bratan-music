@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { motion, AnimatePresence, Reorder, useReducedMotion } from 'motion/react';
+import { useId, useState } from 'react';
+import { Reorder } from 'motion/react';
 import { Ban, GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { Modal } from '@/components/ui/Modal';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { useT } from '@/i18n';
@@ -21,7 +22,7 @@ interface QueueDialogProps {
  */
 export function QueueDialog({ open, onClose }: QueueDialogProps) {
   const t = useT();
-  const reduce = useReducedMotion();
+  const titleId = useId();
   const queue = usePlayerStore((s) => s.queue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -37,96 +38,70 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            key="queue-backdrop"
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="liquid-glass-scrim fixed inset-0 z-[60]"
-            onClick={onClose}
-            aria-hidden
-          />
+    <Modal
+      open={open}
+      onClose={onClose}
+      align="sheet"
+      labelledBy={titleId}
+      panelClassName="max-w-[520px] flex flex-col rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+    >
+      <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <ListOrdered size={15} className="text-muted-foreground" />
+          <span id={titleId} className="truncate text-sm font-medium">{t('queue.title')}</span>
+          <span className="text-xs text-muted-foreground">· {queue.length}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          aria-label={t('common.close')}
+        >
+          <X size={14} />
+        </button>
+      </div>
 
-          <div className="fixed inset-0 z-[60] flex flex-col items-center justify-end md:justify-center pointer-events-none">
-            <motion.div
-              key="queue-panel"
-              role="dialog"
-              aria-modal="true"
-              aria-label={t('queue.title')}
-              initial={{ opacity: 0, y: 32, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              style={{ maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))' }}
-              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--radius-xl)] md:mb-0 md:rounded-[var(--radius-lg)]"
-            >
-              <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <ListOrdered size={15} className="text-muted-foreground" />
-                  <span className="truncate text-sm font-medium">{t('queue.title')}</span>
-                  <span className="text-xs text-muted-foreground">· {queue.length}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  aria-label={t('common.close')}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-
-              <div data-allow-pan-y className="min-h-0 flex-1 overflow-y-auto p-1.5">
-                {queue.length === 0 ? (
-                  <p className="px-3 py-10 text-center text-xs text-muted-foreground">
-                    {t('queue.empty')}
-                  </p>
-                ) : (
-                  <Reorder.Group
-                    axis="y"
-                    values={queue}
-                    onReorder={handleReorder}
-                    className="flex flex-col"
-                    layoutScroll
-                  >
-                    {queue.map((t, i) => {
-                      const active = currentTrack?.id === t.id;
-                      return (
-                        <QueueRow
-                          key={t.id}
-                          track={t}
-                          index={i}
-                          active={active}
-                          isPlaying={active && isPlaying}
-                          dragging={draggingId === t.id}
-                          onDragStart={() => setDraggingId(t.id)}
-                          onDragEnd={() => setDraggingId(null)}
-                          // Active row toggles play/pause; inactive
-                          // rows jump-and-play. Single click = single
-                          // intent, mirrors how TrackItem behaves.
-                          onJump={() => (active ? togglePlay() : jumpToQueue(i))}
-                          onRemove={() => removeFromQueue(t.id)}
-                        />
-                      );
-                    })}
-                  </Reorder.Group>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        </>
-      )}
-    </AnimatePresence>
+      <div data-allow-pan-y className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        {queue.length === 0 ? (
+          <p className="px-3 py-10 text-center text-xs text-muted-foreground">
+            {t('queue.empty')}
+          </p>
+        ) : (
+          <Reorder.Group
+            axis="y"
+            values={queue}
+            onReorder={handleReorder}
+            className="flex flex-col"
+            layoutScroll
+          >
+            {queue.map((tr, i) => {
+              const active = currentTrack?.id === tr.id;
+              return (
+                <QueueRow
+                  key={tr.id}
+                  track={tr}
+                  active={active}
+                  isPlaying={active && isPlaying}
+                  dragging={draggingId === tr.id}
+                  onDragStart={() => setDraggingId(tr.id)}
+                  onDragEnd={() => setDraggingId(null)}
+                  // Active row toggles play/pause; inactive
+                  // rows jump-and-play. Single click = single
+                  // intent, mirrors how TrackItem behaves.
+                  onJump={() => (active ? togglePlay() : jumpToQueue(i))}
+                  onRemove={() => removeFromQueue(tr.id)}
+                />
+              );
+            })}
+          </Reorder.Group>
+        )}
+      </div>
+    </Modal>
   );
 }
 
 interface RowProps {
   track: Track;
-  index: number;
   active: boolean;
   isPlaying: boolean;
   dragging: boolean;
