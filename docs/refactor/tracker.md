@@ -64,7 +64,9 @@
 | 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | merged | [#394](https://github.com/BRATAN-CORP/bratan-music/pull/394) |
 | 17  | `devin/1778252772-comment-cleanup-pass`      | Comment cleanup pass — collapse multi-paragraph narrative docstrings in 10 non-audio-engine files (preserve rationale / quirk / edge-case docs) | merged | [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395) |
 | 18  | `devin/1778263961-docs-sync-tracker`         | Docs sync — close stale statuses / placeholders in tracker, daily-changes, REFACTOR_PROGRESS                                                    | merged | [#396](https://github.com/BRATAN-CORP/bratan-music/pull/396)    |
-| 19  | `devin/1778265136-prev-track-threshold`      | Player "previous" 3 s rewind threshold + gesture override — button / mediaSession respect threshold; mini-player swipe + fullscreen cover drag bypass via `previous(true)` | open   | —                                                            |
+| 19  | `devin/1778265136-prev-track-threshold`      | Player "previous" 3 s rewind threshold + gesture override — button / mediaSession respect threshold; mini-player swipe + fullscreen cover drag bypass via `previous(true)` | merged | [#397](https://github.com/BRATAN-CORP/bratan-music/pull/397) |
+| 20  | `devin/1778267378-library-redesign-liquidglass` | Library redesign — WebGL `liquidglass` hero + Radix-based `<Tabs/>` + 4-up `LibraryStatsRow` + `LibraryEmptyState` (rotating concentric rings) + `.liquid-glass` SCSS recipe iridescent shimmer / highlight stripe (z-index: -1 pseudo-elements). 14 новых i18n ключей. Audio-engine core / security — нетронуты. **Reverted by PR #21 ([#399]) по явной просьбе пользователя — «откати все изменения»** | merged → reverted | [#398](https://github.com/BRATAN-CORP/bratan-music/pull/398) |
+| 21  | `devin/1778269178-revert-pr-398-library-redesign` | Full revert PR #20 (`git revert -m 1 f129348`) — undo всем 14 файлам/1834 строкам #398 одним коммитом. Не force-push в main; revert PR на review. Re-revert path остаётся открытым (`git revert <revert-sha>`) | open   | [#399](https://github.com/BRATAN-CORP/bratan-music/pull/399) |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -318,6 +320,22 @@
   `Equalizer.tsx`, `LyricsPanel.tsx`) и security-конфигурация (HMAC,
   CORS allowlist, RLS, parameterized SQL) не тронуты — это
   markdown-only PR.
+- 2026-05-08T18:50Z — PR #19 (#397) смерджен в `main`. CI зелёный.
+- 2026-05-08T19:25Z — PR #20 (#398, library redesign + liquidglass
+  миграция + glass cosmetic upgrade) смерджен в `main` и тут же
+  по явному запросу пользователя помечен как `говно` и реквестован
+  полный откат (буквальная цитата: «откати полностью прошлый пр.
+  я уже смержил, но это просто пиздец. откати все изменения»).
+- 2026-05-08T19:39Z — PR #21 (#399, full revert PR #20)
+  подготовлен. `git revert -m 1 f129348` — один коммит, undo всем
+  14 файлам / 1834 строкам #20. Не force-push в main (запрещено
+  AGENTS.md), не amend, не cherry-pick. Audio engine и security
+  не задеты ни в #20, ни в revert'е. После мерджа этого PR `main`
+  возвращается к pre-#20 состоянию (HEAD=`4b75297`). Re-revert
+  path: `git revert <revert-sha>` восстанавливает редизайн —
+  если пользователь захочет вернуть part of it отдельным scoped
+  PR. Дальнейший план: `boneyard-js` скелетоны на `/library`
+  отдельным маленьким PR без редизайна / liquidglass / shadcn.
 - 2026-05-08T18:34Z — PR #19 (player "previous" threshold) подготовлен.
   Под явный bug-report пользователя ("кнопка назад на середине трека
   багуется"): `store.previous()` всегда отдавал предыдущий трек, даже
@@ -359,6 +377,8 @@
 | 2026-05-08 ~14:55       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #16 (iOS PWA mediaSession sync — fix Control Center play/pause desync во время crossfade) |
 | 2026-05-08 ~15:25       | `1a56046f-8dc5-4e06-b779-25be387e9447`              | PR #17 (#395) — comment cleanup pass, 10 non-audio-engine файлов, нетто −840 строк |
 | 2026-05-08 ~18:10       | `7f10684789d747179251e486ffb73fe1`                  | PR #18 (#396) — docs sync: закрыт стейл-статус PR #17, заполнены 7 placeholder PR-ссылок в `2026-05-08.md`, добавлены записи PR #16 / PR #17, `REFACTOR_PROGRESS.md` помечен historical |
-| 2026-05-08 ~18:34       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #19 (player "previous" threshold) — `previous(force?)` в `store/player.ts`: <3 s → prev track, ≥3 s → rewind to 0, gesture (`force=true`) всегда → prev. 3 callsite-обновления (Player.tsx, FullscreenPlayer.tsx button + drag, SwipeTrackStrip.tsx). Audio-engine core / security — нетронуты. |
+| 2026-05-08 ~18:34       | `7f10684789d747179251e486ffb73fe1`                  | PR #19 (#397) — `previous(force?)` в `store/player.ts`: <3 s → prev track, ≥3 s → rewind to 0, gesture (`force=true`) всегда → prev. 3 callsite-обновления (Player.tsx, FullscreenPlayer.tsx button + drag, SwipeTrackStrip.tsx). Audio-engine core / security — нетронуты. |
+| 2026-05-08 ~19:25       | `7f10684789d747179251e486ffb73fe1`                  | PR #20 (#398) — library redesign + glass cosmetic upgrade. WebGL `liquidglass` hero panel + Radix `<Tabs/>` + `LibraryStatsRow` + `LibraryEmptyState` + `.liquid-glass` SCSS iridescent shimmer recipe + 14 i18n ключей. Audio-engine core / security — нетронуты. Smerged. |
+| 2026-05-08 ~19:39       | `7f10684789d747179251e486ffb73fe1` (текущий)        | PR #21 (#399, revert) — `git revert -m 1 f129348` отменяет PR #20 по явной просьбе пользователя («откати все изменения»). Не force-push в main. После мерджа `main` возвращается к pre-#20 состоянию. Re-revert path остаётся через `git revert <revert-sha>`. Дальнейший план обсудили: `boneyard-js` скелетоны отдельным scoped PR без redesign-overhead'а. |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
