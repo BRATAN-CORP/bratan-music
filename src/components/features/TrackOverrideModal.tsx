@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
-import { Upload, X, Loader2, Trash2 } from 'lucide-react';
+import { Upload, Loader2, Trash2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { Button } from '@/components/ui/Button';
+import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
 import { useT } from '@/i18n';
 import { toast } from '@/store/toast';
@@ -45,8 +46,6 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
     // would refetch the override status and reset the dialog mid-flight.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, trackId]);
-
-  if (!open) return null;
 
   const refreshStream = () => {
     if (currentTrackId === trackId) bumpStream();
@@ -95,92 +94,87 @@ export function TrackOverrideModal({ open, onClose, trackId, trackTitle }: Track
   const hasOverride = status?.exists === true;
 
   return (
-    <div
-      className="liquid-glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
+    <Modal
+      open={open}
+      onClose={onClose}
+      ariaLabel={t('override.title')}
+      panelClassName="p-6"
     >
-      <div
-        className="liquid-glass w-full max-w-sm rounded-[var(--radius-lg)] p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold tracking-tight">{t('override.title')}</h2>
-          <Button onClick={onClose} variant="ghost" size="icon" className="h-8 w-8" aria-label={t('override.close')}>
-            <X size={16} />
-          </Button>
+      <ModalHeader
+        title={t('override.title')}
+        description={trackTitle}
+        onClose={onClose}
+        closeAriaLabel={t('override.close')}
+        className="mb-4"
+      />
+
+      {statusLoading ? (
+        <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
+          <Loader2 size={14} className="animate-spin" />
+          {t('override.checking')}
         </div>
+      ) : (
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleUpload(file);
+            }}
+          />
 
-        <p className="mb-5 truncate text-xs text-muted-foreground">{trackTitle}</p>
+          {hasOverride && (
+            <p className="mb-3 rounded-[var(--radius-sm)] border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              {t('override.currentVersion')}
+            </p>
+          )}
 
-        {statusLoading ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" />
-            {t('override.checking')}
-          </div>
-        ) : (
-          <>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="audio/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUpload(file);
-              }}
-            />
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading || deleting}
+              className="w-full"
+              variant="outline"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  {t('override.uploading')}
+                </>
+              ) : (
+                <>
+                  <Upload size={14} />
+                  {hasOverride ? t('override.replaceFile') : t('override.pickFile')}
+                </>
+              )}
+            </Button>
 
             {hasOverride && (
-              <p className="mb-3 rounded-[var(--radius-sm)] border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
-                {t('override.currentVersion')}
-              </p>
-            )}
-
-            <div className="flex flex-col gap-2">
               <Button
-                onClick={() => fileRef.current?.click()}
+                onClick={handleDelete}
                 disabled={uploading || deleting}
                 className="w-full"
-                variant="outline"
+                variant="ghost"
               >
-                {uploading ? (
+                {deleting ? (
                   <>
                     <Loader2 size={14} className="animate-spin" />
-                    {t('override.uploading')}
+                    {t('override.deleting')}
                   </>
                 ) : (
                   <>
-                    <Upload size={14} />
-                    {hasOverride ? t('override.replaceFile') : t('override.pickFile')}
+                    <Trash2 size={14} />
+                    {t('override.deleteMy')}
                   </>
                 )}
               </Button>
-
-              {hasOverride && (
-                <Button
-                  onClick={handleDelete}
-                  disabled={uploading || deleting}
-                  className="w-full"
-                  variant="ghost"
-                >
-                  {deleting ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      {t('override.deleting')}
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={14} />
-                      {t('override.deleteMy')}
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+            )}
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }

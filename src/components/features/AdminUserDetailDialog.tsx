@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import {
   X, Loader2, Crown, Star, Ban, Shield, ShieldOff, Undo2, Database, ListMusic,
   Heart, Disc, Music2, ThumbsDown, History, Clock, Layers, KeyRound, AlertOctagon,
@@ -10,6 +8,7 @@ import {
   useAdminUserStats, useBanUser, useUnbanUser, useToggleAdmin, useGrantSub,
 } from '@/hooks/useAdminUsers';
 import { Button } from '@/components/ui/Button';
+import { Sheet } from '@/components/ui/Sheet';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import type { AdminUserStats } from '@/types/admin';
 
@@ -28,96 +27,49 @@ function intlLocale(locale: string): string {
  * the heavy /admin/users/:id endpoint on demand and renders every
  * statistic an operator might care about (subscription history, R2
  * storage breakdown, library counts, listening aggregates, sessions,
- * preferences). Bottom-sheet on mobile, right-side panel on lg+ — same
- * visual vocabulary as QueueDialog / SubscriptionDialog.
+ * preferences). Bottom-sheet on mobile, centered modal on md+ via
+ * the shared `Sheet` primitive at `layer="elevated"` so it can
+ * paint above standard-layer dialogs from elsewhere in the app.
  */
 export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetailDialogProps) {
   const { t, locale } = useI18n();
   const intl = intlLocale(locale);
-  const reduce = useReducedMotion();
   const open = !!userId;
 
   const { data, isLoading, isFetching, error } = useAdminUserStats(userId);
 
-  // Lock body scroll while the panel is open so background lists don't
-  // bleed through on mobile.
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
-
-  // ESC closes — keyboard parity with the rest of the dialog vocabulary.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
   return (
-    <AnimatePresence>
-      {open && userId && (
-        <>
-          <motion.div
-            key="admin-detail-backdrop"
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            className="liquid-glass-scrim fixed inset-0 z-[70]"
-            onClick={onClose}
-            aria-hidden
-          />
+    <Sheet
+      open={open}
+      onClose={onClose}
+      layer="elevated"
+      ariaLabel={t('admin.detail.title')}
+      panelClassName="flex w-[min(720px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+    >
+      <DetailHeader
+        title={t('admin.detail.title')}
+        onClose={onClose}
+        isFetching={isFetching && !!data}
+      />
 
-          {/* Layout: bottom-sheet on phones, centred modal on md+, matching
-              QueueDialog / BannedListDialog so admin drill-down reads as
-              the same dialog vocabulary as the rest of the app. The
-              previous right-rail layout (slide-in from x:32, full-height
-              border-l) was an outlier — the user explicitly asked for
-              this card to come from the centre, like the queue. */}
-          <div className="fixed inset-0 z-[70] flex flex-col items-center justify-end md:justify-center pointer-events-none">
-            <motion.div
-              key="admin-detail-panel"
-              role="dialog"
-              aria-modal="true"
-              aria-label={t('admin.detail.title')}
-              initial={reduce ? false : { opacity: 0, y: 32, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 32, scale: 0.97, transition: { duration: 0.18 } }}
-              transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              style={{ maxHeight: 'calc(100dvh - 7rem - env(safe-area-inset-bottom, 0px))' }}
-              className="liquid-glass pointer-events-auto mx-3 mb-[calc(env(safe-area-inset-bottom,0px)+5rem)] flex w-[min(720px,calc(100vw-24px))] flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card md:mb-0 md:rounded-[var(--radius-lg)]"
-            >
-              <DetailHeader
-                title={t('admin.detail.title')}
-                onClose={onClose}
-                isFetching={isFetching && !!data}
-              />
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-                {isLoading && !data ? (
-                  <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-                    <Loader2 size={14} className="mr-2 animate-spin" /> {t('admin.detail.loading')}
-                  </div>
-                ) : error ? (
-                  <div className="flex flex-col items-center gap-2 py-16 text-center">
-                    <AlertOctagon size={28} className="text-destructive" />
-                    <p className="text-sm font-medium">{t('admin.detail.error')}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {error instanceof Error ? error.message : String(error)}
-                    </p>
-                  </div>
-                ) : data ? (
-                  <DetailBody data={data} meId={meId} t={t} intl={intl} onClose={onClose} />
-                ) : null}
-              </div>
-            </motion.div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+        {isLoading && !data ? (
+          <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+            <Loader2 size={14} className="mr-2 animate-spin" /> {t('admin.detail.loading')}
           </div>
-        </>
-      )}
-    </AnimatePresence>
+        ) : error ? (
+          <div className="flex flex-col items-center gap-2 py-16 text-center">
+            <AlertOctagon size={28} className="text-destructive" />
+            <p className="text-sm font-medium">{t('admin.detail.error')}</p>
+            <p className="text-xs text-muted-foreground">
+              {error instanceof Error ? error.message : String(error)}
+            </p>
+          </div>
+        ) : data ? (
+          <DetailBody data={data} meId={meId} t={t} intl={intl} onClose={onClose} />
+        ) : null}
+      </div>
+    </Sheet>
   );
 }
 
