@@ -23,23 +23,47 @@
 >
 > Каждая задача — отдельный PR. После каждого PR — апдейт этого файла.
 
-Свежий батч (2026-05-08, вечер):
+Свежий батч (2026-05-08):
 
-> Переделать вид библиотеки в разных вариантах адаптива; переделать дизайн
-> страниц авторов / плейлистов / альбомов (что-то с отступом сверху не в
-> pwa-mobile, нижний блюр сделать плавным градиентом); расширить карточку
-> пользователя в админ-панели (только её, остальные компоненты не трогать);
-> убрать баг с появлением ползунка смены языка снизу при заходе в профиль;
-> переделать дизайн страницы поиска (стартовой и с запросами); переделать
-> дизайн `/rooms` (стартовый экран, убрать иконку наушников и градиент на
-> квадрате с иконкой); добавить в проект boneyard.
+> Переделать вид библиотеки в разных вариантах адаптива; переделать
+> дизайн страниц авторов / плейлистов / альбомов (что-то с отступом
+> сверху не в pwa-mobile, нижний блюр сделать плавным градиентом);
+> расширить карточку пользователя в админ-панели (только её, остальные
+> компоненты не трогать); убрать баг с появлением ползунка смены языка
+> снизу при заходе в профиль; переделать дизайн страницы поиска
+> (стартовой и с запросами); переделать дизайн `/rooms` (стартовый
+> экран, убрать иконку наушников и градиент на квадрате с иконкой);
+> добавить в проект boneyard.
+
+Уточнения по ходу батча:
+
+- "boneyard" → **skeleton screens** (заменить крутящиеся лоадеры на
+  shimmer-каркасы), не code-archive (изначальная интерпретация — PR
+  #406 — отозвана revert'ом #410, а реальная фича приехала в #411).
+- top-padding должен быть **только** на PWA (Android / iOS), на
+  десктопе / мобильном вебе — флушится с верхом viewport. При этом
+  ambience-слои (radial glow, cover blur, artist crossfade) НЕ должны
+  обрезаться — они должны свободно тянуться до верха.
+- В полноэкранном плеере (PWA iOS) иконки header'а и подпись "Сейчас
+  играет" должны быть на одной строке.
+- Плеер не должен раздуваться от длинного списка артистов через
+  запятую — нужна та же fixed-width + marquee-scroll схема, как у
+  title, с edge-fade только во время движения и кликабельностью
+  каждого артиста.
+- На /library и /search свет/блюр тоже надо тянуть к верху (не
+  обрезать) — отдельный PR #412.
+- LanguageSwitcher всё ещё глючил (pill летел из неоткуда при заходе
+  в профиль) + при смене языка появлялся ложный тост "Снова в сети" —
+  оба фикса в PR #413.
 
 ## Hard constraints (не нарушаем)
 
-- Не трогаем audio engine: `useAudioPlayer`, `Player.tsx`, `FullscreenPlayer.tsx`,
-  визуализатор / EQ / lyrics.
-- Не ослабляем безопасность: HMAC Telegram WebApp, JWT auth, CORS allowlist,
-  RLS, parameterized SQL.
+- Не трогаем audio engine: `useAudioPlayer`, playback-логику
+  `Player.tsx` / `FullscreenPlayer.tsx`, визуализатор / EQ / lyrics.
+  Visual-only фиксы header'а и marquee для имён артистов в плеере —
+  с явного override'а пользователя в чате.
+- Не ослабляем безопасность: HMAC Telegram WebApp, JWT auth, CORS
+  allowlist, RLS, parameterized SQL.
 - Не модифицируем уже применённые D1-миграции.
 - Не делаем force-push в main.
 - Каждый PR держим скоупанным — лучше шесть маленьких чем один большой.
@@ -48,66 +72,83 @@
 
 ## Roadmap (текущая серия)
 
-Старые `merged` PR (#373..#396) вычищены из таблицы по запросу пользователя
-("ты можешь полностью стереть старые задачи, которые уже выполнены"). История
-по ним — в `git log`, в `docs/daily-changes/`, и частично в Handoff log ниже.
+Старые `merged` PR (#373..#396) вычищены из таблицы по запросу
+пользователя. История по ним — в `git log`, `docs/daily-changes/`,
+частично в Handoff log ниже.
 
-| #   | Branch                                       | Title                                                                                          | Status | PR                                                              |
-| --- | -------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------- |
-| 1   | `devin/1778271260-fix-language-switcher-anim` | LanguageSwitcher — убрать "вылет снизу" thumb-индикатора при заходе в профиль                  | merged | [#400](https://github.com/BRATAN-CORP/bratan-music/pull/400)    |
-| 2   | `devin/1778271340-hero-polish`               | PageHero — top-padding для не-PWA + плавный bottom blur fade gradient                          | merged | [#401](https://github.com/BRATAN-CORP/bratan-music/pull/401)    |
-| 3   | `devin/1778271470-library-redesign`          | Library page — адаптивный редизайн, унификация со стилем альбомов / артистов / плейлистов      | merged | [#402](https://github.com/BRATAN-CORP/bratan-music/pull/402)    |
-| 4   | `devin/1778271600-search-redesign`           | Search page (start + results) — единый стиль с остальными разделами                            | merged | [#403](https://github.com/BRATAN-CORP/bratan-music/pull/403)    |
-| 5   | `devin/1778271720-rooms-list-redesign`       | `/rooms` start screen — выкинуть headphones-icon с градиентом, унифицировать hero              | merged | [#404](https://github.com/BRATAN-CORP/bratan-music/pull/404)    |
-| 6   | `devin/1778271817-admin-usercard-expand`     | Admin → UserCard — расширенная карточка (только её): widened panel, refresh, copy-id, inline ban form | open   | [#405](https://github.com/BRATAN-CORP/bratan-music/pull/405)    |
-| 7   | `devin/1778271817-add-boneyard`              | Add `boneyard/` archive directory + ESLint ignore + contract README                            | open   | [#406](https://github.com/BRATAN-CORP/bratan-music/pull/406)    |
-| 8   | `devin/1778271971-tracker-sync`              | Tracker sync — drop merged old roadmap rows, add #400–#406, refresh Live status / Handoff log  | open   | (этот PR)                                                       |
+| #    | Title                                                                                                            | Status | PR                                                              |
+| ---- | ---------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------- |
+| #400 | LanguageSwitcher — попытка №1 фикса "вылета снизу" thumb-индикатора (`initial={false}` на `LayoutGroup`)         | merged → reopened by #413 | [#400](https://github.com/BRATAN-CORP/bratan-music/pull/400) |
+| #401 | PageHero — top-padding для не-PWA + плавный bottom blur fade gradient                                            | merged | [#401](https://github.com/BRATAN-CORP/bratan-music/pull/401)    |
+| #402 | Library — адаптивный редизайн, унификация со стилем альбомов / артистов / плейлистов                             | merged | [#402](https://github.com/BRATAN-CORP/bratan-music/pull/402)    |
+| #403 | Search (start + results) — единый стиль с остальными разделами                                                   | merged | [#403](https://github.com/BRATAN-CORP/bratan-music/pull/403)    |
+| #404 | `/rooms` start — выкинуть headphones-icon с градиентом, унифицировать hero                                       | merged | [#404](https://github.com/BRATAN-CORP/bratan-music/pull/404)    |
+| #405 | Admin → AdminUserDetailDialog — расширенная карточка (только её)                                                 | merged | [#405](https://github.com/BRATAN-CORP/bratan-music/pull/405)    |
+| #406 | Boneyard как code-archive (`boneyard/` dir + ESLint ignore + README)                                             | reverted by #410 | [#406](https://github.com/BRATAN-CORP/bratan-music/pull/406) |
+| #407 | Tracker sync                                                                                                     | merged | [#407](https://github.com/BRATAN-CORP/bratan-music/pull/407)    |
+| #408 | PageHero — флушим hero к верху viewport (`-mt-N` к `-mx-N`), убираем "полоску" на не-PWA                         | merged | [#408](https://github.com/BRATAN-CORP/bratan-music/pull/408)    |
+| #409 | Player UX batch — fullscreen header alignment + artist-list marquee (mini + fullscreen) + сохранена кликабельность | merged | [#409](https://github.com/BRATAN-CORP/bratan-music/pull/409)  |
+| #410 | Revert #406 — boneyard как code-archive (пользователь имел в виду skeleton screens)                              | merged | [#410](https://github.com/BRATAN-CORP/bratan-music/pull/410)    |
+| #411 | Skeleton screens — page-level лоадеры → shimmer skeletons (admin / library / explore / search)                   | merged | [#411](https://github.com/BRATAN-CORP/bratan-music/pull/411)    |
+| #412 | Library + Search hero ambience — extend to top edge (`-mt-N` mirror of `-mx-N` bleed)                            | merged | [#412](https://github.com/BRATAN-CORP/bratan-music/pull/412)    |
+| #413 | LanguageSwitcher — фикс №2 (drop layoutId, single measured-position highlight) + OfflineToastWatcher gate        | open   | [#413](https://github.com/BRATAN-CORP/bratan-music/pull/413)    |
 
-`#1` — конкретный bug-report пользователя: thumb-индикатор `LanguageSwitcher`
-`<motion.div layoutId="lang-switcher-thumb">` без `initial={false}` "вылетал
-снизу" при первом монтировании страницы профиля. Фикс: пробросить
-`initial={false}` через `LayoutGroup` чтобы `layoutId` не анимировал
-mount-фазу — только последующие переключения языка. Аудио-движок не тронут.
+### Notes per PR
 
-`#2` — две полировки на hero страниц альбома / артиста / плейлиста:
-- non-PWA top-padding выглядел "обрезанным" (был `pt-safe` even off-PWA, что
-  на десктопе давало 0). Сейчас: `pt-safe` только когда есть `--pwa-safe-top`,
-  иначе `pt-6` / `sm:pt-10` для нормального воздуха.
-- bottom blur был резкой границей (`mask-image: linear-gradient(to bottom,
-  black 70%, transparent)`) — заменён на плавный double-stop fade
-  (`black 0%, black 65%, transparent 100%` с `to bottom`-направлением и
-  pixel-точным fallback для Safari).
+`#400` (merged → reopened by #413) — попытка фикса "вылета снизу"
+indicator'а через `initial={false}` на `LayoutGroup`. Не сработала, потому
+что баг вызван не первым монтированием, а сменой активной кнопки после
+двухпроходной hydration `useSettingsStore`. PR #413 решает корректно.
 
-`#3` — Library page прежде стояла на одном `<table>`-варианте без адаптива.
-Сейчас — двухмерный grid с `auto-fill, minmax(...)` ячейками, hover-эффекты
-через `transition-transform`, `<MetaChip>` под секционные заголовки,
-адаптация: 1 колонка (mobile) → 2 (tablet) → 3 (desktop) → 4 (xl).
+`#406` (reverted) — изначально интерпретировал "boneyard" как top-level
+dir для снятых с прода модулей. Пользователь уточнил — имелся в виду
+**skeleton-экран**. PR #410 откатил `boneyard/` директорию; PR #411
+реализовал skeleton screens.
 
-`#4` — Search page (`/search`) — старт-экран и результаты. Старт-экран —
-теперь grid с recent searches / suggestions / genre chips, всё через те же
-`<MetaChip>` / `<Eyebrow>`. Результаты — табы (треки / альбомы / артисты /
-плейлисты) над тем же grid'ом, с motion-driven cross-fade между табами.
+`#408` — пара `-mx-N -mt-N` в `<PageHero>` чтобы hero флушился по всем
+четырём viewport-граням. PWA `pt-safe` не задет — он живёт в app-shell
+`<main>` слоем выше, отдельно от consumer wrapper'а.
 
-`#5` — `/rooms` start screen. Убраны: hero-иконка наушников
-(`<Headphones>` в gradient-квадрате) и сам gradient, заменены на текстовый
-`<PageHero>` с `<MetaChip>` "live rooms" eyebrow. Единый стиль с
-`/library`, `/search`, `/profile`.
+`#409` — три visual-only фикса в плеере одним PR'ом (с явного
+override'а пользователя):
+1. Header alignment в `<FullscreenPlayer>`: "Сейчас играет" / "Now
+   Playing" больше не уезжает выше иконок на PWA iOS.
+2. Mini-player — артисты через запятую больше не раздувают контейнер;
+   вынесен новый `<ArtistLinks>` + reusable `<Marquee>` с edge-fade
+   только во время движения, fixed-width контейнер, кликабельность
+   каждого артиста сохранена.
+3. Fullscreen player — то же `<ArtistLinks>` + `<Marquee>` под title.
 
-`#6` — Admin → "Карточка пользователя". Только этот компонент
-(`AdminUserDetailDialog.tsx`) — остальные admin-tabs не тронуты по явному
-запросу. Изменения: panel расширен `min(720px,...)` → `min(960px,...)`,
-добавлен refresh-кнопка с loading state, copy-id с clipboard API +
-fallback, ban-flow `window.prompt()` заменён на inline motion-form
-(open / submit / cancel). i18n-ключи `admin.detail.refresh` / `copyId` +
-`admin.action.banPlaceholder` / `banConfirm`.
+`#411` — добавил `.skeleton-shimmer` keyframes в `globals.scss` +
+варианты в `Skeleton.tsx` (`UserRowSkeleton`, `*GridSkeleton`,
+`ExploreModuleSkeleton`, `ExploreFeedSkeleton`, `TrackListSkeleton`,
+`PlaylistSkeleton`). Заменены page-level крутящиеся `<Loader2>`: admin
+user list, admin detail dialog, library/uploads, `/explore/page/:slug/list/:i`
+(type-aware), search empty state. Inline / button-level Loader2 (Save /
+Ban / Delete) ОСТАЛИСЬ — это корректные busy-индикаторы для in-flight
+мутаций.
 
-`#7` — `boneyard/` — top-level dir для "снятого с продакшена, но
-сохранённого как референс" кода. Контракт в `boneyard/README.md`.
-ESLint игнорирует, TypeScript уже исключает (`tsconfig include: ["src"]`),
-Vite-бандл тоже не трогает. Изначально пусто.
+`#412` — на `/library` и `/search` радиальный glow обрезался сверху
+паддингом `<div className="… p-4 sm:p-6 lg:p-10">` обёртки. Применён тот
+же recipe что и в `<PageHero>` (PR #408): добавили `-mt-4 sm:-mt-6
+lg:-mt-10`, бамп `pt-4 → pt-8 sm:pt-10 lg:pt-14` чтобы заголовок остался
+на том же визуальном offset.
 
-`#8` (этот PR) — сам tracker. Убраны merged-строки старого roadmap'а
-(#373..#396) из таблицы roadmap; полная история — в `git log`.
+`#413` — два связанных бага профиля:
+1. **Language pill flies in from below**. `<motion.span layoutId="lang-highlight">`
+   сидел внутри `{active && …}`, при флипе активной кнопки (двухпроходная
+   hydration настроек: localStorage→server) `layoutId` морфил pill через
+   позицию. `initial={false}` не помогало — его роль подавить ПЕРВОЕ
+   монтирование, а не cross-mount морф. Фикс: одна always-mounted
+   `<motion.span>`, `{x, width, height}` замеряется `useLayoutEffect` +
+   `ResizeObserver` от активной кнопки, animate'ятся как обычные пропсы.
+   `initial={false}` теперь работает как ожидалось — первый paint
+   статичный, последующие смены локали — spring slide.
+2. **Phantom "Back online" toast**. У `OfflineToastWatcher` зависимости
+   были `[online, t]`, при смене локали `t` меняла identity → effect
+   ре-запускался → `isFirstMount` уже `false` → попадало в
+   `toast.success(toastOnline)` хотя `online` не менялся. Фикс:
+   `lastOnline` ref, `if (lastOnline.current === online) return;`.
 
 ---
 
@@ -117,56 +158,58 @@ Vite-бандл тоже не трогает. Изначально пусто.
 
 1. **Accent color.** Везде `--color-accent: #5E6AD2`. Малиновый
    `#c2185b` остаётся **только** в плеере как `--color-accent-secondary`
-   (фирменный gradient прогресс-бара). На остальных страницах — лиловый.
-2. **Hero motion.** Album/Artist/Playlist hero получают лёгкий fade-up
-   при входе, через `motion` (тайминг согласован с плеером).
-3. **Desktop PWA top-inset.** Без изменений (десктоп не имеет чёлки,
-   медиазапрос `pointer: coarse` сохраняем).
+   (фирменный gradient прогресс-бара).
+2. **Hero motion.** Album / Artist / Playlist hero получают лёгкий
+   fade-up при входе, через `motion` (тайминг согласован с плеером).
+3. **Top-inset.** PWA Android / iOS получают `pt-safe`
+   (`env(safe-area-inset-top)`). Десктоп / мобильный веб — `0`. Hero /
+   cards внутри page-wrapper'а флушатся к viewport-верху через `-mt-N`
+   парой к существующему `-mx-N`. Ambience-слои тянутся до границы.
 4. **OnboardingTour.** Не трогаем в этой серии PR'ов.
-5. **Brandmark в Sidebar.** `Bratan Music` остаётся как константа в коде
+5. **Brandmark в Sidebar.** `Bratan Music` остаётся как константа
    (бренд не локализуется).
-6. **Шрифты.** `Inter` + `Instrument Serif` — без изменений.
-7. **`liquid-glass` примитив.** Параметры (blur, tint, border) уже
-   унифицированы (PR #383 → `--shadow-cover` token).
-8. **Magenta accent.** Единый `--color-accent-magenta` (light `#d946ef`,
-   dark `#e879f9`) — НЕ путать с `--color-sub-accent` (player-only).
-9. **Boneyard.** Read-only архив; сюда переезжают de-prod'нутые модули,
-   которые могут пригодиться как референс. Контракт — `boneyard/README.md`.
+6. **Шрифты.** `Inter` + `Instrument Serif`.
+7. **Boneyard.** `boneyard/` директория **не используется** —
+   изначальная интерпретация термина (PR #406) откачена в #410. Termin
+   "boneyard" в этом репо означает **skeleton screens** (`bones` =
+   каркас) — реализованы в #411.
+8. **Loader-policy.** Page-level "blank surface + spinner" boundaries
+   рендерят shimmer-skeleton (см. варианты в `<Skeleton>`).
+   Button-level / inline-mutation `<Loader2>` остаются — это
+   корректные busy-сигналы для in-flight мутаций.
+9. **`<LanguageSwitcher>` highlight.** Single always-mounted
+   `<motion.span>` с измеренной `{x, width}` от активной кнопки,
+   `initial={false}`. **Не использовать** `LayoutGroup` + `layoutId`
+   для cross-button морфа — двухпроходная hydration setting'ов рвёт
+   эту схему (см. PR #413).
 
 ---
 
 ## Live status
 
-- 2026-05-08T19:30Z — старт текущего батча (PR #400..#406). Все семь
-  тасков из user-input'а:
-  - `#400` — language switcher thumb fix
-  - `#401` — hero top-padding + bottom fade gradient
-  - `#402` — library adaptive redesign
-  - `#403` — search start + results redesign
-  - `#404` — `/rooms` start hero unification
-  - `#405` — admin UserCard expand (refresh, copy-id, inline ban form)
-  - `#406` — boneyard archive directory
-  Audio engine и security не тронуты ни в одном из них.
-- 2026-05-08T19:55Z — PR #400..#404 смерджены в `main`. CI зелёный.
-- 2026-05-08T20:00Z — PR #405 (admin UserCard) и #406 (boneyard) открыты.
-- 2026-05-08T20:25Z — PR #8 (tracker sync, этот) — drop merged
-  #373..#396 из roadmap, оставлен только текущий батч; полная история
-  по старым PR — в `git log`, `docs/daily-changes/` и Handoff log ниже.
+- 2026-05-08 ~19:30 — старт текущего батча. PR #400..#406 открыты.
+- 2026-05-08 ~20:00 — PR #400..#404 + #407 merged.
+- 2026-05-08 ~20:15 — пользователь уточнил: top-padding только на PWA,
+  ambience не обрезать, "boneyard" = skeleton screens.
+- 2026-05-08 ~20:30 — PR #408 (PageHero flush к верху), #409 (player UX
+  batch), #410 (revert boneyard как code-archive) merged.
+- 2026-05-08 ~21:00 — PR #411 (skeleton screens) и #412 (library/search
+  hero ambience) merged.
+- 2026-05-08 ~21:14 — PR #413 (LanguageSwitcher v2 + OfflineToastWatcher
+  gate) — CI green (Build success, Lint & Typecheck success), ждём
+  user-review / merge.
 
 ---
 
 ## Handoff log
 
-| Когда (UTC)       | Кто (Devin session)                          | Что сделал                                                                                  |
-| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 2026-05-08 ~11:30 | (исторический)                               | Foundation + knowledge base + диалоги/safe-area/collection-pages (PR #373..#396, merged). Полный лог — в `git log`. |
-| 2026-05-08 ~19:30 | `4dbcd574a1924b858d11b3b425ef8691` (текущий) | PR #400 (lang-switcher anim fix)                                                            |
-| 2026-05-08 ~19:35 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #401 (PageHero polish — top-padding + bottom fade gradient)                              |
-| 2026-05-08 ~19:40 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #402 (Library adaptive redesign)                                                         |
-| 2026-05-08 ~19:45 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #403 (Search start + results redesign)                                                   |
-| 2026-05-08 ~19:50 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #404 (`/rooms` start hero unification)                                                   |
-| 2026-05-08 ~19:55 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #405 (Admin UserCard expand — only that component)                                       |
-| 2026-05-08 ~20:00 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #406 (boneyard/ archive dir + ESLint ignore + contract README)                           |
-| 2026-05-08 ~20:25 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #8 (tracker sync — drop merged roadmap rows, add #400–#406)                              |
+| Когда (UTC)       | Кто (Devin session)                          | Что сделал                                                                                |
+| ----------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 2026-05-08 ~11:30 | (исторический)                               | Foundation + knowledge base + диалоги/safe-area/collection-pages (PR #373..#396, merged). |
+| 2026-05-08 ~19:30 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #400..#407 (lang switch v1, hero polish, library, search, /rooms, admin user, boneyard-as-archive, tracker sync). |
+| 2026-05-08 ~20:30 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #408 (PageHero flush top), #409 (player UX batch — header + artist marquee), #410 (revert boneyard archive). |
+| 2026-05-08 ~21:00 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #411 (skeleton screens — proper "boneyard" interpretation), #412 (library/search hero ambience top). |
+| 2026-05-08 ~21:14 | `4dbcd574a1924b858d11b3b425ef8691`           | PR #413 (LanguageSwitcher v2 — measured-position highlight; OfflineToastWatcher — gate on actual online change). |
 
-> При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
+> При следующем перехвате — добавь свою строку в этот лог и обнови
+> `Live status`.
