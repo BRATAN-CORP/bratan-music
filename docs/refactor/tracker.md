@@ -60,8 +60,9 @@
 | 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | merged | [#389](https://github.com/BRATAN-CORP/bratan-music/pull/389) |
 | 13  | `devin/1778249618-meta-chip-component`       | Extract `<MetaChip>` for the 9 "info pill" duplicates (eyebrows above section H2s)                                        | merged | [#390](https://github.com/BRATAN-CORP/bratan-music/pull/390) |
 | 14  | `devin/1778250082-eyebrow-dedup`             | Migrate 9 inline `Eyebrow`-pattern spans to existing `<Eyebrow>` (text-xs uppercase tracking-[0.25em])                    | merged | [#391](https://github.com/BRATAN-CORP/bratan-music/pull/391) |
-| 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | merged   | [#393](https://github.com/BRATAN-CORP/bratan-music/pull/393) |
-| 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | open   | _(opens after push)_ |
+| 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | merged | [#393](https://github.com/BRATAN-CORP/bratan-music/pull/393) |
+| 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | merged | [#394](https://github.com/BRATAN-CORP/bratan-music/pull/394) |
+| 17  | `devin/1778252772-comment-cleanup-pass`      | Comment cleanup pass — collapse multi-paragraph narrative docstrings in 10 non-audio-engine files (preserve rationale / quirk / edge-case docs) | open | [#395](https://github.com/BRATAN-CORP/bratan-music/pull/395) |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -278,6 +279,22 @@
   не врала, (б) следующий tap "Play" в Control Center корректно
   ушёл в наш `play` action handler. Crossfade-логика и сам
   крос-fade ramp нетронуты — гасим только Media Session-десинк.
+- 2026-05-08T17:56Z — PR #16 (#394) смерджен в `main`. CI зелёный.
+- 2026-05-08T15:25Z — PR #17 (comment cleanup pass) подготовлен.
+  Под явный запрос пользователя ("огромное количество многострочных
+  комментариев … можно стирать или сокращать") — широкий проход по
+  10 самым "тяжёлым по комментам" non-audio-engine файлам:
+  `ExploreModules.tsx`, `store/player.ts`, `usePlayHistoryLogger.ts`,
+  `app/home/page.tsx`, `useRoomChat.ts`, `useOfflineCoverUrl.ts`,
+  `OnboardingTour.tsx`, `lib/offline/downloads.ts`,
+  `useRoomBridge.ts`, `lib/offline/streamResolver.ts`. Сжаты только
+  устаревшие нарративы и многословные docstrings; всё, что
+  документирует iOS Safari quirks, race conditions, security
+  trade-offs и behavioral edge cases — сохранено. Логика, типы,
+  тесты не тронуты. Audio engine (`useAudioPlayer.ts`,
+  `Player.tsx`, `FullscreenPlayer.tsx`, `Equalizer.tsx`,
+  `LyricsPanel.tsx`) — hard constraint, не тронут. Diff: 10 файлов,
+  +632/−1472 (нетто −840 строк).
 
 ---
 

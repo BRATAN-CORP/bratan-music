@@ -9,27 +9,15 @@ import { api } from '@/lib/api';
 import { useT, type TranslationKey } from '@/i18n';
 
 /**
- * Spotlight onboarding tour — runs once per user on the first dashboard
- * visit after a successful login. The completion timestamp is persisted
- * server-side as `users.tour_completed_at`, mirrored on the auth store
- * via `User.tourCompletedAt`. Clearing the timestamp (server-side) or
- * pressing the "replay" button in the profile page replays the tour on the
- * next mount.
+ * Spotlight onboarding tour. Runs once per user; completion is
+ * persisted server-side as `users.tour_completed_at` and mirrored on
+ * the auth store as `User.tourCompletedAt`. Clearing it (server-side
+ * or via the profile "replay" button) replays on next mount.
  *
- * Design choices:
- *   - The component navigates the user across routes itself, so each
- *     step can highlight an element that lives on its own page. The
- *     alternative — a tour that only fires on `/home` — would either
- *     leave most of the product unexplained or require a separate
- *     "feature reveal" pattern per page; one self-driving tour is
- *     simpler.
- *   - Targets are addressed by `data-tour-id="..."` attributes on the
- *     real UI rather than by ref/className probing, so the tour can
- *     survive minor markup churn without becoming a flake.
- *   - The spotlight cutout is a single absolutely-positioned element
- *     with `box-shadow: 0 0 0 9999px rgba(...)`. That keeps the
- *     backdrop a single GPU layer (no SVG mask) and animates smoothly
- *     when the target moves between steps.
+ * Targets are looked up by `data-tour-id` attributes so the tour
+ * survives minor markup churn. The spotlight cutout is a single
+ * element with `box-shadow: 0 0 0 9999px rgba(...)` — keeps the
+ * backdrop a single GPU layer and animates smoothly between steps.
  */
 
 interface TourStep {
@@ -46,8 +34,7 @@ interface TourStep {
 }
 
 const STEPS: TourStep[] = [
-  // Home is the index route mounted at "/" (see router.tsx —
-  // `{ index: true, element: <HomeOrLanding /> }`). There is no
+  // Home lives at `/` (router.tsx index route). There is no
   // dedicated `/home` path; navigating there hits NotFoundPage.
   {
     targetId: 'tour-wave',
@@ -121,10 +108,9 @@ interface SpotlightRect {
 
 function readRect(target: Element): SpotlightRect {
   const r = target.getBoundingClientRect();
-  // Read the target's computed border-radius so the cutout matches.
-  // We pick the largest of the four corners since asymmetric radii
-  // would be hard to mirror in a single CSS value, and the fattest
-  // round still reads as "the same shape".
+  // Pick the largest of the four corners — asymmetric radii are hard
+  // to mirror in a single CSS value and the fattest round still
+  // reads as the same shape.
   let radius = 12;
   try {
     const cs = getComputedStyle(target);
@@ -150,9 +136,8 @@ function readRect(target: Element): SpotlightRect {
 }
 
 function fallbackRect(): SpotlightRect {
-  // Centre the spotlight when no target is found (e.g. mid-route
-  // transition). The tooltip falls back to `placement: 'center'`
-  // automatically when the spot is the viewport itself.
+  // Centred when no target is found (e.g. mid-route). Tooltip
+  // falls back to `placement: 'center'` automatically.
   const w = Math.min(window.innerWidth, 480);
   const h = 80;
   return {
@@ -179,11 +164,10 @@ function TourCard({ step, index, total, rect, onNext, onBack, onSkip }: TourCard
   const isLast = index === total - 1;
   const isFirst = index === 0;
   const cardRef = useRef<HTMLDivElement | null>(null);
-  // Real card height after layout. We keep a sensible initial guess
-  // (200) so the first frame doesn't jump from 0 → measured height.
+  // Initial guess (200) so the first frame doesn't jump from 0
+  // to the post-layout height.
   const [cardHeight, setCardHeight] = useState(200);
-  // Re-measure on viewport changes so rotating phones / resizing
-  // browser windows still places the card correctly.
+  // Re-measure on viewport changes (rotation / resize).
   const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024));
   const [vh, setVh] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 768));
 
@@ -205,10 +189,9 @@ function TourCard({ step, index, total, rect, onNext, onBack, onSkip }: TourCard
     };
   }, []);
 
-  // On narrow viewports we ditch the floating-tooltip pattern entirely
-  // and pin the card to the bottom of the screen as a sheet. The
-  // floating tooltip on a 360px-wide phone never has good placement —
-  // it either overlaps the spotlight or runs off the edge.
+  // Narrow viewports use a bottom sheet — a floating tooltip on a
+  // 360px-wide phone always overlaps the spotlight or runs off the
+  // edge.
   const isMobile = vw < 640;
   const cardWidth = isMobile ? Math.min(vw - 24, 480) : 360;
 
@@ -216,13 +199,9 @@ function TourCard({ step, index, total, rect, onNext, onBack, onSkip }: TourCard
   let left = 0;
 
   if (isMobile) {
-    // Bottom-sheet style: hugs the bottom of the screen, full width
-    // minus 12px gutter on each side. Above the player bar (~80px)
-    // when present — we add a 16px breathing-room margin below.
     left = (vw - cardWidth) / 2;
     top = vh - cardHeight - 16;
   } else {
-    // Desktop: float adjacent to the spotlight with smart placement.
     const desired = step.placement ?? 'bottom';
     let placement = desired;
     if (desired === 'bottom' && rect.top + rect.height + cardHeight + 16 > vh) {
@@ -248,8 +227,7 @@ function TourCard({ step, index, total, rect, onNext, onBack, onSkip }: TourCard
       left = vw / 2 - cardWidth / 2;
     }
 
-    // Clamp inside viewport with a 16px gutter so the card never runs
-    // off-screen, even for very tall steps.
+    // Clamp inside viewport with a 16px gutter.
     left = Math.max(16, Math.min(vw - cardWidth - 16, left));
     top = Math.max(16, Math.min(vh - cardHeight - 16, top));
   }
@@ -271,11 +249,9 @@ function TourCard({ step, index, total, rect, onNext, onBack, onSkip }: TourCard
         left,
         width: cardWidth,
         zIndex: 10001,
-        // The portal wrapper carries `pointer-events-none` so the dim
-        // backdrop from the spotlight box-shadow doesn't swallow clicks
-        // on app chrome. The card itself has to opt back in, otherwise
-        // its buttons inherit the disabled
-        // state and never fire onClick.
+        // Portal wrapper is `pointer-events-none` (so the spotlight
+        // backdrop doesn't swallow chrome clicks); the card opts
+        // back in so its buttons fire onClick.
         pointerEvents: 'auto',
       }}
       className="liquid-glass overflow-hidden rounded-[var(--radius-lg)] border border-border bg-[var(--color-surface-elevated)] p-5 shadow-2xl"
@@ -329,12 +305,9 @@ export function OnboardingTour() {
   const patchUser = useAuthStore((s) => s.patchUser);
   const accessToken = useAuthStore((s) => s.accessToken);
 
-  // Tour eligibility: authed + has never finished/skipped before. The
-  // optional `tourCompletedAt` comes from `/auth/telegram` /
-  // `/auth/nonce` payloads and is `null` for fresh accounts. We also
-  // guard against running twice in the same session via the local
-  // `dismissed` ref so that finishing the tour doesn't immediately
-  // re-open it before the auth payload round-trips.
+  // Tour eligibility: authed + never finished/skipped. The local
+  // `startedRef` guards against running twice in the same session
+  // before the auth payload round-trips.
   const eligible = useMemo(() => {
     if (!user || !accessToken) return false;
     return user.tourCompletedAt == null;
@@ -345,9 +318,8 @@ export function OnboardingTour() {
   const [rect, setRect] = useState<SpotlightRect | null>(null);
   const startedRef = useRef(false);
 
-  // Kick the tour off once after login. We delay the first step a hair
-  // so the first route's hero animations don't visually fight with the
-  // tour overlay mounting.
+  // Delay the first step so the hero animations don't fight with
+  // the overlay mounting.
   useEffect(() => {
     if (!eligible || startedRef.current) return;
     startedRef.current = true;
@@ -355,12 +327,10 @@ export function OnboardingTour() {
     return () => window.clearTimeout(id);
   }, [eligible]);
 
-  // On every step transition: navigate to the route that owns the
-  // step's target, scroll the target into view, then poll for the
-  // target element until it appears (give it ~3s, then bail to a
-  // centre-screen fallback). Without the explicit scrollIntoView the
-  // spotlight could land on an off-screen element — user reported
-  // "оно не скролит к выделенному компоненту".
+  // On step transition: navigate to the step's route, scroll the
+  // target into view, poll for it (~3s before bailing to a centred
+  // fallback). Explicit scrollIntoView prevents the spotlight
+  // landing on an off-screen element.
   useLayoutEffect(() => {
     if (!running) return;
     const step = STEPS[stepIndex];
@@ -378,20 +348,16 @@ export function OnboardingTour() {
       if (el && el.getBoundingClientRect().width > 0) {
         if (!scrolled) {
           scrolled = true;
-          // Centre the target vertically so the floating tooltip has
-          // room above and below — `block: 'center'` is friendlier
-          // than `'start'` for short targets like the WaveHero, which
-          // otherwise hug the top of the viewport with the tooltip
-          // pushed off-screen below.
+          // `block: 'center'` is friendlier than `'start'` for short
+          // targets like the WaveHero — leaves room above and below
+          // for the floating tooltip.
           el.scrollIntoView({
             block: 'center',
             inline: 'nearest',
             behavior: reduce ? 'auto' : 'smooth',
           });
-          // Wait for the smooth scroll to settle before reading the
-          // post-scroll rect. 380ms covers the default browser scroll
-          // duration on every engine; reduce-motion users skip the
-          // wait entirely (the scroll was instant for them anyway).
+          // 380ms covers the default smooth-scroll duration on every
+          // engine; reduce-motion users skip the wait.
           window.setTimeout(() => {
             if (cancelled) return;
             const after = document.querySelector(`[data-tour-id="${step.targetId}"]`);
@@ -439,9 +405,8 @@ export function OnboardingTour() {
   const finish = async () => {
     setRunning(false);
     setRect(null);
-    // Optimistically flip the local flag so the tour doesn't replay
-    // before the API confirms — the server is the source of truth on
-    // next refresh, but the user shouldn't see a flicker.
+    // Optimistically flip the local flag — server is source of
+    // truth on next refresh, this just avoids a flicker.
     patchUser({ tourCompletedAt: Math.floor(Date.now() / 1000) });
     try {
       await api.post('/user/me/tour/complete', {});
@@ -482,11 +447,10 @@ export function OnboardingTour() {
           className="pointer-events-none fixed inset-0 z-[10000]"
         >
           <motion.div
-            // Spotlight: a transparent rectangle whose 9999px box-shadow
-            // paints the rest of the viewport black. Animating top/left
-            // /width/height/borderRadius drives the cutout between steps
-            // — borderRadius mirrors the target element's own radius so
-            // the cutout matches a 24px-rounded card cleanly.
+            // Spotlight: transparent rect whose 9999px box-shadow
+            // paints the rest of the viewport black. Animating
+            // top/left/width/height/borderRadius drives the cutout
+            // between steps.
             initial={false}
             animate={{
               top: rect.top,

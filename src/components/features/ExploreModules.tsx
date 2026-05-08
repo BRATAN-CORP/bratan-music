@@ -191,12 +191,9 @@ function SectionHeader({
 }
 
 /**
- * Hero treatment for the top-level "Genres" row on /explore. Renders
- * a 2- or 3-column responsive grid of tall image tiles with a soft
- * gradient + title overlay — the same visual rhythm Tidal's own
- * Explore landing uses, adapted to our spacing tokens. Because grids
- * wrap onto multiple lines, no horizontal scroll is needed: the
- * whole genre taxonomy is visible at a glance.
+ * Hero treatment for the top-level "Genres" row: responsive grid of
+ * tall image tiles with a gradient + title overlay. No scroll —
+ * grid wraps so the whole taxonomy is visible at a glance.
  */
 function PageLinksHeroGrid({ title, items }: { title: string; items: ExplorePageLink[] }) {
   return (
@@ -212,10 +209,8 @@ function PageLinksHeroGrid({ title, items }: { title: string; items: ExplorePage
 }
 
 /**
- * Standard image-backed row for non-hero pageLinks (e.g. moods /
- * decades after the hero genres row, or any pageLinks list rendered
- * inside a sub-page). Horizontal scroller with snap so swiping on
- * mobile feels deliberate.
+ * Standard image-backed row for non-hero pageLinks (moods, decades
+ * inside sub-pages). Horizontal snap-scroller.
  */
 function PageLinksImageRow({ title, items }: { title: string; items: ExplorePageLink[] }) {
   return (
@@ -230,12 +225,9 @@ function PageLinksImageRow({ title, items }: { title: string; items: ExplorePage
 }
 
 /**
- * Decade ladder rendered as a compact pill cloud — same visual
- * weight as the icon-only "Mood & Activity" row (`PageLinksCloud`).
- * The previous tile grid was visually dominant (2/3/4-col aspect-
- * square cards) for a row whose only payload is a 4-character label,
- * which made the search empty state look unbalanced. Pill cloud is
- * dense, scannable, and matches the rest of the page's rhythm.
+ * Decade ladder as a compact pill cloud — matches the icon-only
+ * "Mood & Activity" row's visual weight, since the payload is just
+ * a 4-character label.
  */
 function PageLinksDecadeGrid({ title, items }: { title: string; items: ExplorePageLink[] }) {
   return (
@@ -275,16 +267,12 @@ function GenreTile({
   variant: 'hero' | 'row';
 }) {
   const t = useT();
-  // Larger CDN size on hero tiles so they stay crisp on retina
-  // screens; row tiles stay at 480 to keep payloads light.
+  // Hero tiles get 640 for retina; row tiles stay at 480 to keep
+  // payloads light.
   const img = tidalImageUrl(item.imageId, variant === 'hero' ? 640 : 480);
-  // Decades and a handful of mood pages don't ship with cover images,
-  // and the previous fallback was a thin diagonal gradient that read
-  // as "broken card". When there's no image we render the same
-  // shape as the landing-page "Что внутри" feature card: a solid
-  // surface with an icon mark + label, plus a hover-revealed
-  // accent-glow blob blurring under the icon. This keeps a missing
-  // image from ever looking like a layout bug.
+  // Some pages (decades, a few moods) ship without a cover. Fallback
+  // is the landing "feature card" shape — solid surface + icon mark
+  // — so a missing image doesn't read as a layout bug.
   const isDecade = /\b(19|20)\d0s?\b/i.test(item.title) || item.slug.toLowerCase().includes('decade');
   const FallbackIcon = isDecade ? CalendarRange : Sparkles;
   return (
@@ -425,28 +413,8 @@ function TrackListRow({
 }
 
 /**
- * Snap-scrolling horizontal row used by every "card scroller" on
- * Explore (albums / artists / playlists / image-backed pageLinks).
- *
- * UX details:
- * - CSS `scroll-snap-type: x mandatory` so cards land cleanly when
- *   the user flicks. Mobile swipe is the primary input on this
- *   surface; momentum scrolling does the rest natively.
- * - Soft fade masks at the left/right edges so the row reads as
- *   "scrollable content" instead of getting hard-clipped at the
- *   container border.
- * - Desktop-only chevron buttons positioned over the edges that
- *   advance ~80% of the viewport on click. They appear/hide based
- *   on whether more content exists in that direction so we don't
- *   leave a phantom button at the start/end of the row.
- */
-/**
- * Builds the CSS mask used to fade the scroller edges. We selectively
- * blank out either edge: a 12-px transparency stripe on the side that
- * still has hidden content, and a hard `black 0` on the side that's
- * already at its terminus. The CSS is identical between
- * `WebkitMaskImage` and `maskImage` — split only because Safari still
- * required the prefix at the time of writing.
+ * Builds the CSS mask for the scroller edges: 12-px transparency
+ * stripe on the scrollable side, hard `black 0` on the terminus.
  */
 function buildEdgeMask(canPrev: boolean, canNext: boolean): string {
   const left = canPrev ? 'transparent 0, black 12px' : 'black 0';
@@ -467,22 +435,13 @@ function SnapScroller({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
-  // Desktop click-and-drag state. We track whether a drag is in
-  // progress so child links can be suppressed if the user actually
-  // dragged (vs. clicked-without-moving). `dragMovedRef` is a ref
-  // because the click handler runs synchronously after pointerup
-  // and React state batching would race the value.
-  //
-  // `pendingScroll` is the most recent desired scrollLeft from a
-  // pointermove that hasn't been flushed to the DOM yet — we batch
-  // every pointermove through a single rAF so the browser only does
-  // one layout/scroll-event roundtrip per frame instead of one per
-  // pointermove (the previous synchronous writes caused the visible
-  // jankiness on long horizontal drags). `velocity` and the recent
-  // sample buffer feed the momentum/inertia animation that runs
-  // after pointerup so the row keeps gliding for a few hundred ms
-  // like a native horizontal scroller, instead of stopping dead at
-  // the cursor.
+  // Desktop click-and-drag state. `moved` is a ref (not React state)
+  // so the click handler that fires synchronously after pointerup
+  // can read it without batching races. `pendingScroll` coalesces
+  // multiple pointermoves into one rAF-batched scrollLeft write per
+  // frame — synchronous writes per move trigger layout + scroll
+  // events and visibly jank long drags. `samples` feeds the
+  // post-release inertia animation.
   const dragStateRef = useRef<{
     pointerId: number;
     startX: number;
@@ -501,21 +460,12 @@ function SnapScroller({
     const el = scrollerRef.current;
     if (!el) return;
     const update = () => {
-      // Asymmetric tolerance:
-      //   - canNext: 8 px because Chromium's smooth-scroll easing and
-      //     iOS rubber-band overscroll routinely park `scrollLeft`
-      //     within ±2-4 px of the true endpoint, leaving the right
-      //     chevron visible at the very end of long Tidal rows even
-      //     though the row could no longer scroll.
-      //   - canPrev: **1 px**. With `scroll-snap-type: x mandatory` +
-      //     `scrollPaddingLeft: 16` Chromium parks `scrollLeft` near
-      //     0 on mount but sometimes at a 4-7 px snap-correction value
-      //     before the user has interacted. The previous 8-px symmetric
-      //     tolerance happened to mask that on the right edge but on
-      //     the left it triggered the opposite bug: the left chevron
-      //     stayed visible at the very start of the row, hiding only
-      //     after the user manually scrolled. Tightening to 1 px lets
-      //     the initial-state check be honest.
+      // Asymmetric tolerance: 8 px on the right because Chromium's
+      // smooth-scroll easing and iOS rubber-band overscroll park
+      // `scrollLeft` within ±2-4 px of the true endpoint. 1 px on
+      // the left because `scroll-snap-type` + scrollPadding parks
+      // the start at 4-7 px on mount in Chromium and a wider gate
+      // would leave the left chevron stuck visible at the boundary.
       setCanPrev(el.scrollLeft > 1);
       setCanNext(el.scrollLeft + el.clientWidth + 8 < el.scrollWidth);
     };
@@ -553,45 +503,22 @@ function SnapScroller({
     el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' });
   };
 
-  // Mouse drag-to-scroll on desktop. We deliberately scope the drag
-  // initiator to the mouse button: touch users get the native flick
-  // momentum scroll and we'd just fight it by hijacking pointer
-  // events here.
+  // Mouse drag-to-scroll on desktop only — touch users get native
+  // flick momentum and hijacking pointer events would fight it.
   //
-  // **Click-vs-capture pitfall**: an earlier version called
-  // `e.preventDefault()` AND `setPointerCapture()` synchronously on
-  // pointerdown. Both broke clicks on the tile `<Link>` children:
-  //   1. preventDefault on a mouse pointerdown over an `<a>` tile
-  //      cancels the synthetic click in Chromium (the default action
-  //      of pointerdown on a link is to prepare the navigation; UA
-  //      preventDefault on it suppresses the eventual click).
-  //   2. `setPointerCapture` redirects pointerup to the captured
-  //      element, which makes the `click` event's target the LCA of
-  //      pointerdown and pointerup — i.e. the scroller, not the
-  //      `<Link>` tile. The Link's own click handler never runs and
-  //      navigation silently no-ops.
-  // The user-facing symptom on PC was: clicking an album/playlist
-  // tile in /explore did nothing. Tapping (touch) worked because
-  // touch input skipped this handler entirely.
-  //
-  // **Current approach**: keep pointerdown side-effect-free as far as
-  // the click pipeline is concerned. We register the gesture in a
-  // ref but DO NOT call preventDefault and DO NOT capture. The
-  // native HTML5 drag-image / link-drag is suppressed at the
-  // `dragstart` level (see `onDragStart` on the scroller div) which
-  // doesn't interfere with clicks. To keep pointermove firing once
-  // the cursor leaves the scroller's bounding box (the long-drag-
-  // to-edge case the previous patch tried to solve with capture),
-  // we attach the move/up listeners to `window` for the duration of
-  // the gesture. Once the user crosses the 6 px drag-threshold we
-  // call preventDefault on the move event (suppresses text-selection
-  // mid-drag) and toggle `body.style.userSelect = 'none'` so the
-  // page doesn't visibly select while the row is being dragged.
-  //
-  // Stop any glide animation that's still running. Called on a fresh
-  // pointerdown so the user can grab the scroller mid-glide and
-  // immediately drag it from the new position, and at the end of the
-  // glide itself once velocity decays.
+  // pointerdown stays side-effect-free w.r.t. the click pipeline:
+  // we don't call `preventDefault` and don't `setPointerCapture`.
+  // Both break clicks on tile `<Link>` children — preventDefault
+  // on pointerdown over an `<a>` cancels the synthetic click in
+  // Chromium, and pointer capture redirects the click target to
+  // the scroller (LCA of pointerdown/pointerup) so the Link's
+  // handler never fires. Native HTML5 link/image drag is killed at
+  // the `dragstart` level instead (`onDragStart` below). To keep
+  // pointermove firing once the cursor leaves the scroller, the
+  // move/up listeners attach to `window` for the duration of the
+  // gesture. Once we cross the 6-px drag threshold, preventDefault
+  // on the move suppresses text-selection and we toggle
+  // `body.userSelect = 'none'`.
   const cancelInertia = () => {
     if (inertiaRafRef.current !== null) {
       cancelAnimationFrame(inertiaRafRef.current);
@@ -599,11 +526,10 @@ function SnapScroller({
     }
   };
 
-  // Refs to window-level move/up listeners attached during a gesture.
-  // Stored on the component so the cleanup path on pointerup /
-  // pointercancel can detach them. We can't keep them inside
-  // `dragStateRef` because the React closure that registered them
-  // needs to detach the SAME function references later.
+  // Window-level move/up listeners attached during a gesture. Stored
+  // on the component so cleanup on pointerup/pointercancel can detach
+  // the SAME function references — can't live in `dragStateRef`
+  // since the React closure needs the originals.
   const windowMoveRef = useRef<((ev: PointerEvent) => void) | null>(null);
   const windowUpRef = useRef<((ev: PointerEvent) => void) | null>(null);
 
@@ -625,44 +551,29 @@ function SnapScroller({
     const el = scrollerRef.current;
     if (!el) return;
     const dx = e.clientX - drag.startX;
-    // Drag activation threshold: 6 px. Below that, treat the gesture
-    // as a click and DO NOT touch `scrollLeft` — laptop trackpads can
-    // shift the cursor 3-5 px between mousedown and mouseup on a
-    // normal tap, and any synthetic scroll during that window would
-    // (a) drag the row out from under the cursor so the click target
-    // moves, and (b) trip the `moved` flag so the post-pointerup
-    // click suppressor swallows the user's tap on an album / playlist
-    // tile. Once moved=true we keep scrolling as before. 6 px is a
-    // sweet spot — high enough to ride out trackpad jitter on taps,
-    // low enough that a deliberate 1-2 cm drag commits immediately.
+    // Drag activation threshold: 6 px. Below that the gesture is a
+    // click — don't touch scrollLeft, otherwise trackpad jitter
+    // (3-5 px between mousedown/up on a normal tap) would shift the
+    // row under the cursor AND trip the click-suppressor.
     if (!drag.moved) {
       if (Math.abs(dx) <= 6) return;
       drag.moved = true;
-      // Now that we've committed to a drag: disable scroll-snap so
-      // the browser doesn't fight every `scrollLeft` write, suppress
-      // text-selection so dragging doesn't paint a selection across
-      // the page, and (defensively) call preventDefault to kill any
-      // residual mid-gesture text-selection on Firefox.
+      // Drag committed: disable snap (browser would fight every
+      // scrollLeft write), kill text-selection.
       el.style.scrollSnapType = 'none';
       document.body.style.userSelect = 'none';
     }
     if (drag.moved) {
       e.preventDefault();
     }
-    // Keep a short rolling window of pointer samples so the inertia
-    // animation can compute the release velocity from the LAST few
-    // moves only — sampling over the entire drag would average out
-    // direction reversals (user dragging back-and-forth) and produce
-    // a misleading flick speed.
+    // Rolling window for velocity: we want the LAST ~80 ms only.
+    // Averaging the whole drag would cancel direction reversals.
     const now = performance.now();
     drag.samples.push({ t: now, x: e.clientX });
     while (drag.samples.length > 6) drag.samples.shift();
-    // Stash the desired scrollLeft and let the rAF coalesce multiple
-    // pointermoves into a single DOM write per frame. Browsers can
-    // fire 4+ pointermoves between frames, and each synchronous
-    // `el.scrollLeft = …` triggers layout + dispatches a `scroll`
-    // event whose handler updates React state — that's the chain
-    // that makes the row feel jerky on long drags.
+    // Coalesce pointermoves into one scrollLeft write per frame —
+    // each sync write triggers layout + a `scroll` event that
+    // re-renders React, which is what janks long drags.
     drag.pendingScroll = drag.startScroll - dx;
     if (drag.rafId === null) {
       drag.rafId = requestAnimationFrame(() => {
@@ -683,8 +594,8 @@ function SnapScroller({
     if (e.button !== 0) return;
     const el = scrollerRef.current;
     if (!el) return;
-    // Stop any in-flight inertia glide so the row "grabs" instantly
-    // under the cursor instead of fighting the new drag.
+    // Cancel in-flight glide so the row grabs instantly under the
+    // new pointer.
     cancelInertia();
     dragStateRef.current = {
       pointerId: e.pointerId,
@@ -695,9 +606,9 @@ function SnapScroller({
       rafId: null,
       samples: [{ t: performance.now(), x: e.clientX }],
     };
-    // Window-level move/up listeners keep the gesture alive when the
-    // cursor leaves the scroller's bounding box, without needing
-    // setPointerCapture (which would re-route the click target).
+    // Window-level listeners keep the gesture alive when the cursor
+    // leaves the scroller, without setPointerCapture (which would
+    // re-route the click target).
     detachWindowListeners();
     const onMove = (ev: PointerEvent) => handlePointerMove(ev);
     const onUp = (ev: PointerEvent) => endDragImpl(ev);
@@ -713,9 +624,7 @@ function SnapScroller({
     detachWindowListeners();
     const el = scrollerRef.current;
     // Flush any pending rAF write before computing release velocity
-    // so the inertia animation starts from the actual final cursor
-    // position, not whatever the last fully-flushed frame happened
-    // to be.
+    // so inertia starts from the actual final cursor position.
     if (drag.rafId !== null) {
       cancelAnimationFrame(drag.rafId);
       drag.rafId = null;
@@ -724,8 +633,8 @@ function SnapScroller({
       el.scrollLeft = drag.pendingScroll;
       drag.pendingScroll = null;
     }
-    // Clear after a microtask so the click handler that runs after
-    // pointerup can still see `moved` to suppress link navigation.
+    // Clear after a microtask so the post-pointerup click handler
+    // can still read `moved` to suppress link navigation.
     const wasMoved = drag.moved;
     const samples = drag.samples;
     setTimeout(() => {
@@ -734,22 +643,17 @@ function SnapScroller({
     // Restore page-level userSelect regardless of whether we glided.
     document.body.style.userSelect = '';
     if (wasMoved) {
-      // Suppress the synthetic click that fires after a drag-release.
-      // Without this the user's drag-to-scroll would also activate
-      // whatever link/card their cursor happens to be over.
+      // Suppress the synthetic click after drag-release so dropping
+      // on a tile doesn't activate it.
       const suppress = (ev: MouseEvent) => {
         ev.preventDefault();
         ev.stopPropagation();
         document.removeEventListener('click', suppress, true);
       };
       document.addEventListener('click', suppress, true);
-      // Defensive removal in case no click ever fires.
       setTimeout(() => document.removeEventListener('click', suppress, true), 200);
-      // Compute release velocity from the last ~80 ms of samples
-      // (the rolling buffer). Sub-ms windows pick up trackpad jitter
-      // as huge spikes, so we floor the dt at 10 ms. The horizontal
-      // velocity is in pixels-per-millisecond; a casual flick lands
-      // around 1 px/ms, an aggressive throw 3-4 px/ms.
+      // Velocity from last ~80 ms of samples; floor dt at 10 ms so
+      // sub-ms windows don't spike on trackpad jitter.
       const last = samples[samples.length - 1];
       const first = (last && samples.find((s) => last.t - s.t <= 80)) ?? samples[0];
       if (!last || !first) {
@@ -758,18 +662,12 @@ function SnapScroller({
       }
       const dt = Math.max(10, last.t - first.t);
       const velocity = (last.x - first.x) / dt;
-      // Below ~0.05 px/ms the user is releasing the drag deliberately
-      // close to a stop — skip the glide entirely and just restore
-      // snap so the row settles on the nearest card.
+      // <0.05 px/ms = deliberate stop, skip the glide.
       if (el && Math.abs(velocity) > 0.05) {
-        // Exponential decay momentum: each frame the remaining
-        // velocity is multiplied by `friction`, and we apply
-        // `velocity * frameMs` to scrollLeft. 0.94 / 16 ms gives a
-        // ~250-300 ms glide which feels close to native trackpad
-        // inertia without overshooting half the row on a normal
-        // flick. Drag direction is INVERTED to match drag-to-pull
-        // semantics: cursor moved RIGHT → scrollLeft DECREASES → we
-        // continue decreasing.
+        // Exponential decay: friction^(frameMs/16) per frame gives
+        // a ~250-300 ms glide that feels close to native trackpad
+        // inertia. Direction inverted: cursor RIGHT → scrollLeft
+        // DECREASES.
         let v = -velocity;
         let lastT = performance.now();
         const friction = 0.94;
@@ -782,18 +680,15 @@ function SnapScroller({
           const frameDt = now - lastT;
           lastT = now;
           elNow.scrollLeft += v * frameDt;
-          // Stop early if we hit either edge — without this the
-          // animation keeps "pushing" against a clamped scrollLeft
-          // for the full decay window and just looks like a frozen
-          // bar at the end.
+          // Stop early on edge hit — otherwise the animation keeps
+          // pushing against a clamped scrollLeft for the full decay
+          // window and just looks frozen.
           const hitEdge = elNow.scrollLeft <= 0
             || elNow.scrollLeft >= elNow.scrollWidth - elNow.clientWidth - 1;
           v *= Math.pow(friction, frameDt / 16);
           if (Math.abs(v) < 0.02 || hitEdge) {
             inertiaRafRef.current = null;
-            // Re-enable snap so the final resting position aligns
-            // to a card. Removing the inline override hands control
-            // back to the SCSS class (`x proximity`).
+            // Restore snap so the final position aligns to a card.
             elNow.style.scrollSnapType = '';
             return;
           }
@@ -803,9 +698,8 @@ function SnapScroller({
         return;
       }
     }
-    // No glide → restore snap immediately. Doing this synchronously
-    // (vs. in the rAF step path) avoids a perceptible "wait" before
-    // the row latches to a card after a non-flick release.
+    // No glide → restore snap synchronously so the row latches to
+    // a card without a perceptible wait.
     if (el) el.style.scrollSnapType = '';
   };
 
@@ -815,63 +709,36 @@ function SnapScroller({
       <div className="relative">
         <div
           ref={scrollerRef}
-          // `scroll-pl-*` / `scroll-pr-*` MUST mirror the responsive
-          // `px-*` values exactly. Cards use `snap-start`, so the snap
-          // target for the first child is `firstChild.offsetLeft -
-          // scroll-padding-left`. With `px-4 sm:px-6 lg:px-10` the
-          // first child's offsetLeft is 16 / 24 / 40 px depending on
-          // breakpoint; if `scroll-padding-left` stays a fixed 16 px,
-          // the lg snap target becomes 24 px instead of 0. The browser
-          // would then snap the row from `scrollLeft: 0` to
-          // `scrollLeft: 24` after the first paint, the left chevron
-          // would appear, and clicking it would `scrollBy(-clientWidth*
-          // 0.8)` back to 0 — exactly the bug the user reported (left
-          // arrow visible by default → click moves carousel into the
-          // position that should have been the default). Matching
-          // both paddings keeps `scrollLeft: 0` as a valid snap point
-          // on every breakpoint.
+          // `scroll-pl-*` / `scroll-pr-*` must mirror the responsive
+          // `px-*` values exactly: `snap-start` targets are
+          // `child.offsetLeft - scroll-padding-left`, so a mismatch
+          // shifts the start snap point off `scrollLeft: 0` and
+          // resurrects the left chevron at first paint.
           className="-mx-4 overflow-x-auto overflow-y-hidden px-4 pb-2 scroll-pl-4 scroll-pr-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:-mx-6 sm:px-6 sm:scroll-pl-6 sm:scroll-pr-6 lg:-mx-10 lg:px-10 lg:scroll-pl-10 lg:scroll-pr-10 cursor-grab active:cursor-grabbing"
           style={{
-            // `proximity` instead of `mandatory`: mandatory was pulling
-            // the row back to the first child's snap target
-            // *immediately on release*, even when the user had dragged
-            // the scroller all the way to its true 0 position. That made
-            // the left chevron flicker back into view a frame after the
-            // user reached the start. Proximity only snaps when the
-            // scroll-end is genuinely close to a snap-point, so dragging
-            // to the boundary stays at the boundary.
+            // `proximity` not `mandatory`: mandatory pulls the row
+            // back to the first snap target on release even when the
+            // user dragged to the true boundary, which flickers the
+            // left chevron back into view at the start.
             scrollSnapType: 'x proximity',
-            // Soft horizontal mask so cards near the gutter dissolve
-            // into the page background instead of getting hard-clipped
-            // — fixes the "rough crop on PC" the user reported on
-            // album / playlist scrollers. The fade is **only applied
-            // on the side that can actually scroll**: when we're at
-            // the start the left edge stays sharp, when we're at the
-            // end the right edge stays sharp. Otherwise fading off
-            // the last visible card looks like the row is dim/disabled.
+            // Soft edge mask, applied only on the side that can
+            // actually scroll — fading the active edge looks like
+            // the row is disabled.
             WebkitMaskImage: buildEdgeMask(canPrev, canNext),
             maskImage: buildEdgeMask(canPrev, canNext),
           }}
           onPointerDown={onPointerDown}
-          // Native HTML5 drag pipeline suppression — `dragstart`
-          // fires when the browser is about to begin a link-drag /
-          // image-drag / text-drag gesture. Cancelling it here keeps
-          // mouse pointerdown side-effect-free so clicks on tile
-          // `<Link>` children fire normally, while still preventing
-          // the page from kicking off a drag-image when the user
-          // mouse-drags across an album cover.
+          // Suppress native HTML5 link/image drag without touching
+          // pointerdown — keeps tile `<Link>` clicks intact.
           onDragStart={(e) => e.preventDefault()}
         >
           <div className="flex gap-4">{children}</div>
         </div>
 
-        {/* Desktop scroll affordances. Hidden on touch (< md) where
-            swipe is the natural input. Each chevron only renders
-            when there's actually content to reach in that direction
-            — `canPrev` / `canNext` are recomputed on scroll, on
-            container resize AND on every child resize so a partial
-            measure during image decode doesn't leave a phantom
-            chevron at the edges of a fully-visible row. */}
+        {/* Desktop chevrons (hidden < md). `canPrev` / `canNext`
+            recompute on scroll + container resize + per-child resize
+            so a partial measure during image decode doesn't leave a
+            phantom chevron at the edges. */}
         {canPrev && (
           <button
             type="button"
@@ -983,8 +850,8 @@ function ExplorePlaylistCard({
     if (loading) return;
     try {
       setLoading(true);
-      // Fetch on demand instead of per-card on mount — a row of 15
-      // playlists would otherwise fire 15 round-trips just to render.
+      // On-demand fetch — eager per-card would fire 15 round-trips
+      // just to render the row.
       const res = await queryClient.fetchQuery({
         queryKey: ['explore-playlist-tracks', playlist.id],
         queryFn: () => api.get<{ items: Track[] }>(`/explore/playlists/${playlist.id}/tracks`),
@@ -1009,11 +876,9 @@ function ExplorePlaylistCard({
     }
   };
 
-  // Hover model matches AlbumCard exactly: only the cover lifts /
-  // scales (`group-hover:scale-[1.04]`), the surrounding card stays
-  // anchored. Previously the whole tile was wrapped in a `motion.div`
-  // with `whileHover={{ y: -2 }}` which made playlist rows visually
-  // "jiggle" while neighbouring album rows stayed still — inconsistent.
+  // Hover model matches AlbumCard: only the cover scales, the card
+  // stays anchored — keeps playlist rows visually consistent with
+  // album rows.
   return (
     <Link
       to={`/explore/playlist/${playlist.id}`}
