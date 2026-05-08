@@ -15,6 +15,36 @@ export default defineConfig({
       // because the project no longer ships one (favicon is strictly
       // SVG per the product brief).
       includeAssets: ['apple-touch-icon.png'],
+      // The default registration installs the new service worker but
+      // keeps the OLD one active until every controlled tab closes.
+      // For users who already had a previous SW installed, that meant
+      // their old precache (which still pointed at the previous
+      // PNG-in-SVG `favicon.svg` and the deleted `favicon.ico`) kept
+      // serving stale icons forever, even though the deployed
+      // `index.html` already declared the new vector favicon. The
+      // user-visible bug was "и фавикон сайта все равно почему-то
+      // другой (как пнг)".
+      //
+      // Three flags fix it:
+      //   - `skipWaiting` — the new SW activates as soon as it's
+      //     installed instead of waiting for all clients to navigate
+      //     away.
+      //   - `clientsClaim` — the activated SW immediately takes
+      //     control of every existing open tab, so the next request
+      //     for `/favicon.svg` (or anything else) is served from the
+      //     fresh precache.
+      //   - `cleanupOutdatedCaches` — purges the previous precache
+      //     keys so the orphan `favicon.ico` / old `favicon.svg`
+      //     entries are reclaimed instead of lingering on disk.
+      //
+      // `autoUpdate` already calls `registration.update()` on every
+      // navigation; combined with the three flags above, a single
+      // page reload after deployment fully evicts the previous SW.
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+      },
       manifest: {
         name: 'BRATAN MUSIC',
         short_name: 'BRATAN',
