@@ -37,6 +37,11 @@ interface ArtistLinksProps {
   wrapperClassName?: string;
   /** Custom separator. Defaults to ", ". */
   separator?: string;
+  /** Force the whole credit list onto a single non-wrapping line.
+   *  Used by player surfaces (mini, dock, fullscreen) so a long
+   *  collaboration list never grows the column vertically — instead
+   *  the row is wrapped in a Marquee that scrolls horizontally. */
+  nowrap?: boolean;
 }
 
 export function ArtistLinks({
@@ -47,7 +52,11 @@ export function ArtistLinks({
   stopPropagation = true,
   wrapperClassName,
   separator = ', ',
+  nowrap = false,
 }: ArtistLinksProps) {
+  const rowClass = nowrap
+    ? 'inline whitespace-nowrap'
+    : 'inline-flex flex-wrap items-baseline gap-x-0';
   const list = artists && artists.length > 0 ? artists : null;
 
   // Trust the structured list only if it carries multi-credit
@@ -84,7 +93,7 @@ export function ArtistLinks({
       const chunks = splitCredits(text);
       if (chunks.length > 1) {
         return (
-          <span className={cn('inline-flex flex-wrap items-baseline gap-x-0', wrapperClassName)}>
+          <span className={cn(rowClass, wrapperClassName)}>
             {chunks.map((c, i) => (
               <Fragment key={`${c.text}:${i}`}>
                 <span className={cn(className)}>{c.text}</span>
@@ -120,7 +129,7 @@ export function ArtistLinks({
 
   // Trustworthy structured list → each contributor gets its own link.
   return (
-    <span className={cn('inline-flex flex-wrap items-baseline gap-x-0', wrapperClassName)}>
+    <span className={cn(rowClass, wrapperClassName)}>
       {list.map((a, i) => (
         <span key={a.id + ':' + i} className="contents">
           <Link
