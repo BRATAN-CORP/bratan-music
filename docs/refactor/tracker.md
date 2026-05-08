@@ -47,12 +47,12 @@
 | --- | --------------------------------------- | ---------------------------------------------------- | ------------- | --------------------------------------------------------------- |
 | 1   | `devin/1778237470-refactor-foundation`  | Foundation: tokens + Modal/Sheet/PageHero/IconButton | merged        | [#373](https://github.com/BRATAN-CORP/bratan-music/pull/373)    |
 | 0.5 | `devin/1778241532-knowledge-base`       | Obsidian-style knowledge base (AGENTS.md + docs/)    | open / CI green | [#378](https://github.com/BRATAN-CORP/bratan-music/pull/378)  |
-| 2   | `devin/1778242810-refactor-dialogs`     | Migrate dialogs to `<Modal>`/`<Sheet>`               | open / awaiting CI | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
-| 3   | `devin/<ts>-refactor-safe-area`         | Unified PWA safe-area handling                       | not started   | —                                                               |
-| 4   | `devin/<ts>-refactor-collection-pages`  | Album/Artist/Playlist → `<PageHero>` + IconButton    | not started   | —                                                               |
-| 5   | `devin/<ts>-refactor-i18n-audit`        | Eliminate residual hardcoded language strings        | not started   | —                                                               |
-| 6   | `devin/<ts>-refactor-polish`            | Stale comments, dead style strings, accent unify     | not started   | —                                                               |
-| 7   | `devin/<ts>-refactor-cleanup`           | Cleanup: outdated multiline comments, dead imports   | not started   | —                                                               |
+| 2   | `devin/1778242810-refactor-dialogs`     | Migrate dialogs to `<Modal>`/`<Sheet>`               | open / CI green | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
+| 3   | `devin/1778243660-refactor-safe-area`   | Unified PWA safe-area handling                       | open / awaiting CI | [#380](https://github.com/BRATAN-CORP/bratan-music/pull/380) |
+| 4   | `devin/1778244500-refactor-collection-pages` | Album/Artist/Playlist → `<PageHero>` + IconButton | open / awaiting CI | [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381) |
+| 5   | `devin/1778244750-refactor-i18n-audit`  | Eliminate residual hardcoded language strings        | open / awaiting CI | [#382](https://github.com/BRATAN-CORP/bratan-music/pull/382) |
+| 6   | `devin/1778244723-refactor-polish`      | --shadow-cover token, hero shadows                   | open / awaiting CI | [#383](https://github.com/BRATAN-CORP/bratan-music/pull/383) |
+| 7   | `devin/1778244958-refactor-cleanup`     | Trim historical PR# references from inline comments  | open / awaiting CI | [#384](https://github.com/BRATAN-CORP/bratan-music/pull/384) |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -84,7 +84,29 @@
 
 - 2026-05-08T11:55Z — knowledge base + tracker созданы (PR #378). CI зелёный.
 - 2026-05-08T12:33Z — PR #2 (dialogs, #379) открыт. 11 диалогов мигрированы
-  на `<Modal>`/`<Sheet>` (см. описание PR). Ожидает CI.
+  на `<Modal>`/`<Sheet>`. CI зелёный.
+- 2026-05-08T12:36Z — PR #3 (safe-area, #380) открыт. Все `env(safe-area-*)`
+  переведены на `var(--pwa-safe-*)`; добавлены `mt-/mb-/top-/bottom-/left-/
+  right-safe` утилиты. База на PR #2 — GitHub перетаргетит на main после
+  мерджа.
+- 2026-05-08T12:43Z — PR #4 (collection pages, #381) открыт. Album / Artist
+  / Playlist hero мигрированы на `<PageHero>` + `<IconButton>`; playlist
+  получил ambience-слой; cover sizing адаптивен. База на PR #3.
+- 2026-05-08T12:51Z — PR #5 (i18n audit, #382) открыт. Локализованы 4
+  оставшихся хардкодных aria-label (`Notifications`, `online`, `Saved
+  offline`, `Загрузка`). Добавлены ключи `common.notifications/online/
+  savedOffline` и `offline.downloading{Percent}`. База на PR #4.
+- 2026-05-08T12:55Z — PR #6 (polish, #383) открыт. Введён
+  `--shadow-cover` токен (light + dark), 6 дублирующихся
+  `shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]` строк заменены на
+  `shadow-[var(--shadow-cover)]` (album/artist/playlist hero +
+  downloaded library swatch). База на PR #5.
+- 2026-05-08T12:58Z — PR #7 (cleanup, #384) открыт. Удалены
+  устаревшие ссылки на номера PR (#120, #287, #131) из
+  многострочных комментариев в `Marquee`, `TiltCard`,
+  `app/rooms/list.tsx`, `app/explore/playlist.tsx` — фиксы давно
+  смерджены, нарратив "первая попытка / надёжный фикс" заменён на
+  чистое описание текущего поведения. База на PR #6.
 
 ---
 

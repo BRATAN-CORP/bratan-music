@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { fallbackGradient, nameInitials } from '@/lib/coverFallback';
+import { useT } from '@/i18n';
 
 /**
  * Single source of truth for rendering a user's avatar across the
@@ -46,6 +47,7 @@ export function UserAvatar({
   alt,
   loading = 'lazy',
 }: UserAvatarProps) {
+  const t = useT();
   const seed = (name?.trim() || username?.trim() || id || '?').slice(0, 64);
   const display = name?.trim() || username?.trim() || 'User';
 
@@ -84,7 +86,7 @@ export function UserAvatar({
       </span>
       {online && (
         <span
-          aria-label="online"
+          aria-label={t('common.online')}
           className="absolute right-0 bottom-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500 shadow-[0_0_0_1px_var(--color-bg-elevated)]"
         />
       )}

@@ -172,29 +172,23 @@ export function Marquee({
       className={'relative block w-full max-w-full min-w-0 whitespace-nowrap ' + className}
       aria-label={ariaLabel ?? text}
       style={{
-        // Horizontal-only clipping. We need the box to never report a
-        // content width larger than its container (PR #120 — a long
-        // inline-block child's intrinsic max-content was leaking into
-        // the parent flex's sizing on iOS Safari, pushing siblings off
-        // screen). But plain `overflow: hidden` clips vertically too
-        // and was eating Cyrillic ascenders / descenders ('у', 'д',
-        // 'й') in the fullscreen player title — the user reported the
-        // top and bottom of letters were being chopped off. A polygon
-        // clip-path with extreme vertical insets clips only at the
-        // left/right edges and lets the line-box overflow vertically
-        // freely, so descenders and any text-shadow halation render
-        // in full.
+        // Horizontal-only clipping. The box must never report a content
+        // width larger than its container — a long inline-block child's
+        // intrinsic max-content otherwise leaks into the parent flex's
+        // sizing on iOS Safari and pushes siblings off screen. Plain
+        // `overflow: hidden` clips vertically too and ate Cyrillic
+        // ascenders/descenders ('у', 'д', 'й') in the fullscreen player
+        // title. A polygon clip-path with extreme vertical insets clips
+        // only at the left/right edges and lets the line-box overflow
+        // vertically freely, so descenders and any text-shadow halation
+        // render in full.
         clipPath: 'polygon(0% -200%, 100% -200%, 100% 300%, 0% 300%)',
-        // `contain: layout` isolates the inline-block child's
-        // max-content from the parent flex's intrinsic-size calc
-        // (the iOS Safari bug PR #120 was originally fixing).
-        // `contain: paint` was here too, but it forces the element
-        // to clip its own painting to the bounding box — overriding
-        // the vertical bleed we want from `clip-path` and re-
-        // introducing the descender clipping the user reported on
-        // the fullscreen player title (Cyrillic "у", lowercase "y",
-        // etc. cut off below the baseline). `layout` alone is
-        // sufficient for the original size-isolation fix.
+        // `contain: layout` isolates the inline-block child's max-content
+        // from the parent flex's intrinsic-size calc. `contain: paint`
+        // would force the element to clip its own painting to the
+        // bounding box — overriding the vertical bleed we want from the
+        // clip-path and re-introducing the descender clipping. `layout`
+        // alone is sufficient for size isolation.
         contain: 'layout',
         ...(isMarqueeing
           ? {

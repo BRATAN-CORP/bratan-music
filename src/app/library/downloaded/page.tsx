@@ -104,7 +104,7 @@ export function DownloadedPlaylistPage() {
             className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-40"
           />
           <div className="flex flex-col gap-6 sm:flex-row">
-            <div className="flex h-48 w-48 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-[var(--color-accent)]/15 text-[var(--color-accent)] shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]">
+            <div className="flex h-48 w-48 items-center justify-center rounded-[var(--radius-md)] border border-white/10 bg-[var(--color-accent)]/15 text-[var(--color-accent)] shadow-[var(--shadow-cover)]">
               <ArrowDownToLine size={48} />
             </div>
             <div className="flex flex-col justify-end gap-3">

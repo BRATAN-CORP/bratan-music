@@ -42,6 +42,7 @@
  * thrash re-renders during a long FLAC download.
  */
 import { motion } from 'motion/react';
+import { useT } from '@/i18n';
 
 interface OfflineProgressIconProps {
   /** Download progress in [0..1]. Pass `undefined` / `null` for
@@ -63,6 +64,7 @@ export function OfflineProgressIcon({
   showLabel,
   className = '',
 }: OfflineProgressIconProps) {
+  const t = useT();
   const isIndeterminate =
     progress === undefined || progress === null || Number.isNaN(progress);
   const clamped = isIndeterminate ? 0 : Math.max(0, Math.min(1, progress));
@@ -84,7 +86,7 @@ export function OfflineProgressIcon({
     <span
       className={`relative inline-flex items-center justify-center shrink-0 ${className}`}
       style={{ width: size, height: size }}
-      aria-label={isIndeterminate ? 'Загрузка' : `Загрузка ${percent}%`}
+      aria-label={isIndeterminate ? t('offline.downloading') : t('offline.downloadingPercent', { percent })}
       role="img"
     >
       <svg

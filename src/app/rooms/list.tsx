@@ -100,14 +100,14 @@ function RoomsListInner() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-10">
-      {/* Premium-hover hero: TiltCard provides the 3D parallax (the
-          new TiltCard #287 already snaps flat on press over interactive
-          children, so the Create/Join input + buttons + segmented tabs
-          all stay on a stable hit-grid). On top of TiltCard we keep the
-          two-corner static idle gradient + hover-only halo signature
-          shared with WaveHero, AiPlaylistPromo, AI prompt, and
-          SubscriptionCard so the high-value entry surfaces all read as
-          one premium family. */}
+      {/* Premium-hover hero: TiltCard provides the 3D parallax. It
+          snaps flat on press over interactive children, so the Create/
+          Join input + buttons + segmented tabs all stay on a stable
+          hit-grid. On top of TiltCard we keep the two-corner static
+          idle gradient + hover-only halo signature shared with
+          WaveHero, AiPlaylistPromo, AI prompt, and SubscriptionCard so
+          the high-value entry surfaces all read as one premium
+          family. */}
       <TiltCard
         intensity={6}
         hoverScale={1}

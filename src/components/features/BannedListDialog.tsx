@@ -72,7 +72,7 @@ export function BannedListDialog({ open, onClose, kind }: Props) {
       open={open}
       onClose={onClose}
       ariaLabel={t(titleKey)}
-      panelClassName="flex w-[min(560px,calc(100vw-24px))] flex-col max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+      panelClassName="flex w-[min(560px,calc(100vw-24px))] flex-col max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <header className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">

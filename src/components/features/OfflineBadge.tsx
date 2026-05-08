@@ -16,6 +16,7 @@
  */
 import { AnimatePresence, motion } from 'motion/react';
 import { useIsTrackSavedOffline, useTrackDownloadJob } from '@/hooks/useOfflineActions';
+import { useT } from '@/i18n';
 
 interface OfflineBadgeProps {
   trackId: string;
@@ -25,6 +26,7 @@ interface OfflineBadgeProps {
 }
 
 export function OfflineBadge({ trackId, size = 16, className = '' }: OfflineBadgeProps) {
+  const t = useT();
   const saved = useIsTrackSavedOffline(trackId);
   const job = useTrackDownloadJob(trackId);
 
@@ -88,7 +90,7 @@ export function OfflineBadge({ trackId, size = 16, className = '' }: OfflineBadg
           transition={{ type: 'spring', stiffness: 500, damping: 25 }}
           className={`inline-flex items-center justify-center shrink-0 ${className}`}
           style={{ width: size, height: size }}
-          aria-label="Saved offline"
+          aria-label={t('common.savedOffline')}
         >
           <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="7" fill="var(--color-accent)" fillOpacity="0.15" />

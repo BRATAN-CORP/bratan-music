@@ -138,7 +138,7 @@ export function Modal({
             className={cn(
               'pointer-events-none absolute inset-0 flex flex-col items-center px-4',
               align === 'sheet'
-                ? 'justify-end pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] sm:justify-center sm:pb-0'
+                ? 'justify-end pb-[calc(var(--pwa-safe-bottom)+5rem)] sm:justify-center sm:pb-0'
                 : 'justify-center',
             )}
           >
