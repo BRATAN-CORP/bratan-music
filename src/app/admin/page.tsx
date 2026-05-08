@@ -11,6 +11,7 @@ import { AdminUserDetailDialog } from '@/components/features/AdminUserDetailDial
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { UserRowSkeleton } from '@/components/ui/Skeleton';
 import { api } from '@/lib/api';
 import {
   useAdminUsers, useBanUser, useUnbanUser, useToggleAdmin, useGrantSub,
@@ -176,9 +177,13 @@ export function AdminDashboard({ meId }: { meId: string }) {
         </div>
 
         {isLoading && !data ? (
-          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-            <Loader2 size={14} className="mr-2 animate-spin" /> {t('admin.loading')}
-          </div>
+          <ul className="divide-y divide-border" aria-label={t('admin.loading')} aria-busy="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <li key={i}>
+                <UserRowSkeleton />
+              </li>
+            ))}
+          </ul>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <UsersIcon size={32} className="text-muted-foreground" />

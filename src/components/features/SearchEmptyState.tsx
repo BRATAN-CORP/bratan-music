@@ -1,6 +1,7 @@
-import { AlertCircle, Clock, Loader2, X } from 'lucide-react';
+import { AlertCircle, Clock, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ExploreModules } from '@/components/features/ExploreModules';
+import { ExploreFeedSkeleton } from '@/components/ui/Skeleton';
 import { useExplore } from '@/hooks/useExplore';
 import { useT } from '@/i18n';
 
@@ -75,12 +76,7 @@ export function SearchEmptyState({ recent, onPick, onRemove, onClear }: SearchEm
         </section>
       )}
 
-      {exploreLoading && (
-        <div className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
-          <Loader2 size={14} className="animate-spin" />
-          {t('search.exploreLoading')}
-        </div>
-      )}
+      {exploreLoading && <ExploreFeedSkeleton count={3} />}
 
       {exploreError && (
         <div className="flex flex-col items-center gap-3 rounded-[var(--radius-md)] border border-border bg-card py-12 text-center">
