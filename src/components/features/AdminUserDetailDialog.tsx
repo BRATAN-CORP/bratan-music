@@ -1,13 +1,16 @@
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   X, Loader2, Crown, Star, Ban, Shield, ShieldOff, Undo2, Database, ListMusic,
   Heart, Disc, Music2, ThumbsDown, History, Clock, Layers, KeyRound, AlertOctagon,
-  CheckCircle2, Smartphone, Info,
+  CheckCircle2, Smartphone, Info, Copy, Check, RefreshCw,
 } from 'lucide-react';
 import { useI18n, useT } from '@/i18n';
 import {
   useAdminUserStats, useBanUser, useUnbanUser, useToggleAdmin, useGrantSub,
 } from '@/hooks/useAdminUsers';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import type { AdminUserStats } from '@/types/admin';
@@ -36,7 +39,7 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
   const intl = intlLocale(locale);
   const open = !!userId;
 
-  const { data, isLoading, isFetching, error } = useAdminUserStats(userId);
+  const { data, isLoading, isFetching, error, refetch } = useAdminUserStats(userId);
 
   return (
     <Sheet
@@ -44,12 +47,18 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
       onClose={onClose}
       layer="elevated"
       ariaLabel={t('admin.detail.title')}
-      panelClassName="flex w-[min(720px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
+      // Wider panel — the detail card got cramped at 720px once the
+      // identity / actions / storage / library / listening / sub /
+      // sessions sections were all stacked. 960 keeps it modal on
+      // desktop while still leaving the page readable behind it.
+      panelClassName="flex w-[min(960px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <DetailHeader
         title={t('admin.detail.title')}
         onClose={onClose}
         isFetching={isFetching && !!data}
+        onRefresh={() => void refetch()}
+        canRefresh={!!data}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
@@ -74,8 +83,11 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
 }
 
 function DetailHeader({
-  title, onClose, isFetching,
-}: { title: string; onClose: () => void; isFetching: boolean }) {
+  title, onClose, isFetching, onRefresh, canRefresh,
+}: {
+  title: string; onClose: () => void; isFetching: boolean;
+  onRefresh: () => void; canRefresh: boolean;
+}) {
   const t = useT();
   return (
     <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 sm:px-6">
@@ -84,14 +96,26 @@ function DetailHeader({
         <span className="truncate text-sm font-medium">{title}</span>
         {isFetching && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        aria-label={t('common.close')}
-      >
-        <X size={14} />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={!canRefresh || isFetching}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          aria-label={t('admin.detail.refresh')}
+          title={t('admin.detail.refresh')}
+        >
+          <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          aria-label={t('common.close')}
+        >
+          <X size={14} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -108,9 +132,22 @@ function DetailBody({
   const unbanMut = useUnbanUser();
   const adminMut = useToggleAdmin();
   const grantMut = useGrantSub();
+  const [banDraft, setBanDraft] = useState<{ open: boolean; reason: string }>({ open: false, reason: '' });
+  const [copied, setCopied] = useState(false);
 
   const isMe = u.id === meId;
   const label = u.name?.trim() || (u.username && '@' + u.username) || u.id;
+
+  const onCopyId = async () => {
+    try {
+      await navigator.clipboard.writeText(u.id);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* clipboard blocked — silently no-op, the id is still visible in
+         the KV row below. */
+    }
+  };
 
   return (
     <div className="flex flex-col gap-5 pb-8">
@@ -150,7 +187,23 @@ function DetailBody({
             )}
           </div>
           <div className="mt-1 grid grid-cols-1 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
-            <KV k={t('admin.detail.id')} v={<code className="text-foreground">{u.id}</code>} />
+            <KV
+              k={t('admin.detail.id')}
+              v={
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <code className="truncate text-foreground">{u.id}</code>
+                  <button
+                    type="button"
+                    onClick={onCopyId}
+                    aria-label={t('admin.detail.copyId')}
+                    title={t('admin.detail.copyId')}
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                  </button>
+                </span>
+              }
+            />
             <KV k={t('admin.detail.username')} v={u.username ? '@' + u.username : '—'} />
             <KV k={t('admin.detail.joined')} v={formatAbsolute(u.createdAt, intl)} />
             <KV k={t('admin.detail.updated')} v={formatAbsolute(u.updatedAt, intl)} />
@@ -181,47 +234,84 @@ function DetailBody({
       </section>
 
       {/* Quick actions */}
-      <section className="flex flex-wrap gap-2">
-        <Button
-          variant="ghost"
-          onClick={() => grantMut.mutate({ userId: u.id, days: 30 })}
-          disabled={grantMut.isPending}
-        >
-          {grantMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Star size={12} />}
-          {t('admin.action.grantSub')}
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => adminMut.mutate({ userId: u.id, isAdmin: !u.isAdmin })}
-          disabled={(isMe && u.isAdmin) || adminMut.isPending}
-        >
-          {adminMut.isPending ? <Loader2 size={12} className="animate-spin" /> : (u.isAdmin ? <ShieldOff size={12} /> : <Shield size={12} />)}
-          {u.isAdmin ? t('admin.action.removeAdmin') : t('admin.action.makeAdmin')}
-        </Button>
-        {u.isBanned ? (
+      <section className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="ghost"
-            onClick={() => unbanMut.mutate(u.id)}
-            disabled={unbanMut.isPending}
+            onClick={() => grantMut.mutate({ userId: u.id, days: 30 })}
+            disabled={grantMut.isPending}
           >
-            {unbanMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
-            {t('admin.action.unban')}
+            {grantMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Star size={12} />}
+            {t('admin.action.grantSub')}
           </Button>
-        ) : (
           <Button
-            variant="danger"
-            onClick={async () => {
-              const reason = window.prompt(t('admin.action.banPlaceholder'), '') ?? '';
-              if (reason === null) return;
-              await banMut.mutateAsync({ id: u.id, reason: reason.trim() || undefined });
-            }}
-            disabled={isMe || banMut.isPending}
+            variant="ghost"
+            onClick={() => adminMut.mutate({ userId: u.id, isAdmin: !u.isAdmin })}
+            disabled={(isMe && u.isAdmin) || adminMut.isPending}
           >
-            {banMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
-            {t('admin.action.ban')}
+            {adminMut.isPending ? <Loader2 size={12} className="animate-spin" /> : (u.isAdmin ? <ShieldOff size={12} /> : <Shield size={12} />)}
+            {u.isAdmin ? t('admin.action.removeAdmin') : t('admin.action.makeAdmin')}
           </Button>
-        )}
-        <Button variant="ghost" onClick={onClose}>{t('admin.action.cancel')}</Button>
+          {u.isBanned ? (
+            <Button
+              variant="ghost"
+              onClick={() => unbanMut.mutate(u.id)}
+              disabled={unbanMut.isPending}
+            >
+              {unbanMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />}
+              {t('admin.action.unban')}
+            </Button>
+          ) : (
+            // Inline ban form — matches the per-row UX in the admin
+            // grid. Replaces the previous window.prompt() flow which
+            // was inconsistent with the rest of the app's chrome.
+            <Button
+              variant="danger"
+              onClick={() => setBanDraft({ open: true, reason: '' })}
+              disabled={isMe || banMut.isPending}
+            >
+              {banMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
+              {t('admin.action.ban')}
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>{t('admin.action.cancel')}</Button>
+        </div>
+        <AnimatePresence initial={false}>
+          {banDraft.open && !u.isBanned && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+            >
+              <div className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-destructive/40 bg-destructive/5 p-3 sm:flex-row sm:items-center">
+                <Input
+                  value={banDraft.reason}
+                  onChange={(e) => setBanDraft((d) => ({ ...d, reason: e.target.value }))}
+                  placeholder={t('admin.action.banPlaceholder')}
+                  maxLength={280}
+                  autoFocus
+                />
+                <div className="flex gap-2 sm:shrink-0">
+                  <Button
+                    variant="danger"
+                    onClick={async () => {
+                      await banMut.mutateAsync({ id: u.id, reason: banDraft.reason.trim() || undefined });
+                      setBanDraft({ open: false, reason: '' });
+                    }}
+                    disabled={banMut.isPending}
+                  >
+                    {banMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Ban size={12} />}
+                    {t('admin.action.banConfirm')}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setBanDraft({ open: false, reason: '' })}>
+                    {t('admin.action.cancel')}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* Storage */}

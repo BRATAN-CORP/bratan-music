@@ -948,6 +948,8 @@
       "subActive": "Subscription active",
       "banned": "Banned",
       "no": "no",
+      "refresh": "Refresh",
+      "copyId": "Copy ID",
       "id": "ID",
       "username": "Username",
       "joined": "Joined",

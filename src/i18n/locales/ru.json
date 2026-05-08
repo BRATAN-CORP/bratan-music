@@ -948,6 +948,8 @@
       "subActive": "Подписка активна",
       "banned": "Забанен",
       "no": "нет",
+      "refresh": "Обновить",
+      "copyId": "Скопировать ID",
       "id": "ID",
       "username": "Username",
       "joined": "Зарегистрирован",
