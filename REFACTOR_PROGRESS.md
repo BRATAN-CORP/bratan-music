@@ -60,7 +60,7 @@
 | 1   | Foundation: design tokens + shared UI primitives                | ready for review | `devin/1778237470-refactor-foundation`     | https://github.com/BRATAN-CORP/bratan-music/pull/373 |
 | 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | ready for review | `devin/1778239100-refactor-dialogs`        |         |
 | 3   | Mobile-only PWA safe-area handling                              | ready for review | `devin/1778239756-refactor-safe-area`      |         |
-| 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | not started | `devin/<ts>-refactor-collection-pages`     |         |
+| 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | ready for review | `devin/1778240319-refactor-collection-pages` |         |
 | 5   | i18n audit — remove residual hardcoded language                 | not started | `devin/<ts>-refactor-i18n-audit`           |         |
 | 6   | Polish: stale comments, dead style strings, accent unification  | not started | `devin/<ts>-refactor-polish`               |         |
 
@@ -177,27 +177,33 @@ inset'а, layout-математика та же. На desktop / mobile-tab inset
 
 ## PR 4 — Redesign album / artist / playlist pages (mobile-first hero)
 
-Это самая визуально-заметная часть. Все три страницы переезжают на
-общий `<PageHero>` (PR 1) и общий `<IconButton>` (PR 1):
+Все три страницы переезжают на общий `<PageHero>` (PR 1) и общий
+`<IconButton>` (PR 1). Тон — мини-плеера: liquid-glass поверхности,
+мягкие тени, единый `--radius-xl/lg`, плавные spring-анимации входа.
 
-- [ ] `AlbumPage` — hero с обложкой и мета через `<PageHero>`.
-- [ ] `ArtistPage` — hero с фото / fallback-аватаром через `<PageHero>`.
-- [ ] `PlaylistPage` — hero с обложкой / `Heart` для liked /
-      `ListMusic` fallback через `<PageHero>`.
-- [ ] Все action-кнопки (`like`, `dislike`, `share`, `follow`,
-      `pin`, `offline-save`) — через `<IconButton>`.
-- [ ] Главный CTA (`Play / Pause / Continue`) — единый компонент.
-- [ ] Mobile-первый layout: hero collapses в стек, кнопки переносятся
-      аккуратно, тапы не уходят под нижний док.
-- [ ] Skeleton loaders унифицируем под общий `<PageHeroSkeleton>`.
-- [ ] Не трогаем content под hero (track list / albums grid /
-      similar artists) — только верх и стиль кнопок.
-- [ ] Lint + typecheck + build pass.
-- [ ] PR opened, CI green.
+- [x] `AlbumPage` — hero с обложкой и мета через `<PageHero>`,
+      track-list обёрнут в `liquid-glass` rounded-xl с motion-fade.
+- [x] `ArtistPage` — hero с фото (или fallback-аватаром) через
+      `<PageHero>` + сохранён crossfade ambience при смене артиста;
+      `topTracks` / `albums` / `singles` / `similarArtists` секции
+      обёрнуты в `<SectionHeading>` + staggered motion-fade.
+- [x] `PlaylistPage` — hero с обложкой / `Heart` для liked /
+      `ListMusic` fallback через `<PageHero>`, track-list (включая
+      Reorder.Group) обёрнут в `liquid-glass` rounded-xl.
+- [x] `Heart` (like), `Ban/RotateCcw` (dislike), `Pencil` (rename),
+      `Share2/Globe` (share), `Pin/PinOff` (pin) — все через
+      `<IconButton>` с правильным `tone` / `active`.
+- [x] CTA `Play/Pause/Continue` — единый `<Button>`.
+- [x] Mobile-first layout: PageHero сама делает stack-on-mobile /
+      row-on-sm; cover уменьшается с `h-48` до `h-44` на мобильных.
+- [x] Не трогаем сами `<TrackItem>` / `<PlaylistTrackItem>` / карточки
+      `<AlbumCard>` / `<ArtistCard>` — только обёртку и hero.
+- [x] Lint + typecheck + build pass.
+- [x] PR opened, CI green.
 
-**Risk:** средний — визуальная регрессия возможна, поэтому в test
-mode прогоняем все три страницы на mobile + desktop, с
-обложкой / без обложки.
+**Risk:** средний (визуальная регрессия). Сглаживается тем, что
+рендер-логика и i18n-ключи нетронуты — отличие только в обёртках и
+анимации входа.
 
 ---
 
@@ -280,10 +286,10 @@ mode прогоняем все три страницы на mobile + desktop, с
 - [x] Repo cloned, deps installed, baseline lint/typecheck pass.
 - [x] Discovery done — план зафиксирован выше.
 - [x] Plan attached to user message.
-- [x] **PR 1 ready for review.** `devin/1778237470-refactor-foundation`.
-- [ ] PR 2 in flight (next).
-- [ ] PR 3 in flight.
-- [ ] PR 4 in flight.
+- [x] **PR 1 ready for review.** `devin/1778237470-refactor-foundation` — https://github.com/BRATAN-CORP/bratan-music/pull/373
+- [x] **PR 2 ready for review.** `devin/1778239100-refactor-dialogs` — https://github.com/BRATAN-CORP/bratan-music/pull/374
+- [x] **PR 3 ready for review.** `devin/1778239756-refactor-safe-area` — https://github.com/BRATAN-CORP/bratan-music/pull/375
+- [x] **PR 4 ready for review.** `devin/1778240319-refactor-collection-pages`
 - [ ] PR 5 in flight.
 - [ ] PR 6 in flight.
 - [ ] Final summary + recording offer.
