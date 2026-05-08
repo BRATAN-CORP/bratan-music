@@ -159,10 +159,24 @@ export function SearchPage() {
   return (
     <AuthGuard>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
-        <div className="flex flex-col gap-2">
-          <Eyebrow>{t('search.pageEyebrow')}</Eyebrow>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('search.pageTitle')}</h1>
-        </div>
+        {/* Hero header — same accent-radial ambience as /library /album
+            /artist /playlist so the search page reads as part of the
+            same family. The bottom fade dissolves the radial into the
+            page bg before the sticky search input picks up. */}
+        <section className="relative isolate -mx-4 overflow-hidden px-4 pb-3 pt-4 sm:-mx-6 sm:px-6 sm:pb-4 lg:-mx-10 lg:px-10">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(70%_120%_at_15%_0%,var(--color-accent-glow),transparent_70%)] opacity-50"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-1/2 bg-gradient-to-b from-transparent to-[var(--color-bg)]"
+          />
+          <div className="flex flex-col gap-2">
+            <Eyebrow>{t('search.pageEyebrow')}</Eyebrow>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">{t('search.pageTitle')}</h1>
+          </div>
+        </section>
         <div data-tour-id="tour-search">
           <SearchBar value={query} onChange={setQuery} />
         </div>
