@@ -47,10 +47,10 @@
 | --- | --------------------------------------- | ---------------------------------------------------- | ------------- | --------------------------------------------------------------- |
 | 1   | `devin/1778237470-refactor-foundation`  | Foundation: tokens + Modal/Sheet/PageHero/IconButton | merged        | [#373](https://github.com/BRATAN-CORP/bratan-music/pull/373)    |
 | 0.5 | `devin/1778241532-knowledge-base`       | Obsidian-style knowledge base (AGENTS.md + docs/)    | open / CI green | [#378](https://github.com/BRATAN-CORP/bratan-music/pull/378)  |
-| 2   | `devin/1778242810-refactor-dialogs`     | Migrate dialogs to `<Modal>`/`<Sheet>`               | open / awaiting CI | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
-| 3   | `devin/<ts>-refactor-safe-area`         | Unified PWA safe-area handling                       | not started   | —                                                               |
-| 4   | `devin/<ts>-refactor-collection-pages`  | Album/Artist/Playlist → `<PageHero>` + IconButton    | not started   | —                                                               |
-| 5   | `devin/<ts>-refactor-i18n-audit`        | Eliminate residual hardcoded language strings        | not started   | —                                                               |
+| 2   | `devin/1778242810-refactor-dialogs`     | Migrate dialogs to `<Modal>`/`<Sheet>`               | open / CI green | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
+| 3   | `devin/1778243660-refactor-safe-area`   | Unified PWA safe-area handling                       | open / awaiting CI | [#380](https://github.com/BRATAN-CORP/bratan-music/pull/380) |
+| 4   | `devin/1778244500-refactor-collection-pages` | Album/Artist/Playlist → `<PageHero>` + IconButton | open / awaiting CI | [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381) |
+| 5   | `devin/<ts>-refactor-i18n-audit`        | Eliminate residual hardcoded language strings        | in progress   | —                                                               |
 | 6   | `devin/<ts>-refactor-polish`            | Stale comments, dead style strings, accent unify     | not started   | —                                                               |
 | 7   | `devin/<ts>-refactor-cleanup`           | Cleanup: outdated multiline comments, dead imports   | not started   | —                                                               |
 
@@ -84,7 +84,14 @@
 
 - 2026-05-08T11:55Z — knowledge base + tracker созданы (PR #378). CI зелёный.
 - 2026-05-08T12:33Z — PR #2 (dialogs, #379) открыт. 11 диалогов мигрированы
-  на `<Modal>`/`<Sheet>` (см. описание PR). Ожидает CI.
+  на `<Modal>`/`<Sheet>`. CI зелёный.
+- 2026-05-08T12:36Z — PR #3 (safe-area, #380) открыт. Все `env(safe-area-*)`
+  переведены на `var(--pwa-safe-*)`; добавлены `mt-/mb-/top-/bottom-/left-/
+  right-safe` утилиты. База на PR #2 — GitHub перетаргетит на main после
+  мерджа.
+- 2026-05-08T12:43Z — PR #4 (collection pages, #381) открыт. Album / Artist
+  / Playlist hero мигрированы на `<PageHero>` + `<IconButton>`; playlist
+  получил ambience-слой; cover sizing адаптивен. База на PR #3.
 
 ---
 
