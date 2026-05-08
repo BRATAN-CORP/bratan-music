@@ -2,6 +2,7 @@ import type { Env } from '../types/env';
 import type { Track } from '../types/music';
 import { TidalService } from './tidal/TidalService';
 import { TasteService, type TasteProfile } from './TasteService';
+import { CACHE_TTL_S as SEED_CACHE_TTL_S, getCachedGenreTracks } from './seedCache';
 
 /**
  * Per-user music recommender. Three public surfaces:
@@ -23,7 +24,14 @@ import { TasteService, type TasteProfile } from './TasteService';
  * each other's recommendations.
  */
 
-const RADIO_CACHE_TTL_S = 24 * 60 * 60; // 24h
+/** Track-radio seed pools change slowly on Tidal's side and the
+ *  Cloudflare Workers KV free tier caps writes at 1000/day for the
+ *  whole namespace. Bumping from 24h → 7d cuts the steady-state
+ *  write rate per unique seed by 7x, which is what keeps cold-track
+ *  spikes (a download burst, the cron, a curious user replaying their
+ *  history) from blowing the daily budget. See
+ *  `services/seedCache.ts` for the full rationale. */
+const RADIO_CACHE_TTL_S = SEED_CACHE_TTL_S;
 const SEEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** How many seeds we fan out into Tidal per wave/continue request. More
@@ -270,8 +278,10 @@ export class RecommendationService {
             ? await this.cachedTrackRadio(seedForRadio).catch(() => [] as Track[])
             : [];
           const combined = dedupTracks([...tops, ...radio]);
+          // 7d TTL: artist top-tracks change rarely on Tidal's side
+          // and KV writes are the bottleneck (1000/day free tier cap).
           await this.env.SESSIONS.put(cacheKey, JSON.stringify(combined), {
-            expirationTtl: 12 * 60 * 60,
+            expirationTtl: SEED_CACHE_TTL_S,
           });
           return combined;
         } catch {
@@ -285,30 +295,7 @@ export class RecommendationService {
   private async candidatesFromGenres(slugs: string[]): Promise<Track[]> {
     if (slugs.length === 0) return [];
     const pools = await Promise.all(
-      slugs.slice(0, 4).map(async (slug) => {
-        try {
-          const cached = await this.env.SESSIONS.get(`genre_seed_tracks:${slug}`, 'json');
-          if (cached && Array.isArray(cached)) return cached as Track[];
-
-          const page = await this.tidal.getExplorePage(slug);
-          const tracks: Track[] = [];
-          for (const m of page.modules) {
-            if (m.type === 'tracks') tracks.push(...m.items);
-            if (m.type === 'playlists') {
-              // Playlists don't contain tracks at this level — fall back
-              // to track-only modules. Cheap, pages always have track
-              // modules for genre slugs.
-            }
-          }
-          // Cache for 12h — genre lists rotate slowly upstream.
-          await this.env.SESSIONS.put(`genre_seed_tracks:${slug}`, JSON.stringify(tracks.slice(0, 60)), {
-            expirationTtl: 12 * 60 * 60,
-          });
-          return tracks;
-        } catch {
-          return [] as Track[];
-        }
-      }),
+      slugs.slice(0, 4).map((slug) => getCachedGenreTracks(this.env, this.tidal, slug)),
     );
     return dedupTracks(pools.flat());
   }

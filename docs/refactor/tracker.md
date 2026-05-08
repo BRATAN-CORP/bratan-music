@@ -56,7 +56,8 @@
 | 8   | `devin/1778246144-refactor-daily-variant`    | DRY daily-playlist variant theme + plural helper     | merged   | [#385](https://github.com/BRATAN-CORP/bratan-music/pull/385)    |
 | 9   | `devin/1778247026-refactor-shadow-accent-token` | Tokenize accent-glow elevation pair (`--shadow-accent`)  | merged   | [#386](https://github.com/BRATAN-CORP/bratan-music/pull/386)    |
 | 10  | `devin/1778247302-refactor-accent-magenta-token` | Unify accent→magenta gradient via `--color-accent-magenta` | merged | [#387](https://github.com/BRATAN-CORP/bratan-music/pull/387) |
-| 11  | `devin/1778247755-refactor-stale-token-refs` | Align stale `--color-on-accent` / `--color-warning` refs and `rgba(99,102,241,…)` accent-glow fallbacks with `_tokens.scss` | open  | _(opens after push)_ |
+| 11  | `devin/1778247755-refactor-stale-token-refs` | Align stale `--color-on-accent` / `--color-warning` refs and `rgba(99,102,241,…)` accent-glow fallbacks with `_tokens.scss` | merged | [#388](https://github.com/BRATAN-CORP/bratan-music/pull/388) |
+| 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | open  | _(opens after push)_ |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -97,6 +98,28 @@
   вводил в заблуждение при grep по цветам. Убран — браузер
   сам остановится на transparent если token исчезнет (в быту
   это невозможно — `_tokens.scss` импортится в `globals.scss`).
+
+`#12` — реакция на Cloudflare-алерт "90% of daily KV operations limit"
+(981 / 1000 writes за день). Воркер пишет в `SESSIONS` namespace —
+кеши Tidal-сидов и radio-pool'ов на каждый "холодный" слаг. Аудит
+показал двух виновников:
+1. **Дублирование** `genre_seed_tracks:<slug>` — один и тот же
+   ключ писали независимо `RecommendationService.candidatesFromGenres`
+   и `DailyPlaylistService.tracksFromGenre`, оба с TTL 12h. На
+   cron-перегенерации daily-плейлистов + любом `wave()` это давало
+   2× записей за каждый запрос.
+2. **Слишком короткие TTLs** на медленно меняющихся сидах:
+   - `genre_seed_tracks:` — 12h
+   - `track_radio:` — 24h
+   - `artist_seed_tracks:` — 12h
+   - `rec_suggested_artists:v1` — 24h
+   - `tidal-track-formats:` (negative cache) — 1h
+   Tidal-стороны меняют эти страницы редко, а 1000 writes/day — это
+   жёсткий cap на free tier. Подняли все долгожители до **7 дней**
+   (`CACHE_TTL_S` в новом `worker/src/services/seedCache.ts`); negative
+   cache discovery — до 24h. Эффект: -5–7× на write-rate в стационаре.
+   Чувствительный к свежести `discovery_breaker` (1h) и `track_quality`
+   (30d) не трогаем.
 ---
 
 ## Resolved decisions
@@ -170,7 +193,7 @@
   два разных значения (`fuchsia-500` против CSS-named `fuchsia`).
   Не перепутать с PR #9 (`--shadow-accent`) — это другой токен,
   про elevation; PR #10 — про цветовую палитру.
-- 2026-05-08T13:43Z — PR #11 (stale token refs) подготовлен.
+- 2026-05-08T13:43Z — PR #11 (stale token refs, #388) смерджен.
   `--color-on-accent` (несуществующее) → `--color-text-on-accent` в
   5 местах (`app/home/page.tsx` ×3, `QuickPrefsBar` ×1,
   `LanguageSwitcher` ×1). `--color-warning` (несуществующее) →
@@ -179,6 +202,15 @@
   Stale fallback `rgba(99,102,241,0.45)` (indigo-500, бывший
   бренд) на `--color-accent-glow` убран из 3 мест (`home`,
   `QuickPrefsBar`, `LanguageSwitcher`).
+- 2026-05-08T14:05Z — PR #12 (KV write-budget) подготовлен.
+  Cloudflare прислал "90% of daily KV ops limit" (981/1000 writes).
+  Создан `worker/src/services/seedCache.ts` (`CACHE_TTL_S = 7d`,
+  `getCachedGenreTracks(env, tidal, slug)`); `RecommendationService`
+  и `DailyPlaylistService` теперь читают/пишут `genre_seed_tracks:*`
+  через одну точку (раньше — два независимых писателя с TTL 12h).
+  TTLs: `track_radio:` 24h → 7d, `artist_seed_tracks:` 12h → 7d,
+  `rec_suggested_artists:v1` 24h → 7d, negative discovery (`tidal-track-formats:`
+  для пустых) 1h → 24h. Ожидаемый стационарный write-rate: 140–200/day.
 
 ---
 
@@ -191,6 +223,7 @@
 | 2026-05-08 ~13:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | sync tracker (PR #2..#7 merged) + PR #8             |
 | 2026-05-08 ~13:30       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #9 (--shadow-accent token, 3 sites, #386)        |
 | 2026-05-08 ~13:36       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #10 (--color-accent-magenta token, 3 sites, #387) |
-| 2026-05-08 ~13:43       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #11 (align stale token refs / fallbacks)         |
+| 2026-05-08 ~13:43       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #11 (align stale token refs / fallbacks, #388)   |
+| 2026-05-08 ~14:05       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #12 (KV write-budget — seedCache + 7d TTLs)      |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

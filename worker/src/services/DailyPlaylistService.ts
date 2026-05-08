@@ -4,6 +4,7 @@ import { RecommendationService } from './RecommendationService';
 import { TasteService } from './TasteService';
 import { TidalService } from './tidal/TidalService';
 import { loadDislikes, filterTracksByDislikes } from './dislikes';
+import { getCachedGenreTracks } from './seedCache';
 
 /**
  * Three daily-playlists per active user:
@@ -258,21 +259,7 @@ export class DailyPlaylistService {
   }
 
   private async tracksFromGenre(slug: string): Promise<Track[]> {
-    try {
-      const cached = await this.env.SESSIONS.get(`genre_seed_tracks:${slug}`, 'json');
-      if (cached && Array.isArray(cached)) return cached as Track[];
-      const page = await this.tidal.getExplorePage(slug);
-      const tracks: Track[] = [];
-      for (const m of page.modules) {
-        if (m.type === 'tracks') tracks.push(...m.items);
-      }
-      await this.env.SESSIONS.put(`genre_seed_tracks:${slug}`, JSON.stringify(tracks.slice(0, 60)), {
-        expirationTtl: 12 * 60 * 60,
-      });
-      return tracks;
-    } catch {
-      return [];
-    }
+    return getCachedGenreTracks(this.env, this.tidal, slug);
   }
 
   /**
