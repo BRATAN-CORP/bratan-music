@@ -90,20 +90,19 @@ export function TiltCard({
   // whatever element the cursor is over at release time → the click
   // misses on fast taps.
   //
-  // First attempt (#287) was to `jump()` the springs to 0 on press.
-  // That fixes the spring's logical value synchronously, but motion-
-  // dom batches its actual DOM writes via rAF — for fast clicks
-  // (~50ms hold) the next frame hasn't rendered when pointerup fires,
-  // so the hit-test still runs against the rotated rect.
+  // We mutate the DOM transform synchronously ourselves, *before* the
+  // browser's pointerup hit-test. We do that by adding a
+  // `.tilt-flatten` class with `transform: none !important` (defined
+  // in globals.scss). A class with !important beats motion's inline
+  // `style.transform = ...` (which is written without priority), and
+  // `classList.add` updates the computed style synchronously — the
+  // very next mouseup / click hit-test uses the un-rotated rect.
   //
-  // The reliable fix is to mutate the DOM transform synchronously
-  // ourselves, *before* the browser's pointerup hit-test. We do that
-  // by adding a `.tilt-flatten` class with `transform: none
-  // !important` (defined in globals.scss). A class with !important
-  // beats motion's inline `style.transform = ...` (which is written
-  // without priority), and `classList.add` updates the computed
-  // style synchronously — the very next mouseup / click hit-test
-  // uses the un-rotated rect.
+  // (We can't just `jump()` the springs to 0 on press: that fixes the
+  //  spring's logical value synchronously, but motion-dom batches its
+  //  actual DOM writes via rAF — for fast clicks the next frame
+  //  hasn't rendered when pointerup fires, so the hit-test still runs
+  //  against the rotated rect.)
   //
   // For non-interactive presses (e.g. user drags from the empty card
   // background) we just freeze the spring target without flattening —
