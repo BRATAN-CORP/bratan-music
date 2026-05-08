@@ -119,7 +119,7 @@ export function QuickPrefsBar() {
                   className="absolute inset-0 rounded-full"
                   style={{
                     background:
-                      'linear-gradient(135deg, var(--color-accent) 0%, color-mix(in oklab, var(--color-accent) 85%, fuchsia) 100%)',
+                      'linear-gradient(135deg, var(--color-accent) 0%, color-mix(in oklab, var(--color-accent) 85%, var(--color-accent-magenta)) 100%)',
                     boxShadow:
                       '0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 14px -6px var(--color-accent-glow, rgba(99,102,241,0.45))',
                   }}

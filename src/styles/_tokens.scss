@@ -19,6 +19,15 @@
   --color-sub-accent:   #c2185b;
   --color-sub-accent-hover: #a91550;
 
+  /* Brand-magenta gradient stop used by non-player surfaces that pair
+     accent-purple with a lighter magenta (rooms hero icon, AI playlist
+     icon, QuickPrefsBar active locale pill). NOT the player's
+     `--color-sub-accent` (#c2185b) — that one is reserved for the
+     fullscreen / mini-player gradient by design. Same hue as Tailwind
+     `fuchsia-500`, just hoisted as a token so the three sites can
+     re-tune together. */
+  --color-accent-magenta: #d946ef;
+
   --color-danger:       #b91c1c;
   --color-danger-muted: #fef2f2;
 
@@ -154,6 +163,10 @@
 
   --color-sub-accent:   #f472b6;
   --color-sub-accent-hover: #f9a8d4;
+
+  /* Lifted to fuchsia-400 in dark mode to compensate for the darker
+     surface — same playbook as accent itself (#5E6AD2 → #7E89E8). */
+  --color-accent-magenta: #e879f9;
 
   --color-danger:       #ef4444;
   --color-danger-muted: rgba(239, 68, 68, 0.10);
