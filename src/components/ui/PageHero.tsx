@@ -69,14 +69,23 @@ export function PageHero({
   return (
     <section
       className={cn(
-        'relative isolate mb-10 overflow-hidden border-b border-border px-4 pb-10 pt-6 sm:px-6 sm:pt-10 lg:px-10',
+        // Top padding bumped from `pt-6 sm:pt-10` so the hero doesn't
+        // feel cropped against the desktop / non-PWA viewport edge,
+        // where there's no system status-bar inset stacking on top of
+        // it. PWA mobile picks up `var(--pwa-safe-top)` from the
+        // app-shell wrapper above, so the new base just gives the
+        // browser case the breathing room it was missing.
+        //
+        // Bottom padding bumped + the vertical vignette below now does
+        // the soft fade, so the previous hard `border-b border-border`
+        // is gone — it cut the blurred ambience cleanly which read as
+        // "the blur is cropped". Pages that still want a divider can
+        // pass one via `className`.
+        'relative isolate mb-8 overflow-hidden px-4 pb-14 pt-10 sm:px-6 sm:pb-16 sm:pt-14 lg:px-10 lg:pt-16',
         bleedHorizontal && '-mx-4 sm:-mx-6 lg:-mx-10',
         className,
       )}
     >
-      {/* Ambience layer — caller-provided. Default `-z-10` so the
-          consumer's nodes are guaranteed to sit underneath the
-          foreground content. */}
       {ambience ? (
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
           {ambience}
@@ -88,15 +97,16 @@ export function PageHero({
         />
       )}
 
-      {/* Soft top-down vignette so foreground type stays legible
-          regardless of how saturated the ambience is. */}
+      {/* Vertical fade — pushes the ambience (cover blur, artist
+          portrait crossfade, accent radial) into the plain page bg
+          over the bottom ~40% of the hero. Replaces the previous
+          hard `border-b` with a smooth dissolve so the hero blends
+          into the page instead of getting clipped. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/10 via-[var(--color-bg)]/35 to-[var(--color-bg)]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/10 from-0% via-[var(--color-bg)]/35 via-55% to-[var(--color-bg)] to-100%"
       />
 
-      {/* Subtle accent radial in the upper-left so the hero never
-          reads as flat — even when the cover is missing. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_80%_at_25%_15%,var(--color-accent-glow),transparent_75%)] opacity-25"
