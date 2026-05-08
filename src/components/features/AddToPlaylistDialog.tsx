@@ -71,7 +71,7 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
       onClose={onClose}
       align="sheet"
       labelledBy={titleId}
-      panelClassName="max-w-[420px] flex flex-col rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+      panelClassName="max-w-[420px] flex flex-col rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)] max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">

@@ -136,7 +136,7 @@ export function MobileBottomDock() {
     // of the surface so it can poke above the dock's rounded top edge
     // without being clipped.
     <div
-      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-4 right-4 z-40 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
+      className="fixed bottom-[calc(var(--pwa-safe-bottom)+1rem)] left-4 right-4 z-40 sm:bottom-[calc(var(--pwa-safe-bottom)+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
     >
     <div
       className="flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass"

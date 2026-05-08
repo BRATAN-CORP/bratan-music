@@ -570,7 +570,7 @@ function WaveSettingsDialog({
               // the bottom of the viewport. The max-height keeps the
               // dialog clear of system UI on the very smallest
               // devices.
-              style={{ maxHeight: 'calc(100dvh - 4rem - env(safe-area-inset-bottom, 0px))' }}
+              style={{ maxHeight: 'calc(100dvh - 4rem - var(--pwa-safe-bottom))' }}
               className="liquid-glass pointer-events-auto flex w-[min(560px,100%)] flex-col overflow-hidden rounded-[var(--radius-xl)] md:rounded-[var(--radius-lg)]"
             >
               <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">

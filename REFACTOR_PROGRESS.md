@@ -59,7 +59,7 @@
 | --- | --------------------------------------------------------------- | ----------- | ------------------------------------------ | ------- |
 | 1   | Foundation: design tokens + shared UI primitives                | ready for review | `devin/1778237470-refactor-foundation`     | https://github.com/BRATAN-CORP/bratan-music/pull/373 |
 | 2   | Migrate all dialogs to shared `Modal`/`Sheet` primitive         | ready for review | `devin/1778239100-refactor-dialogs`        |         |
-| 3   | Unified PWA safe-area handling                                  | not started | `devin/<ts>-refactor-safe-area`            |         |
+| 3   | Mobile-only PWA safe-area handling                              | ready for review | `devin/1778239756-refactor-safe-area`      |         |
 | 4   | Redesign album/artist/playlist pages — mobile-adaptive hero     | not started | `devin/<ts>-refactor-collection-pages`     |         |
 | 5   | i18n audit — remove residual hardcoded language                 | not started | `devin/<ts>-refactor-i18n-audit`           |         |
 | 6   | Polish: stale comments, dead style strings, accent unification  | not started | `devin/<ts>-refactor-polish`               |         |
@@ -143,25 +143,35 @@
 
 ---
 
-## PR 3 — Unified PWA safe-area handling
+## PR 3 — Mobile-only PWA safe-area handling
 
-- [ ] Аудит: какие top-level контейнеры страниц забыли про `pt-safe` /
-      `pl-safe` / `pr-safe`.
-- [ ] Унифицировать в `<AppLayout>` / `<PageContainer>` примитиве,
-      чтобы любая новая страница автоматически получала корректные
-      инсеты.
-- [ ] `FullscreenPlayer`: notch + home-indicator. Сейчас работает в
-      целом, проверить углы (свайпы, кнопка close, прогресс-бар).
-- [ ] `MobileBottomDock`: уже использует `env(safe-area-inset-bottom)`,
-      проверить, что не двоится с `pb-safe`.
-- [ ] Toast host: уже учитывает чёлку, верифицировать.
-- [ ] Sidebar: уже учитывает desktop PWA top-inset, оставляем.
-- [ ] Landing / OnboardingTour: проверить, что не уезжают под чёлку.
-- [ ] Добавить utility `pb-safe-dock` (env-bottom + var(--player-height)).
-- [ ] Lint + typecheck + build pass.
-- [ ] PR opened, CI green.
+> Уточнение от пользователя: «отступы pwa нужны ток на мобильных
+> устройствах». Текущий медиа-запрос `(display-mode: standalone) and
+> (pointer: coarse)` уже отдаёт `--pwa-safe-*` только в установленной
+> мобильной PWA. Проблема была в том, что несколько компонентов
+> вызывали `env(safe-area-inset-*)` напрямую — а это в iOS Safari
+> возвращает реальный inset даже в обычной вкладке, не только в PWA.
+> Решение: всё, что не определение переменной в `globals.scss`,
+> переезжает на `var(--pwa-safe-*)` — и автоматически становится
+> mobile-PWA-only.
 
-**Risk:** низкий. Только padding / safe-area правки, без рендер-логики.
+- [x] `Modal.tsx` (sheet bottom-padding) → `var(--pwa-safe-bottom)`.
+- [x] `MobileBottomDock.tsx` (fixed bottom) → `var(--pwa-safe-bottom)`.
+- [x] `BannedListDialog`, `QueueDialog`, `AddToPlaylistDialog`,
+      `AdminUserDetailDialog` (sheet `max-h` calc) → `var(--pwa-safe-bottom)`.
+- [x] `EditUploadDialog` (sheet `pb` calc) → `var(--pwa-safe-bottom)`.
+- [x] `home/page.tsx` `WaveSettingsDialog` (centered max-h) →
+      `var(--pwa-safe-bottom)`.
+- [x] Sidebar / FullscreenPlayer / LyricsPanel / RoomConnectedBadge /
+      QuickPrefsBar / ToastHost / `<main>` уже на `var(--pwa-safe-*)` —
+      ничего трогать не нужно.
+- [x] Lint + typecheck + build pass.
+- [x] PR opened, CI green.
+
+**Risk:** очень низкий — изменение только подменяет источник числа
+inset'а, layout-математика та же. На desktop / mobile-tab inset
+становится `0px` (чего и хотел пользователь), на mobile-PWA остаётся
+рабочим.
 
 ---
 
