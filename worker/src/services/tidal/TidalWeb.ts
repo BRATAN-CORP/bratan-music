@@ -85,11 +85,13 @@ const QUALITY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const QUALITY_CACHE_PREFIX = 'tidal-track-quality:';
 const DISCOVERY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 // Empty discovery results (DRM-locked tracks, openapi.tidal.com auth
-// failures, malformed responses) are cached for an hour rather than
-// 30 days. That keeps the silent-fallback path cheap on cold tracks
-// without permanently poisoning the cache for tracks where Tidal
-// transiently returned an error.
-const DISCOVERY_NEGATIVE_CACHE_TTL_S = 60 * 60; // 1 hour
+// failures, malformed responses) are cached for 24h rather than 30d.
+// That keeps the silent-fallback path cheap on cold tracks without
+// permanently poisoning the cache for tracks where Tidal transiently
+// returned an error. Bumped from 1h up so a problematic track that
+// gets played multiple times in a day doesn't burn one negative-cache
+// KV write per hour against the 1000-writes/day free-tier cap.
+const DISCOVERY_NEGATIVE_CACHE_TTL_S = 24 * 60 * 60; // 24 hours
 const DISCOVERY_CACHE_PREFIX = 'tidal-track-formats:';
 // When the discovery endpoint returns a global-auth failure (401 /
 // 403 from openapi.tidal.com — bearer revoked, region-block, etc.),

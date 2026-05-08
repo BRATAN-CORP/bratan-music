@@ -278,7 +278,10 @@ recommendations.get('/artists/suggested', async (c) => {
       } catch { /* one bad slug shouldn't kill the whole list */ }
       if (collected.length >= 24) break;
     }
-    await c.env.SESSIONS.put(cacheKey, JSON.stringify(collected), { expirationTtl: 24 * 60 * 60 });
+    // 7d TTL: the curated explore-page list rotates slowly and KV writes
+    // are the bottleneck (1000/day free tier cap). Bumped from 24h to
+    // match `services/seedCache.ts::CACHE_TTL_S`.
+    await c.env.SESSIONS.put(cacheKey, JSON.stringify(collected), { expirationTtl: 7 * 24 * 60 * 60 });
     return c.json({ items: collected });
   } catch (err) {
     console.error('artists/suggested failed', err);
