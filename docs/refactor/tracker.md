@@ -51,8 +51,8 @@
 | 3   | `devin/1778243660-refactor-safe-area`   | Unified PWA safe-area handling                       | open / awaiting CI | [#380](https://github.com/BRATAN-CORP/bratan-music/pull/380) |
 | 4   | `devin/1778244500-refactor-collection-pages` | Album/Artist/Playlist → `<PageHero>` + IconButton | open / awaiting CI | [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381) |
 | 5   | `devin/1778244750-refactor-i18n-audit`  | Eliminate residual hardcoded language strings        | open / awaiting CI | [#382](https://github.com/BRATAN-CORP/bratan-music/pull/382) |
-| 6   | `devin/<ts>-refactor-polish`            | Stale comments, dead style strings, accent unify     | in progress   | —                                                               |
-| 7   | `devin/<ts>-refactor-cleanup`           | Cleanup: outdated multiline comments, dead imports   | not started   | —                                                               |
+| 6   | `devin/1778244723-refactor-polish`      | --shadow-cover token, hero shadows                   | open / awaiting CI | [#383](https://github.com/BRATAN-CORP/bratan-music/pull/383) |
+| 7   | `devin/<ts>-refactor-cleanup`           | Cleanup: outdated multiline comments, dead imports   | in progress   | —                                                               |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -96,6 +96,11 @@
   оставшихся хардкодных aria-label (`Notifications`, `online`, `Saved
   offline`, `Загрузка`). Добавлены ключи `common.notifications/online/
   savedOffline` и `offline.downloading{Percent}`. База на PR #4.
+- 2026-05-08T12:55Z — PR #6 (polish, #383) открыт. Введён
+  `--shadow-cover` токен (light + dark), 6 дублирующихся
+  `shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]` строк заменены на
+  `shadow-[var(--shadow-cover)]` (album/artist/playlist hero +
+  downloaded library swatch). База на PR #5.
 
 ---
 
