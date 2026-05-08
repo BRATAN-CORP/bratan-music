@@ -78,11 +78,17 @@ function LocaleButton({ code, label, active, onSelect }: LocaleButtonProps) {
       {active && (
         <motion.span
           layoutId="lang-highlight"
+          // `initial={false}` skips the very-first layout animation when
+          // the radio mounts already-selected (every navigation TO the
+          // profile page). Without it motion has no "from" snapshot for
+          // the layoutId and slides the pill in from a default origin
+          // — the user-visible "flies from below" glitch on profile
+          // entry. Subsequent locale switches still animate normally
+          // because motion now has a real previous rect to interpolate
+          // from.
+          initial={false}
           className="absolute inset-0 rounded-full"
           style={{
-            // Single-accent fill — matches the rest of the profile
-            // family (no fuchsia tail). Glow is the same accent token
-            // so light/dark themes adapt automatically.
             background: 'var(--color-accent)',
             boxShadow:
               '0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 18px -6px var(--color-accent-glow)',
