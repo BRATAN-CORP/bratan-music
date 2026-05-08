@@ -71,6 +71,35 @@
   --easing-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --easing-emph:   cubic-bezier(0.32, 0.72, 0, 1);
 
+  --motion-instant: 80ms;
+  --motion-fast:    180ms;
+  --motion-base:    240ms;
+  --motion-slow:    320ms;
+
+  /* Single source of truth for stacking layers. Used by `<Modal>` and
+     anything that needs to coordinate with it. The numeric values
+     match what's in use today across MobileBottomDock (40), the
+     fullscreen player (50), modal scrims (60), elevated modals (70),
+     toasts (80) and destructive-confirm overlays (90). */
+  --z-dock:           40;
+  --z-fullscreen:     50;
+  --z-modal:          60;
+  --z-modal-elevated: 70;
+  --z-toast:          80;
+  --z-confirm:        90;
+
+  /* Tints used by `liquid-glass` and friends. Dark surface tint for
+     translucent panels on light theme, light tint for the same
+     panels on dark theme. Re-uses the rgba values that already live
+     inline in `globals.scss` so `_tokens.scss` becomes the canonical
+     home. */
+  --color-glass-tint:        rgba(20, 20, 24, 0.32);
+  --color-glass-tint-strong: rgba(20, 20, 24, 0.45);
+  --color-glass-border:      rgba(255, 255, 255, 0.06);
+
+  --color-warn:        #b45309;
+  --color-warn-muted:  rgba(180, 83, 9, 0.10);
+
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Instrument Serif', 'Times New Roman', serif;
 
@@ -132,6 +161,13 @@
   --shadow-glow: 0 0 0 1px var(--color-accent-glow), 0 16px 48px -8px var(--color-accent-glow);
 
   --player-bg:     rgba(15, 15, 18, 0.85);
+
+  --color-glass-tint:        rgba(20, 20, 24, 0.45);
+  --color-glass-tint-strong: rgba(20, 20, 24, 0.60);
+  --color-glass-border:      rgba(255, 255, 255, 0.08);
+
+  --color-warn:        #fbbf24;
+  --color-warn-muted:  rgba(251, 191, 36, 0.12);
 
   --background: var(--color-bg);
   --foreground: var(--color-text);
