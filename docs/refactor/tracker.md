@@ -50,8 +50,8 @@
 | 2   | `devin/1778242810-refactor-dialogs`     | Migrate dialogs to `<Modal>`/`<Sheet>`               | open / CI green | [#379](https://github.com/BRATAN-CORP/bratan-music/pull/379) |
 | 3   | `devin/1778243660-refactor-safe-area`   | Unified PWA safe-area handling                       | open / awaiting CI | [#380](https://github.com/BRATAN-CORP/bratan-music/pull/380) |
 | 4   | `devin/1778244500-refactor-collection-pages` | Album/Artist/Playlist → `<PageHero>` + IconButton | open / awaiting CI | [#381](https://github.com/BRATAN-CORP/bratan-music/pull/381) |
-| 5   | `devin/<ts>-refactor-i18n-audit`        | Eliminate residual hardcoded language strings        | in progress   | —                                                               |
-| 6   | `devin/<ts>-refactor-polish`            | Stale comments, dead style strings, accent unify     | not started   | —                                                               |
+| 5   | `devin/1778244750-refactor-i18n-audit`  | Eliminate residual hardcoded language strings        | open / awaiting CI | [#382](https://github.com/BRATAN-CORP/bratan-music/pull/382) |
+| 6   | `devin/<ts>-refactor-polish`            | Stale comments, dead style strings, accent unify     | in progress   | —                                                               |
 | 7   | `devin/<ts>-refactor-cleanup`           | Cleanup: outdated multiline comments, dead imports   | not started   | —                                                               |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
@@ -92,6 +92,10 @@
 - 2026-05-08T12:43Z — PR #4 (collection pages, #381) открыт. Album / Artist
   / Playlist hero мигрированы на `<PageHero>` + `<IconButton>`; playlist
   получил ambience-слой; cover sizing адаптивен. База на PR #3.
+- 2026-05-08T12:51Z — PR #5 (i18n audit, #382) открыт. Локализованы 4
+  оставшихся хардкодных aria-label (`Notifications`, `online`, `Saved
+  offline`, `Загрузка`). Добавлены ключи `common.notifications/online/
+  savedOffline` и `offline.downloading{Percent}`. База на PR #4.
 
 ---
 
