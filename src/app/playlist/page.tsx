@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Reorder, motion } from 'motion/react';
+import { Reorder, motion, useReducedMotion } from 'motion/react';
 import { ChevronLeft, Globe, Heart, ListMusic, Pencil, Pin, PinOff, Share2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistTrackItem } from '@/components/features/PlaylistTrackItem';
@@ -12,10 +12,13 @@ import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/u
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHero } from '@/components/ui/PageHero';
 import { useT } from '@/i18n';
 
 export function PlaylistPage() {
   const t = useT();
+  const reduce = useReducedMotion();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: playlist, isLoading, isFetching, isError, refetch } = usePlaylist(id ?? '');
@@ -59,9 +62,7 @@ export function PlaylistPage() {
   const canShare = Boolean(playlist && !playlist.isLiked && !isLinked);
   // Resolve the hero cover from the offline cache when the playlist
   // is saved — keeps the iconic art visible on iOS Safari even when
-  // the remote URL no longer reaches Tidal's CDN. The hook also
-  // handles the iOS Safari Blob-eviction case by re-materialising
-  // bytes from the saved `coverBytes` ArrayBuffer.
+  // the remote URL no longer reaches Tidal's CDN.
   const heroCoverUrl = useOfflineCoverUrl(
     'playlist',
     playlist?.id,
@@ -87,7 +88,8 @@ export function PlaylistPage() {
       artist: track.artist,
       artistId: track.artistId,
       artists: track.artists,
-      coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl,
+      coverUrl: track.coverUrl,
+      coverVideoUrl: track.coverVideoUrl,
       duration: track.duration,
     });
     setQueue(
@@ -100,7 +102,7 @@ export function PlaylistPage() {
         coverUrl: tr.coverUrl,
         coverVideoUrl: tr.coverVideoUrl,
         duration: tr.duration,
-      }))
+      })),
     );
   };
 
@@ -111,6 +113,34 @@ export function PlaylistPage() {
     if (originalOrder === newOrder) return;
     reorderMutation.mutate({ playlistId: id, trackIds: localTracks.map((tr) => tr.id) });
   };
+
+  const ambience = heroCoverUrl ? (
+    <div
+      className="pointer-events-none absolute -inset-[15%] bg-cover bg-center blur-2xl saturate-150 opacity-60"
+      style={{ backgroundImage: `url(${heroCoverUrl})` }}
+    />
+  ) : undefined;
+
+  const cover = playlist ? (
+    <motion.div
+      className="flex h-40 w-40 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-lg)] border border-white/10 bg-card text-muted-foreground shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)] sm:h-48 sm:w-48"
+      initial={reduce ? false : { opacity: 0, scale: 0.96 }}
+      animate={reduce ? undefined : { opacity: 1, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 220, damping: 28 }}
+    >
+      {heroCoverUrl ? (
+        <img
+          src={heroCoverUrl}
+          alt={t('playlistPage.coverAlt', { name: displayName })}
+          className="h-full w-full object-cover"
+        />
+      ) : playlist.isLiked ? (
+        <Heart size={42} fill="currentColor" />
+      ) : (
+        <ListMusic size={42} />
+      )}
+    </motion.div>
+  ) : null;
 
   return (
     <AuthGuard>
@@ -154,88 +184,77 @@ export function PlaylistPage() {
           </div>
         ) : playlist ? (
           <>
-            <div className="mb-8 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:gap-6">
-              <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-card text-muted-foreground sm:h-40 sm:w-40">
-                {heroCoverUrl ? (
-                  <img
-                    src={heroCoverUrl}
-                    alt={t('playlistPage.coverAlt', { name: displayName })}
-                    className="h-full w-full object-cover"
-                  />
-                ) : playlist.isLiked ? (
-                  <Heart size={42} fill="currentColor" />
-                ) : (
-                  <ListMusic size={42} />
-                )}
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('playlistPage.eyebrow')}</span>
-                <div className="flex items-start gap-3">
-                  <h1 className="flex-1 text-3xl font-semibold tracking-tight sm:text-4xl">{displayName}</h1>
+            <PageHero
+              ambience={ambience}
+              cover={cover}
+              eyebrow={t('playlistPage.eyebrow')}
+              title={displayName}
+              meta={
+                <>
+                  {playlist.trackCount}{' '}
+                  {playlist.trackCount === 1
+                    ? t('playlistPage.trackOne')
+                    : t('playlistPage.trackMany')}
+                  {isLinked && (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                      {t('playlistPage.linkBadge')} ·{' '}
+                      {playlist.sourceKind === 'tidal' ? 'Tidal' : t('playlistPage.linkUser')}
+                    </span>
+                  )}
+                </>
+              }
+              actions={
+                <>
                   {canRename && (
-                    <button
-                      type="button"
+                    <IconButton
                       onClick={() => setRenameOpen(true)}
-                      className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                       aria-label={t('playlistPage.renameAria')}
                       title={t('playlistPage.renameTitle')}
                     >
                       <Pencil size={16} />
-                    </button>
+                    </IconButton>
                   )}
                   {canShare && (
-                    <motion.button
-                      type="button"
+                    <IconButton
+                      tone="accent"
+                      active={Boolean(playlist?.isPublic)}
                       onClick={() => setShareOpen(true)}
-                      whileTap={{ scale: 0.82 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                      className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
+                      aria-label={
                         playlist?.isPublic
-                          ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
-                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      }`}
-                      aria-label={playlist?.isPublic ? t('playlistPage.shareAriaPublic') : t('playlistPage.shareAriaPrivate')}
-                      title={playlist?.isPublic ? t('playlistPage.shareTitlePublic') : t('playlistPage.shareTitlePrivate')}
+                          ? t('playlistPage.shareAriaPublic')
+                          : t('playlistPage.shareAriaPrivate')
+                      }
+                      title={
+                        playlist?.isPublic
+                          ? t('playlistPage.shareTitlePublic')
+                          : t('playlistPage.shareTitlePrivate')
+                      }
                     >
                       {playlist?.isPublic ? <Globe size={16} /> : <Share2 size={16} />}
-                    </motion.button>
+                    </IconButton>
                   )}
                   {playlist && !playlist.isLiked && (
-                    <motion.button
-                      type="button"
+                    <IconButton
+                      tone="accent"
+                      active={isPinned}
                       onClick={() => pinPlaylist.mutate({ id: playlist.id, pinned: !isPinned })}
-                      whileTap={{ scale: 0.82 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                      className={`mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] transition-colors ${
-                        isPinned
-                          ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
-                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                      }`}
                       aria-label={isPinned ? t('playlistPage.unpinAria') : t('playlistPage.pinAria')}
                       title={isPinned ? t('playlistPage.unpinTitle') : t('playlistPage.pinTitle')}
                     >
                       {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
-                    </motion.button>
+                    </IconButton>
                   )}
                   {playlist && <PlaylistOfflineButton playlist={playlist} tracks={tracks} />}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {playlist.trackCount} {playlist.trackCount === 1 ? t('playlistPage.trackOne') : t('playlistPage.trackMany')}
-                  {isLinked && (
-                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                      {t('playlistPage.linkBadge')} · {playlist.sourceKind === 'tidal' ? 'Tidal' : t('playlistPage.linkUser')}
-                    </span>
+                  {canRename && (
+                    <PlaylistCoverButton
+                      playlistId={playlist.id}
+                      hasCover={Boolean(playlist.coverUrl)}
+                    />
                   )}
-                </p>
-                {canRename && (
-                  <PlaylistCoverButton
-                    playlistId={playlist.id}
-                    hasCover={Boolean(playlist.coverUrl)}
-                    className="pt-1"
-                  />
-                )}
-              </div>
-            </div>
+                </>
+              }
+            />
+
             {playlist && (
               <>
                 <RenamePlaylistDialog
@@ -251,40 +270,50 @@ export function PlaylistPage() {
                 />
               </>
             )}
-            {ownPlaylist && !hideRemoveMenu ? (
-              <Reorder.Group
-                axis="y"
-                values={localTracks}
-                onReorder={setLocalTracks}
-                className="overflow-visible rounded-[var(--radius-md)] border border-border"
-              >
-                {localTracks.map((track, i) => (
-                  <PlaylistTrackItem
-                    key={track.id}
-                    track={track}
-                    index={i}
-                    playlistId={playlist.id}
-                    reorderable
-                    onPlay={handlePlayTrack}
-                    onReorderEnd={handleReorderEnd}
-                  />
-                ))}
-              </Reorder.Group>
-            ) : (
-              <div className="overflow-visible rounded-[var(--radius-md)] border border-border">
-                {localTracks.map((track, i) => (
-                  <PlaylistTrackItem
-                    key={track.id}
-                    track={track}
-                    index={i}
-                    playlistId={playlist.id}
-                    reorderable={false}
-                    onPlay={handlePlayTrack}
-                    hideRemoveMenu={hideRemoveMenu}
-                  />
-                ))}
-              </div>
-            )}
+
+            {/* Track list panel — adopts the mini-player's liquid-glass
+                visual language so the album / artist / playlist pages
+                share a single surface treatment. */}
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 8 }}
+              animate={reduce ? undefined : { opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 28, delay: 0.05 }}
+            >
+              {ownPlaylist && !hideRemoveMenu ? (
+                <Reorder.Group
+                  axis="y"
+                  values={localTracks}
+                  onReorder={setLocalTracks}
+                  className="liquid-glass overflow-visible rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)]"
+                >
+                  {localTracks.map((track, i) => (
+                    <PlaylistTrackItem
+                      key={track.id}
+                      track={track}
+                      index={i}
+                      playlistId={playlist.id}
+                      reorderable
+                      onPlay={handlePlayTrack}
+                      onReorderEnd={handleReorderEnd}
+                    />
+                  ))}
+                </Reorder.Group>
+              ) : (
+                <div className="liquid-glass overflow-visible rounded-[var(--radius-xl)] sm:rounded-[var(--radius-lg)]">
+                  {localTracks.map((track, i) => (
+                    <PlaylistTrackItem
+                      key={track.id}
+                      track={track}
+                      index={i}
+                      playlistId={playlist.id}
+                      reorderable={false}
+                      onPlay={handlePlayTrack}
+                      hideRemoveMenu={hideRemoveMenu}
+                    />
+                  ))}
+                </div>
+              )}
+            </motion.div>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">{t('playlistPage.notFound')}</p>
