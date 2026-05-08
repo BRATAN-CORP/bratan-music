@@ -14,27 +14,16 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
-/**
- * Poll cadence — kept short so a guest catches a play / pause / seek
- * within ~one tick. The server short-circuits unchanged requests via
- * `?since=<version>` so the steady-state cost is a 200-with-empty-body
- * roundtrip, not a state recompute.
- */
+/** Poll cadence — short so guests catch play/pause/seek within one
+ *  tick; server short-circuits unchanged via `?since=<version>` so
+ *  steady-state is a tiny round-trip. */
 const POLL_INTERVAL_MS = 1500;
 const HEARTBEAT_INTERVAL_MS = 20_000;
-/**
- * "Real divergence" threshold: when a fresh event arrives and the
- * client's clock is more than this far from the room's authoritative
- * position, we hard-snap with `seekAudio`. Set deliberately loose so
- * normal buffer jitter, audio-thread scheduling and clock skew don't
- * trigger seeks (which manifest as choppy playback).
- */
+/** Drift past this triggers `seekAudio`. Loose enough that normal
+ *  buffer jitter / clock skew doesn't cause audible choppy seeks. */
 const HARD_SYNC_DRIFT_MS = 4000;
-/**
- * Local-progress jump threshold for "this was a user scrub" detection.
- * Anything bigger is treated as a deliberate seek; anything smaller is
- * treated as natural ~250 ms playback advance.
- */
+/** Local-progress jump threshold for "this was a user scrub".
+ *  Anything bigger is a deliberate seek; smaller is natural advance. */
 const SEEK_PUSH_THRESHOLD_S = 2;
 
 function trackIdsEqual(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -81,6 +70,7 @@ function buildRoomStreamUrl(track: RoomTrackSnapshot, roomId: string, accessToke
   }
   // Tidal needs a JSON round-trip — caller handles it.
   return null;
+
 }
 
 async function resolveRoomStreamUrl(
@@ -97,76 +87,43 @@ async function resolveRoomStreamUrl(
 }
 
 interface BridgeRefs {
-  /**
-   * Highest `state.version` we have applied locally. Lets the polling
-   * loop pass `?since=<version>` so the server can short-circuit
-   * unchanged responses.
-   */
+  /** Highest `state.version` applied locally; passed as `?since=` */
   appliedVersion: number;
-  /**
-   * True while we're in the middle of writing room state into the
-   * playerStore. The `usePlayerStore.subscribe` callback reads this
-   * to skip the local→remote push that would otherwise feedback-loop
-   * (every apply fires the subscription).
-   */
+  /** True while writing room state into playerStore so the
+   *  subscribe callback skips the feedback-loop push. */
   applying: boolean;
-  /** Last known (currentTrack.id, isPlaying, progress) baseline. */
+  /** Last (currentTrack.id, isPlaying, progress) baseline. */
   lastLocalTrackId: string | null;
   lastLocalIsPlaying: boolean;
   lastLocalProgress: number;
-  /** Server-clock skew (`serverNow - localNow`). */
+  /** `serverNow - localNow`. */
   serverClockOffsetMs: number;
-  /** Stream URL we last set for this track (so unchanged polls don't reload). */
+  /** Last stream URL for this track (so unchanged polls don't reload). */
   appliedStreamUrlForTrackId: string | null;
-  /** Snapshot of pre-room shuffle/crossfade so we can restore them. */
+  /** Pre-room shuffle/crossfade snapshot for restore. */
   savedShuffle: boolean | null;
   savedCrossfade: { on: boolean; dur: number } | null;
 }
 
 /**
- * The single source of truth that bridges the global `<audio>` engine
- * with a server-authoritative listening room.
+ * Bridge between the global `<audio>` engine and a server-authoritative
+ * listening room. Event-driven: the server bumps `state.version` on
+ * each play/pause/seek/track-change and the bridge applies it once per
+ * bump. No periodic drift correction — re-seeking on every poll is
+ * audibly choppy; genuine divergence is caught at the next event.
  *
- * Mounted at the layout level (`AppLayout`) so the user can navigate
- * between pages while the bridge keeps the global mini-player in lock-
- * step with the room. Behaviour is **event-driven**: the server bumps
- * `state.version` on each play / pause / seek / track-change, and the
- * bridge applies the new state exactly once per bump. Between events
- * the local audio engine plays freely — there is intentionally no
- * periodic drift correction, because re-seeking on every poll is
- * audible as choppy playback. Any genuine clock divergence is caught
- * the next time the host emits an event.
+ * Mounted at the layout level so navigation doesn't drop the bridge.
  *
- * 1.  Activates whenever `roomConnection.roomId` is non-null. Polls
- *     `GET /rooms/:id/state?since=<version>` every 1.5 s; the server
- *     responds `{ unchanged: true }` until something happens.
- * 2.  **Room → local.** When `state.version` advances:
- *     - **Track change.** Resolves a stream URL through
- *       `/rooms/:id/stream/...` (uploads / overrides via the proxy,
- *       Tidal via a JSON round-trip) and calls `setTrackAt(track,
- *       position, isPlaying)` so the global player loads the new track
- *       at the room's authoritative position. Guests joining a session
- *       in progress don't snap to 0:00 because `setTrackAt` honours
- *       the supplied progress. The local queue is hard-reset to
- *       `[track]` so a guest's pre-existing queue can't auto-advance
- *       into non-room content.
- *     - **Same track, isPaused changed.** Toggles `play()` / `pause()`
- *       locally — no seek, the local progress is trusted.
- *     - **Same track, isPaused same.** Treated as a host-issued seek;
- *       only re-seeks if the local clock has diverged by more than
- *       `HARD_SYNC_DRIFT_MS` to avoid no-op snaps.
- * 3.  **Local → room.** When the user (with control rights) plays a
- *     different track via /search, /library, or any surface that calls
- *     `playerStore.setTrack`, the bridge POSTs `kind: 'track'` to the
- *     room so everyone follows. Same for play/pause and large
- *     progress jumps (treated as user seeks).
- * 4.  **Mode lock.** Save+restore the user's shuffle/crossfade
- *     preferences while connected: both are forced off because cross-
- *     fades and queue reordering would silently desync from the host.
+ * Room→local: track changes resolve a stream URL (uploads/overrides
+ * via proxy, Tidal via JSON round-trip) and call
+ * `setTrackAt(track, position, isPlaying)`; same-track changes toggle
+ * play/pause locally. A drift past `HARD_SYNC_DRIFT_MS` triggers a
+ * single `seekAudio` snap.
  *
- * Loop avoidance: `applying` is true for the synchronous span of every
- * room→local apply, so the subscribe-callback can detect "this change
- * came from us" and skip pushing it back to the server.
+ * Local→room: subscriber on playerStore POSTs control events when
+ * `applying` is false (suppresses our own writes). Shuffle / crossfade
+ * are saved+forced-off while connected because both would silently
+ * desync from the host; restored on disconnect.
  */
 export function useRoomBridge(): void {
   const refs = useRef<BridgeRefs>({
@@ -189,7 +146,7 @@ export function useRoomBridge(): void {
   const meId = useAuthStore((s) => s.user?.id ?? null);
   const isHost = !!hostId && hostId === meId;
 
-  // 1. Save+restore shuffle/crossfade on connect/disconnect.
+  // Save+restore shuffle/crossfade on connect/disconnect.
   useEffect(() => {
     if (!roomId) {
       const r = refs.current;
@@ -221,7 +178,7 @@ export function useRoomBridge(): void {
     if (player.shuffle) player.toggleShuffle();
   }, [roomId]);
 
-  // 2. Polling loop: pull room state.
+  // Polling loop.
   useEffect(() => {
     if (!roomId) {
       setLive(false);
@@ -232,9 +189,8 @@ export function useRoomBridge(): void {
 
     const applyRoomState = async (state: RoomState, members: RoomMember[], serverNowMs: number) => {
       const r = refs.current;
-      // Mirror state + members into the connection store so consumer
-      // surfaces (room page, badge) stay in sync without running their
-      // own duplicate /state poll.
+      // Mirror state+members into the connection store so consumers
+      // (room page, badge) stay in sync without their own /state poll.
       useRoomConnectionStore.getState().setRemote({ state, members, serverNowMs });
       if (!state.track) return;
 
@@ -252,10 +208,8 @@ export function useRoomBridge(): void {
       r.applying = true;
       try {
         if (!sameTrack || !sameUrlAlready) {
-          // Track change (or first apply of this track on this client).
-          // Resolve the stream URL lazily — uploads / overrides build
-          // synchronously; Tidal needs one extra round-trip. Failures
-          // here just abort the apply; the next poll will retry.
+          // Track change. Resolve URL lazily; failures abort the
+          // apply and the next poll will retry.
           let streamUrl = '';
           try {
             const accessToken = useAuthStore.getState().accessToken ?? '';
@@ -283,33 +237,19 @@ export function useRoomBridge(): void {
             streamUrl,
           };
           ps.setTrackAt(trackPayload, targetPositionMs / 1000, !state.isPaused);
-          // Only replace the queue when the local one doesn't already
-          // contain this track. The previous unconditional
-          // `setQueue([trackPayload])` destroyed the host's own queue
-          // every time the bridge round-tripped the host's freshly
-          // chosen track back through `/state` — leaving the host
-          // (and any guest who'd built up their own queue) with a
-          // single-item queue. That broke next/prev buttons, the
-          // horizontal swipe gesture on the mini-player and
-          // fullscreen cover, and the auto-advance at end-of-track,
-          // because all three resolve the next item via
-          // `queue[idx + 1]` and there was no idx + 1.
-          //
-          // We still want a guest who joins a room cold (empty queue,
-          // or a queue from a different browsing context) to at least
-          // have the room's current track in their queue so the UI
-          // surfaces (queue list, idx-based navigation) line up with
-          // what's playing. So: keep the local queue when it already
-          // contains the track, otherwise seed it with the single
-          // room track exactly like before.
+          // Only replace the queue when it doesn't already contain
+          // this track. An unconditional `setQueue([trackPayload])`
+          // would destroy the host's own queue every time their
+          // freshly chosen track round-tripped through `/state`,
+          // killing next/prev, swipe, and auto-advance — all of which
+          // resolve via `queue[idx + 1]`. Cold guests still need the
+          // current track seeded so their queue UI lines up.
           const queueHasTrack = ps.queue.some((t) => t.id === trackPayload.id);
           if (!queueHasTrack) ps.setQueue([trackPayload]);
           r.appliedStreamUrlForTrackId = state.track.id;
         } else {
-          // Same track, same URL. The version bumped because of a
-          // play / pause / seek event. Apply only what changed —
-          // never re-seek "just because" because that would interrupt
-          // playback on every event.
+          // Same track, same URL: a play/pause/seek event. Apply only
+          // what changed; never re-seek unconditionally.
           const wantPlaying = !state.isPaused;
           if (wantPlaying && !ps.isPlaying) ps.play();
           else if (!wantPlaying && ps.isPlaying) ps.pause();
@@ -323,8 +263,8 @@ export function useRoomBridge(): void {
         r.applying = false;
       }
 
-      // Re-baseline post-apply so the local→remote subscription is
-      // judged against the just-applied state, not the stale one.
+      // Re-baseline so local→remote is judged against just-applied
+      // state, not the stale baseline.
       const fresh = usePlayerStore.getState();
       r.lastLocalTrackId = fresh.currentTrack?.id ?? null;
       r.lastLocalIsPlaying = fresh.isPlaying;
@@ -341,10 +281,8 @@ export function useRoomBridge(): void {
         if (cancelled) return;
         refs.current.serverClockOffsetMs = res.serverNowMs - Date.now();
         setLive(true);
-        // Mirror the server-pushed hostOnlyControl flag into the
-        // connection store regardless of whether the version bumped —
-        // members must observe the host's toggle within one poll
-        // window without needing to re-fetch the full room detail.
+        // Mirror hostOnlyControl every poll regardless of version
+        // bump — members must see toggle changes within one window.
         if (typeof res.hostOnlyControl === 'boolean') {
           const cs = useRoomConnectionStore.getState();
           if (cs.hostOnlyControl !== res.hostOnlyControl) {
@@ -354,8 +292,8 @@ export function useRoomBridge(): void {
         if (!res.unchanged && res.state) {
           await applyRoomState(res.state, res.members ?? [], res.serverNowMs);
         } else if (res.unchanged) {
-          // Still publish the heartbeat-only `serverNowMs` so badge
-          // animations have a fresh "isLive" tick.
+          // Publish heartbeat-only `serverNowMs` so badge animations
+          // get a fresh "isLive" tick.
           const cs = useRoomConnectionStore.getState();
           if (cs.state) {
             cs.setRemote({ state: cs.state, members: cs.members, serverNowMs: res.serverNowMs });
@@ -380,8 +318,8 @@ export function useRoomBridge(): void {
     };
   }, [roomId, setLive, clearActiveRoom]);
 
-  // 3. Heartbeat so the server keeps membership alive even when nothing
-  //    is changing (otherwise the live-member chip turns grey).
+  // Heartbeat so membership stays alive when nothing is changing
+  // (otherwise the live-member chip turns grey).
   useEffect(() => {
     if (!roomId) return;
     let cancelled = false;
@@ -399,10 +337,8 @@ export function useRoomBridge(): void {
     };
   }, [roomId]);
 
-  // 4. Local → room push: subscribe to playerStore changes and forward
-  //    user-initiated track / play / pause / seek to the room. The
-  //    `applying` ref suppresses pushes that originate from our own
-  //    `applyRoomState` writes.
+  // Local→room: forward user-initiated track/play/pause/seek; the
+  // `applying` ref suppresses pushes from our own applyRoomState writes.
   useEffect(() => {
     if (!roomId) return;
     const unsub = usePlayerStore.subscribe((state) => {
@@ -426,8 +362,7 @@ export function useRoomBridge(): void {
 
       if (trackChanged && state.currentTrack) {
         const snap = snapshotFromTrack(state.currentTrack);
-        // Reset URL marker so the next room poll forces a fresh
-        // `/rooms/:id/stream/...` resolve for the new track.
+        // Reset URL marker so the next poll forces a fresh resolve.
         r.appliedStreamUrlForTrackId = null;
         api.post(`/rooms/${roomId}/control`, {
           kind: 'track',

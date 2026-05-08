@@ -5,26 +5,16 @@ import { useT } from '@/i18n';
 import type { RoomChatPoll, RoomMessage } from '@/types/rooms';
 
 /**
- * Polling cadence for the chat list. The hook's primary delivery path
- * is now the per-room WebSocket (see worker/src/do/ChatRoomDO.ts);
- * polling is kept as a robustness fallback so a dropped socket, a
- * dev-tools breakpoint or a flapping connection still surface new
- * messages within a few seconds.
+ * Polling cadences. WebSocket is the primary delivery path (see
+ * worker/src/do/ChatRoomDO.ts); polling is a fallback for dropped
+ * sockets / breakpoints / flaps.
  *
- *   - `ACTIVE`: tab is visible AND the document has focus. Cadence is
- *     loose because the WebSocket should be carrying real-time updates
- *     — polling here just covers the edge case where the socket
- *     dropped without a clean close event yet.
- *   - `BLURRED`: tab is visible but unfocused (user typing in another
- *     window). Slightly slower so we don't burn battery on a chat
- *     nobody is currently watching.
- *   - `HIDDEN`: tab is in the background or the device is asleep.
- *     We mostly trust the browser to throttle setTimeout there
- *     anyway, but pick a long interval so we don't fire a burst of
- *     stale requests when the tab wakes up.
- *   - `WS_BROKEN`: WebSocket isn't currently delivering. Drop back to
- *     the original 0.9 s cadence so the user still sees other people's
- *     messages within ~1 beat even if the socket can't be re-opened.
+ *   - ACTIVE: visible+focused. Loose — WS handles real-time.
+ *   - BLURRED: visible+unfocused. Slower so we don't burn battery.
+ *   - HIDDEN: background/asleep. Long interval so wake-ups don't
+ *     fire a burst of stale requests.
+ *   - WS_BROKEN: WS not delivering. Tight 0.9 s so users still see
+ *     messages within ~1 beat.
  */
 const POLL_INTERVAL_ACTIVE_MS = 4000;
 const POLL_INTERVAL_BLURRED_MS = 6000;
@@ -33,11 +23,9 @@ const POLL_INTERVAL_WS_BROKEN_MS = 900;
 const MAX_MESSAGES_KEPT = 400;
 
 /**
- * Where to send the WebSocket upgrade request. Mirrors `API_BASE` from
- * `@/lib/api` but rewritten with the `wss:` scheme. We resolve the
- * URL lazily so a hostile DOM (`window.location` clobber etc.) can't
- * affect the choice — we only consult `import.meta.env.VITE_API_URL`,
- * the same env var the REST client uses.
+ * WebSocket upgrade URL. Mirrors `API_BASE` from `@/lib/api` rewritten
+ * with `wss:`. Sourced only from `import.meta.env.VITE_API_URL` so a
+ * hostile DOM (window.location clobber) can't redirect the upgrade.
  */
 function chatWsUrl(roomId: string, token: string): string {
   const base = (import.meta.env.VITE_API_URL as string | undefined)
@@ -56,14 +44,11 @@ export interface UiRoomMessage extends RoomMessage {
   /** True if `send()` failed and the row should be marked as undelivered. */
   failed?: boolean;
   /**
-   * Stable React-key for the row that survives the swap of an
-   * optimistic row (negative `id`) for the canonical server row
-   * (positive `id`). Without this, `<AnimatePresence>` sees the key
-   * change as an exit-then-enter and replays the row's entrance
-   * animation a second time the moment the server echo lands —
-   * exactly the "double pop on send" the user reported. Pending
-   * rows get a random `clientKey` at insert time and we carry it
-   * over when we replace them with the real row.
+   * Stable React key surviving the swap of an optimistic row
+   * (negative `id`) for the canonical server row (positive `id`).
+   * Prevents `<AnimatePresence>` from playing exit/enter on the
+   * row identity change — same `clientKey` is preserved across
+   * the replacement.
    */
   clientKey?: string;
 }
@@ -80,20 +65,15 @@ interface UseRoomChatResult {
 /**
  * Polling-based chat for a listening room.
  *
- *   - First call to `GET /rooms/:id/chat` returns the most recent
- *     ~100 messages in ascending order so the UI has something to
- *     render immediately.
- *   - After that we poll `?since=<lastId>` every 2.5s. The endpoint
- *     returns only messages strictly newer than the cursor, so the
- *     poll cost is constant regardless of room age.
- *   - `send()` writes an **optimistic** row to local state immediately
- *     (negative id, `pending: true`) so the sender sees their message
- *     before the network round-trip lands. When the POST resolves, the
- *     placeholder is replaced with the real row by tempId. On failure
- *     the placeholder flips to `failed: true` so the UI can mark it.
+ *   - Initial GET returns the most recent ~100 messages.
+ *   - Subsequent polls use `?since=<lastId>` so cost stays constant
+ *     regardless of room age.
+ *   - `send()` writes an optimistic row (negative id, pending: true)
+ *     immediately and reconciles it when POST resolves; on failure
+ *     it flips to `failed: true`.
  *
- * The hook caps history at `MAX_MESSAGES_KEPT` rows in memory so a
- * long-running session doesn't grow without bound.
+ * History capped at MAX_MESSAGES_KEPT so a long session doesn't grow
+ * without bound.
  */
 export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
   const me = useAuthStore((s) => s.user);
@@ -104,28 +84,15 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
   const lastIdRef = useRef(0);
   const cancelledRef = useRef(false);
 
-  // Stable merge — order, dedupe, advance cursor, cap memory. Pending
-  // optimistic rows (id < 0) stay at the tail until they get replaced
-  // with their server-side counterparts in `send`.
+  // Stable merge — order, dedupe, advance cursor, cap memory.
+  // Pending optimistic rows (id < 0) stay at the tail until they're
+  // replaced with their server-side counterparts in `send`.
   //
-  // Race-condition guard for the "double pop on send" the user has
-  // reported: the WebSocket can deliver our OWN echo back before
-  // `send()`'s POST has resolved. Without special handling the WS row
-  // is treated as a brand-new message, gets appended with a fresh
-  // `srv-${id}` React key, and `<AnimatePresence>` plays the
-  // entrance animation a SECOND time on top of the optimistic row
-  // (which is still sitting in the list waiting for `send()` to
-  // reconcile it). When the POST finally lands, `send()` then dedupes
-  // by `m.id === real.id`, removing the WS row — and that exit
-  // triggers another visible flicker.
-  //
-  // We can't fix the race upstream (the broadcast is racing the
-  // HTTP response on different paths), but we CAN match incoming
-  // confirmed rows against pending optimistic rows by sender + body
-  // and merge them in place, preserving the optimistic row's
-  // `clientKey` so React/Motion treat it as the same row. Result:
-  // a single entrance animation regardless of whether WS or POST
-  // wins the race.
+  // Race guard for "double pop on send": WS can deliver our OWN echo
+  // before `send()`'s POST resolves. We absorb confirmed rows into
+  // pending rows from the same sender+body, preserving the
+  // optimistic row's `clientKey` so Motion sees a single entrance
+  // animation regardless of whether WS or POST wins.
   const mergeMessages = useCallback((incoming: RoomMessage[]) => {
     setMessages((prev) => {
       const seen = new Set(prev.map((m) => m.id));
@@ -133,11 +100,8 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       for (const m of incoming) {
         if (seen.has(m.id)) continue;
         if (m.id >= 0) {
-          // Try to absorb this confirmed row into a pending
-          // optimistic row from the same sender carrying the same
-          // body. We only match the FIRST such pending row so
-          // back-to-back identical messages still each get their
-          // own server row.
+          // Match only the FIRST same-sender/body pending row —
+          // back-to-back identical messages still get their own row.
           const pendingIdx = working.findIndex(
             (p) =>
               p.id < 0 &&
@@ -179,24 +143,14 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
     };
   }, [roomId]);
 
-  // Holds the latest `tick` so external callers (`send`,
-  // visibilitychange / focus listeners) can request an immediate
-  // poll without having to manage their own timers. Re-bound on each
-  // render via `tickRef.current = tick` below.
+  // Latest `tick` accessor so listeners (`send`, visibilitychange,
+  // focus) can request an immediate poll without their own timers.
   const pokeRef = useRef<() => void>(() => {});
 
-  // Initial fetch + adaptive polling loop + WebSocket live-stream.
-  //
-  // The WebSocket is the primary delivery channel: every message is
-  // broadcast from the worker right after the D1 commit lands (see
-  // `worker/src/do/ChatRoomDO.ts`), so the receiver typically sees
-  // it within ~50 ms RTT. Polling sticks around as a robustness
-  // fallback — if the socket drops or fails to upgrade we fall back
-  // to the original 0.9 s cadence so the chat keeps working.
-  //
-  // The interval is recomputed on every tick, on every visibility /
-  // focus change, and on socket open/close so we widen it as soon as
-  // the WS is delivering messages and tighten it the moment it isn't.
+  // Initial fetch + adaptive polling + WebSocket live-stream.
+  // Interval is recomputed on every tick / visibility / focus /
+  // socket open-close so it widens once WS is delivering and
+  // tightens the moment it isn't.
   useEffect(() => {
     if (!roomId) return;
     let timer: number | null = null;
@@ -220,9 +174,8 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
 
     const tick = async () => {
       if (cancelledRef.current) return;
-      // Coalesce overlapping pokes — if a request is already in
-      // flight just let it land, the response will trigger the next
-      // schedule.
+      // Coalesce overlapping pokes — the in-flight response will
+      // trigger the next schedule.
       if (inFlight) return;
       if (timer !== null) {
         window.clearTimeout(timer);
@@ -242,8 +195,7 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
         setError(null);
       } catch (err) {
         if (err instanceof ApiError && err.status === 403) {
-          // Membership has been revoked under us — bail out and let
-          // the parent page handle the redirect.
+          // Membership revoked — bail and let the parent page redirect.
           cancelledRef.current = true;
           return;
         }
@@ -257,14 +209,11 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
     };
 
     pokeRef.current = () => {
-      // Fire-and-forget — the function is async but callers
-      // (event listeners, `send`) don't need to wait for it.
       void tick();
     };
 
-    /** Reschedule the next poll relative to "right now" using the
-     *  current cadence. Called when the WS state flips so the polling
-     *  loop tightens or loosens immediately, not on the next cycle. */
+    /** Reschedule the next poll using the current cadence. Called
+     *  on WS state flips so polling re-tunes immediately. */
     const reschedulePoll = () => {
       if (cancelledRef.current) return;
       if (timer !== null) {
@@ -295,8 +244,8 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       if (typeof WebSocket === 'undefined') return;
       const token = useAuthStore.getState().accessToken;
       if (!token) {
-        // Without a token we can't authenticate the upgrade; let
-        // polling carry the channel and try again on next reconnect.
+        // No token — can't authenticate the upgrade. Let polling
+        // carry it and retry on next reconnect.
         scheduleReconnect();
         return;
       }
@@ -309,9 +258,9 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       }
       socket = next;
       next.addEventListener('open', () => {
-        // Don't flip wsHealthy here — wait for the `hello` envelope so
-        // we know the DO accepted us, not just that TCP/TLS finished.
-        // (The DO sends `hello` synchronously after `accept()`.)
+        // Wait for the `hello` envelope before flipping wsHealthy —
+        // open just means TCP/TLS finished, not that the DO
+        // accepted us.
       });
       next.addEventListener('message', (event) => {
         if (cancelledRef.current) return;
@@ -331,8 +280,7 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
             mergeMessages([env.message]);
           }
         } catch {
-          // Corrupt frame — ignore. Next message or polling tick will
-          // cover the row if it matters.
+          // Corrupt frame — next message / polling tick covers it.
         }
       });
       const onLost = () => {
@@ -351,7 +299,7 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
         void tick();
-        // Re-arm the socket if it was torn down while the tab was hidden.
+        // Re-arm the socket if it was torn down while hidden.
         if (!socket && reconnectTimer === null) openSocket();
       }
     };
@@ -379,12 +327,9 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
       const trimmed = body.trim();
       if (!trimmed) return;
 
-      // 1. Build an optimistic row keyed by a unique negative id +
-      //    a stable `clientKey`. The `clientKey` is what React uses
-      //    as the row's identity inside `<AnimatePresence>`, so when
-      //    the server echo lands and we replace `id` with the real
-      //    positive id below, the row keeps the same key and does
-      //    NOT replay its entrance animation.
+      // 1. Optimistic row keyed by a negative id + stable
+      //    `clientKey` — the row keeps its React key when we swap
+      //    in the real positive id, so no re-entrance animation.
       const tempId = -(Date.now() * 1000 + Math.floor(Math.random() * 1000));
       const clientKey = `local-${tempId}`;
       const optimistic: UiRoomMessage = {
@@ -407,17 +352,13 @@ export function useRoomChat(roomId: string | undefined): UseRoomChatResult {
         );
         const real = res?.message;
         if (!real) {
-          // Server didn't echo a row — drop the optimistic placeholder
-          // and rely on the next poll. Shouldn't happen but is safe.
+          // No echo — drop placeholder, rely on next poll.
           setMessages((prev) => prev.filter((m) => m.clientKey !== clientKey));
           return;
         }
-        // 2. Replace the optimistic row IN PLACE — same `clientKey`,
-        //    same array slot — so React/Motion treats this as an
-        //    update of the existing row, not an exit + enter. The
-        //    pending dim reverts and `id` flips to the real one
-        //    without any visible animation. Also drop any duplicate
-        //    that the next poll might have already merged.
+        // 2. Replace the optimistic row in place — same `clientKey`,
+        //    same slot — so Motion treats it as an update, not an
+        //    exit/enter. Also drops any duplicate from a poll race.
         setMessages((prev) => {
           let replaced = false;
           const merged: UiRoomMessage[] = [];

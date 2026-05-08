@@ -64,25 +64,10 @@ import { toast } from '@/store/toast';
 type Translate = ReturnType<typeof useT>;
 
 /**
- * Home dashboard for authenticated users. Three sections:
- *
- *   1. **Hero "Моя волна"** — the headline element. One-tap personal
- *      stream. If the user has no taste signal yet (no history, no
- *      seed artists) we render the ArtistPicker inline instead so the
- *      first-time experience is "pick artists → listen", not "see an
- *      empty page → figure out what to do".
- *
- *   2. **Плейлисты дня** — three variants (Знакомое / Открытия /
- *      Под настроение). Each one playable as a queue and savable to
- *      the library as a permanent snapshot.
- *
- *   3. **Недавно слушал** — last ~12 tracks from history. Tapping any
- *      row resumes that track. The last row is a link to the full
- *      "library" or just expands into more rows if needed.
- *
- * Uses TanStack Query throughout so revisiting the page reuses
- * cached data and re-fetches only when explicitly invalidated (e.g.
- * after a wave save or genre-seed change).
+ * Home dashboard for authenticated users. Three sections: "Моя волна"
+ * hero (or ArtistPicker if no taste signal yet), "Плейлисты дня",
+ * "Недавно слушал". TanStack Query everywhere so revisits hit
+ * cache until explicitly invalidated.
  */
 export function HomePage() {
   const t = useT();
@@ -100,14 +85,8 @@ export function HomePage() {
 
   return (
     <div className="relative w-full">
-      {/*
-       * Hero clipping. Same reasoning as the landing hero — see
-       * comment in `src/app/landing/page.tsx`. `clip-path: inset(0 0
-       * -240px 0)` keeps horizontal clipping while letting the bottom
-       * Aurora blob bleed 240px below the section, so the hero
-       * transitions softly into the daily-playlists grid instead of
-       * ending with a hard horizontal cut.
-       */}
+      {/* Bottom Aurora blob bleeds 240px below the section so the
+          hero transitions softly into the daily-playlists grid. */}
       <section className="relative pb-10 pt-12 sm:pt-16 lg:pb-14 [clip-path:inset(0_0_-240px_0)]">
         <Aurora variant="hero" />
         <div className="grid-bg absolute inset-0 opacity-20" aria-hidden />
@@ -164,22 +143,12 @@ export function HomePage() {
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Compact entry-point card sitting between the wave hero and the
- * daily playlists. Lives only on the authenticated home — gives the
- * AI-playlist feature a permanent, on-route visual anchor instead
- * of relying entirely on the sidebar nav item. The card mirrors
- * the wave hero's hover treatment (border-glow + accent halo) so
- * the two read as a related family at the top of the page.
+ * Compact entry-point card between the wave hero and daily
+ * playlists. Hover treatment mirrors the wave hero so they read as
+ * a related family at the top of the page.
  */
 function AiPlaylistPromo() {
   const t = useT();
-  // Hover treatment matched to the daily-playlist cards directly
-  // below this on /home: clean idle (no decorative layer visible),
-  // and on hover the card lifts via border-strong + shadow-md while
-  // the Sparkles badge scales 1.05 over 700ms — same physics as the
-  // album cover scaling inside daily cards. Decorative glow lives
-  // on `pointer-events-none` layers so the "Попробовать" pill stays
-  // fully interactive throughout the hover.
   return (
     <Reveal>
       <section className="relative mx-auto w-full max-w-6xl px-4 pt-2 sm:px-6 lg:px-10" data-tour-id="tour-ai">
@@ -193,10 +162,8 @@ function AiPlaylistPromo() {
           to="/ai"
           className="group relative flex flex-col gap-4 overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card p-5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:flex-row sm:items-center sm:justify-between sm:p-6"
         >
-          {/* Static idle gradient — same two-corner signature as the
-              SubscriptionCard reference in /profile. Lives below the
-              hover-only halo on the same `pointer-events-none` layer
-              so the "Попробовать" pill stays interactive. */}
+          {/* Idle gradient sits below the hover halo on the same
+              pointer-events-none layer so the CTA stays interactive. */}
           <div
             className="pointer-events-none absolute inset-0"
             aria-hidden
@@ -214,13 +181,6 @@ function AiPlaylistPromo() {
             }}
           />
           <div className="relative flex items-center gap-4">
-            {/* Icon swatch — was a fuchsia-to-accent gradient with a Sparkles
-                glyph, which read as a third accent palette grafted onto the
-                page. Now uses the same accent-soft tint family as the rest of
-                the eyebrow chips (Premium tag, daily-mood pills) and a clean
-                Wand2 glyph that telegraphs "AI generation" without needing a
-                rainbow. The hover scale is preserved so the lift physics
-                still match the daily-playlist cards directly below. */}
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-accent-soft)] text-[var(--color-accent)] transition-transform duration-700 group-hover:scale-105">
               <Wand2 size={20} />
             </div>
@@ -261,28 +221,20 @@ function WaveHero({
   const t = useT();
   const [starting, setStarting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // null = "сбалансированная" волна без биаса. Mood управляет
-  // содержанием candidate-pool на бэке (mood_<slug> explore-page +
-  // +0.30 в rerank), character — наклоном novelty/familiar gates
-  // ("чаще что я уже знаю" vs "чаще что не слышал" vs "что сейчас
-  // популярно").
+  // null — balanced wave. Mood biases candidate pool (mood_<slug>
+  // explore + +0.30 rerank); character biases novelty/familiar
+  // gates (familiar / discover / popular).
   const [mood, setMood] = useState<WaveMood | null>(null);
   const [character, setCharacter] = useState<WaveCharacter | null>(null);
 
-  // Подкачиваем превью под выбранные настройки — covers + previewStrip
-  // мгновенно дают юзеру понять как изменится волна до клика
-  // "Включить волну".
   const previewQ = useQuery({
     queryKey: ['recommendations', 'wave-preview', mood ?? 'default', character ?? 'default'],
     queryFn: () => fetchWave(8, { mood, character }),
-    // Preview is just a teaser — let it go stale quickly so the user
-    // sees a fresh feel after they navigate away and come back.
     staleTime: 60_000,
   });
 
-  // Treat any preview track being currently active as "the wave is on
-  // air" — let the CTA collapse to play/pause behaviour instead of
-  // re-spawning a fresh wave (which would replace the user's queue).
+  // Active preview track means "wave is on air" — CTA collapses to
+  // play/pause instead of re-spawning a fresh wave over the queue.
   const previewIds = useMemo(() => (previewQ.data ?? []).map((tr) => tr.id), [previewQ.data]);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -304,16 +256,6 @@ function WaveHero({
     }
   };
 
-  // Hero card without TiltCard wrapping: the 3D rotation kept eating
-  // clicks on the secondary CTA even at minimal intensity, because
-  // any non-zero parent transform shifts the buttons' bounding boxes
-  // between mousedown and mouseup. The hover treatment is now matched
-  // to the daily-playlist cards below this hero — clean idle, gentle
-  // border-strong + shadow-md lift on hover, and the CoverStack on
-  // the right scales 1.05 over 700ms (the daily cards' album image
-  // does the same). All decorative layers stay on
-  // `pointer-events-none` so the "Включить волну" / "Поменять
-  // артистов" buttons sit on a stable, fully clickable pixel grid.
   return (
     <Reveal>
       <TiltCard
@@ -324,8 +266,7 @@ function WaveHero({
       >
       <div className="group isolate min-w-0 rounded-[var(--radius-xl)]" data-tour-id="tour-wave">
         <div className="relative isolate overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]">
-          {/* Static idle gradient — same two-corner signature as the
-              SubscriptionCard reference in /profile. */}
+          {/* Idle gradient signature — mirrors SubscriptionCard. */}
           <div
             className="pointer-events-none absolute inset-0"
             aria-hidden
@@ -359,14 +300,8 @@ function WaveHero({
                 </p>
               </div>
 
-              {/* CTA layout split across breakpoints:
-                    - mobile: primary button takes the full row so the
-                      "Включить волну" / Pause / Continue verb is the
-                      first thing the thumb hits, secondary actions
-                      sit in their own row underneath as 50/50 tiles
-                      (no awkward third-button-on-its-own-line wrap).
-                    - sm+: everything inline, gap-3, primary keeps its
-                      generous horizontal padding for visual weight. */}
+              {/* Mobile: primary takes full row, secondaries sit
+                  beneath as 50/50 tiles. sm+: everything inline. */}
               <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <Button
                   size="lg"
@@ -410,10 +345,8 @@ function WaveHero({
                     </span>
                   </Button>
 
-                  {/* Configurator button — opens the Yandex-Music-style
-                      sheet (mood + character). Active settings show a
-                      dot indicator so the state is visible without
-                      opening the sheet. */}
+                  {/* Mood + character sheet. Active settings show a
+                      dot indicator without opening the sheet. */}
                   <Button
                     variant="outline"
                     size="lg"
@@ -441,11 +374,9 @@ function WaveHero({
             </div>
           </div>
 
-          {/* Compact horizontal track-strip BELOW the hero copy, so on
-              mobile users still see what's coming up before the daily
-              playlists. Tapping a row plays from that track and seeds
-              the wave from it (useful when one of the previews really
-              catches the user's ear). */}
+          {/* Track strip under the hero so mobile users see what's
+              coming up. Tapping a row plays it and seeds the wave
+              from there. */}
           <div className="relative border-t border-border">
             <PreviewStrip tracks={previewQ.data ?? []} loading={previewQ.isLoading} />
           </div>
@@ -466,24 +397,10 @@ function WaveHero({
 }
 
 /**
- * Wave configurator — Yandex-Music-flavoured sheet that slides up on
- * mobile and centres on desktop. Reuses the same `liquid-glass` panel
- * + `liquid-glass-scrim` backdrop combo as `QueueDialog` /
- * `AddToPlaylistDialog` so the visual vocabulary is consistent. Lets
- * the user pick exactly two things:
- *
- *  - **Mood** — biases the candidate pool toward a Tidal `mood_<slug>`
- *    explore page and gives those tracks a +0.30 rerank bonus.
- *  - **Character** — biases the rerank gates: `familiar` boosts the
- *    "stuff I know" weight, `discover` flips it negative so the wave
- *    skews unfamiliar, `popular` pulls from a popularity-weighted
- *    explore page.
- *
- * Both are nullable — clicking an already-active option deselects it,
- * matching the deselect pattern from the artist picker. The dialog
- * itself is non-modal in the data sense: changes apply live to the
- * preview / next wave start, no "Apply" button needed (just a Reset
- * + Close pair).
+ * Wave configurator sheet (mobile slide-up / desktop centre). Two
+ * options: mood (biases candidate pool toward `mood_<slug>` explore
+ * + +0.30 rerank) and character (familiar / discover / popular). Both
+ * nullable, changes apply live — no Apply button.
  */
 const MOOD_ICON: Record<WaveMood, typeof Moon> = {
   chill: Moon,
@@ -523,18 +440,11 @@ function WaveSettingsDialog({
     onCharacterChange(null);
   };
 
-  // Render through a portal anchored at <body>. Without this, the
-  // `position: fixed` scrim + panel would be size-constrained to the
-  // first ancestor with a `transform` / `filter` / `perspective` —
-  // and the WaveHero is wrapped in <Reveal /> (a motion.div that
-  // keeps an inline `transform: translateY(0)` even after its enter
-  // animation settles). With Reveal as the containing block the
-  // "fixed" scrim was actually pinned to the WaveHero card's box,
-  // which is why the page heading + AI banner stayed sharp behind it
-  // ("не всю блюрит за собой" — they were never under the scrim in
-  // the first place). Portalling out of the transform tree means the
-  // viewport is the containing block, the scrim covers everything,
-  // and the backdrop-filter blurs the entire home page.
+  // Portal to <body>: the WaveHero is wrapped in <Reveal /> which
+  // keeps an inline transform, making it the containing block for
+  // any descendant `position: fixed`. Portalling out of the
+  // transform tree lets the scrim cover the whole viewport and
+  // backdrop-filter blur the entire home page.
   const dialog = (
     <AnimatePresence>
       {open && (
@@ -545,12 +455,9 @@ function WaveSettingsDialog({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            // Scrim sits at z-[100] — above the mobile bottom dock
-            // (z-40), the AI-playlist banner and the floating mini
-            // player so the whole home page reads as blurred-out when
-            // the configurator is up. z-[60] (the QueueDialog default)
-            // wasn't enough on mobile because the dock + player share
-            // the bottom of the viewport with the dialog's panel.
+            // z-[100] sits above mobile dock (z-40), AI banner and
+            // mini player so the whole home reads as blurred when
+            // the configurator is up.
             className="liquid-glass-scrim fixed inset-0 z-[100]"
             onClick={onClose}
             aria-hidden
@@ -566,11 +473,9 @@ function WaveSettingsDialog({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.97, transition: { duration: 0.18 } }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              // Centred on every breakpoint so the panel can't be
-              // covered by the mini-player / mobile dock that live at
-              // the bottom of the viewport. The max-height keeps the
-              // dialog clear of system UI on the very smallest
-              // devices.
+              // Centred so the panel can't be covered by the
+              // mini-player / mobile dock; max-height clears system
+              // UI on the smallest devices.
               style={{ maxHeight: 'calc(100dvh - 4rem - var(--pwa-safe-bottom))' }}
               className="liquid-glass pointer-events-auto flex w-[min(560px,100%)] flex-col overflow-hidden rounded-[var(--radius-xl)] md:rounded-[var(--radius-lg)]"
             >
@@ -627,10 +532,8 @@ function WaveSettingsDialog({
                   </SettingsGroup>
 
                   <SettingsGroup label={t('home.waveSettingsCharacterLabel')}>
-                    {/* 1-col on the smallest screens (each tile lays
-                        the icon left of label+hint so the line still
-                        looks dense), 3-col on sm+ where width is
-                        comfortable enough for the stacked variant. */}
+                    {/* 1-col on small (icon left of label+hint),
+                        3-col stacked on sm+. */}
                     <div
                       role="radiogroup"
                       aria-label={t('home.waveSettingsCharacterLabel')}
@@ -753,10 +656,7 @@ function CharacterTile({
       onClick={onClick}
       whileTap={{ scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 600, damping: 30 }}
-      // Mobile: horizontal row (icon left, label/hint right) so a
-      // single-column 1-col grid still reads dense and tappable.
-      // sm+: stacked column (icon top, then label, then hint) — same
-      // shape as the daily-playlist cards a few rows below this.
+      // Mobile: row (icon left). sm+: stacked column.
       className={cn(
         'group relative flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-col sm:items-start sm:gap-1.5',
         active
@@ -790,11 +690,7 @@ function CharacterTile({
   );
 }
 
-/**
- * Stacked-cover decoration: 3 layered album covers rotating slightly,
- * pulled from the user's wave preview. Replaces a static hero image
- * with something that actually reflects the user's taste.
- */
+/** 3 layered album covers from the user's wave preview. */
 function CoverStack({ tracks, loading }: { tracks: Track[]; loading: boolean }) {
   const covers = useMemo(() => {
     const seen = new Set<string>();
@@ -875,9 +771,8 @@ function PreviewStrip({ tracks, loading }: { tracks: Track[]; loading: boolean }
 function PreviewStripRow({ track, index, tracks }: { track: Track; index: number; tracks: Track[] }) {
   const { isActive, isActivePlaying, playOrToggle } = useTrackPlayback(track.id);
   const onClick = () => {
-    // Active row → toggle pause / resume in place. Inactive row →
-    // restart the wave starting at this preview, with the rest of
-    // the strip seeded as the queue tail.
+    // Active → pause/resume in place. Inactive → restart the wave
+    // from this row with the strip as the queue tail.
     if (isActive) {
       playOrToggle(track);
       return;
@@ -990,15 +885,10 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [savedJustNow, setSavedJustNow] = useState(false);
-  // Persistent across reloads (server-side flag) OR set to true after a
-  // local save click — both should disable the button and show the
-  // "Сохранено" state.
+  // Server-side flag OR local save click — either disables the
+  // button and shows "Сохранено".
   const isSaved = !!playlist.savedToPlaylistId || savedJustNow;
 
-  // Sync the card's play CTAs with the global player. When a track
-  // from this daily playlist is currently active the buttons swap
-  // to a Pause icon and clicking pauses/resumes in place instead of
-  // restarting the queue from the top.
   const trackIds = useMemo(() => playlist.tracks.map((tr) => tr.id), [playlist.tracks]);
   const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
 
@@ -1017,9 +907,8 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
     try {
       await saveDailyPlaylist(playlist.id);
       setSavedJustNow(true);
-      // Invalidate both the library list (sidebar / library page) and
-      // the daily-playlists query so the persistent saved flag flows
-      // back into other consumers of this card too.
+      // Library list + daily-playlists — saved flag flows back to
+      // other consumers of this card.
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
       queryClient.invalidateQueries({ queryKey: ['daily-playlists'] });
     } finally {
@@ -1030,10 +919,8 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   return (
     <Link
       to={`/daily/${playlist.id}`}
-      // The whole card navigates to /daily/:id where the user can preview
-      // the full tracklist without committing to the library. Inner Play
-      // and "В библиотеку" buttons swallow the click via preventDefault +
-      // stopPropagation so their actions still work in place.
+      // Whole card → /daily/:id. Inner Play and "В библиотеку"
+      // buttons preventDefault + stopPropagation to act in place.
       className="group relative flex h-full flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]"
     >
       {/* Cover header: gradient + cover image overlay. */}
@@ -1128,9 +1015,8 @@ function RecentSection() {
     queryFn: () => fetchRecentPlays(12),
     staleTime: 30_000,
   });
-  // tour-recent target sits on the inner <section /> below — keeps the
-  // spotlight off the early-return null branch when the user has no
-  // recent plays yet.
+  // tour-recent on inner <section /> — spotlight stays off the
+  // empty-state early return.
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
 

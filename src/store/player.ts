@@ -100,21 +100,14 @@ interface PlayerState {
   playNext: (track: Track) => void;
   removeFromQueue: (trackId: string) => void;
   /** Drop queue items whose *track id* the user just banned. Artist
-   *  bans intentionally do NOT prune the queue (the user's queue is
-   *  a deliberate, manual selection — banning an artist hides them
-   *  from recommendations going forward but doesn't retroactively
-   *  yank already-queued tracks). If the current track itself was
-   *  the one explicitly banned, advance to the next still-valid one.
-   *  Called by the dislike mutation right after the optimistic
-   *  update.
+   *  bans never prune the queue — banning an artist hides them from
+   *  recommendations going forward but the user's queue is sacred.
+   *  If the current track was the one banned, advance.
    *
-   *  `bannedTrackId` is the id the user just toggled. Skip-to-next is
-   *  only triggered when this id matches the current track — banning
-   *  any OTHER track (or any artist) just prunes the queue, never
-   *  hijacks playback of whatever the user is listening to right now.
-   *  Omit the argument for the bootstrap path that has no notion of
-   *  "the user just clicked ban" — falls back to the legacy "skip if
-   *  current is banned" semantics for backwards compatibility. */
+   *  `bannedTrackId` scopes the skip: only when it matches the
+   *  currently-playing id. Banning any neighbour leaves audio
+   *  untouched. Omit for the bootstrap path — falls back to the
+   *  legacy "skip if current is banned" check. */
   pruneBanned: (bannedTrackId?: string) => void;
   /** Move a track inside the queue from one index to another. */
   reorderQueue: (from: number, to: number) => void;
@@ -147,18 +140,11 @@ interface PlayerState {
   reset: () => void;
   /**
    * Optional "end of queue" handler installed by `usePlayHistoryLogger`.
-   * `next()` and `nextManual()` consult it the moment they would
-   * otherwise stop / wrap because the queue is exhausted. If the
-   * handler returns `true` it is taking responsibility for whatever
-   * happens next (typically: async-fetch wave/continue tracks, append
-   * to the queue, then `setTrack` the first new track) and the store
-   * action returns without applying its built-in fallback. If `false`
-   * (or no handler is registered, e.g. logged-out state, SSR), the
-   * built-in fallback runs:
-   *   - `next()` stops at the end of the queue.
-   *   - `nextManual()` wraps to track 0.
-   * Decoupling the actual fetch+advance from the player store keeps
-   * the recommendations module out of zustand's dependency graph. */
+   * Consulted by `next()` / `nextManual()` when the queue is
+   * exhausted. Returning `true` claims responsibility for advance
+   * (async wave/continue fetch); the store action then bails. With no
+   * handler / `false`: `next()` stops, `nextManual()` wraps to 0.
+   * Decouples recommendations from the zustand graph. */
   endHandler: (() => boolean) | null;
   setEndHandler: (handler: (() => boolean) | null) => void;
 }
@@ -319,18 +305,11 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     const { queue, currentTrack, shuffle, repeat } = get();
     if (!queue.length) return;
     const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
-    // Skip-on-play: if the next pick is banned, keep scanning. We
-    // bound the scan at queue.length so a fully-banned queue can't
-    // hang the engine — worst case we exhaust every slot and bail.
-    //
-    // Skips both explicit track-id bans AND artist-level bans —
-    // banning an artist with `не рекомендовать` should not just
-    // suppress them in recommendations, it should also stop
-    // auto-advance from landing on them. The queue itself still
-    // contains the row (banning an artist intentionally doesn't
-    // prune already-queued items — see `pruneBanned`), so the user
-    // can still play them by clicking the queue entry directly
-    // (`jumpToQueue`); we just walk past them on natural flow.
+    // Skip-on-play: if the next pick is banned (track-id OR artist),
+    // keep scanning. Bounded by queue.length so a fully-banned queue
+    // can't hang. Auto-advance walks past artist-banned items even
+    // though they survive in the queue (see `pruneBanned`); the user
+    // can still reach them via direct `jumpToQueue`.
     let probe = startIdx;
     for (let attempts = 0; attempts < queue.length; attempts++) {
       let nextIdx: number;
@@ -341,13 +320,9 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       } else if (repeat === 'all') {
         nextIdx = 0;
       } else {
-        // End of queue with repeat='off'. Give the optional end
-        // handler a chance to extend the queue (infinite playback,
-        // wave continuation) — if it accepts, it's responsible for
-        // calling setQueue/setTrack asynchronously, so we just bail
-        // out here. The fallback (do nothing, player stops) only
-        // runs when no handler is registered or the handler
-        // declines.
+        // End-of-queue, repeat='off'. Try the end handler (infinite
+        // playback / wave continuation); if it claims, it drives
+        // setQueue/setTrack async. No handler → player stops.
         const handler = get().endHandler;
         if (handler && handler()) return;
         return;
@@ -381,15 +356,9 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       } else if (probe < queue.length - 1) {
         nextIdx = probe + 1;
       } else {
-        // End of queue. Try the end handler first — when infinite
-        // playback is on it'll fetch wave/continue tracks, append
-        // them to the queue and `setTrack` the first new one. If
-        // it accepts (returns true), we bail out and let the async
-        // path drive playback so the user doesn't see a flash of
-        // track-1 before the wave kicks in. Without a handler
-        // (logged out, infinite playback off, or fetch already in
-        // flight from a prior tap) we wrap to track 0 so the user
-        // doesn't get a no-op skip on a non-empty queue.
+        // End-of-queue (manual). Try the end handler so the wave
+        // continues without a flash of track-1; if no handler
+        // claims, wrap to 0 so a non-empty queue doesn't no-op.
         const handler = get().endHandler;
         if (handler && handler()) return;
         nextIdx = 0;
@@ -412,40 +381,24 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
 
   previous: () => {
     const { queue, currentTrack, progress, _seekToZero, repeat, playHistory } = get();
-    // Primary path: pop the explicit play-history stack. This is the
-    // *actual* "the track you were on a moment ago" pointer, pushed by
-    // every state transition that promotes a new currentTrack —
-    // setTrack, jumpToQueue, next, nextManual, the room bridge's
-    // setTrackAt, and the audio engine's auto-crossfade promotion.
-    // Walking the queue backwards (legacy fallback below) is fragile
-    // around auto-advance: in some cases the queue/currentTrack pair
-    // is in a transient state (post-crossfade slot churn, mid-fetch
-    // queue prune, room bridge reorder) and findIndex returns -1,
-    // leaving "back" silently no-op. The history stack survives all
-    // of that because it stores ids, not array positions.
+    // Primary path: pop the play-history stack. Every state
+    // transition that promotes a new currentTrack pushes here, so
+    // popping survives queue mutations / crossfade slot churn /
+    // room-bridge reorders that would defeat a queue-index walk.
     if (playHistory.length > 0) {
       let history = playHistory;
       while (history.length > 0) {
         const lastId = history[history.length - 1];
         history = history.slice(0, -1);
-        // Skip self-references (shouldn't happen with the pushHistory
-        // guard, but be defensive against persisted state from older
-        // builds where the stack might have been polluted).
+        // Defensive against polluted persisted state from older
+        // builds.
         if (!lastId || lastId === currentTrack?.id) continue;
         const target = queue.find((t) => t.id === lastId);
-        // The pop is a back-target as long as the queue still
-        // contains it. We deliberately do NOT also gate on
-        // `isBanned(target)` here: track-id-banned items are
-        // already filtered out of the queue (`filterTrackBanned`),
-        // so `queue.find` returning truthy means the track is
-        // still a valid hop. Artist-banned tracks DO survive in
-        // the queue (per `pruneBanned`'s "user's queue is sacred"
-        // contract) and a previous version of this walk also
-        // skipped them — that was the source of "back from track 6
-        // to track 4 works but back from track 2 to track 1
-        // doesn't" when one of the intermediate tracks shared an
-        // artist with one the user later banned. "Back" is an
-        // explicit user gesture; honour it.
+        // Don't gate on `isBanned`: track-id-bans are already
+        // pruned from the queue, and artist-banned items survive
+        // there by design — "back" is an explicit user gesture, so
+        // we honour it even when an intermediate track shares an
+        // artist with one the user later banned.
         if (target) {
           set({
             currentTrack: target,
@@ -455,29 +408,16 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
           });
           return;
         }
-        // Track is no longer in the queue (dequeued, track-id-banned
-        // and pruned, etc.) — drop the entry and keep walking
-        // backward.
       }
-      // History exhausted with nothing playable — persist the cleanup
-      // and fall through to the queue-walk fallback.
+      // History exhausted — persist the cleanup and fall through to
+      // the queue-walk fallback.
       set({ playHistory: history });
     }
 
-    // First, see whether there is an actual previous track to walk to.
-    // If there is, "back" always goes there — the user expects "back"
-    // to mean "go to the previous song", not "rewind the current one".
-    // The classic 3s-rewind idiom (Spotify et al) is preserved as a
-    // fallback for the case where there is no valid neighbour to walk
-    // to (first track of the queue under repeat='off').
-    //
-    // We deliberately do NOT skip artist-banned neighbours here.
-    // Track-id-banned ones are already filtered out of the queue by
-    // `filterTrackBanned`, so any item we land on is a legitimate
-    // back target. Walking past artist-banned items used to leave
-    // "back from 2 → 1" silently no-op once a credited artist of the
-    // intermediate track had been banned — the user explicitly
-    // pressed back, honour it.
+    // "Back" goes to the previous song when one exists; the
+    // 3s-rewind idiom (Spotify) is the fallback for the first track
+    // under repeat='off'. Artist-banned neighbours are NOT skipped
+    // for the same reason as above — explicit user gesture.
     let target: Track | null = null;
     if (queue.length > 0) {
       const startIdx = queue.findIndex((t) => t.id === currentTrack?.id);
@@ -486,9 +426,8 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
       } else if (startIdx === 0 && repeat === 'all') {
         target = queue[queue.length - 1] ?? null;
       } else if (startIdx < 0) {
-        // Current track isn't in the queue (rare — pruned mid-flight,
-        // room-bridge state mismatch). Pick the last item as a
-        // best-effort back target so the user isn't stranded.
+        // Current track isn't in the queue (mid-flight prune,
+        // room-bridge mismatch). Best-effort: last item.
         target = queue[queue.length - 1] ?? null;
       }
     }
@@ -511,26 +450,19 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
   cycleRepeat: () =>
     set((s) => {
-      // off → all (queue/playlist repeat) → one (current track repeat) → off.
-      // Rationale: on the first press from the inactive state the user
-      // most likely wants "keep the queue going" rather than "loop this
-      // single track". Single-track loop is a less common, more niche
-      // intent so it lives at the second press.
+      // off → all (queue) → one (track) → off. First press from off
+      // most likely means "keep the queue going", not single-track
+      // loop (rarer intent).
       const modes: RepeatMode[] = ['off', 'all', 'one'];
       const idx = modes.indexOf(s.repeat);
       return { repeat: modes[(idx + 1) % modes.length] ?? 'off' };
     }),
   setProgress: (progress) => set({ progress }),
   setDuration: (duration) => set({ duration }),
-  // We no longer surface playback errors via an inline banner inside
-  // the mini- and fullscreen-player — that broke the visual rhythm of
-  // the player every time something went wrong (especially common
-  // during long sessions where transient stream errors are normal).
-  // Instead we route through the global toast surface so all
-  // user-facing errors live in one corner of the screen and disappear
-  // on their own. The `error` field is kept on the store so anything
-  // else relying on it (e.g. cleanup branches that treat a non-null
-  // error as "we paused due to a problem") keeps working.
+  // Errors route through the global toast surface (not an inline
+  // banner) so they live in one corner and disappear on their own.
+  // Field kept for cleanup branches that treat non-null as "paused
+  // due to problem".
   setError: (error) => {
     set({ error });
     if (error) {
@@ -561,24 +493,17 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     repeat: s.repeat,
     progress: s.progress,
     duration: s.duration,
-    // П8 — fullscreen state survives reload: if the user was inside the
-    // expanded player when they refreshed, we re-open it on rehydrate so
-    // the experience picks up exactly where it left off.
+    // П8 — fullscreen state survives reload so the expanded player
+    // re-opens on rehydrate.
     fullscreen: s.fullscreen,
-    // Persist the back-stack so a quick reload doesn't strand the
-    // user on track 2 with no way back to track 1 (the most common
-    // path before this fix — rehydrate dropped the history and the
-    // queue-walk fallback couldn't always reach the prior song).
+    // П8 — persist the back-stack so a reload doesn't strand the
+    // user with no way back to a previous track.
     playHistory: s.playHistory,
   }),
-  // П2 — never auto-resume playback after a page reload. We deliberately
-  // do NOT persist `isPlaying`. Even when the browser would technically
-  // allow autoplay (because the user has interacted with the site
-  // before), starting a track that the user didn't explicitly resume
-  // feels like the page is hijacking their session. The rest of the
-  // player state (current track, queue, progress, fullscreen) is
-  // restored so a single tap on the play button picks up at the
-  // previous timecode.
+  // П2 — never auto-resume after reload. `isPlaying` is NOT
+  // persisted: even with autoplay allowed, starting a track the user
+  // didn't explicitly resume feels like hijacking the session. One
+  // tap on play picks up at the persisted timecode.
   onRehydrateStorage: () => (state) => {
     if (state) state.isPlaying = false;
   },
