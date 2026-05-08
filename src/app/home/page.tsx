@@ -33,6 +33,7 @@ import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { MetaChip } from '@/components/ui/MetaChip';
 import { TrackItem } from '@/components/features/TrackItem';
 import { ArtistPicker } from '@/components/features/ArtistPicker';
 
@@ -118,13 +119,13 @@ export function HomePage() {
             transition={{ duration: 0.7, ease: EASE }}
             className="flex flex-col gap-2"
           >
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+            <MetaChip size="md">
               <Sparkles size={12} className="text-[var(--color-accent)]" />
               <span>
                 {greeting(t)}{user?.name ? ',' : ''}
                 {user?.name ? <span className="ml-1 text-foreground">{user.name}</span> : null}
               </span>
-            </span>
+            </MetaChip>
 
             <h1 className="max-w-3xl text-[clamp(2rem,5vw,3.6rem)] font-semibold leading-[1.04] tracking-tight">
               {t('home.heroLine1')}{' '}<span className="font-serif italic text-muted-foreground">{t('home.heroLine1Italic')}</span>{t('home.heroLine1End')}
@@ -345,10 +346,10 @@ function WaveHero({
           <div className="relative grid gap-6 p-5 sm:gap-8 sm:p-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-10">
             <div className="flex min-w-0 flex-col justify-between gap-6">
               <div className="flex min-w-0 flex-col gap-3">
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+                <MetaChip>
                   <Disc3 size={12} className="text-[var(--color-accent)]" />
                   {t('home.waveBadge')}
-                </div>
+                </MetaChip>
                 <h2 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-5xl">
                   {t('home.waveTitleA')}{' '}
                   <span className="font-serif italic text-muted-foreground">{t('home.waveTitleItalic')}</span> {t('home.waveTitleB')}
@@ -942,10 +943,10 @@ function DailyPlaylistsSection() {
     <section className="relative mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-10" data-tour-id="tour-daily">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+          <MetaChip className="w-auto">
             <ListMusic size={12} className="text-[var(--color-accent)]" />
             {t('home.dailyBadge')}
-          </div>
+          </MetaChip>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
             {t('home.dailyTitle')}
           </h2>
@@ -1150,10 +1151,10 @@ function RecentSection() {
     <section className="relative mx-auto w-full max-w-6xl px-4 py-10 pb-16 sm:px-6 lg:px-10" data-tour-id="tour-recent">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+          <MetaChip className="w-auto">
             <HistoryIcon size={12} className="text-[var(--color-accent)]" />
             {t('home.recentBadge')}
-          </div>
+          </MetaChip>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
             {t('home.recentTitle')}
           </h2>

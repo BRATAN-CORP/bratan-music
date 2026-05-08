@@ -15,6 +15,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { Button } from '@/components/ui/Button';
 import { CoverFallback } from '@/components/ui/CoverFallback';
+import { MetaChip } from '@/components/ui/MetaChip';
 import { fetchDailyPlaylists, saveDailyPlaylist } from '@/lib/recommendations';
 import { DAILY_VARIANT_THEME, dailyTrackUnitKey } from '@/lib/dailyVariant';
 import type { Track } from '@/types';
@@ -157,12 +158,10 @@ export function DailyPlaylistPreviewPage() {
                   />
                 </div>
                 <div className="flex min-w-0 flex-col justify-end gap-3">
-                  <div
-                    className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur"
-                  >
+                  <MetaChip className="gap-1.5">
                     <VariantIcon size={12} style={{ color: theme.hue }} />
                     {t('dailyPage.eyebrow', { variant: t(theme.labelKey) })}
-                  </div>
+                  </MetaChip>
                   <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
                     {theme ? t(theme.nameKey) : playlist.name}
                   </h1>

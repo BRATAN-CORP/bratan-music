@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { MetaChip } from '@/components/ui/MetaChip';
 import { TrackItem } from '@/components/features/TrackItem';
 import { usePlayerStore } from '@/store/player';
 import {
@@ -113,10 +114,10 @@ function Inner() {
             transition={{ duration: 0.7, ease: EASE_SPRING }}
             className="flex flex-col gap-2"
           >
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+            <MetaChip size="md">
               <Sparkles size={12} className="text-[var(--color-accent)]" />
               {t('ai.eyebrow')}
-            </span>
+            </MetaChip>
             <h1 className="max-w-3xl text-[clamp(1.8rem,4vw,2.8rem)] font-semibold leading-[1.06] tracking-tight">
               {t('ai.titlePart1')}{' '}<span className="font-serif italic text-muted-foreground">{t('ai.titlePart2')}</span>
               <br className="hidden sm:block" />{t('ai.titlePart3')}

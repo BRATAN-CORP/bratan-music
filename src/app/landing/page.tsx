@@ -15,6 +15,7 @@ import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { TiltCard } from '@/components/ui/TiltCard';
+import { MetaChip } from '@/components/ui/MetaChip';
 import { EASE_SPRING as EASE, staggerItem } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { useT, type TranslationKey } from '@/i18n';
@@ -195,10 +196,11 @@ export function LandingPage() {
             initial={reduce ? false : { opacity: 0, y: 12 }}
             animate={reduce ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: EASE }}
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur"
           >
-            <ShieldOff size={12} className="text-[var(--color-accent)]" />
-            {t('landing.eyebrow')}
+            <MetaChip size="md">
+              <ShieldOff size={12} className="text-[var(--color-accent)]" />
+              {t('landing.eyebrow')}
+            </MetaChip>
           </motion.div>
 
           <motion.h1
