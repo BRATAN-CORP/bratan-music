@@ -92,6 +92,13 @@
    * `pt-[calc(theme(spacing.4)+var(--pwa-safe-top))]` style
    * arbitrary values on rows that have a baseline padding to
    * preserve.
+   *
+   * Margin / position variants (`mt-safe`, `top-safe`, etc.) are
+   * available for fixed / absolute surfaces that anchor against
+   * the viewport edge directly (toasts, room badge, quick-prefs).
+   * Padding variants are still preferred when the consumer owns
+   * an internal layout — they keep the inset out of the box-model
+   * that drives child positioning.
    */
   .pt-safe {
     padding-top: var(--pwa-safe-top);
@@ -104,6 +111,32 @@
   }
   .pr-safe {
     padding-right: var(--pwa-safe-right);
+  }
+
+  .mt-safe {
+    margin-top: var(--pwa-safe-top);
+  }
+  .mb-safe {
+    margin-bottom: var(--pwa-safe-bottom);
+  }
+  .ml-safe {
+    margin-left: var(--pwa-safe-left);
+  }
+  .mr-safe {
+    margin-right: var(--pwa-safe-right);
+  }
+
+  .top-safe {
+    top: var(--pwa-safe-top);
+  }
+  .bottom-safe {
+    bottom: var(--pwa-safe-bottom);
+  }
+  .left-safe {
+    left: var(--pwa-safe-left);
+  }
+  .right-safe {
+    right: var(--pwa-safe-right);
   }
 }
 
