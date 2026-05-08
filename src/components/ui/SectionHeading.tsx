@@ -1,28 +1,44 @@
-import { type ReactNode } from 'react';
+import {
+  type ComponentPropsWithoutRef,
+  type ElementType,
+  type ReactNode,
+} from 'react';
 import { cn } from '@/lib/utils';
 
-interface EyebrowProps {
+type EyebrowProps<E extends ElementType> = {
+  /** Render as a different element / component (e.g. `Link` for back-link
+   *  eyebrows on `/artist/.../albums`, `/explore/...`). Defaults to `span`. */
+  as?: E;
   children: ReactNode;
   className?: string;
-}
+} & Omit<ComponentPropsWithoutRef<E>, 'as' | 'children' | 'className'>;
 
 /**
  * Tiny uppercase tag rendered above page titles ("ALBUM" /
  * "ARTIST" / "PLAYLIST") and section dividers. Matches the
  * letter-spacing used today on hero pages so the visual rhythm is
  * preserved when the album / artist / playlist heroes migrate to
- * `<PageHero>`.
+ * `<PageHero>`. Polymorphic via `as` so back-link / anchor eyebrows
+ * (with `transition-colors hover:text-foreground`) can share the same
+ * base classes — pass extra layout/hover modifiers through `className`.
  */
-export function Eyebrow({ children, className }: EyebrowProps) {
+export function Eyebrow<E extends ElementType = 'span'>({
+  as,
+  children,
+  className,
+  ...rest
+}: EyebrowProps<E>) {
+  const Comp = (as ?? 'span') as ElementType;
   return (
-    <span
+    <Comp
       className={cn(
         'text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground',
         className,
       )}
+      {...rest}
     >
       {children}
-    </span>
+    </Comp>
   );
 }
 
