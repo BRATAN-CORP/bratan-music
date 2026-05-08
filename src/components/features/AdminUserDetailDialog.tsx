@@ -44,7 +44,7 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
       onClose={onClose}
       layer="elevated"
       ariaLabel={t('admin.detail.title')}
-      panelClassName="flex w-[min(720px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom,0px))]"
+      panelClassName="flex w-[min(720px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <DetailHeader
         title={t('admin.detail.title')}
