@@ -85,7 +85,7 @@ function LocaleButton({ code, label, active, onSelect }: LocaleButtonProps) {
             // so light/dark themes adapt automatically.
             background: 'var(--color-accent)',
             boxShadow:
-              '0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 18px -6px var(--color-accent-glow, rgba(99,102,241,0.45))',
+              '0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 18px -6px var(--color-accent-glow)',
           }}
           transition={{ type: 'spring', stiffness: 500, damping: 35 }}
           aria-hidden
@@ -93,7 +93,7 @@ function LocaleButton({ code, label, active, onSelect }: LocaleButtonProps) {
       )}
       <span
         className={`relative z-10 inline-flex items-center gap-1.5 ${
-          active ? 'text-[var(--color-on-accent,_white)]' : 'text-foreground'
+          active ? 'text-[var(--color-text-on-accent)]' : 'text-foreground'
         }`}
       >
         {label}

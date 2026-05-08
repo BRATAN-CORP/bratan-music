@@ -721,7 +721,7 @@ function SettingChip({
       className={cn(
         'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         active
-          ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent,white)] shadow-[0_6px_18px_-6px_var(--color-accent-glow,rgba(99,102,241,0.45))]'
+          ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-[0_6px_18px_-6px_var(--color-accent-glow)]'
           : 'border-border bg-[var(--color-surface-elevated)]/60 text-foreground/80 backdrop-blur hover:border-[var(--color-border-strong)] hover:text-foreground',
       )}
     >
@@ -767,7 +767,7 @@ function CharacterTile({
         className={cn(
           'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors sm:h-7 sm:w-7',
           active
-            ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-on-accent,white)]'
+            ? 'border-transparent bg-[var(--color-accent)] text-[var(--color-text-on-accent)]'
             : 'border-border bg-[var(--color-surface-elevated)]/60 text-foreground/70',
         )}
       >
@@ -780,7 +780,7 @@ function CharacterTile({
       {active && (
         <span
           aria-hidden
-          className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-on-accent,white)]"
+          className="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)]"
         >
           <Check size={10} />
         </span>

@@ -383,7 +383,7 @@ function HealthTile({ icon: Icon, title, severity, primary, rows }: HealthTilePr
   const accent = severity === 'ok'
     ? 'border-[var(--color-accent-soft)] bg-[var(--color-accent-soft)]/30'
     : severity === 'warn'
-      ? 'border-[var(--color-warning,_#d97706)]/40 bg-[var(--color-warning,_#d97706)]/10'
+      ? 'border-[var(--color-warn)]/40 bg-[var(--color-warn)]/10'
       : severity === 'err'
         ? 'border-[var(--color-danger-muted)] bg-[var(--color-danger-muted)]/30'
         : 'border-border bg-background';

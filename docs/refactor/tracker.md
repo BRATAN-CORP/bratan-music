@@ -55,7 +55,8 @@
 | 7   | `devin/1778244958-refactor-cleanup`          | Trim historical PR# references from inline comments  | merged   | [#384](https://github.com/BRATAN-CORP/bratan-music/pull/384)    |
 | 8   | `devin/1778246144-refactor-daily-variant`    | DRY daily-playlist variant theme + plural helper     | merged   | [#385](https://github.com/BRATAN-CORP/bratan-music/pull/385)    |
 | 9   | `devin/1778247026-refactor-shadow-accent-token` | Tokenize accent-glow elevation pair (`--shadow-accent`)  | merged   | [#386](https://github.com/BRATAN-CORP/bratan-music/pull/386)    |
-| 10  | `devin/1778247302-refactor-accent-magenta-token` | Unify accent→magenta gradient via `--color-accent-magenta` | open  | _(opens after push)_                                            |
+| 10  | `devin/1778247302-refactor-accent-magenta-token` | Unify accent→magenta gradient via `--color-accent-magenta` | merged | [#387](https://github.com/BRATAN-CORP/bratan-music/pull/387) |
+| 11  | `devin/1778247755-refactor-stale-token-refs` | Align stale `--color-on-accent` / `--color-warning` refs and `rgba(99,102,241,…)` accent-glow fallbacks with `_tokens.scss` | open  | _(opens after push)_ |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -79,6 +80,23 @@
 переиспользуем `--color-sub-accent` (#c2185b) — он зарезервирован за
 плеером по AGENTS.md decision #1.
 
+`#11` — в коде жили ссылки на токены, которых НЕТ в `_tokens.scss`,
+всегда резолвившиеся в хардкодный fallback:
+- `--color-on-accent` (5 сайтов) — правильное имя `--color-text-on-accent`.
+  Сейчас рендерится `white` (fallback). После — реальный токен
+  (тоже `#ffffff`, но в единой схеме с остальными 8 сайтами
+  кода, которые уже используют `--color-text-on-accent`).
+- `--color-warning` (`AdminHealthPanel`) — правильное имя `--color-warn`.
+  Раньше panel рендерился в fallback `#d97706` (Tailwind
+  amber-600). Сейчас — `#b45309` light / `#fbbf24` dark, то что
+  было задумано в design-системе.
+- Fallback на `--color-accent-glow` (`rgba(99,102,241,0.45)` — это
+  indigo-500 от бывшего бренда, до перехода на текущий #5E6AD2)
+  жил в 3 местах (`home`, `QuickPrefsBar`, `LanguageSwitcher`).
+  Fallback никогда не срабатывал (токен всегда определён), но
+  вводил в заблуждение при grep по цветам. Убран — браузер
+  сам остановится на transparent если token исчезнет (в быту
+  это невозможно — `_tokens.scss` импортится в `globals.scss`).
 ---
 
 ## Resolved decisions
@@ -144,7 +162,7 @@
   `shadow-[0_4px_16px_-4px_var(--color-accent-glow)]` на токены.
   Уникальный `0 4px 20px -4px` в `app/rooms/list.tsx` — намеренно
   оставлен (другая геометрия, hero-иконка).
-- 2026-05-08T13:36Z — PR #10 (accent-magenta token) подготовлен.
+- 2026-05-08T13:36Z — PR #10 (accent-magenta token, #387) смерджен.
   Добавлен `--color-accent-magenta` (`#d946ef` light, `#e879f9`
   dark) в `_tokens.scss`. `app/rooms/list.tsx`, `app/ai/page.tsx`
   и `components/layout/QuickPrefsBar.tsx` теперь все используют
@@ -152,6 +170,15 @@
   два разных значения (`fuchsia-500` против CSS-named `fuchsia`).
   Не перепутать с PR #9 (`--shadow-accent`) — это другой токен,
   про elevation; PR #10 — про цветовую палитру.
+- 2026-05-08T13:43Z — PR #11 (stale token refs) подготовлен.
+  `--color-on-accent` (несуществующее) → `--color-text-on-accent` в
+  5 местах (`app/home/page.tsx` ×3, `QuickPrefsBar` ×1,
+  `LanguageSwitcher` ×1). `--color-warning` (несуществующее) →
+  `--color-warn` в `AdminHealthPanel` (было: рендерило fallback
+  `#d97706`; сейчас: design-токен `#b45309` / `#fbbf24`).
+  Stale fallback `rgba(99,102,241,0.45)` (indigo-500, бывший
+  бренд) на `--color-accent-glow` убран из 3 мест (`home`,
+  `QuickPrefsBar`, `LanguageSwitcher`).
 
 ---
 
@@ -163,6 +190,7 @@
 | 2026-05-08 ~11:50       | `9363824c-19ed-41b2-9915-dac317a5a082`              | knowledge base (AGENTS.md + docs/), tracker.md      |
 | 2026-05-08 ~13:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | sync tracker (PR #2..#7 merged) + PR #8             |
 | 2026-05-08 ~13:30       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #9 (--shadow-accent token, 3 sites, #386)        |
-| 2026-05-08 ~13:36       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #10 (--color-accent-magenta token, 3 sites)      |
+| 2026-05-08 ~13:36       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #10 (--color-accent-magenta token, 3 sites, #387) |
+| 2026-05-08 ~13:43       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #11 (align stale token refs / fallbacks)         |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
