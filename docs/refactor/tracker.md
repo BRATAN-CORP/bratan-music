@@ -57,7 +57,8 @@
 | 9   | `devin/1778247026-refactor-shadow-accent-token` | Tokenize accent-glow elevation pair (`--shadow-accent`)  | merged   | [#386](https://github.com/BRATAN-CORP/bratan-music/pull/386)    |
 | 10  | `devin/1778247302-refactor-accent-magenta-token` | Unify accent→magenta gradient via `--color-accent-magenta` | merged | [#387](https://github.com/BRATAN-CORP/bratan-music/pull/387) |
 | 11  | `devin/1778247755-refactor-stale-token-refs` | Align stale `--color-on-accent` / `--color-warning` refs and `rgba(99,102,241,…)` accent-glow fallbacks with `_tokens.scss` | merged | [#388](https://github.com/BRATAN-CORP/bratan-music/pull/388) |
-| 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | open  | _(opens after push)_ |
+| 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | merged | [#389](https://github.com/BRATAN-CORP/bratan-music/pull/389) |
+| 13  | `devin/1778249618-meta-chip-component`       | Extract `<MetaChip>` for the 9 "info pill" duplicates (eyebrows above section H2s)                                        | open   | _(opens after push)_ |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -211,6 +212,19 @@
   TTLs: `track_radio:` 24h → 7d, `artist_seed_tracks:` 12h → 7d,
   `rec_suggested_artists:v1` 24h → 7d, negative discovery (`tidal-track-formats:`
   для пустых) 1h → 24h. Ожидаемый стационарный write-rate: 140–200/day.
+- 2026-05-08T14:12Z — PR #12 (#389) смерджен в `main`. CI зелёный.
+- 2026-05-08T14:15Z — PR #13 (`<MetaChip>` extract) подготовлен.
+  Один и тот же inline-pill (`inline-flex w-fit items-center gap-2
+  rounded-full border border-border bg-[var(--color-surface-elevated)]
+  px-... py-... text-xs font-medium text-muted-foreground backdrop-blur`)
+  жил **9 раз** в коде — `<icon> <label>` eyebrow над H2-заголовками
+  (`/home` ×4, `/daily`, `/ai`, `/landing`, `/profile`, `ArtistPicker`).
+  Вынесен в `src/components/ui/MetaChip.tsx` с двумя плотностями:
+  `size="md"` (px-3 py-1.5, hero-уровень) и `size="sm"` (px-2.5 py-1,
+  раздел-уровень — default). Никаких визуальных изменений, разница
+  per-сайт (`gap-1.5` в `/daily`, отсутствие `w-fit` у DOM-обёрток
+  внутри flex-row) пробрасывается через `className`. Продолжение
+  запроса "везде использовать одинаковые компоненты, меньше хардкода".
 
 ---
 
@@ -224,6 +238,7 @@
 | 2026-05-08 ~13:30       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #9 (--shadow-accent token, 3 sites, #386)        |
 | 2026-05-08 ~13:36       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #10 (--color-accent-magenta token, 3 sites, #387) |
 | 2026-05-08 ~13:43       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #11 (align stale token refs / fallbacks, #388)   |
-| 2026-05-08 ~14:05       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #12 (KV write-budget — seedCache + 7d TTLs)      |
+| 2026-05-08 ~14:05       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #12 (KV write-budget — seedCache + 7d TTLs, #389) |
+| 2026-05-08 ~14:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #13 (`<MetaChip>` — DRY 9 inline eyebrow pills)   |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

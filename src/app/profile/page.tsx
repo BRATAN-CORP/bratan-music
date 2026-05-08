@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { MetaChip } from '@/components/ui/MetaChip';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 import { useSettingsStore, TIDAL_QUALITY_LABEL_KEYS, type TidalQuality } from '@/store/settings';
@@ -610,10 +611,10 @@ function SubscriptionCard({
       />
       <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
         <div className="flex flex-col gap-4">
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+          <MetaChip>
             <Crown size={12} className="text-[var(--color-accent)]" />
             {t('profile.premiumTag')}
-          </span>
+          </MetaChip>
           <h2 className="max-w-xl text-2xl font-semibold leading-tight tracking-tight sm:text-4xl">
             <PremiumHeadline />
           </h2>

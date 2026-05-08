@@ -5,6 +5,7 @@ import { Sparkles, Check, X, Search, Loader2, Music4 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Reveal } from '@/components/ui/Reveal';
 import { CoverFallback } from '@/components/ui/CoverFallback';
+import { MetaChip } from '@/components/ui/MetaChip';
 import { useT } from '@/i18n';
 import {
   fetchSuggestedSeedArtists,
@@ -157,10 +158,10 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
 
           <div className="relative grid gap-8 p-6 sm:p-10 lg:gap-10">
             <div className="flex flex-col gap-3">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-[var(--color-surface-elevated)] px-2.5 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+              <MetaChip>
                 <Music4 size={12} className="text-[var(--color-accent)]" />
                 {t('artistPicker.tuneTaste')}
-              </div>
+              </MetaChip>
               <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">
                 {t('artistPicker.headingPrefix')}
                 <span className="font-serif italic text-muted-foreground">
