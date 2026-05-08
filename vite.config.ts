@@ -9,12 +9,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Service-worker pre-cache list. Only PWA-shaped assets — the
-      // favicon is SVG and is served as a regular module asset, no
-      // need to cache it twice. `favicon.ico` is intentionally absent
-      // because the project no longer ships one (favicon is strictly
-      // SVG per the product brief).
-      includeAssets: ['apple-touch-icon.png'],
+      // Service-worker pre-cache list. The favicon SVG itself is
+      // served as a regular module asset (no need to cache it twice),
+      // but the 32×32 PNG fallback ships through the SW so Safari
+      // (which keeps reaching for it instead of the SVG, see
+      // index.html) gets a fast offline-capable hit. The
+      // apple-touch-icon must be reachable at the project subpath for
+      // iOS home-screen installs to find it.
+      includeAssets: ['apple-touch-icon.png', 'favicon-32x32.png'],
       // The default registration installs the new service worker but
       // keeps the OLD one active until every controlled tab closes.
       // For users who already had a previous SW installed, that meant

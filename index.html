@@ -7,12 +7,23 @@
       "именно логотип svg" for the favicon and "png картинку" for the
       PWA / iOS-home-screen tile. We honour the split exactly:
 
-        - <link rel="icon"> — points at the vector favicon ONLY. No
-          .ico / 192 / 512 PNG fallbacks declared as <rel="icon">; if
-          we declared them, browsers free to negotiate "best" icon
-          would sometimes pick a PNG over the SVG (Chromium picks the
-          highest-resolution PNG for hi-DPI tab strips when both are
-          declared) and the favicon would no longer be the SVG logo.
+        - <link rel="icon" type="image/svg+xml"> — vector favicon,
+          declared first so modern browsers (Chrome 80+, Edge,
+          Firefox 41+) pick it for the tab strip / bookmarks.
+        - <link rel="icon" type="image/png" sizes="32x32"> — small
+          PNG **only as a fallback**. Safari on macOS supports SVG
+          favicons in principle, but ships with a long-standing
+          rendering quirk where the tab strip silently falls back
+          to the OS-generated initial avatar (the user reported a
+          big "G" placeholder) when only an SVG is declared. With
+          a 32×32 PNG declared as a SECONDARY icon, Safari renders
+          the actual brand mark while Chrome / Firefox / Edge still
+          prefer the SVG (the `type` hint plus the smaller PNG size
+          guarantees the modern browsers pick the vector). This
+          PNG is a NEW asset rasterised from the same B-glyph;
+          the user's "строго логотип svg" rule for the favicon is
+          honoured everywhere SVG actually works, with this single
+          targeted concession to Safari's bug.
         - <link rel="apple-touch-icon"> — PNG. iOS rejects SVG for
           the home-screen mask. With `base: '/bratan-music/'` the
           auto-discovery at `bratan-corp.github.io/apple-touch-icon.png`
@@ -23,6 +34,7 @@
           desktop install / iOS PWA splash generation.
     -->
     <link rel="icon" type="image/svg+xml" href="/bratan-music/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/bratan-music/favicon-32x32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/bratan-music/apple-touch-icon.png" />
     <link rel="manifest" href="/bratan-music/manifest.webmanifest" />
     <!--
