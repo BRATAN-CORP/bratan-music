@@ -4,6 +4,7 @@ import { AlertCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useArtist, useArtistAlbumsInfinite, useArtistSinglesInfinite } from '@/hooks/useTrack';
 import { useT } from '@/i18n';
 
@@ -85,13 +86,14 @@ export function ArtistReleasesPage({ kind }: ArtistReleasesPageProps) {
     <AuthGuard>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <div className="flex flex-col gap-2">
-          <Link
+          <Eyebrow
+            as={Link}
             to={`/artist/${artistId}`}
-            className="inline-flex w-fit items-center gap-1 text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex w-fit items-center gap-1 transition-colors hover:text-foreground"
           >
             <ChevronLeft size={12} />
             {artist?.name ?? t('artistReleases.back')}
-          </Link>
+          </Eyebrow>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{heading}</h1>
           {total > 0 && (
             <p className="text-xs text-muted-foreground">

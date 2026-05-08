@@ -3,6 +3,7 @@ import { AlertCircle, ChevronLeft } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { ExploreModules } from '@/components/features/ExploreModules';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePage } from '@/hooks/useExplore';
 import { useT } from '@/i18n';
 
@@ -15,13 +16,14 @@ export function ExploreSlugPage() {
     <AuthGuard>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <div className="flex flex-col gap-2">
-          <Link
+          <Eyebrow
+            as={Link}
             to="/explore"
-            className="inline-flex w-fit items-center gap-1 text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex w-fit items-center gap-1 transition-colors hover:text-foreground"
           >
             <ChevronLeft size={12} />
             {t('exploreSlug.eyebrow')}
-          </Link>
+          </Eyebrow>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             {data?.title ?? slug}
           </h1>

@@ -60,6 +60,7 @@
 | 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | merged | [#389](https://github.com/BRATAN-CORP/bratan-music/pull/389) |
 | 13  | `devin/1778249618-meta-chip-component`       | Extract `<MetaChip>` for the 9 "info pill" duplicates (eyebrows above section H2s)                                        | merged | [#390](https://github.com/BRATAN-CORP/bratan-music/pull/390) |
 | 14  | `devin/1778250082-eyebrow-dedup`             | Migrate 9 inline `Eyebrow`-pattern spans to existing `<Eyebrow>` (text-xs uppercase tracking-[0.25em])                    | merged | [#391](https://github.com/BRATAN-CORP/bratan-music/pull/391) |
+| 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | open   | _(opens after push)_ |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -238,6 +239,16 @@
   (`artist/releases.tsx`, `explore/list.tsx`, `explore/slug.tsx` —
   `<a>`/`<Link>`, не `<span>`) и `FullscreenPlayer.tsx:509`
   (player-поверхность, hard constraint).
+- 2026-05-08T14:25Z — PR #14 (#391) смерджен в `main`. CI зелёный.
+- 2026-05-08T14:32Z — PR #15 (`<Eyebrow>` polymorphic) подготовлен.
+  Достроен `<Eyebrow>` до полиморфного `as` prop:
+  `<Eyebrow as={Link} to=...>` / `<Eyebrow as="a" href=...>`.
+  Оставшиеся **3** сайта с тем же class-string
+  (`releases.tsx`, `explore/list.tsx`, `explore/slug.tsx` —
+  back-link якоря с `transition-colors hover:text-foreground`)
+  переехали на `<Eyebrow as={Link}>` без визуальных изменений.
+  Не тронут `FullscreenPlayer.tsx:509` (player-поверхность, hard
+  constraint).
 
 ---
 
@@ -253,6 +264,7 @@
 | 2026-05-08 ~13:43       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #11 (align stale token refs / fallbacks, #388)   |
 | 2026-05-08 ~14:05       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #12 (KV write-budget — seedCache + 7d TTLs, #389) |
 | 2026-05-08 ~14:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #13 (`<MetaChip>` — DRY 9 inline eyebrow pills, #390) |
-| 2026-05-08 ~14:23       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #14 (`<Eyebrow>` — DRY 9 inline tracking-[0.25em] spans) |
+| 2026-05-08 ~14:23       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #14 (`<Eyebrow>` — DRY 9 inline tracking-[0.25em] spans, #391) |
+| 2026-05-08 ~14:32       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #15 (`<Eyebrow>` polymorphic — `as` prop + dedup 3 link-eyebrows) |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
