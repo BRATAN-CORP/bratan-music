@@ -317,7 +317,7 @@ export function MobileBottomDock() {
               <button
                 type="button"
                 onClick={togglePlay}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-[0_2px_8px_-2px_var(--color-accent-glow)] transition-[transform,box-shadow] active:scale-95 hover:shadow-[0_4px_16px_-4px_var(--color-accent-glow)]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-[var(--shadow-accent)] transition-[transform,box-shadow] active:scale-95 hover:shadow-[var(--shadow-accent-strong)]"
                 aria-label={isPlaying ? t('player.pause') : t('player.play')}
               >
                 {isPlaying ? <Pause size={16} fill="currentColor" strokeWidth={0} /> : <Play size={16} fill="currentColor" />}

@@ -51,6 +51,13 @@
      `shadow-[0_18px_48px_-16px_rgba(0,0,0,0.55)]` strings across the
      hero pages. */
   --shadow-cover: 0 18px 48px -16px rgba(0, 0, 0, 0.55);
+  /* Accent-glow elevation pair for primary CTAs: the rest/hover lift
+     on `<Button variant="primary">`, the dock play button and the
+     ArtistPicker selected-state badge. Single token vocab so the
+     accent halo stays consistent across primary surfaces — and any
+     future re-tune happens here, not across three component files. */
+  --shadow-accent:        0 2px  8px -2px var(--color-accent-glow);
+  --shadow-accent-strong: 0 4px 16px -4px var(--color-accent-glow);
 
   --radius-sm:  6px;
   --radius-md:  10px;
