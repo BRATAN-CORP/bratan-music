@@ -256,7 +256,7 @@ export function ArtistPicker({ onComplete, onSkip }: ArtistPickerProps) {
                                 transition={{ duration: 0.2, ease: EASE }}
                                 className="absolute inset-0 flex items-center justify-center bg-[var(--color-accent)]/45 backdrop-blur-[2px]"
                               >
-                                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-accent)] text-white shadow-[0_4px_16px_-4px_var(--color-accent-glow)]">
+                                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-accent)] text-white shadow-[var(--shadow-accent-strong)]">
                                   <Check size={16} strokeWidth={3} />
                                 </span>
                               </motion.div>
