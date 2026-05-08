@@ -5,6 +5,7 @@ import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { PageLoader } from '@/components/ui/PageLoader';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import {
   useCreateUpload,
   useDeleteUpload,
@@ -75,7 +76,7 @@ export function UploadsPage() {
         </button>
         <div className="flex items-end justify-between gap-4 border-b border-border pb-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('uploads.libraryLabel')}</span>
+            <Eyebrow>{t('uploads.libraryLabel')}</Eyebrow>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('uploads.pageTitle')}</h1>
             <p className="text-xs text-muted-foreground">
               {t('uploads.pageHint')}

@@ -6,6 +6,7 @@ import { SearchFilters } from '@/components/features/SearchFilters';
 import { SearchResults } from '@/components/features/SearchResults';
 import { SearchEmptyState } from '@/components/features/SearchEmptyState';
 import { AuthGuard } from '@/components/features/AuthGuard';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useSearch, useSearchInfinite } from '@/hooks/useSearch';
 import { useRecentSearches } from '@/hooks/useRecentSearches';
 import { usePlayerStore } from '@/store/player';
@@ -159,7 +160,7 @@ export function SearchPage() {
     <AuthGuard>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-6 lg:p-10">
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">{t('search.pageEyebrow')}</span>
+          <Eyebrow>{t('search.pageEyebrow')}</Eyebrow>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('search.pageTitle')}</h1>
         </div>
         <div data-tour-id="tour-search">
