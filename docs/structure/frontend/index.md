@@ -180,6 +180,7 @@ Zustand:
 | `trackActions.ts` | Like / unlike / add-to-playlist / share — единые actions для всех мест UI. |
 | `streamUrlCache.ts` | Memo stream-URL чтобы не дёргать `/tracks/:id/stream` повторно. |
 | `recommendations.ts` | Helper для recommendations API. |
+| `dailyVariant.ts` | Единый источник для «Плейлист дня»: `DAILY_VARIANT_THEME` (hue + i18n-ключи + lucide-icon на вариант) и `dailyTrackUnitKey()` (падежная форма счётчика). Используется `/home` карточкой и `/daily/:id` preview-страницей. |
 | `trackRadio.ts` | Track radio (related tracks). |
 | `artistCredit.ts` | Парсинг multi-artist credits. |
 | `wave.ts` | "Моя волна" plumbing. |

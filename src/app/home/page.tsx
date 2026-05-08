@@ -11,7 +11,6 @@ import {
   RefreshCw,
   ListMusic,
   ArrowRight,
-  Heart,
   Disc3,
   Check,
   Wand2,
@@ -50,6 +49,7 @@ import {
   type WaveMood,
   type WaveCharacter,
 } from '@/lib/recommendations';
+import { DAILY_VARIANT_THEME, dailyTrackUnitKey } from '@/lib/dailyVariant';
 import { startMyWave } from '@/lib/wave';
 import { usePlayerStore } from '@/store/player';
 import { useTrackPlayback, useCollectionPlayback } from '@/hooks/usePlaybackSync';
@@ -982,36 +982,9 @@ function DailyPlaylistsSection() {
   );
 }
 
-const VARIANT_THEME: Record<
-  DailyPlaylist['variant'],
-  { hue: string; labelKey: TranslationKey; nameKey: TranslationKey; descKey: TranslationKey; icon: typeof Sparkles }
-> = {
-  familiar: {
-    hue: '#5E6AD2',
-    labelKey: 'home.dailyVariantFamiliar',
-    nameKey: 'home.dailyVariantFamiliarName',
-    descKey: 'home.dailyVariantFamiliarDescription',
-    icon: Heart,
-  },
-  discover: {
-    hue: '#c2185b',
-    labelKey: 'home.dailyVariantDiscover',
-    nameKey: 'home.dailyVariantDiscoverName',
-    descKey: 'home.dailyVariantDiscoverDescription',
-    icon: Sparkles,
-  },
-  mood: {
-    hue: '#0ea5e9',
-    labelKey: 'home.dailyVariantMood',
-    nameKey: 'home.dailyVariantMoodName',
-    descKey: 'home.dailyVariantMoodDescription',
-    icon: Disc3,
-  },
-};
-
 function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   const t = useT();
-  const theme = VARIANT_THEME[playlist.variant];
+  const theme = DAILY_VARIANT_THEME[playlist.variant];
   const VariantIcon = theme.icon;
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
@@ -1242,14 +1215,5 @@ function greeting(t: Translate): string {
   if (h < 12) return t('home.greetingMorning');
   if (h < 18) return t('home.greetingDay');
   return t('home.greetingEvening');
-}
-
-function dailyTrackUnitKey(count: number): TranslationKey {
-  const m = Math.abs(count) % 100;
-  const m1 = m % 10;
-  if (m > 10 && m < 20) return 'home.dailyTrackUnit5plus';
-  if (m1 > 1 && m1 < 5) return 'home.dailyTrackUnit2_4';
-  if (m1 === 1) return 'home.dailyTrackUnit1';
-  return 'home.dailyTrackUnit5plus';
 }
 
