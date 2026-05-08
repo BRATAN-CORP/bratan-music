@@ -4,14 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   ChevronLeft,
-  Disc3,
-  Heart,
   Library,
   ListMusic,
   Loader2,
   Pause,
   Play,
-  Sparkles,
   Check,
 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
@@ -19,50 +16,11 @@ import { TrackItem } from '@/components/features/TrackItem';
 import { Button } from '@/components/ui/Button';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { fetchDailyPlaylists, saveDailyPlaylist } from '@/lib/recommendations';
-import type { DailyPlaylist } from '@/lib/recommendations';
+import { DAILY_VARIANT_THEME, dailyTrackUnitKey } from '@/lib/dailyVariant';
 import type { Track } from '@/types';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import { usePlayerStore } from '@/store/player';
-import { useT, type TranslationKey } from '@/i18n';
-
-// Plural unit key for daily-playlist track counts. Mirrors the rules
-// inlined on /home but routes through the shared i18n dictionary so
-// English and Russian noun forms come from the same source of truth.
-function trackUnitKey(count: number): TranslationKey {
-  const m100 = count % 100;
-  if (m100 >= 11 && m100 <= 14) return 'home.dailyTrackUnit5plus';
-  const m10 = count % 10;
-  if (m10 === 1) return 'home.dailyTrackUnit1';
-  if (m10 >= 2 && m10 <= 4) return 'home.dailyTrackUnit2_4';
-  return 'home.dailyTrackUnit5plus';
-}
-
-const VARIANT_THEME: Record<
-  DailyPlaylist['variant'],
-  { hue: string; labelKey: TranslationKey; nameKey: TranslationKey; descKey: TranslationKey; icon: typeof Sparkles }
-> = {
-  familiar: {
-    hue: '#5E6AD2',
-    labelKey: 'home.dailyVariantFamiliar',
-    nameKey: 'home.dailyVariantFamiliarName',
-    descKey: 'home.dailyVariantFamiliarDescription',
-    icon: Heart,
-  },
-  discover: {
-    hue: '#c2185b',
-    labelKey: 'home.dailyVariantDiscover',
-    nameKey: 'home.dailyVariantDiscoverName',
-    descKey: 'home.dailyVariantDiscoverDescription',
-    icon: Sparkles,
-  },
-  mood: {
-    hue: '#0ea5e9',
-    labelKey: 'home.dailyVariantMood',
-    nameKey: 'home.dailyVariantMoodName',
-    descKey: 'home.dailyVariantMoodDescription',
-    icon: Disc3,
-  },
-};
+import { useT } from '@/i18n';
 
 /**
  * Read-only preview for one of the three "Плейлист дня" cards on /home.
@@ -140,7 +98,7 @@ export function DailyPlaylistPreviewPage() {
     else navigate('/');
   };
 
-  const theme = playlist ? VARIANT_THEME[playlist.variant] : null;
+  const theme = playlist ? DAILY_VARIANT_THEME[playlist.variant] : null;
   const VariantIcon = theme?.icon ?? ListMusic;
   const showLoading = dailyQ.isLoading;
 
@@ -212,7 +170,7 @@ export function DailyPlaylistPreviewPage() {
                     {theme ? t(theme.descKey) : playlist.description}
                   </p>
                   <div className="text-xs text-muted-foreground">
-                    {t('dailyPage.tracksCount', { count: tracks.length, form: t(trackUnitKey(tracks.length)) })}
+                    {t('dailyPage.tracksCount', { count: tracks.length, form: t(dailyTrackUnitKey(tracks.length)) })}
                   </div>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2">
