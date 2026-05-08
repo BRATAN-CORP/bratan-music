@@ -69,20 +69,25 @@ export function PageHero({
   return (
     <section
       className={cn(
-        // Top padding bumped from `pt-6 sm:pt-10` so the hero doesn't
-        // feel cropped against the desktop / non-PWA viewport edge,
-        // where there's no system status-bar inset stacking on top of
-        // it. PWA mobile picks up `var(--pwa-safe-top)` from the
-        // app-shell wrapper above, so the new base just gives the
-        // browser case the breathing room it was missing.
+        // Internal `pt-N` keeps a comfortable gap between the hero's
+        // top edge and the cover / title row. The horizontal `-mx-N`
+        // already negates the consumer's `p-4 sm:p-6 lg:p-10` wrapper
+        // padding so the ambience layer reaches the viewport edges;
+        // we mirror that with `-mt-N` so the hero's TOP edge ALSO
+        // reaches the viewport top — eliminating the dark "полоска"
+        // stripe the wrapper's `pt-N` was producing on browsers.
         //
-        // Bottom padding bumped + the vertical vignette below now does
-        // the soft fade, so the previous hard `border-b border-border`
-        // is gone — it cut the blurred ambience cleanly which read as
-        // "the blur is cropped". Pages that still want a divider can
-        // pass one via `className`.
+        // PWA mobile keeps its system status-bar inset because the
+        // app-shell's `<main className="pt-safe">` wrapper sits
+        // OUTSIDE both the consumer wrapper and the hero, so its
+        // padding isn't affected by the negative margin here.
+        //
+        // Bottom padding + the vertical vignette below own the soft
+        // fade so we no longer need the previous hard `border-b`
+        // divider. Pages that still want one can pass it via
+        // `className`.
         'relative isolate mb-8 overflow-hidden px-4 pb-14 pt-10 sm:px-6 sm:pb-16 sm:pt-14 lg:px-10 lg:pt-16',
-        bleedHorizontal && '-mx-4 sm:-mx-6 lg:-mx-10',
+        bleedHorizontal && '-mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-10 lg:-mt-10',
         className,
       )}
     >
