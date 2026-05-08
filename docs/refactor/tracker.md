@@ -60,7 +60,8 @@
 | 12  | `devin/1778248978-kv-write-budget`           | KV write-budget fix: dedup genre-tracks helper + 7d TTLs                                                                  | merged | [#389](https://github.com/BRATAN-CORP/bratan-music/pull/389) |
 | 13  | `devin/1778249618-meta-chip-component`       | Extract `<MetaChip>` for the 9 "info pill" duplicates (eyebrows above section H2s)                                        | merged | [#390](https://github.com/BRATAN-CORP/bratan-music/pull/390) |
 | 14  | `devin/1778250082-eyebrow-dedup`             | Migrate 9 inline `Eyebrow`-pattern spans to existing `<Eyebrow>` (text-xs uppercase tracking-[0.25em])                    | merged | [#391](https://github.com/BRATAN-CORP/bratan-music/pull/391) |
-| 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | open   | _(opens after push)_ |
+| 15  | `devin/1778250754-eyebrow-polymorphic`       | Polymorphic `<Eyebrow as=...>` + dedup 3 link-eyebrows on `releases`/`explore-list`/`explore-slug`                         | merged   | [#393](https://github.com/BRATAN-CORP/bratan-music/pull/393) |
+| 16  | `devin/1778252146-ios-pwa-mediasession-sync` | iOS PWA Control Center play/pause sync — listen to native `<audio>` `play`/`pause`, reflect onto `mediaSession.playbackState` + store     | open   | _(opens after push)_ |
 
 `#7` — отдельный pass под явный запрос пользователя ("куча мусорного кода и
 многострочных комментариев"). Делаем после полировки, чтобы не удалять то,
@@ -249,6 +250,34 @@
   переехали на `<Eyebrow as={Link}>` без визуальных изменений.
   Не тронут `FullscreenPlayer.tsx:509` (player-поверхность, hard
   constraint).
+- 2026-05-08T14:55Z — PR #15 (#393) смерджен в `main`. CI зелёный.
+- 2026-05-08T14:55Z — PR #16 (iOS PWA mediaSession sync, под явный
+  bug-report пользователя) подготовлен.
+  **Симптом:** на iOS PWA при долгом фоновом прослушивании с
+  включённым crossfade кнопка play/pause в Control Center
+  десинхронизируется с реальным состоянием — музыка либо
+  останавливается сама, либо нажатие play в трее не запускает
+  воспроизведение.
+  **Root cause:** `navigator.mediaSession.playbackState` ставится
+  только из стора (`isPlaying`). Но на iOS `<audio>` элемент может
+  быть поставлен на паузу самой системой — interruption (звонок,
+  будильник, отключение AirPods, маршрутизация AVAudioSession) или
+  WebKit-suspend при долгом backgrounding-е PWA. Стор об этом не
+  узнаёт, `playbackState` остаётся `'playing'`. Apple-spec: iOS
+  диспетчерует **противоположное** действие тому, что показано в
+  Control Center — то есть кнопка показывает ⏸, юзер тапает её, а
+  iOS шлёт `pause` в наш handler, и playback окончательно встаёт.
+  **Фикс (минимальный, точечно по spec, не трогает audio engine):**
+  в `wireSlot` подключены нативные слушатели `play` / `pause` на
+  обе слот-`<audio>` элемента. На `play` → выставляется
+  `mediaSession.playbackState = 'playing'`. На `pause` (только
+  если pause НЕ инициирован движком — не `crossfadingRef`,
+  не `loadingRef`, не `fallbackInProgressRef`, не natural
+  `audio.ended`) → `mediaSession.playbackState = 'paused'` и
+  стор-флаг `isPlaying` сбрасывается, чтобы (а) UI-кнопка плеера
+  не врала, (б) следующий tap "Play" в Control Center корректно
+  ушёл в наш `play` action handler. Crossfade-логика и сам
+  крос-fade ramp нетронуты — гасим только Media Session-десинк.
 
 ---
 
@@ -265,6 +294,7 @@
 | 2026-05-08 ~14:05       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #12 (KV write-budget — seedCache + 7d TTLs, #389) |
 | 2026-05-08 ~14:15       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #13 (`<MetaChip>` — DRY 9 inline eyebrow pills, #390) |
 | 2026-05-08 ~14:23       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #14 (`<Eyebrow>` — DRY 9 inline tracking-[0.25em] spans, #391) |
-| 2026-05-08 ~14:32       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2` (текущий)    | PR #15 (`<Eyebrow>` polymorphic — `as` prop + dedup 3 link-eyebrows) |
+| 2026-05-08 ~14:32       | `0c93bc21-a83b-41f7-adb5-9821edc1dfa2`              | PR #15 (`<Eyebrow>` polymorphic — `as` prop + dedup 3 link-eyebrows) |
+| 2026-05-08 ~14:55       | `1a56046f-8dc5-4e06-b779-25be387e9447` (текущий)    | PR #16 (iOS PWA mediaSession sync — fix Control Center play/pause desync во время crossfade) |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
