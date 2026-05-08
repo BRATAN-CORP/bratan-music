@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Headphones, Plus, ArrowRight, Sparkles, Users, KeyRound, Loader2, Trash2 } from 'lucide-react';
+import { Plus, ArrowRight, Sparkles, Users, KeyRound, Loader2, Trash2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Eyebrow } from '@/components/ui/SectionHeading';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useCreateRoom, useDeleteRoom, useJoinRoom, useRoomsList } from '@/hooks/useRooms';
 import { ApiError } from '@/lib/api';
@@ -141,12 +142,15 @@ function RoomsListInner() {
           }}
         />
         <div className="relative">
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-magenta)] text-white shadow-[0_4px_20px_-4px_var(--color-accent-glow)] transition-transform duration-700 group-hover:scale-105">
-              <Headphones size={14} />
-            </span>
-            {t('rooms.list.eyebrow')}
-          </div>
+          {/* Eyebrow uses the shared <Eyebrow> component (same letter-
+              spacing scale as /album, /artist, /playlist, /library,
+              /search) so the rooms hero reads as part of one family.
+              Removed the gradient headphones chip — the page already
+              announces itself as Rooms via copy + URL, and the chip
+              was the only place in the app shipping a magenta-orange
+              gradient block, which clashed with the rest of the
+              accent ambience. */}
+          <Eyebrow className="tracking-[0.22em]">{t('rooms.list.eyebrow')}</Eyebrow>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
             {t('rooms.list.heroTitle')}
           </h1>
@@ -219,9 +223,9 @@ function RoomsListInner() {
       </TiltCard>
 
       <section className="mt-10">
-        <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+        <Eyebrow className="mb-3 flex items-center gap-2 tracking-[0.22em]">
           <Users size={14} /> {t('rooms.list.myRooms')}
-        </div>
+        </Eyebrow>
 
         {isLoading ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
