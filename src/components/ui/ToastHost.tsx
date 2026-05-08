@@ -22,6 +22,7 @@ import { useT } from '@/i18n';
  *   the page; each toast re-enables them on its own surface.
  */
 export function ToastHost() {
+  const t = useT();
   const toasts = useToastStore((s) => s.toasts);
   // `pt-safe` adds the iOS PWA notch / Dynamic Island inset
   // (env(safe-area-inset-top)) on top of the design's nominal `top-3`
@@ -35,7 +36,7 @@ export function ToastHost() {
     <div
       className="pt-safe pointer-events-none fixed inset-x-0 top-3 z-[80] flex flex-col items-center gap-2 px-3 sm:top-4"
       role="region"
-      aria-label="Notifications"
+      aria-label={t('common.notifications')}
       aria-live="polite"
     >
       <AnimatePresence initial={false}>

@@ -11,7 +11,10 @@
     "retry": "Попробовать ещё раз",
     "confirm": "Подтвердить",
     "yes": "Да",
-    "no": "Нет"
+    "no": "Нет",
+    "notifications": "Уведомления",
+    "online": "В сети",
+    "savedOffline": "Сохранено офлайн"
   },
   "nav": {
     "home": "Главная",
@@ -1572,6 +1575,8 @@
     "readFailed": "Не удалось прочитать изображение"
   },
   "offline": {
+    "downloading": "Загрузка",
+    "downloadingPercent": "Загрузка {{percent}}%",
     "listenOffline": "Слушать офлайн",
     "removeFromDevice": "Удалить из офлайн",
     "cancelDownload": "Отменить загрузку",
