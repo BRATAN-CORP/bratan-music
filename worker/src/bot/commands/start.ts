@@ -129,6 +129,53 @@ export async function handleStart(env: Env, message: TelegramMessage): Promise<v
     return;
   }
 
+  // Telegram-link deeplink: an email-first user is binding their
+  // Telegram identity to an existing site account. The frontend
+  // already pre-stamped a row in `tg_link_requests` keyed to the
+  // requester's user id; here we fill in the tg_id / username / name
+  // that the requester didn't have at start-time. The site polls
+  // `/user/me/telegram/link/status/:nonce` and finalises the link
+  // once `tg_id` is non-NULL. Crucially we do NOT call `ensureUser`
+  // here — that would mint a fresh tg-keyed row for an account
+  // that's about to be merged into the existing email-keyed one,
+  // and the merge endpoint would then refuse on the UNIQUE tg_id
+  // index.
+  if (args[0]?.startsWith('link_')) {
+    const nonce = args[0].replace('link_', '');
+    const fullName = [from.first_name, from.last_name].filter(Boolean).join(' ') || null;
+
+    let dbOk = true;
+    try {
+      const result = await env.DB
+        .prepare(
+          'UPDATE tg_link_requests SET tg_id = ?, tg_username = ?, tg_name = ? ' +
+          'WHERE nonce = ? AND tg_id IS NULL AND expires_at > ?',
+        )
+        .bind(
+          String(from.id),
+          from.username ?? null,
+          fullName,
+          nonce,
+          Math.floor(Date.now() / 1000),
+        )
+        .run();
+      // `meta.changes` is 0 when the nonce doesn't match (typo in URL)
+      // or the row already had tg_id set / has expired. We surface
+      // that as a soft error so the user knows to retry.
+      if (!result.meta?.changes) dbOk = false;
+    } catch (err) {
+      dbOk = false;
+      console.error('[bot] tg link nonce DB write failed:', err instanceof Error ? err.message : err);
+    }
+
+    const replyText = dbOk
+      ? '<b>BRATAN MUSIC</b>\n\nTelegram привязан. Вернитесь на сайт — карточка аккаунта обновится автоматически.'
+      : '<b>BRATAN MUSIC</b>\n\nСсылка для привязки Telegram устарела или некорректна. Откройте сайт и нажмите «Привязать Telegram» ещё раз.';
+
+    await tg.sendMessage(message.chat.id, replyText);
+    return;
+  }
+
   await ensureUser(env, message);
   await tg.setChatMenuButton(message.chat.id, getAppUrl(env));
 

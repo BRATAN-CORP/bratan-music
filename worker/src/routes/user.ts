@@ -196,6 +196,128 @@ user.post('/me/email/verify', async (c) => {
 });
 
 /**
+ * Link-a-Telegram-account flow, step 1: caller (an email-first user)
+ * mints a single-use, 5-minute-TTL nonce and stashes a row in
+ * `tg_link_requests` keyed to their user id. We return the nonce so
+ * the frontend can build a `t.me/<bot>?start=link_<nonce>` deeplink.
+ *
+ * The bot's `/start` handler picks the deeplink up, fills in
+ * `tg_id` / `tg_username` / `tg_name` on the same row, and the
+ * frontend then polls `/me/telegram/link/status/:nonce` to finalise
+ * the binding under JWT.
+ *
+ * Refuses to mint a nonce if the caller already has a Telegram
+ * identity bound — the link flow is one-shot per row.
+ */
+user.post('/me/telegram/link/start', async (c) => {
+  const userId = c.get('userId');
+
+  const current = await c.env.DB
+    .prepare('SELECT tg_id FROM users WHERE id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ tg_id: string | null }>();
+  if (!current) {
+    return c.json({ error: 'Пользователь не найден' }, 404);
+  }
+  if (current.tg_id) {
+    return c.json({ error: 'К аккаунту уже привязан Telegram.' }, 409);
+  }
+
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + 5 * 60; // 5 minutes — same window as auth_nonces
+
+  await c.env.DB
+    .prepare(
+      'INSERT INTO tg_link_requests (nonce, requester_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
+    )
+    .bind(nonce, userId, expiresAt, now)
+    .run();
+
+  return c.json({ nonce, expiresAt });
+});
+
+/**
+ * Link-a-Telegram-account flow, step 2: poll-and-finalise. Frontend
+ * calls this every ~1s until the row's `tg_id` is non-NULL — i.e.
+ * the bot has handled the deeplink and stamped the Telegram identity
+ * onto the row. We then bind the identity to the caller's user row
+ * and delete the link-request row so the nonce is strictly one-shot.
+ *
+ * Statuses:
+ *   - `pending`: row exists, bot hasn't seen the deeplink yet
+ *   - `expired`: TTL elapsed, row gc'd or about to be
+ *   - `confirmed`: link applied — response includes the updated
+ *     username/name so the frontend can refresh the profile card
+ *   - `conflict`: tg_id is already bound to another user — surface to UI
+ */
+user.get('/me/telegram/link/status/:nonce', async (c) => {
+  const userId = c.get('userId');
+  const nonce = c.req.param('nonce');
+  if (!/^[0-9a-f]{16,64}$/.test(nonce)) {
+    return c.json({ error: 'Некорректный nonce' }, 400);
+  }
+
+  const row = await c.env.DB
+    .prepare(
+      'SELECT requester_id, tg_id, tg_username, tg_name, expires_at FROM tg_link_requests WHERE nonce = ? LIMIT 1',
+    )
+    .bind(nonce)
+    .first<{
+      requester_id: string;
+      tg_id: string | null;
+      tg_username: string | null;
+      tg_name: string | null;
+      expires_at: number;
+    }>();
+
+  if (!row) {
+    return c.json({ status: 'expired' as const });
+  }
+  if (row.requester_id !== userId) {
+    // Don't let one user finalise another user's link nonce.
+    return c.json({ error: 'Nonce принадлежит другому пользователю' }, 403);
+  }
+  if (row.expires_at < Math.floor(Date.now() / 1000)) {
+    await c.env.DB.prepare('DELETE FROM tg_link_requests WHERE nonce = ?').bind(nonce).run();
+    return c.json({ status: 'expired' as const });
+  }
+  if (!row.tg_id) {
+    return c.json({ status: 'pending' as const });
+  }
+
+  const userService = new UserService(c.env);
+  try {
+    await userService.linkTelegram(userId, {
+      id: row.tg_id,
+      username: row.tg_username,
+      name: row.tg_name,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'tg_id_taken') {
+      // Another user already owns this tg_id. Drop the link-request
+      // row so a stale nonce doesn't keep returning a confirmable
+      // status to the poller.
+      await c.env.DB.prepare('DELETE FROM tg_link_requests WHERE nonce = ?').bind(nonce).run();
+      return c.json({ status: 'conflict' as const }, 409);
+    }
+    console.error('[telegram/link] linkTelegram failed:', msg);
+    return c.json({ error: 'Не удалось привязать Telegram' }, 500);
+  }
+
+  await c.env.DB.prepare('DELETE FROM tg_link_requests WHERE nonce = ?').bind(nonce).run();
+
+  return c.json({
+    status: 'confirmed' as const,
+    telegram: {
+      username: row.tg_username,
+      name: row.tg_name,
+    },
+  });
+});
+
+/**
  * Mark the onboarding tour as finished. Called by the frontend when
  * the user finishes the last spotlight step or hits "Пропустить".
  * Idempotent — a second POST keeps the original timestamp.

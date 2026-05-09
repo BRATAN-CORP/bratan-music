@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { toast } from '@/store/toast';
 import { useT } from '@/i18n';
 
 interface LinkedAccountsResponse {
@@ -14,6 +15,12 @@ interface LinkedAccountsResponse {
 }
 
 type Step = 'idle' | 'email' | 'code';
+
+/** Bot handle used to build deeplinks for the
+ *  "link Telegram to existing email account" flow. Mirrors the value
+ *  used by `<TelegramLoginButton />` so a single env var controls both
+ *  the login and the link surfaces. */
+const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME ?? 'bratan_music_bot';
 
 /**
  * Profile-page section that lets a signed-in user attach an email
@@ -49,6 +56,14 @@ export function LinkedAccountsPanel() {
   const [cooldown, setCooldown] = useState(0);
   const codeRef = useRef<HTMLInputElement | null>(null);
 
+  /** Polling state for the "link Telegram to email user" flow. The
+   *  nonce identifies the row in the worker's `tg_link_requests` table;
+   *  when set, an effect below polls `/user/me/telegram/link/status`
+   *  every second until the bot stamps the row (status: confirmed) or
+   *  the 5-min TTL elapses (status: expired). */
+  const [tgLinkNonce, setTgLinkNonce] = useState<string | null>(null);
+  const [tgLinking, setTgLinking] = useState(false);
+
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = window.setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000);
@@ -60,6 +75,98 @@ export function LinkedAccountsPanel() {
   }, [step]);
 
   const linkedEmail = profile?.email ?? null;
+  const hasTelegram = Boolean(profile?.username || profile?.name);
+
+  // Poll the link-status endpoint while a nonce is in flight. Stops on
+  // any terminal state (confirmed / conflict / expired) so an
+  // abandoned nonce doesn't keep hammering the worker.
+  useEffect(() => {
+    if (!tgLinkNonce) return;
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const res = await api.get<{
+            status: 'pending' | 'confirmed' | 'expired' | 'conflict';
+            telegram?: { username: string | null; name: string | null };
+          }>(`/user/me/telegram/link/status/${tgLinkNonce}`);
+
+          if (res.status === 'confirmed' && res.telegram) {
+            patchUser({
+              username: res.telegram.username,
+              name: res.telegram.name,
+            });
+            await queryClient.invalidateQueries({ queryKey: ['profile'] });
+            await refetch();
+            toast.info(t('profile.linkedAccounts.telegramLinkedToast'));
+            setTgLinkNonce(null);
+            setTgLinking(false);
+            return;
+          }
+          if (res.status === 'expired') {
+            toast.error(t('profile.linkedAccounts.telegramExpired'));
+            setTgLinkNonce(null);
+            setTgLinking(false);
+            return;
+          }
+          if (res.status === 'conflict') {
+            toast.error(t('profile.linkedAccounts.telegramConflict'));
+            setTgLinkNonce(null);
+            setTgLinking(false);
+            return;
+          }
+        } catch (err) {
+          // Server responded with `conflict` (HTTP 409) — surface to UI.
+          if (err instanceof ApiError && err.status === 409) {
+            toast.error(t('profile.linkedAccounts.telegramConflict'));
+            setTgLinkNonce(null);
+            setTgLinking(false);
+            return;
+          }
+          // Network blip; keep polling.
+        }
+        // Hard stop after 5 minutes (matches server TTL) to avoid
+        // tail-latency loops if the bot never responds.
+        if (Date.now() - startedAt > 5 * 60 * 1000) {
+          setTgLinkNonce(null);
+          setTgLinking(false);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally only depend on `tgLinkNonce`. The other deps
+    // (`patchUser`, query/refetch helpers, `t`) are stable enough for
+    // a polling hook and would re-fire it on every render otherwise.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tgLinkNonce]);
+
+  const handleStartTgLink = async () => {
+    if (tgLinking) return;
+    setTgLinking(true);
+    try {
+      const res = await api.post<{ nonce: string }>('/user/me/telegram/link/start', {});
+      const url = `https://t.me/${BOT_USERNAME}?start=link_${res.nonce}`;
+      window.open(url, '_blank');
+      setTgLinkNonce(res.nonce);
+    } catch (err) {
+      setTgLinking(false);
+      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : t('profile.linkedAccounts.telegramStartFailed');
+      toast.error(msg);
+    }
+  };
+
+  const handleCancelTgLink = () => {
+    setTgLinkNonce(null);
+    setTgLinking(false);
+  };
 
   const handleStartLink = () => {
     setStep('email');
@@ -158,8 +265,12 @@ export function LinkedAccountsPanel() {
           cards added a visual "box inside a box" that the user
           flagged as redundant next to the outer container. */}
       <div className="mt-4 divide-y divide-border">
-        {/* Telegram row — read-only because Telegram binding is set on
-            login and there's no server endpoint to detach it. */}
+        {/* Telegram row — for users who already have a Telegram
+            identity bound (the common path) the row is read-only.
+            Email-first users (signed up via the OTP flow, no
+            Telegram on file) see a "Привязать Telegram" CTA that
+            opens the bot deeplink and polls until the bot stamps
+            the link, then refreshes the profile. */}
         <div className="flex items-center justify-between gap-3 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <TelegramGlyph />
@@ -168,13 +279,29 @@ export function LinkedAccountsPanel() {
                 {t('profile.linkedAccounts.telegramLabel')}
               </div>
               <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                {profile?.username ? `@${profile.username}` : profile?.name ?? t('profile.linkedAccounts.telegramNotLinked')}
+                {profile?.username
+                  ? `@${profile.username}`
+                  : profile?.name
+                    ? profile.name
+                    : tgLinking
+                      ? t('profile.linkedAccounts.telegramAwaiting')
+                      : t('profile.linkedAccounts.telegramNotLinked')}
               </div>
             </div>
           </div>
-          {profile?.username || profile?.name ? (
+          {hasTelegram ? (
             <StatusBadge>{t('profile.linkedAccounts.linked')}</StatusBadge>
-          ) : null}
+          ) : tgLinking ? (
+            <Button onClick={handleCancelTgLink} variant="ghost" size="sm">
+              <Loader2 size={14} className="animate-spin" />
+              {t('common.cancel')}
+            </Button>
+          ) : (
+            <Button onClick={handleStartTgLink} variant="outline" size="sm">
+              <Link2 size={14} />
+              {t('profile.linkedAccounts.telegramLinkCta')}
+            </Button>
+          )}
         </div>
 
         {/* Email row — interactive. Three rendering states: linked

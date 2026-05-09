@@ -751,6 +751,7 @@ admin.delete('/users/:id/data', async (c) => {
   // 3. Manual cleanup for tables that don't have a CASCADE FK on user_id.
   await c.env.DB.prepare('DELETE FROM auth_nonces WHERE user_id = ?').bind(targetId).run();
   await c.env.DB.prepare('DELETE FROM recommendation_seen WHERE user_id = ?').bind(targetId).run();
+  await c.env.DB.prepare('DELETE FROM tg_link_requests WHERE requester_id = ?').bind(targetId).run();
 
   // 4. Finally drop the user row — cascades to playlists, library_items,
   //    user_tracks, sessions, subscriptions, daily_*, play_history,

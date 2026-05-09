@@ -86,7 +86,13 @@
       "linked": "Привязан",
       "linkCta": "Привязать",
       "formEmailLabel": "Введите email для привязки",
-      "confirmCta": "Привязать"
+      "confirmCta": "Привязать",
+      "telegramLinkCta": "Привязать Telegram",
+      "telegramAwaiting": "Ожидаем подтверждения в Telegram…",
+      "telegramLinkedToast": "Telegram привязан к аккаунту",
+      "telegramExpired": "Ссылка для привязки Telegram устарела. Попробуйте ещё раз.",
+      "telegramConflict": "Этот Telegram уже привязан к другому аккаунту.",
+      "telegramStartFailed": "Не удалось начать привязку Telegram. Попробуйте позже."
     },
     "crossfadeSeconds": "{value} с"
   },
@@ -1561,6 +1567,9 @@
     "linkBadge": "Ссылка",
     "linkUser": "Пользователь",
     "notFound": "Плейлист не найден"
+  },
+  "hero": {
+    "moreActions": "Ещё действия"
   },
   "artistPage": {
     "loading": "Загрузка…",

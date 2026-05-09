@@ -70,17 +70,22 @@ export function EmailLoginCard() {
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * Shared verify path used both by the explicit form submit and the
+   * "auto-submit on 6 digits" effect below. Pulled out so the
+   * keystroke-driven auto-call doesn't have to fake a SyntheticEvent
+   * just to satisfy `handleVerify(e)`.
+   */
+  const submitCode = async (value: string) => {
     if (submitting) return;
     setError(null);
-    if (!/^\d{6}$/.test(code.trim())) {
+    if (!/^\d{6}$/.test(value)) {
       setError(t('auth.emailLogin.errorCodeFormat'));
       return;
     }
     setSubmitting(true);
     try {
-      await verifyEmailCode(email, code.trim());
+      await verifyEmailCode(email, value);
       // On success the auth-store flips and the surrounding view (e.g.
       // Landing's gate) unmounts the card. Nothing to do here.
     } catch (err) {
@@ -97,6 +102,31 @@ export function EmailLoginCard() {
       setSubmitting(false);
     }
   };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitCode(code.trim());
+  };
+
+  // Auto-submit as soon as the user has typed (or pasted) all six
+  // digits — no need to chase the small "Подтвердить" button on
+  // mobile. We deliberately don't fire while `submitting` is true (so
+  // a refocus that re-triggers the effect during the in-flight request
+  // doesn't double-submit) and we don't auto-fire after a server
+  // error: the catch in `submitCode` clears `code` to `''`, which
+  // exits this branch on the next render.
+  useEffect(() => {
+    if (step !== 'code') return;
+    if (submitting) return;
+    if (!/^\d{6}$/.test(code)) return;
+    void submitCode(code);
+    // We intentionally only depend on `code` and `step` — `submitCode`
+    // closes over `email` / `submitting` / setters via React's stable
+    // identity guarantees, and listing it here would re-fire the
+    // effect on every keystroke (because `submitCode` is recreated
+    // each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, step]);
 
   const handleResend = async () => {
     if (submitting || cooldown > 0) return;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, Share2 } from 'lucide-react';
+import { shareLink } from '@/lib/share';
 import { useT } from '@/i18n';
 
 interface ShareButtonProps {
@@ -20,44 +21,21 @@ interface ShareButtonProps {
  * finally to a hidden textarea + execCommand copy for environments
  * where the Clipboard API is unavailable. Shows a check-mark for a
  * brief moment after a successful copy so the user gets feedback.
+ *
+ * The actual share/clipboard plumbing lives in `lib/share.ts` so the
+ * hero overflow kebab (`HeroActionsKebab`) can reuse it without
+ * pulling this component in for its own row.
  */
 export function ShareButton({ path, shareTitle, shareText, ariaLabel, className }: ShareButtonProps) {
   const t = useT();
   const [copied, setCopied] = useState(false);
 
   const handleClick = async () => {
-    const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
-    const origin = typeof window === 'undefined' ? '' : window.location.origin;
-    const url = `${origin}${base}${path.startsWith('/') ? path : `/${path}`}`;
-
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: shareTitle, text: shareText, url });
-        return;
-      } catch {
-        // User cancelled or share failed — fall through to clipboard.
-      }
+    const result = await shareLink({ path, shareTitle, shareText });
+    if (result.copied) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     }
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = url;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        document.execCommand('copy');
-      } catch {
-        window.prompt(t('share.copyPrompt'), url);
-      } finally {
-        document.body.removeChild(textarea);
-      }
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
   };
 
   return (

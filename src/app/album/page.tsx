@@ -1,14 +1,18 @@
 import { useParams, Link } from 'react-router-dom';
-import { Pause, Play, Disc3, Heart } from 'lucide-react';
+import { Pause, Play, Disc3, Heart, Share2 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useAlbum } from '@/hooks/useTrack';
 import { ShareButton } from '@/components/features/ShareButton';
 import { AlbumOfflineButton } from '@/components/features/OfflineActionButton';
+import { HeroActionsKebab } from '@/components/features/HeroActionsKebab';
+import { MenuItem } from '@/components/ui/PopoverMenu';
+import { shareLink } from '@/lib/share';
 import { useToggleAlbumLike } from '@/hooks/useLibrary';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
+import { toast } from '@/store/toast';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -54,6 +58,20 @@ export function AlbumPage() {
     if (album?.tracks?.length) {
       playCollection(album.tracks);
     }
+  };
+
+  // Hoisted so the inline ShareButton (visible from `sm` up) and the
+  // overflow `HeroActionsKebab` share one share-link path. Toast on
+  // clipboard success because the kebab menu closes immediately and
+  // the user otherwise gets no feedback.
+  const handleShareAlbum = async () => {
+    if (!album) return;
+    const result = await shareLink({
+      path: `/album/${album.id}`,
+      shareTitle: album.title,
+      shareText: `${album.title} — ${album.artist}`,
+    });
+    if (result.copied) toast.info(t('share.copied'));
   };
 
   return (
@@ -126,12 +144,25 @@ export function AlbumPage() {
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </IconButton>
                   <AlbumOfflineButton album={album} tracks={album.tracks ?? []} />
-                  <ShareButton
-                    path={`/album/${album.id}`}
-                    shareTitle={album.title}
-                    shareText={`${album.title} — ${album.artist}`}
-                    ariaLabel={t('albumPage.shareAria')}
-                  />
+
+                  {/* Visible from `sm` (640px) up — below that the
+                      Listen + Heart + Offline trio already eats the
+                      row, so Share folds into the kebab to avoid
+                      wrapping. */}
+                  <div className="hidden sm:contents">
+                    <ShareButton
+                      path={`/album/${album.id}`}
+                      shareTitle={album.title}
+                      shareText={`${album.title} — ${album.artist}`}
+                      ariaLabel={t('albumPage.shareAria')}
+                    />
+                  </div>
+
+                  <HeroActionsKebab className="sm:hidden">
+                    <MenuItem onClick={handleShareAlbum} icon={<Share2 size={14} />}>
+                      {t('share.shareGeneric')}
+                    </MenuItem>
+                  </HeroActionsKebab>
                 </>
               }
             />
