@@ -1,10 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
 import { downloads } from '@/lib/offline/downloads';
 import { enqueueSync } from '@/lib/offline/syncQueue';
 import { getSavedPlaylistWithTracks } from '@/lib/offline/storage';
 import { networkOrLocal } from '@/lib/offline/networkOrLocal';
 import type { Track, Playlist, ArtistRef } from '@/types';
+
+/**
+ * Read-side queries below all hit endpoints that require auth. Layout
+ * components (`Sidebar`, `Player`, `MobileBottomDock`,
+ * `FullscreenPlayer`) consume them on every route, including the
+ * landing / signed-out states. Without this gate they fired against
+ * the worker as soon as the layout mounted, the worker rate-limited
+ * the anonymous client with 429s, and the `retry: 1` queryClient
+ * default amplified each into a loop visible in the network panel
+ * even before the user had typed in their email.
+ */
+function useIsAuthed() {
+  return useAuthStore((s) => Boolean(s.accessToken));
+}
 
 /** Treat the device as offline if `navigator.onLine` is false. The
  *  flag is famously imprecise but the queue replay path is
@@ -63,12 +78,14 @@ function snapshotOf(t: LikeableTrack): TrackSnapshot {
 }
 
 export function usePlaylistsList() {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['playlists'],
     queryFn: async () => {
       const r = await api.get<{ items: Playlist[] } | Playlist[]>('/library/playlists');
       return Array.isArray(r) ? r : r.items;
     },
+    enabled: isAuthed,
   });
 }
 
@@ -118,17 +135,21 @@ export function usePlaylist(id: string) {
 }
 
 export function useLikedTracks(limit = 50, offset = 0) {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['liked', limit, offset],
     queryFn: () => api.get<LikedResponse>(`/library/liked?limit=${limit}&offset=${offset}`),
+    enabled: isAuthed,
   });
 }
 
 export function useLikedIds() {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['liked', 'ids'],
     queryFn: () => api.get<LikedIds>('/library/likes/ids'),
     staleTime: 30_000,
+    enabled: isAuthed,
   });
 }
 
@@ -362,32 +383,40 @@ export interface LibraryArtist extends LibraryArtistSnapshot {
 }
 
 export function useLikedAlbumIds() {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['library', 'album', 'ids'],
     queryFn: () => api.get<{ ids: string[] }>('/library/items/album/ids'),
     staleTime: 30_000,
+    enabled: isAuthed,
   });
 }
 
 export function useLikedArtistIds() {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['library', 'artist', 'ids'],
     queryFn: () => api.get<{ ids: string[] }>('/library/items/artist/ids'),
     staleTime: 30_000,
+    enabled: isAuthed,
   });
 }
 
 export function useLikedAlbums() {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['library', 'album'],
     queryFn: () => api.get<{ items: LibraryAlbum[] }>('/library/items/album'),
+    enabled: isAuthed,
   });
 }
 
 export function useLikedArtists() {
+  const isAuthed = useIsAuthed();
   return useQuery({
     queryKey: ['library', 'artist'],
     queryFn: () => api.get<{ items: LibraryArtist[] }>('/library/items/artist'),
+    enabled: isAuthed,
   });
 }
 

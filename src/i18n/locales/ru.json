@@ -86,8 +86,7 @@
       "linked": "Привязан",
       "linkCta": "Привязать",
       "formEmailLabel": "Введите email для привязки",
-      "confirmCta": "Привязать",
-      "emailLockedHint": "Email привязан и не может быть изменён."
+      "confirmCta": "Привязать"
     },
     "crossfadeSeconds": "{value} с"
   },
@@ -258,12 +257,10 @@
       "errorVerify": "Не удалось проверить код. Попробуй ещё раз."
     },
     "emailPage": {
-      "eyebrow": "Вход по почте",
+      "eyebrow": "Вход",
       "title": "Войдите в BRATAN MUSIC",
-      "subtitle": "Введите свою почту — мы отправим одноразовый код. Без паролей и без регистрации.",
-      "back": "Назад",
-      "altLoginHint": "Уже есть Telegram?",
-      "altLoginCta": "Вернуться к входу через Telegram"
+      "subtitle": "Войдите через Telegram или по одноразовому коду на почту. Без паролей и без регистрации.",
+      "back": "Назад"
     }
   },
   "languages": {

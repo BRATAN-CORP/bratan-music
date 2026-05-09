@@ -171,7 +171,40 @@ export class DailyPlaylistService {
     for (const variant of variants) {
       const spec = SPECS[variant];
       const built = await this.buildVariantTracks(variant, userId, profile.completedTrackIds, genreSeeds);
-      const tracks = filterTracksByDislikes(built, dislikes);
+      let tracks = filterTracksByDislikes(built, dislikes);
+
+      // Backfill so each variant always reaches PLAYLIST_LENGTH when
+      // possible. Without this the user would intermittently see
+      // 10–30 tracks on a daily playlist whenever the wave/genre
+      // pool came back short or after dislikes filtered out enough
+      // candidates to drop the count under the cap. Cycle through
+      // the variant's fallback genres + the user's taste-derived
+      // genre seeds so we exhaust reasonable sources before
+      // shipping a partial playlist.
+      if (tracks.length < PLAYLIST_LENGTH) {
+        const fallbackSlugs = [
+          ...spec.fallbackGenres,
+          ...genreSeeds,
+          'genre_pop',
+          'genre_rap',
+          'genre_electronic',
+        ];
+        const seenSlugs = new Set<string>();
+        for (const slug of fallbackSlugs) {
+          if (tracks.length >= PLAYLIST_LENGTH) break;
+          if (seenSlugs.has(slug)) continue;
+          seenSlugs.add(slug);
+          const filler = filterTracksByDislikes(
+            await this.tracksFromGenre(slug),
+            dislikes,
+          );
+          tracks = mergeUnique(tracks, filler, PLAYLIST_LENGTH);
+        }
+      }
+
+      // Hard cap so a backfill that overshoots can't ship more than
+      // the contracted PLAYLIST_LENGTH (the home-page UI assumes 50).
+      if (tracks.length > PLAYLIST_LENGTH) tracks = tracks.slice(0, PLAYLIST_LENGTH);
       if (tracks.length === 0) continue;
 
       const cover = pickCover(tracks);
@@ -226,8 +259,12 @@ export class DailyPlaylistService {
       const known = new Set(completedTrackIds);
       const unknown = wave.filter((t) => !known.has(t.id));
       if (unknown.length >= PLAYLIST_LENGTH) return unknown.slice(0, PLAYLIST_LENGTH);
-      // Cold-start fallback: fetch genre tracks for the first picked genre.
-      const filler = hasHistory ? [] : await this.tracksFromGenre(genreSeeds[0] ?? 'genre_pop');
+      // Pad with a genre-seeded pool when wave came back short.
+      // Previously this only ran for cold-start users (no history),
+      // which meant returning users with a thin wave got a partial
+      // (10–30 track) discover playlist instead of the contracted 50.
+      const fillerSlug = genreSeeds[0] ?? SPECS.discover.fallbackGenres[0] ?? 'genre_pop';
+      const filler = await this.tracksFromGenre(fillerSlug);
       return mergeUnique(unknown, filler, PLAYLIST_LENGTH);
     }
 

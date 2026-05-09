@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Mail, Loader2, Link2, Send, Lock } from 'lucide-react';
+import { Mail, Loader2, Link2, Send } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -151,64 +151,63 @@ export function LinkedAccountsPanel() {
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col gap-3">
+      {/* Flat row list (divide-y between siblings) instead of
+          nested cards-in-a-card so the panel reads as a single
+          surface that matches the surrounding `SettingsCard`
+          rhythm on the profile page. The previous bordered inner
+          cards added a visual "box inside a box" that the user
+          flagged as redundant next to the outer container. */}
+      <div className="mt-4 divide-y divide-border">
         {/* Telegram row — read-only because Telegram binding is set on
             login and there's no server endpoint to detach it. */}
-        <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border bg-background/40 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <TelegramGlyph />
             <div className="min-w-0">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-sm font-medium text-foreground">
                 {t('profile.linkedAccounts.telegramLabel')}
               </div>
-              <div className="mt-0.5 truncate text-sm text-foreground">
+              <div className="mt-0.5 truncate text-xs text-muted-foreground">
                 {profile?.username ? `@${profile.username}` : profile?.name ?? t('profile.linkedAccounts.telegramNotLinked')}
               </div>
             </div>
           </div>
           {profile?.username || profile?.name ? (
-            <span className="rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-accent)]">
-              {t('profile.linkedAccounts.linked')}
-            </span>
+            <StatusBadge>{t('profile.linkedAccounts.linked')}</StatusBadge>
           ) : null}
         </div>
 
         {/* Email row — interactive. Three rendering states: linked
             (show address + unlink), idle/unlinked (show "link" CTA),
             in-progress (email or code form). */}
-        <div className="rounded-[var(--radius-md)] border border-border bg-background/40 px-4 py-3">
+        <div className="py-3">
           {linkedEmail && step === 'idle' ? (
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-                  <Mail size={14} />
-                </span>
+                <EmailGlyph />
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <div className="text-sm font-medium text-foreground">
                     {t('profile.linkedAccounts.emailLabel')}
                   </div>
-                  <div className="mt-0.5 truncate text-sm text-foreground" title={linkedEmail}>{linkedEmail}</div>
+                  <div
+                    className="mt-0.5 truncate text-xs text-muted-foreground"
+                    title={linkedEmail}
+                  >
+                    {linkedEmail}
+                  </div>
                 </div>
               </div>
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-accent)]"
-                title={t('profile.linkedAccounts.emailLockedHint')}
-              >
-                <Lock size={11} />
-                {t('profile.linkedAccounts.linked')}
-              </span>
+              <StatusBadge>{t('profile.linkedAccounts.linked')}</StatusBadge>
             </div>
           ) : step === 'idle' ? (
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-                  <Mail size={14} />
-                </span>
+                <EmailGlyph />
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  <div className="text-sm font-medium text-foreground">
                     {t('profile.linkedAccounts.emailLabel')}
                   </div>
-                  <div className="mt-0.5 truncate text-sm text-muted-foreground">
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">
                     {t('profile.linkedAccounts.emailNotLinked')}
                   </div>
                 </div>
@@ -294,10 +293,34 @@ export function LinkedAccountsPanel() {
 
 function TelegramGlyph() {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-telegram)]/10 text-[var(--color-telegram)]">
-      <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-telegram)]/10 text-[var(--color-telegram)]">
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
         <path d="M21.94 4.34a1.5 1.5 0 0 0-2.06-1.66L2.5 9.85a1.05 1.05 0 0 0 .07 1.97l4.6 1.55 1.78 5.6a1 1 0 0 0 1.65.4l2.51-2.45 4.7 3.46a1.5 1.5 0 0 0 2.36-.96l1.77-15.08ZM9.7 14.4l-.74 4 1.18-3.36 7.94-7.6L9.7 14.4Z" />
       </svg>
+    </span>
+  );
+}
+
+function EmailGlyph() {
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+      <Mail size={16} />
+    </span>
+  );
+}
+
+/**
+ * Linked-status pill. Borderless on purpose — the previous variant
+ * carried a `border-[var(--color-accent)]/30` ring that read as a
+ * faint white outline against `bg-card` in dark mode (the dark-theme
+ * accent token is light lavender), which the user flagged as
+ * "странная белая обводка". Background-only treatment keeps the
+ * accent tint without the rim.
+ */
+function StatusBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-[var(--color-accent-soft)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-accent)]">
+      {children}
     </span>
   );
 }
