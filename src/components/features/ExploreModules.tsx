@@ -1,7 +1,18 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarRange, ChevronLeft, ChevronRight, ListMusic, Loader2, Play, Sparkles } from 'lucide-react';
+import {
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
+  Flame,
+  Layers,
+  ListMusic,
+  Loader2,
+  Play,
+  Sparkles,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import type {
   ExploreModule,
@@ -114,10 +125,10 @@ function ModuleRow({
       // grid; otherwise we fall back to the compact pill cloud so
       // an icon-only row doesn't get awkwardly large empty cards.
       {
-        // Decade rows (`m_1980s`, `m_1990s`, …) render as a compact
-        // pill cloud — see `PageLinksDecadeGrid`. The previous big
-        // image grid was visually disproportionate to the row's
-        // payload (a 4-character label).
+        // Decade rows (`m_1980s`, `m_1990s`, …) and any other row
+        // whose payload reduces to a 4-character label render as a
+        // pill cloud (see `PageLinksCloud`). The previous big image
+        // grid was visually disproportionate.
         const isDecadeRow =
           m.items.length > 0 &&
           m.items.every(
@@ -125,7 +136,7 @@ function ModuleRow({
               /\b(19|20)\d0s?\b/i.test(it.title) || it.slug.toLowerCase().includes('decade'),
           );
         if (isDecadeRow) {
-          return <PageLinksDecadeGrid title={m.title} items={m.items} />;
+          return <PageLinksCloud title={m.title} items={m.items} />;
         }
         const allHaveImage = m.items.length > 0 && m.items.every((it) => Boolean(it.imageId));
         if (hero && allHaveImage) {
@@ -224,40 +235,6 @@ function PageLinksImageRow({ title, items }: { title: string; items: ExplorePage
   );
 }
 
-/**
- * Decade ladder as a compact pill cloud — matches the icon-only
- * "Mood & Activity" row's visual weight, since the payload is just
- * a 4-character label.
- */
-function PageLinksDecadeGrid({ title, items }: { title: string; items: ExplorePageLink[] }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <SectionHeader
-        title={title}
-        icon={<CalendarRange size={14} className="text-[var(--color-accent)]" />}
-      />
-      <div className="flex flex-wrap gap-2">
-        {items.map((it, i) => (
-          <motion.div
-            key={it.slug}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i, 12) * 0.012, duration: 0.18 }}
-          >
-            <Link
-              to={`/explore/${it.slug}`}
-              state={{ title: it.title }}
-              className="inline-flex items-center rounded-full border border-border bg-card px-4 py-1.5 text-sm transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
-            >
-              {it.title}
-            </Link>
-          </motion.div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function GenreTile({
   item,
   index,
@@ -349,30 +326,116 @@ function GenreTile({
   );
 }
 
+/**
+ * Pill-cloud variant for icon-only `pageLinks` rows (genres without
+ * cover art, mood / activity ladder, decades, the unlabelled
+ * "filters" cloud at the bottom of /explore — New / Top / Videos /
+ * HiRes / Clean Content). Wrapped in a soft card surface with an
+ * idle accent gradient so each cloud reads as a self-contained
+ * section instead of naked pills floating against the page bg, and
+ * supplies a fallback heading + icon when Tidal didn't ship one.
+ */
 function PageLinksCloud({ title, items }: { title: string; items: ExplorePageLink[] }) {
+  const t = useT();
+  const flavour = useMemo(() => derivePillCloudFlavour(items), [items]);
+  const heading = title?.trim() || t(`search.discoverGroups.${flavour.key}`);
+  const Icon = flavour.icon;
   return (
-    <section className="flex flex-col gap-3">
-      <SectionHeader title={title} icon={<Sparkles size={14} className="text-[var(--color-accent)]" />} />
-      <div className="flex flex-wrap gap-2">
-        {items.map((it, i) => (
-          <motion.div
-            key={it.slug}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i, 12) * 0.012, duration: 0.18 }}
+    <section className="relative isolate overflow-hidden rounded-[var(--radius-lg)] border border-border bg-card/50 p-4 sm:p-5">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{ background: flavour.gradient }}
+      />
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <span
+            className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+            aria-hidden
           >
-            <Link
-              to={`/explore/${it.slug}`}
-              state={{ title: it.title }}
-              className="inline-flex items-center rounded-full border border-border bg-card px-4 py-1.5 text-sm transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
+            <Icon size={14} />
+          </span>
+          <h2 className="text-sm font-semibold tracking-tight">{heading}</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {items.map((it, i) => (
+            <motion.div
+              key={it.slug}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i, 12) * 0.012, duration: 0.18 }}
             >
-              {it.title}
-            </Link>
-          </motion.div>
-        ))}
+              <Link
+                to={`/explore/${it.slug}`}
+                state={{ title: it.title }}
+                className="inline-flex items-center rounded-full border border-border bg-background/70 px-4 py-1.5 text-sm font-medium tracking-tight backdrop-blur-sm transition-all hover:-translate-y-px hover:border-[var(--color-border-strong)] hover:bg-secondary hover:text-foreground"
+              >
+                {it.title}
+              </Link>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </section>
   );
+}
+
+/**
+ * Pick a section icon + idle gradient + i18n fallback heading
+ * keyed off the item slugs. Used by `<PageLinksCloud>` to hide the
+ * fact that Tidal sometimes ships pageLinks rows without a title
+ * (the bottom "New / Top / Videos / HiRes / Clean Content" filter
+ * cloud on /explore is the textbook offender) and to give each
+ * cloud a tiny visual signature so the eye can tell rows apart at
+ * a glance.
+ */
+function derivePillCloudFlavour(items: ExplorePageLink[]): {
+  key: 'genres' | 'moods' | 'decades' | 'filters' | 'more';
+  icon: LucideIcon;
+  gradient: string;
+} {
+  if (items.length === 0) {
+    return {
+      key: 'more',
+      icon: Layers,
+      gradient: 'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 60%)',
+    };
+  }
+  const slugs = items.map((it) => it.slug.toLowerCase());
+  const allDecade = items.every((it) => {
+    const slug = it.slug.toLowerCase();
+    return /\b(19|20)\d0s?\b/i.test(it.title) || slug.includes('decade') || /^m_\d{4}s?$/.test(slug);
+  });
+  if (allDecade) {
+    return {
+      key: 'decades',
+      icon: CalendarRange,
+      gradient:
+        'radial-gradient(110% 70% at 100% 0%, color-mix(in oklab, var(--color-sub-accent) 12%, transparent) 0%, transparent 60%)',
+    };
+  }
+  if (slugs.every((s) => s.startsWith('genre_') || s.startsWith('genres'))) {
+    return {
+      key: 'genres',
+      icon: Sparkles,
+      gradient:
+        'radial-gradient(110% 70% at 100% 0%, var(--color-accent-soft) 0%, transparent 55%), radial-gradient(80% 60% at 0% 100%, color-mix(in oklab, var(--color-sub-accent) 10%, transparent) 0%, transparent 60%)',
+    };
+  }
+  if (slugs.every((s) => s.startsWith('mood_') || s.startsWith('activity_') || s.includes('mood') || s.includes('activity'))) {
+    return {
+      key: 'moods',
+      icon: Flame,
+      gradient:
+        'radial-gradient(110% 70% at 100% 0%, color-mix(in oklab, var(--color-sub-accent) 18%, transparent) 0%, transparent 60%)',
+    };
+  }
+  return {
+    key: 'filters',
+    icon: Layers,
+    gradient:
+      'radial-gradient(110% 70% at 0% 100%, var(--color-accent-soft) 0%, transparent 60%)',
+  };
 }
 
 function TrackListRow({

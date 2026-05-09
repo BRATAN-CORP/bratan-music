@@ -127,7 +127,7 @@ function SearchHeroShortcuts() {
         accent="accent"
       />
       <ShortcutCard
-        to="/home"
+        to="/"
         icon={<Disc3 size={18} />}
         eyebrow={t('search.shortcuts.waveEyebrow')}
         title={t('search.shortcuts.waveTitle')}
