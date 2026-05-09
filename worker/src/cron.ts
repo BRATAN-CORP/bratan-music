@@ -110,6 +110,24 @@ export async function runScheduledJobs(env: Env): Promise<void> {
     await health.log('error', 'cron.gc.auth_nonces', msg);
   }
 
+  // GC expired tg_link_requests. Same shape as `auth_nonces` — the
+  // status/finalise endpoint deletes a row on the first confirmed
+  // claim, but rows that the user abandoned mid-flow (opened the
+  // bot deeplink, never came back to the site) accumulate forever
+  // without this sweep.
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    await env.DB
+      .prepare(`DELETE FROM tg_link_requests WHERE expires_at < ?`)
+      .bind(nowSec)
+      .run();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[cron] gc tg_link_requests', msg);
+    recordError(`gc tg_link_requests: ${msg}`);
+    await health.log('error', 'cron.gc.tg_link_requests', msg);
+  }
+
   try {
     // GC closes rooms whose host has been silent for too long. Result
     // is intentionally not logged — it's operational, not an error.

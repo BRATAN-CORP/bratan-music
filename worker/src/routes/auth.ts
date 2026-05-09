@@ -56,8 +56,11 @@ auth.post('/telegram', async (c) => {
   // Was the user new before this upsert? Check before so we know to
   // log the signup (and apply the per-IP cap). The check has to
   // happen against the row state BEFORE upsert; doing it after would
-  // always classify the user as existing.
-  const isNew = !(await userService.findById(userId));
+  // always classify the user as existing. Look up by `tg_id` so a
+  // user that linked their Telegram identity to an email-first row
+  // resolves to that row (and is therefore *not* new), rather than
+  // triggering a per-IP signup gate they shouldn't see.
+  const isNew = !(await userService.findByTgId(userId));
 
   if (isNew) {
     // Per-IP cap on freshly-created accounts. Already-known Telegram

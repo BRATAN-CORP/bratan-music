@@ -86,7 +86,13 @@
       "linked": "Linked",
       "linkCta": "Link",
       "formEmailLabel": "Enter the email to link",
-      "confirmCta": "Link"
+      "confirmCta": "Link",
+      "telegramLinkCta": "Link Telegram",
+      "telegramAwaiting": "Waiting for confirmation in Telegram…",
+      "telegramLinkedToast": "Telegram linked to your account",
+      "telegramExpired": "The Telegram link expired. Please try again.",
+      "telegramConflict": "This Telegram account is already linked to another user.",
+      "telegramStartFailed": "Couldn't start the Telegram link. Try again later."
     },
     "crossfadeSeconds": "{value}s"
   },
@@ -1561,6 +1567,9 @@
     "linkBadge": "Linked",
     "linkUser": "User",
     "notFound": "Playlist not found"
+  },
+  "hero": {
+    "moreActions": "More actions"
   },
   "artistPage": {
     "loading": "Loading…",

@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Pause, Play, Heart, Radio, Ban, RotateCcw } from 'lucide-react';
+import { Pause, Play, Heart, Radio, Ban, RotateCcw, Share2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
 import { AlbumCard } from '@/components/features/AlbumCard';
 import { ArtistCard } from '@/components/features/ArtistCard';
 import { ShareButton } from '@/components/features/ShareButton';
+import { HeroActionsKebab } from '@/components/features/HeroActionsKebab';
+import { MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
+import { shareLink } from '@/lib/share';
 import { useArtist, useArtistRadio } from '@/hooks/useTrack';
 import { useToggleArtistLike } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
@@ -65,6 +68,40 @@ export function ArtistPage() {
     if (!items?.length || !first) return;
     setTrack(toPlayerTrack(first));
     setQueue(items.map(toPlayerTrack));
+  };
+
+  // Hoisted out of the inline `actions={…}` block so the inline icon
+  // rail (visible from `sm` up) and the overflow `HeroActionsKebab`
+  // (visible below `sm`) share one source of truth for ban / share
+  // handlers.
+  const handleToggleArtistDislike = () => {
+    if (!artist) return;
+    const wasDisliked = artistDisliked;
+    toggleDislike.mutate(
+      { kind: 'artist', id: artist.id, source: 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
+      {
+        onSuccess: () => {
+          toast.info(
+            wasDisliked
+              ? t('dislike.artistRestored')
+              : t('dislike.artistHidden', { name: artist.name }),
+          );
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : t('dislike.failed'));
+        },
+      },
+    );
+  };
+
+  const handleShareArtist = async () => {
+    if (!artist) return;
+    const result = await shareLink({
+      path: `/artist/${artist.id}`,
+      shareTitle: artist.name,
+      shareText: t('artistPage.shareText', { name: artist.name }),
+    });
+    if (result.copied) toast.info(t('share.copied'));
   };
 
   return (
@@ -127,53 +164,71 @@ export function ArtistPage() {
                   >
                     <Heart size={16} className={liked ? 'fill-current' : ''} />
                   </IconButton>
-                  <IconButton
-                    tone="danger"
-                    active={artistDisliked}
-                    onClick={() => {
-                      const wasDisliked = artistDisliked;
-                      toggleDislike.mutate(
-                        { kind: 'artist', id: artist.id, source: 'tidal', nextState: wasDisliked ? 'unbanned' : 'banned' },
-                        {
-                          onSuccess: () => {
-                            toast.info(
-                              wasDisliked
-                                ? t('dislike.artistRestored')
-                                : t('dislike.artistHidden', { name: artist.name }),
-                            );
-                          },
-                          onError: (err) => {
-                            toast.error(err instanceof Error ? err.message : t('dislike.failed'));
-                          },
-                        },
-                      );
-                    }}
-                    disabled={toggleDislike.isPending}
-                    aria-label={artistDisliked
-                      ? t('dislike.artistUnban', { name: artist.name })
-                      : t('dislike.artistBan', { name: artist.name })}
-                    title={artistDisliked
-                      ? t('dislike.artistUnban', { name: artist.name })
-                      : t('dislike.artistBan', { name: artist.name })}
-                  >
-                    {artistDisliked ? <RotateCcw size={16} /> : <Ban size={16} />}
-                  </IconButton>
-                  {radio?.items?.length ? (
-                    <button
-                      type="button"
-                      onClick={handlePlayRadio}
-                      className="inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
-                      aria-label={t('artistPage.radioAria')}
+
+                  {/* Inline rail for the secondary actions — visible
+                      from `sm` (640px) up. Below that we collapse into
+                      `HeroActionsKebab` so the row never wraps. The
+                      handlers are hoisted above so both surfaces call
+                      the same code. */}
+                  <div className="hidden sm:contents">
+                    <IconButton
+                      tone="danger"
+                      active={artistDisliked}
+                      onClick={handleToggleArtistDislike}
+                      disabled={toggleDislike.isPending}
+                      aria-label={artistDisliked
+                        ? t('dislike.artistUnban', { name: artist.name })
+                        : t('dislike.artistBan', { name: artist.name })}
+                      title={artistDisliked
+                        ? t('dislike.artistUnban', { name: artist.name })
+                        : t('dislike.artistBan', { name: artist.name })}
                     >
-                      <Radio size={14} /> {t('artistPage.radio')}
-                    </button>
-                  ) : null}
-                  <ShareButton
-                    path={`/artist/${artist.id}`}
-                    shareTitle={artist.name}
-                    shareText={t('artistPage.shareText', { name: artist.name })}
-                    ariaLabel={t('artistPage.shareAria')}
-                  />
+                      {artistDisliked ? <RotateCcw size={16} /> : <Ban size={16} />}
+                    </IconButton>
+                    {radio?.items?.length ? (
+                      <button
+                        type="button"
+                        onClick={handlePlayRadio}
+                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+                        aria-label={t('artistPage.radioAria')}
+                      >
+                        <Radio size={14} /> {t('artistPage.radio')}
+                      </button>
+                    ) : null}
+                    <ShareButton
+                      path={`/artist/${artist.id}`}
+                      shareTitle={artist.name}
+                      shareText={t('artistPage.shareText', { name: artist.name })}
+                      ariaLabel={t('artistPage.shareAria')}
+                    />
+                  </div>
+
+                  <HeroActionsKebab className="sm:hidden">
+                    <MenuItem
+                      onClick={handleToggleArtistDislike}
+                      disabled={toggleDislike.isPending}
+                      icon={artistDisliked ? <RotateCcw size={14} /> : <Ban size={14} />}
+                    >
+                      {artistDisliked
+                        ? t('dislike.artistUnban', { name: artist.name })
+                        : t('dislike.artistBan', { name: artist.name })}
+                    </MenuItem>
+                    {radio?.items?.length ? (
+                      <MenuItem
+                        onClick={handlePlayRadio}
+                        icon={<Radio size={14} />}
+                      >
+                        {t('artistPage.radio')}
+                      </MenuItem>
+                    ) : null}
+                    <MenuDivider />
+                    <MenuItem
+                      onClick={handleShareArtist}
+                      icon={<Share2 size={14} />}
+                    >
+                      {t('share.shareGeneric')}
+                    </MenuItem>
+                  </HeroActionsKebab>
                 </>
               }
               className="border-b-0"
