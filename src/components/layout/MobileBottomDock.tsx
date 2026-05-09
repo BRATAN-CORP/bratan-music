@@ -135,20 +135,19 @@ export function MobileBottomDock() {
     // the child below, while the timeline thumb is rendered as a sibling
     // of the surface so it can poke above the dock's rounded top edge
     // without being clipped.
-    // Bottom inset is now `safe-area-inset-bottom / 2` instead of the
-    // full inset. The user's request: outside PWA the dock should sit
-    // the same distance from the bottom as it does from the sides
-    // (`left-4 right-4` → 16 px), and inside an installed PWA the
-    // home-indicator clearance was eating ~34 px on iOS which made
-    // the dock float much higher than it does on the sides. Halving
-    // the inset still keeps the dock clear of the home indicator
-    // (matters on iOS where the indicator is opaque) but visually
-    // brings it down to roughly the same gap the user sees on the
-    // left and right edges. On non-PWA touch devices the variable is
-    // already `0px`, so the resolved value is exactly the side
-    // padding and nothing visibly changes outside standalone mode.
+    // Bottom inset matches the side padding 1:1 — the user's
+    // explicit request after PR #427 was "сделать отступ снизу такой
+    // же как и сбоку". On `left-4 right-4` (16 px) we use `bottom-4`,
+    // on `sm:` (24 px) we use `sm:bottom-6`. We deliberately drop the
+    // `var(--pwa-safe-bottom)` clearance entirely: on iOS PWA the
+    // home-indicator is a translucent line that still lets the user
+    // tap the dock through it, and even half of the inset (~17 px)
+    // visibly pushed the dock too high relative to the side gap. The
+    // dock's rounded `liquid-glass` surface keeps a comfortable
+    // visual border below the last interactive row, so the home
+    // indicator never feels like it's biting content.
     <div
-      className="fixed bottom-[calc(var(--pwa-safe-bottom)/2+1rem)] left-4 right-4 z-40 sm:bottom-[calc(var(--pwa-safe-bottom)/2+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
+      className="fixed bottom-4 left-4 right-4 z-40 sm:bottom-6 sm:left-6 sm:right-6 lg:hidden"
     >
     <div
       className="flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass"
@@ -354,8 +353,14 @@ export function MobileBottomDock() {
                 aria-label={t('player.next')}
               >
                 {/* Solid wedge — matches the desktop player and the
-                    fullscreen player skip controls. */}
-                <SkipForward size={16} fill="currentColor" strokeWidth={0} />
+                    fullscreen player skip controls. We DON'T zero the
+                    stroke (the way Pause does) because lucide's
+                    SkipForward is a triangle polygon + a vertical
+                    `<line>` element; a 1-D line with no stroke has no
+                    visible area, so `strokeWidth={0}` would erase the
+                    bar and leave only the triangle (the broken icon
+                    the user flagged after PR #427). */}
+                <SkipForward size={16} fill="currentColor" />
               </button>
             </div>
 

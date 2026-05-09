@@ -443,9 +443,13 @@ export function Player() {
               </Button>
               <Button onClick={() => previous()} variant="ghost" size="icon" aria-label={t('player.previous')}>
                 {/* Solid wedge to match the play/pause icon next to it.
-                    Lucide outline glyphs only become solid when fill is
-                    set + stroke width is zeroed. */}
-                <SkipBack size={16} fill="currentColor" strokeWidth={0} />
+                    `fill='currentColor'` paints the triangle interior
+                    while the default stroke keeps the rounded line
+                    caps + the vertical bar (lucide's `<line>` element
+                    has zero area, so dropping the stroke would erase
+                    the bar entirely — exactly the broken-icon
+                    regression the user flagged after PR #427). */}
+                <SkipBack size={16} fill="currentColor" />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} size="icon" className="h-10 w-10 rounded-full" aria-label={isPlaying ? t('player.pause') : t('player.play')}>
@@ -453,7 +457,7 @@ export function Player() {
                 </Button>
               </motion.div>
               <Button onClick={nextManual} variant="ghost" size="icon" aria-label={t('player.next')}>
-                <SkipForward size={16} fill="currentColor" strokeWidth={0} />
+                <SkipForward size={16} fill="currentColor" />
               </Button>
               <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label={t('player.repeat')}>
                 {repeat === 'one' ? (
