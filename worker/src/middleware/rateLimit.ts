@@ -7,6 +7,15 @@ interface RateLimitConfig {
 }
 
 const ROUTE_LIMITS: Record<string, RateLimitConfig> = {
+  // Per-IP cap on email-OTP request + verify combined. A single user
+  // walking through the flow normally hits 1 /request + 1–2 /verify
+  // (typo, then correct), so 10/60s gives generous headroom. The
+  // service-side per-email cooldown (60s) and per-OTP attempts cap
+  // (5) are the actual brute-force gates; this bucket exists so a
+  // single attacker can't fan out across many addresses from one IP.
+  // Must be declared BEFORE 'POST:/auth' so the more-specific path
+  // matches first via startsWith().
+  'POST:/auth/email': { limit: 10, windowSeconds: 60 },
   'POST:/auth': { limit: 5, windowSeconds: 60 },
   // /auth/nonce/:nonce is the deeplink-login polling endpoint. The site
   // hits it every ~1s after /start, so we need way more headroom than the

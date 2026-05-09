@@ -12,6 +12,12 @@ crons = ["30 4 * * *"]
 [vars]
 ENVIRONMENT = "production"
 APP_URL = "https://bratan-corp.github.io/bratan-music/"
+# Brevo transactional sender (email-OTP login). The API key itself is
+# a secret — set via `wrangler secret put BREVO_API_KEY`. Sender
+# email must be a verified single-sender or sit on a verified domain
+# in Brevo, otherwise the API returns 401.
+BREVO_SENDER_EMAIL = "noreply.bratanmusic@gmail.com"
+BREVO_SENDER_NAME = "BRATAN MUSIC"
 
 # D1 Database
 [[d1_databases]]

@@ -76,6 +76,20 @@
     "offlineQualityTitle": "Качество для офлайна",
     "offlineQualityHint": "Качество, в котором треки сохраняются на устройство для оффлайн-прослушивания. Если выбранное качество недоступно, скачается следующий доступный уровень.",
     "languageTitle": "Язык",
+    "linkedAccounts": {
+      "title": "Связанные аккаунты",
+      "hint": "Можно входить и через Telegram, и через почту — оба способа открывают один аккаунт.",
+      "telegramLabel": "Telegram",
+      "telegramNotLinked": "Не привязан",
+      "emailLabel": "Email",
+      "emailNotLinked": "Не привязан",
+      "linked": "Привязан",
+      "linkCta": "Привязать",
+      "unlinkCta": "Отвязать",
+      "formEmailLabel": "Введите email для привязки",
+      "confirmCta": "Привязать",
+      "errorUnlink": "Не удалось отвязать почту."
+    },
     "crossfadeSeconds": "{value} с"
   },
   "rooms": {
@@ -224,7 +238,25 @@
   "auth": {
     "loginRequired": "Требуется повторный вход",
     "logout": "Выйти",
-    "error": "Ошибка авторизации"
+    "error": "Ошибка авторизации",
+    "emailLogin": {
+      "dividerLabel": "или по почте",
+      "emailLabel": "Почта",
+      "emailPlaceholder": "you@example.com",
+      "codeLabel": "Код из письма",
+      "sendCodeCta": "Получить код",
+      "sending": "Отправляем…",
+      "verifyCta": "Войти",
+      "verifying": "Проверяем…",
+      "sentTo": "Код отправлен на",
+      "changeEmail": "Изменить почту",
+      "resend": "Отправить ещё раз",
+      "resendIn": "Повтор через {seconds} с",
+      "errorInvalidEmail": "Похоже на некорректный email",
+      "errorCodeFormat": "Код должен состоять из 6 цифр",
+      "errorRequest": "Не удалось отправить код. Попробуй позже.",
+      "errorVerify": "Не удалось проверить код. Попробуй ещё раз."
+    }
   },
   "languages": {
     "ru": "Русский",

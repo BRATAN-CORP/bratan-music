@@ -2,6 +2,7 @@ CREATE TABLE users (
     id                TEXT PRIMARY KEY,
     tg_username       TEXT,
     tg_name           TEXT,
+    email             TEXT,
     is_admin          INTEGER NOT NULL DEFAULT 0,
     is_banned         INTEGER NOT NULL DEFAULT 0,
     banned_at         INTEGER,
@@ -12,6 +13,22 @@ CREATE TABLE users (
     updated_at        INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_users_is_banned ON users(is_banned);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email);
+
+-- Email-based passwordless login. Codes are 6 digits hashed at rest;
+-- `purpose` separates fresh-login OTPs from "link this email to an
+-- existing Telegram account" OTPs so the verify path can refuse
+-- cross-purpose replay. See migration 0025_email_otps.sql.
+CREATE TABLE email_otps (
+    email      TEXT PRIMARY KEY,
+    code_hash  TEXT NOT NULL,
+    purpose    TEXT NOT NULL DEFAULT 'login' CHECK(purpose IN ('login','link')),
+    user_id    TEXT,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_email_otps_expires_at ON email_otps(expires_at);
 
 CREATE TABLE subscriptions (
     id              TEXT PRIMARY KEY,

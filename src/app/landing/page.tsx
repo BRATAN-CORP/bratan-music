@@ -10,6 +10,7 @@ import { useEffect, useRef } from 'react';
 import { useAutoAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/auth';
 import { TelegramLoginButton } from '@/components/features/TelegramLoginButton';
+import { EmailLoginCard } from '@/components/features/EmailLoginCard';
 import { Button } from '@/components/ui/Button';
 import { Aurora } from '@/components/ui/Aurora';
 import { Reveal, Stagger } from '@/components/ui/Reveal';
@@ -228,7 +229,7 @@ export function LandingPage() {
             initial={reduce ? false : { opacity: 0, y: 12 }}
             animate={reduce ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25, ease: EASE }}
-            className="flex flex-wrap items-center gap-3 pt-2"
+            className="flex flex-col items-start gap-4 pt-2"
           >
             {user ? (
               <Link to="/search">
@@ -239,7 +240,10 @@ export function LandingPage() {
                 </Button>
               </Link>
             ) : (
-              <TelegramLoginButton />
+              <>
+                <TelegramLoginButton />
+                <EmailLoginCard />
+              </>
             )}
           </motion.div>
 
