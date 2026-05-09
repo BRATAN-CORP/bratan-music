@@ -135,8 +135,20 @@ export function MobileBottomDock() {
     // the child below, while the timeline thumb is rendered as a sibling
     // of the surface so it can poke above the dock's rounded top edge
     // without being clipped.
+    // Bottom inset is now `safe-area-inset-bottom / 2` instead of the
+    // full inset. The user's request: outside PWA the dock should sit
+    // the same distance from the bottom as it does from the sides
+    // (`left-4 right-4` → 16 px), and inside an installed PWA the
+    // home-indicator clearance was eating ~34 px on iOS which made
+    // the dock float much higher than it does on the sides. Halving
+    // the inset still keeps the dock clear of the home indicator
+    // (matters on iOS where the indicator is opaque) but visually
+    // brings it down to roughly the same gap the user sees on the
+    // left and right edges. On non-PWA touch devices the variable is
+    // already `0px`, so the resolved value is exactly the side
+    // padding and nothing visibly changes outside standalone mode.
     <div
-      className="fixed bottom-[calc(var(--pwa-safe-bottom)+1rem)] left-4 right-4 z-40 sm:bottom-[calc(var(--pwa-safe-bottom)+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
+      className="fixed bottom-[calc(var(--pwa-safe-bottom)/2+1rem)] left-4 right-4 z-40 sm:bottom-[calc(var(--pwa-safe-bottom)/2+1.5rem)] sm:left-6 sm:right-6 lg:hidden"
     >
     <div
       className="flex flex-col overflow-hidden rounded-[var(--radius-xl)] liquid-glass"
@@ -151,22 +163,31 @@ export function MobileBottomDock() {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="flex flex-col"
           >
-            {/* Progress bar — thin rail FLUSH with the dock's top edge.
-                No padding wrapper above (a previous attempt at hosting
-                the thumb in extra hit-area was eating cover taps that
-                landed near the top of the cover image and broke the
-                'tap cover → open fullscreen' gesture).
+            {/* Progress bar — visible 3px rail FLUSH with the dock's
+                top edge, sitting inside a 14px-tall transparent hit
+                zone. The wrapper element is what receives the
+                pointer events (`onPointerDown` → seek), the inner
+                3px child is purely visual.
 
-                Mobile-native pattern: the rail is invisible-thin at
-                rest (3px) and grows to 6px while the user is hovering
-                (desktop) or actively dragging (touch). The thumb is
-                rendered INSIDE the expanded rail at the playhead edge,
-                so it's always fully contained — no clipping by the
-                dock's `overflow-hidden`, no z-index conflict with
-                neighbouring buttons, and nothing extends above the
-                rail to steal taps from the cover button. */}
+                Why the wrapper is taller than the rail: a finger has
+                a touch surface of ~40px, and the previous 3px hit
+                area was so narrow that the user's tap on a real
+                phone (or DevTools touch emulator) almost never
+                landed on the rail — it was the "тaймлайн нельзя
+                перемещать на мобильном" complaint. Mouse cursors
+                CAN land precisely on a 3px line, which is why the
+                bug only showed up on touch. The 11px of dead space
+                below the visible rail eats only into the cover
+                row's `py-2.5` top padding, so no interactive element
+                inside the row loses its hit zone.
+
+                The thumb is still rendered OUTSIDE this wrapper as
+                a sibling of the visual surface, so it can extend
+                above the dock's rounded top edge. Its `top: 1px`
+                anchors it to the centre of the visible 3px rail
+                (which still starts at the top of the wrapper). */}
             <div
-              className="relative h-[3px] w-full shrink-0 cursor-pointer touch-none select-none overflow-hidden bg-white/[0.08]"
+              className="group/seek relative flex h-3.5 w-full shrink-0 cursor-pointer touch-none select-none items-start"
               role="slider"
               aria-label={t('player.seek')}
               aria-valuemin={0}
@@ -203,10 +224,12 @@ export function MobileBottomDock() {
                 target.addEventListener('pointercancel', onUp);
               }}
             >
-              <motion.div
-                className="absolute inset-y-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
-                style={{ left: `${RAIL_INSET_PX}px`, width: progressWidth }}
-              />
+              <div className="relative h-[3px] w-full overflow-hidden bg-white/[0.08]">
+                <motion.div
+                  className="absolute inset-y-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
+                  style={{ left: `${RAIL_INSET_PX}px`, width: progressWidth }}
+                />
+              </div>
             </div>
 
             <div
@@ -330,7 +353,9 @@ export function MobileBottomDock() {
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[transform,colors,background-color] active:scale-90 hover:bg-[var(--color-hover-overlay)] hover:text-foreground"
                 aria-label={t('player.next')}
               >
-                <SkipForward size={16} />
+                {/* Solid wedge — matches the desktop player and the
+                    fullscreen player skip controls. */}
+                <SkipForward size={16} fill="currentColor" strokeWidth={0} />
               </button>
             </div>
 

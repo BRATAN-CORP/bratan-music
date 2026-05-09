@@ -1247,7 +1247,11 @@ export function FullscreenPlayer() {
                 <Shuffle size={18} className={shuffle ? 'text-foreground' : 'text-muted-foreground'} />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => previous()} aria-label={t('fullscreenPlayer.back')} className="h-12 w-12">
-                <SkipBack size={22} />
+                {/* `fill='currentColor'` + `strokeWidth={0}` turns the
+                    default lucide outline glyph into a solid wedge
+                    that matches the play/pause solid pair the user
+                    wants across all skip controls. */}
+                <SkipBack size={22} fill="currentColor" strokeWidth={0} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} className="h-16 w-16 rounded-full" aria-label={isPlaying ? t('player.pause') : t('player.play')}>
@@ -1255,7 +1259,7 @@ export function FullscreenPlayer() {
                 </Button>
               </motion.div>
               <Button variant="ghost" size="icon" onClick={nextManual} aria-label={t('fullscreenPlayer.forward')} className="h-12 w-12">
-                <SkipForward size={22} />
+                <SkipForward size={22} fill="currentColor" strokeWidth={0} />
               </Button>
               <Button variant="ghost" size="icon" onClick={cycleRepeat} aria-label={t('player.repeat')}>
                 {repeat === 'one' ? (
@@ -1305,8 +1309,16 @@ export function FullscreenPlayer() {
                   }}
                 >
                   <div className="relative h-1 w-full rounded-full bg-white/15">
+                    {/* No CSS transition on width here — the fill MUST
+                        track the cursor in the same frame as the
+                        pointermove event that updates `volume`. The
+                        previous `transition-[width] duration-100`
+                        made the bar trail the cursor by ~100ms during
+                        drag, which read as the slider being "laggy"
+                        compared to the mini-player slider where the
+                        same transition had already been removed. */}
                     <div
-                      className="h-full rounded-full bg-white/85 transition-[width] duration-100"
+                      className="h-full rounded-full bg-white/85"
                       style={{ width: `${(muted ? 0 : volume) * 100}%` }}
                     />
                     <div
