@@ -259,6 +259,13 @@
     "pageTitle": "Найдите треки, альбомы и артистов",
     "loadingMore": "Загружаем ещё…",
     "discoverTitle": "Подборки от Tidal",
+    "discoverGroups": {
+      "genres": "Жанры",
+      "moods": "Настроения и активности",
+      "decades": "Десятилетия",
+      "filters": "Ещё подборки",
+      "more": "Подборки"
+    },
     "shortcuts": {
       "aiEyebrow": "AI",
       "aiTitle": "AI-плейлист",

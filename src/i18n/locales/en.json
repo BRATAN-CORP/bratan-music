@@ -259,6 +259,13 @@
     "pageTitle": "Find tracks, albums and artists",
     "loadingMore": "Loading more…",
     "discoverTitle": "Picked by Tidal",
+    "discoverGroups": {
+      "genres": "Genres",
+      "moods": "Moods & activities",
+      "decades": "Decades",
+      "filters": "More picks",
+      "more": "Picks"
+    },
     "shortcuts": {
       "aiEyebrow": "AI",
       "aiTitle": "AI playlist",
