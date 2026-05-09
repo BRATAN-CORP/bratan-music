@@ -25,6 +25,7 @@ import * as db from './db';
 import {
   fetchAudioBlob,
   fetchCoverBlob,
+  fetchLyricsPayload,
   resolveStreamForDownload,
 } from './streamResolver';
 import type { DownloadJob, DownloadStatus, OfflineTrack } from './types';
@@ -456,6 +457,15 @@ class DownloadsManager {
       const desiredQuality = useSettingsStore.getState().offlineQuality;
       const resolved = await resolveStreamForDownload(track.id, track.source, desiredQuality);
 
+      // Fire the lyrics fetch in parallel with the audio body — the
+      // worker's `/tracks/:id/lyrics` is independent of the stream
+      // URL endpoint so kicking it off here adds zero wall-clock to
+      // the total download time. `fetchLyricsPayload` never throws,
+      // so we don't have to wrap it; if it ends up null we just
+      // leave the offline row's `lyrics` undefined and the next
+      // online view falls back to the regular React-Query path.
+      const lyricsPromise = fetchLyricsPayload(track.id, track.source);
+
       const { blob, mimeType } = await fetchAudioBlob(resolved.url, {
         signal: ctrl.signal,
         onProgress: (received, total) => {
@@ -484,6 +494,17 @@ class DownloadsManager {
       const existing = await db.getTrack(track.id);
       const collections = mergeCollections(existing?.collections, parent);
 
+      // Lyrics arrived in parallel with the audio body; await once
+      // we're ready to write the row. `fetchLyricsPayload` always
+      // resolves (never throws) so this never blocks beyond the
+      // single round trip already in flight. Prefer the freshly
+      // fetched payload, fall back to whatever the prior row had
+      // — never overwrite cached lyrics with `null`, since a
+      // momentarily flaky upstream shouldn't blank lyrics that
+      // the user previously had offline.
+      const fetchedLyrics = await lyricsPromise;
+      const lyrics = fetchedLyrics ?? existing?.lyrics;
+
       const offlineTrack: OfflineTrack = {
         id: track.id,
         title: track.title,
@@ -506,6 +527,7 @@ class DownloadsManager {
         lastAccessAt: existing?.lastAccessAt ?? Date.now(),
         byteLength: blob.size,
         collections,
+        lyrics,
       };
       await db.putTrack(offlineTrack);
       this.events.emit({ type: 'track-saved', trackId: track.id });

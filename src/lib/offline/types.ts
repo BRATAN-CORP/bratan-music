@@ -83,6 +83,33 @@ export interface OfflineTrack {
    *  by any other collection. Empty array means the track was
    *  saved directly from a 3-dot menu and has no parent. */
   collections: string[];
+  /** Cached lyrics payload so the lyrics panel renders without the
+   *  network when the user views a downloaded track in offline /
+   *  PWA mode. Optional because lyrics may not have been available
+   *  at download time (Tidal hasn't matched a provider) or the
+   *  lyrics fetch may have failed mid-download — the rest of the
+   *  download is still considered successful in that case. The
+   *  shape mirrors `LyricsResponse` from `useLyrics` so the panel
+   *  can hydrate the React-Query cache from this row directly. */
+  lyrics?: OfflineLyrics;
+}
+
+/** Cached lyrics for a single offline track. Mirrors the
+ *  `LyricsResponse` shape returned by `/tracks/:id/lyrics` minus
+ *  the transport-level `error` field (we never persist a failure;
+ *  if the fetch fails at download time we just leave `lyrics`
+ *  unset and the next online view re-attempts via the regular
+ *  React-Query path). */
+export interface OfflineLyrics {
+  available: boolean;
+  provider?: string | null;
+  isRightToLeft?: boolean;
+  lyrics?: string | null;
+  subtitles?: string | null;
+  /** Wall-clock timestamp at which the lyrics row was fetched,
+   *  used for invalidation heuristics if we ever decide to
+   *  re-fetch on next online view. */
+  fetchedAt: number;
 }
 
 /** Album metadata stored alongside its track ids. The album doesn't
