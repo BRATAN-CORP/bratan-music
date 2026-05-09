@@ -54,10 +54,13 @@
 
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
-| 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | open | (этот PR) |
-| 2 | (TBD) | Mobile lyrics layout — на узких экранах прятать обложку + анимированный halo при открытом lyrics, рендерить тот же side-panel дизайн в области обложки | pending | — |
-| 3 | (TBD) | FullscreenPlayer volume slider — убрать `transition-[width] duration-100` с fill, чтобы dragged value совпадал с курсором (как в mini-плеере) | pending | — |
-| 4 | (TBD) | Solid skip icons — Player / FullscreenPlayer / MobileBottomDock: SkipBack / SkipForward с `fill="currentColor"` + `strokeWidth={0}` | pending | — |
+| 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | merged | #425 |
+| 2 | `devin/1778362720-lyrics-mobile-inline` | Mobile lyrics layout — на узких экранах прятать обложку + анимированный halo при открытом lyrics, рендерить тот же side-panel дизайн в области обложки | merged | #426 |
+| 3 | `devin/1778363267-batch-fixes` | FullscreenPlayer volume slider responsiveness | open | #427 |
+| 4 | `devin/1778363267-batch-fixes` | Solid skip icons — Player / FullscreenPlayer / MobileBottomDock | open | #427 |
+| 5 | `devin/1778363267-batch-fixes` | PWA bottom navbar inset (опустить ниже на iOS/Android) | open | #427 |
+| 7 | `devin/1778363267-batch-fixes` | Mini-player progress bar — touch hit area (3px → 14px) | open | #427 |
+| 6 | (TBD) | Online/offline toast — пользователь жалуется что не появляется. Локально (`npm run dev`) воспроизводится корректно: и offline, и online toast отображаются. Возможная причина — устаревший SW в установленной PWA, требуется проверка на проде. | open / not-reproducible | — |
 
 ---
 
@@ -97,7 +100,45 @@
   `useLyrics` теперь сначала смотрит в IDB, потом сеть, и при
   успешной сетевой загрузке backfill-ит старые офлайн-строки без
   лирики. Audio engine не тронут (изменения только в путях
-  загрузки и в lyrics-хуке).
+  загрузки и в lyrics-хуке). → PR #425, merged.
+- 2026-05-09T21:50Z — mobile lyrics layout (PR
+  `devin/1778362720-lyrics-mobile-inline`). На узких экранах
+  обложка + анимированный halo при `lyricsOpen=true` больше не
+  монтируются; на их месте рендерится тот же `LyricsPanel`
+  дизайн (`mode='cover'` — без X-кнопки и оверлея). Фон-блюр
+  обложки на корне fullscreen player'а сохранён. Десктоп
+  side-panel поведение не изменено. → PR #426, merged.
+- 2026-05-09T22:30Z — батч из 4 фиксов (PR
+  `devin/1778363267-batch-fixes` → main).
+  - **#3 Volume slider FullscreenPlayer** — убран
+    `transition-[width] duration-100` с fill, теперь fill
+    трекает курсор кадр-в-кадр (как в мини-плеере).
+  - **#4 Solid skip icons** — `fill="currentColor"
+    strokeWidth={0}` добавлен на SkipBack/SkipForward в
+    Player.tsx, FullscreenPlayer.tsx, MobileBottomDock.tsx.
+  - **#5 PWA bottom navbar inset** — формула изменена с
+    `calc(var(--pwa-safe-bottom)+1rem)` на
+    `calc(var(--pwa-safe-bottom)/2+1rem)`. На iOS док
+    больше не задирается на ~34px вверх; вне PWA
+    переменная всё ещё 0px → визуальное поведение не меняется.
+  - **#7 Mini-player touch hit area** —
+    `MobileBottomDock.tsx` rail обёрнут в 14px-высокий
+    прозрачный hit-zone (`h-3.5` flex items-start),
+    видимая полоса осталась 3px top-aligned. Палец теперь
+    попадает в hit-zone (DevTools touch emulator + реальный
+    мобильный). 11px пустого пространства снизу съедают
+    `py-2.5` cover row, ни один интерактивный элемент не
+    потерян. Thumb (sibling над `overflow-hidden`) с
+    `top: 1px` всё так же якорится на центре видимого 3px
+    rail'а.
+  - **#6 Online/offline toast** — НЕ ПОПРАВЛЕНО. В dev
+    локально toast отображается корректно (см. ручной тест в
+    DevTools console: `window.dispatchEvent(new
+    Event('offline'))` → "You're offline" toast появляется,
+    `window.dispatchEvent(new Event('online'))` → "Back
+    online" toast появляется). Если пользователь видит
+    проблему в проде / PWA — вероятная причина устаревший SW
+    в установленной PWA. Требуется проверка на проде.
 
 ---
 
@@ -108,6 +149,6 @@
 | 2026-05-08 ~11:30 | (исторический)                               | Foundation + knowledge base + диалоги/safe-area/collection-pages (PR #373..#396, merged). Полный лог — в `git log`. |
 | 2026-05-08 ~19:30..20:25 | `4dbcd574a1924b858d11b3b425ef8691` (предыдущий) | PR #400..#406 + tracker sync — language-switcher fix, PageHero polish, Library/Search/Rooms redesign, Admin UserCard, Boneyard archive. Все смерджены. |
 | 2026-05-08 ~21:25 | `2fa86d7feed2415c825633b09851548a` (предыдущий) | Boneyard skeletons — заменил оставшиеся `<PageLoader>` (7 страниц) на скелетоны, удалил компонент `PageLoader.tsx`, добавил `PlaylistRowSkeleton` / `PlaylistRowListSkeleton` в `Skeleton.tsx`. Tracker pruned. |
-| 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (текущий) | Offline lyrics — `OfflineTrack.lyrics`, `fetchLyricsPayload`, IDB-first `useLyrics` с back-fill сетевого ответа. Подготовил roadmap к 4-задачному батчу (lyrics offline / mobile lyrics layout / volume slider responsiveness / solid skip icons). |
+| 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (текущий) | Offline lyrics → PR #425 merged. Mobile lyrics inline → PR #426 merged. Batch (volume slider, solid skip icons, PWA navbar inset, mini-player touch hit area) → PR #427 open, CI зелёный. Online/offline toast в dev работает, в проде/PWA — оставлен открытой задачей (вероятный stale SW). |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
