@@ -11,6 +11,19 @@
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { TidalQuality } from '@/store/settings';
+import type { OfflineLyrics } from './types';
+
+/** Network shape for `/tracks/:id/lyrics`. Kept local so this
+ *  file stays React-free (the public hook in `@/hooks/useLyrics`
+ *  re-exports its own copy of the same interface for consumers). */
+interface LyricsApiResponse {
+  available: boolean;
+  provider?: string | null;
+  isRightToLeft?: boolean;
+  lyrics?: string | null;
+  subtitles?: string | null;
+  error?: string;
+}
 
 const API_BASE =
   import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
@@ -265,4 +278,54 @@ export async function fetchCoverBlob(
   });
   if (opaque) return opaque;
   return null;
+}
+
+/**
+ * Best-effort fetch of a track's lyrics for offline storage. Used by
+ * the downloads manager so a saved track's `LyricsPanel` can render
+ * even with no network (PWA installed on a plane / metro / etc.).
+ *
+ * Always resolves — never throws. On any failure (network, 5xx,
+ * upstream provider unavailable) we return `null` and the caller
+ * leaves the offline track row's `lyrics` unset; the next online
+ * view of the track will hydrate via the regular React-Query path.
+ *
+ * Upload tracks (`upload:<uuid>` or `source === 'upload'`) don't
+ * have lyrics — there is no `/tracks/upload:.../lyrics` endpoint —
+ * so we short-circuit to `null` for them instead of burning a
+ * round trip that would always 404.
+ */
+export async function fetchLyricsPayload(
+  trackId: string,
+  source?: string,
+): Promise<OfflineLyrics | null> {
+  if (trackId.startsWith('upload:') || source === 'upload') return null;
+  try {
+    const res = await api.get<LyricsApiResponse>(`/tracks/${trackId}/lyrics`);
+    // The worker returns `{ available: false }` when Tidal hasn't
+    // matched a provider — still cache that "negative" answer so
+    // the offline panel can show "Текст не найден" without a
+    // network call instead of a generic loading spinner that
+    // never resolves.
+    return {
+      available: Boolean(res.available),
+      provider: res.provider ?? null,
+      isRightToLeft: Boolean(res.isRightToLeft),
+      lyrics: res.lyrics ?? null,
+      subtitles: res.subtitles ?? null,
+      fetchedAt: Date.now(),
+    };
+  } catch (err) {
+    // 4xx/5xx/network: don't persist anything. We treat lyrics as a
+    // strictly best-effort enhancement of the offline track — never
+    // a reason to fail the download itself.
+    if (err instanceof ApiError) {
+      // Auth still bubbles to the caller for visibility, but we
+      // don't rethrow because the caller is already inside the
+      // download try/catch and we don't want a missing-lyrics
+      // 401 to mark the audio download as failed.
+      return null;
+    }
+    return null;
+  }
 }

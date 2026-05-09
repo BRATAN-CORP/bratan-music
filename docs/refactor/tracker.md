@@ -23,16 +23,17 @@
 >
 > Каждая задача — отдельный PR. После каждого PR — апдейт этого файла.
 
-Свежий батч (2026-05-08, вечер):
+Свежий батч (2026-05-09):
 
-> Переделать вид библиотеки в разных вариантах адаптива; переделать дизайн
-> страниц авторов / плейлистов / альбомов (что-то с отступом сверху не в
-> pwa-mobile, нижний блюр сделать плавным градиентом); расширить карточку
-> пользователя в админ-панели (только её, остальные компоненты не трогать);
-> убрать баг с появлением ползунка смены языка снизу при заходе в профиль;
-> переделать дизайн страницы поиска (стартовой и с запросами); переделать
-> дизайн `/rooms` (стартовый экран, убрать иконку наушников и градиент на
-> квадрате с иконкой); добавить в проект boneyard.
+> 1. Офлайн lyrics: при загрузке трека прогружать его lyrics, чтобы
+>    они работали и в офлайн режиме (PWA точно).
+> 2. Мобильная адаптация lyrics: при включённом lyrics прятать обложку
+>    и анимированный блюр от неё, на их месте показывать lyrics
+>    (бекграунд блюр обложки оставлять). Дизайн lyrics — как на
+>    широком экране (десктоп side-panel).
+> 3. Полноэкранный плеер: пофиксить отзывчивость ползунка громкости
+>    (привести к поведению mini-плеера, без отстающей CSS-анимации).
+> 4. Иконки next/prev в плеере (везде где встречаются) — solid.
 
 ## Hard constraints (не нарушаем)
 
@@ -48,15 +49,15 @@
 
 ## Roadmap (текущая серия)
 
-Старые завершённые PR-роадмапы (#373..#406, #413) вычищены из таблицы
-по запросу пользователя — поддерживаем чистоту трекера. История по ним —
-в `git log` и в `docs/daily-changes/`. В таблице остаются только активные
-задачи текущего батча.
+История по ранее завершённым PR-роадмапам — в `git log` и
+`docs/daily-changes/`. В таблице — только активные задачи текущего батча.
 
-| #   | Branch                                  | Title                                                                                                      | Status | PR        |
-| --- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------ | --------- |
-| 1   | `devin/1778275445-boneyard-skeletons`   | Boneyard skeletons — заменить все оставшиеся `<PageLoader>` на скелетоны страниц (album / track / artist / artist-releases / explore-slug / rooms-detail / library-playlists), удалить компонент `PageLoader` | open   | (этот PR) |
-| 2   | (TBD)                                   | Dependabot security alerts — починить все открытые алерты (babel / fast-uri / hono) одним PR-мерджом       | pending | —         |
+| # | Branch | Title | Status | PR |
+| --- | --- | --- | --- | --- |
+| 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | open | (этот PR) |
+| 2 | (TBD) | Mobile lyrics layout — на узких экранах прятать обложку + анимированный halo при открытом lyrics, рендерить тот же side-panel дизайн в области обложки | pending | — |
+| 3 | (TBD) | FullscreenPlayer volume slider — убрать `transition-[width] duration-100` с fill, чтобы dragged value совпадал с курсором (как в mini-плеере) | pending | — |
+| 4 | (TBD) | Solid skip icons — Player / FullscreenPlayer / MobileBottomDock: SkipBack / SkipForward с `fill="currentColor"` + `strokeWidth={0}` | pending | — |
 
 ---
 
@@ -86,19 +87,17 @@
 
 ## Live status
 
-- 2026-05-08T21:25Z — старт скелетон-батча (PR `devin/1778275445-…`).
-  Найдено семь оставшихся `<PageLoader>` на страницах: `/album`,
-  `/track`, `/artist`, `/artist/releases`, `/explore/:slug`,
-  `/rooms/:id`, `/library` (вкладка плейлистов). Все заменены на
-  скелетон-варианты: `AlbumSkeleton + TrackListSkeleton`, `TrackSkeleton`,
-  кастомный `ArtistPageSkeleton`, `AlbumGridSkeleton`,
-  `ExploreFeedSkeleton`, кастомный `RoomPageSkeleton`,
-  `PlaylistRowListSkeleton`. Сам компонент `<PageLoader>` удалён —
-  больше не используется в UI. Audio engine и security не тронуты.
-- 2026-05-08T21:25Z — Следующая задача (после мерджа этого PR) —
-  Dependabot security alerts: пройтись по
-  https://github.com/BRATAN-CORP/bratan-music/security/dependabot,
-  поднять алерты, починить всё одним PR-мерджом.
+- 2026-05-09T21:30Z — старт офлайн-lyrics батча (PR
+  `devin/1778362098-offline-lyrics`). Расширил `OfflineTrack` новым
+  опциональным полем `lyrics: OfflineLyrics`, добавил
+  `fetchLyricsPayload` рядом с `fetchCoverBlob` в
+  `streamResolver.ts`, в `downloads.ts :: runTrack` запускаем
+  лирику параллельно с аудио (нулевая прибавка к wall-clock),
+  записываем в IDB при создании / обновлении строки трека.
+  `useLyrics` теперь сначала смотрит в IDB, потом сеть, и при
+  успешной сетевой загрузке backfill-ит старые офлайн-строки без
+  лирики. Audio engine не тронут (изменения только в путях
+  загрузки и в lyrics-хуке).
 
 ---
 
@@ -108,6 +107,7 @@
 | ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | 2026-05-08 ~11:30 | (исторический)                               | Foundation + knowledge base + диалоги/safe-area/collection-pages (PR #373..#396, merged). Полный лог — в `git log`. |
 | 2026-05-08 ~19:30..20:25 | `4dbcd574a1924b858d11b3b425ef8691` (предыдущий) | PR #400..#406 + tracker sync — language-switcher fix, PageHero polish, Library/Search/Rooms redesign, Admin UserCard, Boneyard archive. Все смерджены. |
-| 2026-05-08 ~21:25 | `2fa86d7feed2415c825633b09851548a` (текущий) | Boneyard skeletons — заменил оставшиеся `<PageLoader>` (7 страниц) на скелетоны, удалил компонент `PageLoader.tsx`, добавил `PlaylistRowSkeleton` / `PlaylistRowListSkeleton` в `Skeleton.tsx`. Tracker pruned. |
+| 2026-05-08 ~21:25 | `2fa86d7feed2415c825633b09851548a` (предыдущий) | Boneyard skeletons — заменил оставшиеся `<PageLoader>` (7 страниц) на скелетоны, удалил компонент `PageLoader.tsx`, добавил `PlaylistRowSkeleton` / `PlaylistRowListSkeleton` в `Skeleton.tsx`. Tracker pruned. |
+| 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (текущий) | Offline lyrics — `OfflineTrack.lyrics`, `fetchLyricsPayload`, IDB-first `useLyrics` с back-fill сетевого ответа. Подготовил roadmap к 4-задачному батчу (lyrics offline / mobile lyrics layout / volume slider responsiveness / solid skip icons). |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

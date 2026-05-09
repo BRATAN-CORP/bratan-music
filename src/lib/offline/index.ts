@@ -33,6 +33,7 @@ export {
   resolveStreamForDownload,
   fetchAudioBlob,
   fetchCoverBlob,
+  fetchLyricsPayload,
   fallbackChain,
   QUALITY_FALLBACK_ORDER,
 } from './streamResolver';
@@ -41,4 +42,5 @@ export type {
   OfflineTrack,
   OfflineAlbum,
   OfflinePlaylist,
+  OfflineLyrics,
 } from './types';
