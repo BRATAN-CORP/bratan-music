@@ -796,6 +796,56 @@ export function FullscreenPlayer() {
             // `w-full max-w-md` rows resolve to `min(player_width, 28rem)`.
             className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col items-center justify-center gap-6 px-6 py-4 sm:gap-8 sm:pt-6 sm:pb-10"
           >
+            {/* Mobile lyrics: rendered IN PLACE of the cover artwork
+                whenever lyrics is open on a narrow viewport. Same
+                bare lyrics body the desktop side-panel uses (no X
+                button, no overlay scrim) — the user explicitly wants
+                parity with the wide-screen design. We sit the panel
+                inside the same cover column so the title row,
+                progress bar, transport and volume slider stay
+                visible underneath; the bg-cover ambience layer at
+                the player root keeps providing the album-tinted
+                blur. The animated halo + TiltCard never mount in
+                this branch so they stop pulsing while lyrics is on
+                screen, which was the user's explicit ask
+                ("скрывать только обложку и анимированный блюр от
+                неё, бекграунд блюр обложки оставлять"). */}
+            {lyricsOpen && !isMdUp ? (
+              <motion.div
+                key="lyrics-cover-wrap"
+                // Same `w-full max-w-md mx-auto` clamp as the cover
+                // wrapper below, so the lyrics column stays within
+                // the same 28rem rail on tablet-portrait widths and
+                // doesn't drift to either edge of the player.
+                // `flex-1 min-h-0` lets the panel grow to fill all
+                // vertical slack between the header and the title /
+                // transport rows. `overflow-hidden` clips the body's
+                // scroll mask cleanly.
+                //
+                // `data-no-sheet-drag` keeps a vertical pan inside the
+                // lyrics scroller from being claimed by the
+                // fullscreen player's swipe-down-to-dismiss gesture
+                // (see `fullscreen-drag-zone` selector logic). The
+                // lyrics body itself opts back in to native pan-y
+                // via `data-allow-pan-y` so users can still scroll
+                // verses by hand.
+                data-no-sheet-drag
+                className="relative mx-auto flex w-full max-w-md flex-1 min-h-0 overflow-hidden md:hidden"
+                initial={reduce ? false : { opacity: 0 }}
+                animate={reduce ? undefined : { opacity: 1 }}
+                exit={reduce ? undefined : { opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <LyricsPanel
+                  trackId={currentTrack.id}
+                  open={lyricsOpen}
+                  onClose={() => setLyricsOpen(false)}
+                  mode="cover"
+                  onSeek={seek}
+                />
+              </motion.div>
+            ) : null}
+
             {/* Cover artwork wrapper. Width is `w-full max-w-md` so
                 on a tall enough viewport it renders at the full
                 28rem (448px) the user marked as ideal. The
@@ -815,8 +865,14 @@ export function FullscreenPlayer() {
                 both dimensions of the wrapper shrink together with
                 the maxWidth clamp — without it, only width
                 shrinks and the TiltCard inside (which derives its
-                own size from `aspect-square`) wouldn't follow. */}
-            <motion.div
+                own size from `aspect-square`) wouldn't follow.
+
+                Hidden on mobile when lyrics are open (see the
+                inline lyrics block above). The desktop side panel
+                still slides in next to the cover via the absolute
+                wrapper at the bottom of this row, so on `md+` we
+                always keep the cover mounted. */}
+            {(lyricsOpen && !isMdUp) ? null : <motion.div
               // Outer wrapper keeps a stable position across track changes
               // (П11). Previously this was keyed by `currentTrack.id`, which
               // unmounted-and-remounted the entire halo + TiltCard subtree
@@ -1086,7 +1142,7 @@ export function FullscreenPlayer() {
                   </motion.div>
                 </AnimatePresence>
               </TiltCard>
-            </motion.div>
+            </motion.div>}
 
             {/* Title row. Important: NO `overflow-hidden` and an
                 explicit `shrink-0` here. The fullscreen layout puts
@@ -1343,18 +1399,12 @@ export function FullscreenPlayer() {
           )}
           </div>
 
-          {/* Mobile overlay: covers the whole player surface. */}
-          {currentTrack && (
-            <div data-no-sheet-drag>
-              <LyricsPanel
-                trackId={currentTrack.id}
-                open={lyricsOpen}
-                onClose={() => setLyricsOpen(false)}
-                mode="overlay"
-                onSeek={seek}
-              />
-            </div>
-          )}
+          {/* Mobile lyrics no longer renders as a fullscreen overlay
+              — the user redesigned this to swap the cover artwork
+              for inline lyrics in the cover column instead (see the
+              `lyricsOpen && !isMdUp` branch above). The desktop side
+              panel is still rendered absolutely on `md+` next to
+              the cover (see the `mode="side"` block above). */}
 
           <AddToPlaylistDialog
             open={addToPlaylistOpen}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useLyrics, parseLrc, type LyricLine } from '@/hooks/useLyrics';
 import { usePlayerStore } from '@/store/player';
 import { useT } from '@/i18n';
@@ -59,40 +59,51 @@ function LyricsContent({ trackId, onSeek }: LyricsContentProps) {
 interface LyricsPanelProps {
   trackId: string;
   open: boolean;
-  onClose: () => void;
+  /** Reserved for future modes (the 'overlay' mode used to call this
+   *  to dismiss; modern modes are dismissed by the parent's own
+   *  toggle in the player chrome). */
+  onClose?: () => void;
   /**
-   * 'overlay' = covers the whole player (mobile-first, used for < md viewports).
-   * 'side'    = inline side pane (used inside a flex row on md+).
+   * 'side'  = inline side pane on md+ (`hidden md:block`). Slides in
+   *           from the right next to the cover.
+   * 'cover' = inline mobile pane (`md:hidden`) rendered IN PLACE of
+   *           the cover artwork on narrow viewports. Same content +
+   *           same typography as the desktop side panel — the user
+   *           explicitly asked for parity. Sized by its parent (the
+   *           cover column in `FullscreenPlayer`) and animated with a
+   *           short blur-in / scale-up so the swap from cover to
+   *           lyrics reads as a tactile transition.
    */
-  mode?: 'overlay' | 'side';
+  mode?: 'side' | 'cover';
   onSeek?: (time: number) => void;
 }
 
-export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }: LyricsPanelProps) {
+export function LyricsPanel({ trackId, open, mode = 'side', onSeek }: LyricsPanelProps) {
   const reduce = useReducedMotion();
   const t = useT();
 
-  if (mode === 'side') {
-    // Side pane on md+. Borderless and transparent so it visually merges
-    // with the fullscreen player background. The panel slides in from
-    // the right with a soft spring + a subtle scale so it lands instead
-    // of just sliding — same feel modals get when they animate in.
+  if (mode === 'cover') {
+    // Mobile inline pane. Sits where the cover artwork was —
+    // `FullscreenPlayer` hides the cover wrapper entirely while
+    // `lyricsOpen` is true on `< md`, and renders this in its place.
+    // The animation is intentionally a short blur+scale rather than
+    // a slide-in so the swap looks like the cover dissolved into
+    // text rather than a drawer landing on top of it.
     return (
       <AnimatePresence>
         {open && (
           <motion.aside
-            key="lyrics-side"
-            initial={reduce ? false : { opacity: 0, x: 48, scale: 0.985, filter: 'blur(6px)' }}
-            animate={reduce ? undefined : { opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
-            exit={reduce ? undefined : { opacity: 0, x: 32, scale: 0.985, filter: 'blur(4px)' }}
+            key="lyrics-cover"
+            initial={reduce ? false : { opacity: 0, scale: 0.985, filter: 'blur(8px)' }}
+            animate={reduce ? undefined : { opacity: 1, scale: 1, filter: 'blur(0px)' }}
+            exit={reduce ? undefined : { opacity: 0, scale: 0.985, filter: 'blur(6px)' }}
             transition={{
-              opacity: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-              filter: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-              x: { type: 'spring', stiffness: 240, damping: 32, mass: 0.9 },
+              opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+              filter: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
               scale: { type: 'spring', stiffness: 260, damping: 26 },
             }}
-            style={{ transformOrigin: 'right center' }}
-            className="hidden h-full w-full overflow-hidden md:block"
+            style={{ transformOrigin: 'center center' }}
+            className="block h-full w-full overflow-hidden md:hidden"
             aria-label={t('lyrics.title')}
           >
             <LyricsContent trackId={trackId} onSeek={onSeek} />
@@ -102,61 +113,30 @@ export function LyricsPanel({ trackId, open, onClose, mode = 'overlay', onSeek }
     );
   }
 
-  // Mobile overlay. Slides in from the bottom with a soft spring + a
-  // brief blur-in so the underlying player surface visibly recedes
-  // before the lyric layer takes over.
+  // Side pane on md+. Borderless and transparent so it visually merges
+  // with the fullscreen player background. The panel slides in from
+  // the right with a soft spring + a subtle scale so it lands instead
+  // of just sliding — same feel modals get when they animate in.
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
-          key="lyrics-overlay"
-          initial={reduce ? false : { opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
-          animate={reduce ? undefined : { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-          exit={reduce ? undefined : { opacity: 0, y: 16, scale: 0.985, filter: 'blur(6px)' }}
+        <motion.aside
+          key="lyrics-side"
+          initial={reduce ? false : { opacity: 0, x: 48, scale: 0.985, filter: 'blur(6px)' }}
+          animate={reduce ? undefined : { opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+          exit={reduce ? undefined : { opacity: 0, x: 32, scale: 0.985, filter: 'blur(4px)' }}
           transition={{
-            opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-            filter: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-            y: { type: 'spring', stiffness: 280, damping: 30, mass: 0.85 },
-            scale: { type: 'spring', stiffness: 280, damping: 26 },
+            opacity: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+            filter: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+            x: { type: 'spring', stiffness: 240, damping: 32, mass: 0.9 },
+            scale: { type: 'spring', stiffness: 260, damping: 26 },
           }}
-          style={{ transformOrigin: 'center bottom' }}
-          className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-xl md:hidden"
-          role="dialog"
-          aria-modal="true"
+          style={{ transformOrigin: 'right center' }}
+          className="hidden h-full w-full overflow-hidden md:block"
           aria-label={t('lyrics.title')}
         >
-          {/*
-           * `paddingTop` keeps the original 0.75rem rhythm but mixes
-           * in the PWA notch / status-bar inset so the close (X)
-           * button isn't covered by the iPhone notch / Dynamic Island
-           * when the app runs as an installed PWA. The variable
-           * resolves to `0px` in regular browser tabs and inside
-           * Telegram WebApp (display-mode: browser) so the on-screen
-           * position is byte-for-byte identical there. See
-           * `globals.scss` for the `--pwa-safe-top` definition.
-           */}
-          <motion.div
-            className="relative flex shrink-0 items-center justify-end px-3"
-            style={{
-              paddingTop: 'calc(0.75rem + var(--pwa-safe-top))',
-            }}
-            initial={reduce ? false : { opacity: 0, y: -8 }}
-            animate={reduce ? undefined : { opacity: 1, y: 0 }}
-            transition={{ duration: 0.22, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label={t('lyrics.closeAria')}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/80 text-muted-foreground shadow-[var(--shadow-md)] backdrop-blur transition-colors hover:text-foreground"
-            >
-              <X size={16} />
-            </button>
-          </motion.div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <LyricsContent trackId={trackId} onSeek={onSeek} />
-          </div>
-        </motion.div>
+          <LyricsContent trackId={trackId} onSeek={onSeek} />
+        </motion.aside>
       )}
     </AnimatePresence>
   );

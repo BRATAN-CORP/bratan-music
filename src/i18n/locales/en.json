@@ -926,7 +926,6 @@
     "loading": "Loading lyrics…",
     "error": "Couldn't load lyrics. Try again later.",
     "empty": "No lyrics available for this track.",
-    "closeAria": "Close lyrics",
     "followAlong": "Follow along with the song",
     "syncOn": "Synced",
     "syncOff": "Static"
