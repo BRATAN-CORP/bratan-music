@@ -2,11 +2,22 @@ import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { UserService } from '../services/UserService';
 import { SubscriptionService } from '../services/SubscriptionService';
+import { BrevoEmailService } from '../services/BrevoEmailService';
+import { EmailOtpService, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
 import { jwtAuth } from '../middleware/auth';
 
 const user = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 user.use('/*', jwtAuth);
+
+function pickLocale(c: { req: { header: (k: string) => string | undefined; query: (k: string) => string | undefined } }): 'ru' | 'en' {
+  const q = c.req.query('lang');
+  if (q === 'en') return 'en';
+  if (q === 'ru') return 'ru';
+  const al = (c.req.header('Accept-Language') ?? '').toLowerCase();
+  if (al.startsWith('en')) return 'en';
+  return 'ru';
+}
 
 user.get('/me', async (c) => {
   const userId = c.get('userId');
@@ -20,10 +31,20 @@ user.get('/me', async (c) => {
   const subService = new SubscriptionService(c.env);
   const subscription = await subService.getActive(userId);
 
+  // Pull the email column with a one-off SELECT — UserService.findById
+  // returns the historical shape (no `email`) so callers that already
+  // depend on `User` don't shift; settings page is the only consumer
+  // that needs the email and it can ride this endpoint.
+  const emailRow = await c.env.DB
+    .prepare('SELECT email FROM users WHERE id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ email: string | null }>();
+
   return c.json({
     id: userData.id,
     username: userData.tg_username,
     name: userData.tg_name,
+    email: emailRow?.email ?? null,
     isAdmin: userData.is_admin === 1,
     /**
      * Unix seconds when the user finished/skipped the spotlight
@@ -39,6 +60,153 @@ user.get('/me', async (c) => {
         }
       : null,
   });
+});
+
+/**
+ * Link-an-email to the currently signed-in user, step 1: caller posts
+ * the address, we issue an OTP with `purpose='link'` and ship it to
+ * Brevo. Refuses to issue if the email is already attached to a
+ * different user — the verify path would 409 anyway, but failing
+ * fast saves the user a 60-second cooldown on a doomed code.
+ */
+user.post('/me/email/request', async (c) => {
+  const userId = c.get('userId');
+  let body: { email?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown }>();
+  } catch {
+    return c.json({ error: 'Некорректный JSON' }, 400);
+  }
+  const rawEmail = typeof body.email === 'string' ? body.email : '';
+  if (!isPlausibleEmail(rawEmail)) {
+    return c.json({ error: 'Некорректный email' }, 400);
+  }
+  const email = normalizeEmail(rawEmail);
+
+  // Block linking an email that another user already owns. SQLite's
+  // UNIQUE INDEX on `users.email` would also catch this on the
+  // verify-side INSERT, but we reject early so the user sees a
+  // dedicated message instead of a generic conflict.
+  const owner = await c.env.DB
+    .prepare('SELECT id FROM users WHERE email = ? LIMIT 1')
+    .bind(email)
+    .first<{ id: string }>();
+  if (owner && owner.id !== userId) {
+    return c.json({ error: 'Этот email уже привязан к другому аккаунту' }, 409);
+  }
+
+  const otpService = new EmailOtpService(c.env);
+  await otpService.sweep().catch(() => {});
+
+  const issued = await otpService.issueCode({ email, purpose: 'link', userId });
+  if (!issued) {
+    return c.json({ ok: true });
+  }
+
+  const brevo = new BrevoEmailService(c.env);
+  const sent = await brevo.sendOtp({ to: email, code: issued.code, locale: pickLocale(c) });
+  if (!sent) {
+    return c.json({ error: 'Не удалось отправить письмо. Попробуйте ещё раз через минуту.' }, 502);
+  }
+  return c.json({ ok: true });
+});
+
+/**
+ * Link-an-email step 2: verify the code and bind the email column on
+ * the caller's user row. Refuses if the row was meant for a
+ * different user (paranoia — the OTP service stamps `user_id` at
+ * issue time, so this only triggers if a row was hand-edited).
+ */
+user.post('/me/email/verify', async (c) => {
+  const userId = c.get('userId');
+  let body: { email?: unknown; code?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown; code?: unknown }>();
+  } catch {
+    return c.json({ error: 'Некорректный JSON' }, 400);
+  }
+  const rawEmail = typeof body.email === 'string' ? body.email : '';
+  const rawCode = typeof body.code === 'string' ? body.code.trim() : '';
+  if (!isPlausibleEmail(rawEmail)) {
+    return c.json({ error: 'Некорректный email' }, 400);
+  }
+  if (!/^\d{6}$/.test(rawCode)) {
+    return c.json({ error: 'Код должен содержать 6 цифр' }, 400);
+  }
+  const email = normalizeEmail(rawEmail);
+
+  const otpService = new EmailOtpService(c.env);
+  const result = await otpService.verifyCode({ email, code: rawCode, purpose: 'link' });
+  if (!result.ok) {
+    if (result.reason === 'expired') return c.json({ error: 'Срок действия кода истёк' }, 400);
+    if (result.reason === 'missing') return c.json({ error: 'Код не найден. Запросите новый.' }, 400);
+    if (result.reason === 'purpose') return c.json({ error: 'Несовпадение цели кода' }, 400);
+    return c.json({ error: 'Неверный код' }, 400);
+  }
+  if (result.userId && result.userId !== userId) {
+    return c.json({ error: 'Код выдан другому пользователю' }, 409);
+  }
+
+  // Race-aware UPDATE — if some other user beat us to UNIQUE on email,
+  // the constraint will throw and we surface a 409. The earlier
+  // pre-check on /request prevents the common path; this catches the
+  // race where two users issued link-codes for the same email
+  // concurrently.
+  try {
+    await c.env.DB
+      .prepare('UPDATE users SET email = ?, updated_at = ? WHERE id = ?')
+      .bind(email, Math.floor(Date.now() / 1000), userId)
+      .run();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('UNIQUE') || msg.includes('constraint')) {
+      return c.json({ error: 'Этот email уже привязан к другому аккаунту' }, 409);
+    }
+    console.error('[email/link] UPDATE failed:', msg);
+    return c.json({ error: 'Не удалось привязать email' }, 500);
+  }
+
+  return c.json({ ok: true, email });
+});
+
+/**
+ * Unlink the email from the caller's user. Refuses if the user has
+ * no other login method (i.e. no Telegram binding) — a successful
+ * unlink would leave the row inaccessible. Telegram-bound users can
+ * always unlink freely.
+ */
+user.post('/me/email/unlink', async (c) => {
+  const userId = c.get('userId');
+
+  // Pull the linked Telegram fields to decide if unlinking would
+  // orphan the account. Both `tg_username` and `tg_name` can be NULL
+  // for an email-first user, but if `tg_username` is set we know they
+  // have a working Telegram login surface.
+  const row = await c.env.DB
+    .prepare('SELECT tg_username, tg_name, email FROM users WHERE id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ tg_username: string | null; tg_name: string | null; email: string | null }>();
+
+  if (!row) return c.json({ error: 'Пользователь не найден' }, 404);
+  if (!row.email) return c.json({ ok: true, email: null });
+
+  // The user id format gives us the strongest signal: ids that don't
+  // start with `email_` were minted from a Telegram numeric id and
+  // therefore have a working Telegram login surface no matter what
+  // tg_username currently is. For `email_…` rows we explicitly
+  // require a tg_username before unlink to avoid locking them out.
+  const isEmailFirst = userId.startsWith('email_');
+  const hasTelegramFallback = !isEmailFirst || Boolean(row.tg_username);
+  if (!hasTelegramFallback) {
+    return c.json({ error: 'Это единственный способ входа. Привяжите Telegram перед отвязкой email.' }, 400);
+  }
+
+  await c.env.DB
+    .prepare('UPDATE users SET email = NULL, updated_at = ? WHERE id = ?')
+    .bind(Math.floor(Date.now() / 1000), userId)
+    .run();
+
+  return c.json({ ok: true, email: null });
 });
 
 /**

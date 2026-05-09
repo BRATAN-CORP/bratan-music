@@ -76,6 +76,20 @@
     "offlineQualityTitle": "Offline quality",
     "offlineQualityHint": "Quality at which tracks are saved to your device for offline playback. If the chosen tier is unavailable, the next-best tier is downloaded.",
     "languageTitle": "Language",
+    "linkedAccounts": {
+      "title": "Linked accounts",
+      "hint": "Sign in with either Telegram or email — both open the same account.",
+      "telegramLabel": "Telegram",
+      "telegramNotLinked": "Not linked",
+      "emailLabel": "Email",
+      "emailNotLinked": "Not linked",
+      "linked": "Linked",
+      "linkCta": "Link",
+      "unlinkCta": "Unlink",
+      "formEmailLabel": "Enter the email to link",
+      "confirmCta": "Link",
+      "errorUnlink": "Could not unlink the email."
+    },
     "crossfadeSeconds": "{value}s"
   },
   "rooms": {
@@ -224,7 +238,25 @@
   "auth": {
     "loginRequired": "Sign in again",
     "logout": "Log out",
-    "error": "Authentication failed"
+    "error": "Authentication failed",
+    "emailLogin": {
+      "dividerLabel": "or with email",
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@example.com",
+      "codeLabel": "Code from email",
+      "sendCodeCta": "Send code",
+      "sending": "Sending…",
+      "verifyCta": "Sign in",
+      "verifying": "Verifying…",
+      "sentTo": "Code sent to",
+      "changeEmail": "Change email",
+      "resend": "Resend code",
+      "resendIn": "Resend in {seconds}s",
+      "errorInvalidEmail": "That doesn't look like an email",
+      "errorCodeFormat": "The code must be 6 digits",
+      "errorRequest": "Could not send the code. Try again later.",
+      "errorVerify": "Could not verify the code. Try again."
+    }
   },
   "languages": {
     "ru": "Русский",

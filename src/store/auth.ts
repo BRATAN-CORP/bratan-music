@@ -12,6 +12,13 @@ interface User {
   id: string;
   username: string | null;
   name: string | null;
+  /**
+   * Email-OTP login surface. Optional so legacy persisted state from
+   * before the email login shipped still deserialises cleanly — the
+   * settings page treats both `null` and `undefined` as "no email
+   * linked".
+   */
+  email?: string | null;
   isAdmin: boolean;
   /**
    * Unix seconds when the user finished or skipped the spotlight

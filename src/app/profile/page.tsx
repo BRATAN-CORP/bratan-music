@@ -27,6 +27,7 @@ import { ResetRecommendationsPanel } from '@/components/features/ResetRecommenda
 import { ClearHistoryPanel } from '@/components/features/ClearHistoryPanel';
 import { ResetTourPanel } from '@/components/features/ResetTourPanel';
 import { BannedListPanel } from '@/components/features/BannedListPanel';
+import { LinkedAccountsPanel } from '@/components/features/LinkedAccountsPanel';
 import { AdminDashboard } from '@/app/admin/page';
 import { useT, useI18n } from '@/i18n';
 
@@ -223,6 +224,8 @@ export function ProfilePage() {
         </div>
 
         <BannedListPanel />
+
+        <LinkedAccountsPanel />
 
         {/* Sign-out lives in its own thin card so the page closes on the
             same visual rhythm as the surrounding settings/maintenance

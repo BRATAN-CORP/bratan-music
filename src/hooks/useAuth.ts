@@ -7,6 +7,8 @@ interface AuthUser {
   id: string;
   username: string | null;
   name: string | null;
+  /** Returned by /auth/email/verify; absent on the Telegram path. */
+  email?: string | null;
   isAdmin: boolean;
   tourCompletedAt: number | null;
 }
@@ -79,6 +81,34 @@ export function useAuth() {
     return nonce;
   }, []);
 
+  /**
+   * Email-OTP step 1 — request a 6-digit code to the address. Mirrors
+   * the server contract in `worker/src/routes/auth.ts`: throws on
+   * 4xx/5xx (with the server's `error` message), resolves on 200.
+   */
+  const requestEmailCode = useCallback(async (email: string) => {
+    setError(null);
+    await api.post<{ ok: true }>('/auth/email/request', { email });
+  }, []);
+
+  /**
+   * Email-OTP step 2 — verify code and finalise login. Same JWT shape
+   * as Telegram → reuses `setAuth` so the rest of the app sees a
+   * standard authenticated session. Throws on bad code so the form
+   * can surface the error inline.
+   */
+  const verifyEmailCode = useCallback(async (email: string, code: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.post<AuthResponse>('/auth/email/verify', { email, code });
+      setAuth({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  }, [setAuth]);
+
   const pollNonce = useCallback(async (nonce: string, signal?: AbortSignal): Promise<boolean> => {
     // Total budget: 5 min. Plain client-side polling — server-side
     // long-poll was removed because it held connections open and
@@ -112,6 +142,8 @@ export function useAuth() {
     loginWithInitData,
     loginWithDeeplink,
     pollNonce,
+    requestEmailCode,
+    verifyEmailCode,
     logout,
   };
 }

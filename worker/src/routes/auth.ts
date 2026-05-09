@@ -2,8 +2,27 @@ import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
 import { AuthService } from '../services/AuthService';
 import { UserService } from '../services/UserService';
+import { BrevoEmailService } from '../services/BrevoEmailService';
+import { EmailOtpService, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
 
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+/**
+ * Pick the locale for the OTP email body. Defaults to Russian (the
+ * primary user-base) and only switches when the client explicitly
+ * sends `Accept-Language: en` or `?lang=en`. We deliberately don't
+ * try to parse a quality-weighted accept-language list — the OTP is
+ * a one-off transactional email and the only meaningful split is
+ * RU vs EN.
+ */
+function pickLocale(c: { req: { header: (k: string) => string | undefined; query: (k: string) => string | undefined } }): 'ru' | 'en' {
+  const q = c.req.query('lang');
+  if (q === 'en') return 'en';
+  if (q === 'ru') return 'ru';
+  const al = (c.req.header('Accept-Language') ?? '').toLowerCase();
+  if (al.startsWith('en')) return 'en';
+  return 'ru';
+}
 
 auth.post('/telegram', async (c) => {
   const body = await c.req.json<{ initData: string }>();
@@ -90,6 +109,153 @@ auth.get('/nonce/:nonce', async (c) => {
       id: user.id,
       username: user.tg_username,
       name: user.tg_name,
+      isAdmin: user.is_admin === 1,
+      tourCompletedAt: user.tour_completed_at ?? null,
+    },
+  });
+});
+
+/**
+ * Step 1 of the email-OTP flow: caller submits an email, we issue a
+ * 6-digit code, hash it into D1 (`email_otps`) and ship the plaintext
+ * via Brevo.
+ *
+ * The response is intentionally generic ("if this address exists or
+ * is well-formed we sent a code") so an attacker can't use the
+ * endpoint to enumerate which addresses are bound to platform
+ * accounts. The cooldown / rate-limit signals also collapse into the
+ * same "ok" so timing the response gives no enumeration signal
+ * either.
+ */
+auth.post('/email/request', async (c) => {
+  let body: { email?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown }>();
+  } catch {
+    return c.json({ error: 'Некорректный JSON' }, 400);
+  }
+
+  const rawEmail = typeof body.email === 'string' ? body.email : '';
+  if (!isPlausibleEmail(rawEmail)) {
+    return c.json({ error: 'Некорректный email' }, 400);
+  }
+  const email = normalizeEmail(rawEmail);
+
+  const otpService = new EmailOtpService(c.env);
+  // Best-effort GC; swallow any failure so a bloated table doesn't
+  // surface as a user-visible 500 on the request endpoint.
+  await otpService.sweep().catch(() => {});
+
+  const issued = await otpService.issueCode({ email, purpose: 'login', userId: null });
+  if (!issued) {
+    // Cooldown still in effect from the previous request — pretend we
+    // sent another one. The user already got the previous code; if
+    // they need a fresh one they can wait out the 60s.
+    return c.json({ ok: true });
+  }
+
+  const brevo = new BrevoEmailService(c.env);
+  // The send happens synchronously so a verified failure returns to
+  // the caller without misleading the UI. We don't surface the
+  // upstream status code — the only externally-visible distinction
+  // is "we accepted your email" vs "internal error".
+  const sent = await brevo.sendOtp({ to: email, code: issued.code, locale: pickLocale(c) });
+  if (!sent) {
+    return c.json({ error: 'Не удалось отправить письмо. Попробуйте ещё раз через минуту.' }, 502);
+  }
+
+  return c.json({ ok: true });
+});
+
+/**
+ * Step 2 of the email-OTP flow: caller submits the email + the
+ * 6-digit code; we verify constant-time, drop the row, find/create
+ * a user keyed by email and issue the same JWT pair the Telegram
+ * flow does. Account-merging is one-directional in this endpoint:
+ * the returned JWT is for the user owning this email, and Telegram
+ * binding (if any) is preserved on the row. To attach an email to
+ * an EXISTING Telegram account, use POST /user/me/email/request +
+ * /user/me/email/verify (those are authenticated).
+ */
+auth.post('/email/verify', async (c) => {
+  let body: { email?: unknown; code?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown; code?: unknown }>();
+  } catch {
+    return c.json({ error: 'Некорректный JSON' }, 400);
+  }
+  const rawEmail = typeof body.email === 'string' ? body.email : '';
+  const rawCode = typeof body.code === 'string' ? body.code.trim() : '';
+  if (!isPlausibleEmail(rawEmail)) {
+    return c.json({ error: 'Некорректный email' }, 400);
+  }
+  if (!/^\d{6}$/.test(rawCode)) {
+    return c.json({ error: 'Код должен содержать 6 цифр' }, 400);
+  }
+  const email = normalizeEmail(rawEmail);
+
+  const otpService = new EmailOtpService(c.env);
+  const result = await otpService.verifyCode({ email, code: rawCode, purpose: 'login' });
+  if (!result.ok) {
+    if (result.reason === 'expired') return c.json({ error: 'Срок действия кода истёк' }, 400);
+    if (result.reason === 'missing') return c.json({ error: 'Код не найден. Запросите новый.' }, 400);
+    if (result.reason === 'purpose') return c.json({ error: 'Несовпадение цели кода' }, 400);
+    return c.json({ error: 'Неверный код' }, 400);
+  }
+
+  // Find existing email-bound user; if none, create one. We deliberately
+  // generate the user id with a stable prefix so the bot/admin tools can
+  // tell apart "Telegram-only" rows (numeric tg ids) from "email-first"
+  // rows at a glance.
+  const userService = new UserService(c.env);
+  const existing = await c.env.DB
+    .prepare('SELECT id FROM users WHERE email = ? LIMIT 1')
+    .bind(email)
+    .first<{ id: string }>();
+
+  let userId: string;
+  if (existing) {
+    userId = existing.id;
+    // Refresh updated_at so the row's "last login" is observable.
+    await c.env.DB
+      .prepare('UPDATE users SET updated_at = ? WHERE id = ?')
+      .bind(Math.floor(Date.now() / 1000), userId)
+      .run();
+  } else {
+    userId = `email_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+    const now = Math.floor(Date.now() / 1000);
+    await c.env.DB
+      .prepare(
+        'INSERT INTO users (id, tg_username, tg_name, email, is_admin, created_at, updated_at) VALUES (?, NULL, NULL, ?, 0, ?, ?)',
+      )
+      .bind(userId, email, now, now)
+      .run();
+  }
+
+  const user = await userService.findById(userId);
+  if (!user) {
+    return c.json({ error: 'Не удалось создать пользователя' }, 500);
+  }
+
+  // Reject banned users at login, same gate as the JWT middleware applies
+  // on every authenticated request — without it, a banned user could log
+  // in and only get blocked on the next API call.
+  if ((user as { is_banned?: number }).is_banned === 1) {
+    return c.json({ error: 'Аккаунт заблокирован', banned: true }, 403);
+  }
+
+  const authService = new AuthService(c.env);
+  const tokens = await authService.generateTokens(user.id, user.is_admin === 1);
+
+  return c.json({
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresIn: tokens.expiresIn,
+    user: {
+      id: user.id,
+      username: user.tg_username,
+      name: user.tg_name,
+      email,
       isAdmin: user.is_admin === 1,
       tourCompletedAt: user.tour_completed_at ?? null,
     },

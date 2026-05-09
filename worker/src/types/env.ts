@@ -30,6 +30,15 @@ export interface Env {
   YANDEX_API_TOKEN?: string;
   YANDEX_FOLDER_ID?: string;
   YANDEX_MODEL_URI?: string;
+
+  // Brevo (transactional email provider) — used for the
+  // passwordless email-OTP login flow. The API key is the only real
+  // secret; sender email/name are non-sensitive plain vars and
+  // declared in [vars] in wrangler.toml so they're visible at deploy
+  // time.
+  BREVO_API_KEY?: string;
+  BREVO_SENDER_EMAIL?: string;
+  BREVO_SENDER_NAME?: string;
 }
 
 export interface Variables {
