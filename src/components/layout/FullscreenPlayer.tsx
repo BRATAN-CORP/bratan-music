@@ -413,6 +413,28 @@ export function FullscreenPlayer() {
                   />
                 )}
               </AnimatePresence>
+              {/* Beat-driven strobe on the blurred backdrop. White
+                  layer composited with `screen` blend brightens
+                  whatever bright pixels are already in the blurred
+                  cover behind it — visually reads as the white parts
+                  of the artwork briefly punching through on every
+                  detected kick. Sits BEFORE the dark gradient so the
+                  bottom half of the screen (where readability matters
+                  for track / artist text) gets the gradient's
+                  darkening on top of the strobe and the strobe never
+                  reaches a blinding luminance there. Capped at 0.42
+                  base opacity so even a sustained run of kicks stays
+                  comfortable. `reduce` users get a static, dim layer
+                  (no animation) instead of strobing. */}
+              <div
+                className="pointer-events-none absolute inset-0 -z-10 bg-white blur-3xl"
+                style={{
+                  mixBlendMode: 'screen',
+                  opacity: reduce ? 0 : flash * 0.42,
+                  transition: 'opacity 90ms ease-out',
+                }}
+                aria-hidden
+              />
               {/* Lighter than the original 40/60/80 — the user said
                   the previous gradient darkened the cover too much.
                   This curve still clears the white-on-white case
