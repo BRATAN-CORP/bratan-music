@@ -3,7 +3,7 @@ import type { Env, Variables } from '../types/env';
 import { UserService } from '../services/UserService';
 import { SubscriptionService } from '../services/SubscriptionService';
 import { BrevoEmailService } from '../services/BrevoEmailService';
-import { EmailOtpService, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
+import { EmailOtpService, isDisposableEmail, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
 import { jwtAuth } from '../middleware/auth';
 
 const user = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -68,6 +68,13 @@ user.get('/me', async (c) => {
  * Brevo. Refuses to issue if the email is already attached to a
  * different user — the verify path would 409 anyway, but failing
  * fast saves the user a 60-second cooldown on a doomed code.
+ *
+ * The link is one-way and permanent: once an email is bound to the
+ * caller's account, this endpoint refuses further /request calls
+ * with a 409. Re-binding (or unlinking) is intentionally not
+ * supported — the email is the recovery handle for the account, and
+ * letting it drift would silently break the recovery flow on a
+ * server-side state we can't reconstruct.
  */
 user.post('/me/email/request', async (c) => {
   const userId = c.get('userId');
@@ -82,6 +89,25 @@ user.post('/me/email/request', async (c) => {
     return c.json({ error: 'Некорректный email' }, 400);
   }
   const email = normalizeEmail(rawEmail);
+
+  // Reject disposable / temp-mail providers — we don't want the
+  // recovery handle for a real account to live on a 10-minute
+  // throwaway inbox.
+  if (isDisposableEmail(email)) {
+    return c.json({ error: 'Одноразовые ящики не поддерживаются. Используйте свою основную почту.' }, 400);
+  }
+
+  // Refuse re-binding: once the user has an email on file, this
+  // endpoint is a no-op. The caller already knows the address
+  // (`/user/me` exposes it); attempts to swap it route through a
+  // dedicated support path instead of an automated UI surface.
+  const current = await c.env.DB
+    .prepare('SELECT email FROM users WHERE id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ email: string | null }>();
+  if (current?.email) {
+    return c.json({ error: 'К аккаунту уже привязан email и его нельзя сменить.' }, 409);
+  }
 
   // Block linking an email that another user already owns. SQLite's
   // UNIQUE INDEX on `users.email` would also catch this on the
@@ -167,46 +193,6 @@ user.post('/me/email/verify', async (c) => {
   }
 
   return c.json({ ok: true, email });
-});
-
-/**
- * Unlink the email from the caller's user. Refuses if the user has
- * no other login method (i.e. no Telegram binding) — a successful
- * unlink would leave the row inaccessible. Telegram-bound users can
- * always unlink freely.
- */
-user.post('/me/email/unlink', async (c) => {
-  const userId = c.get('userId');
-
-  // Pull the linked Telegram fields to decide if unlinking would
-  // orphan the account. Both `tg_username` and `tg_name` can be NULL
-  // for an email-first user, but if `tg_username` is set we know they
-  // have a working Telegram login surface.
-  const row = await c.env.DB
-    .prepare('SELECT tg_username, tg_name, email FROM users WHERE id = ? LIMIT 1')
-    .bind(userId)
-    .first<{ tg_username: string | null; tg_name: string | null; email: string | null }>();
-
-  if (!row) return c.json({ error: 'Пользователь не найден' }, 404);
-  if (!row.email) return c.json({ ok: true, email: null });
-
-  // The user id format gives us the strongest signal: ids that don't
-  // start with `email_` were minted from a Telegram numeric id and
-  // therefore have a working Telegram login surface no matter what
-  // tg_username currently is. For `email_…` rows we explicitly
-  // require a tg_username before unlink to avoid locking them out.
-  const isEmailFirst = userId.startsWith('email_');
-  const hasTelegramFallback = !isEmailFirst || Boolean(row.tg_username);
-  if (!hasTelegramFallback) {
-    return c.json({ error: 'Это единственный способ входа. Привяжите Telegram перед отвязкой email.' }, 400);
-  }
-
-  await c.env.DB
-    .prepare('UPDATE users SET email = NULL, updated_at = ? WHERE id = ?')
-    .bind(Math.floor(Date.now() / 1000), userId)
-    .run();
-
-  return c.json({ ok: true, email: null });
 });
 
 /**

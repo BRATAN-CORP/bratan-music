@@ -85,10 +85,9 @@
       "emailNotLinked": "Не привязан",
       "linked": "Привязан",
       "linkCta": "Привязать",
-      "unlinkCta": "Отвязать",
       "formEmailLabel": "Введите email для привязки",
       "confirmCta": "Привязать",
-      "errorUnlink": "Не удалось отвязать почту."
+      "emailLockedHint": "Email привязан и не может быть изменён."
     },
     "crossfadeSeconds": "{value} с"
   },
@@ -233,7 +232,8 @@
   "authGuard": {
     "eyebrow": "Доступ",
     "title": "Войдите для продолжения",
-    "body": "Авторизуйтесь через Telegram, чтобы получить доступ к поиску, библиотеке и плееру."
+    "body": "Авторизуйтесь через Telegram, чтобы получить доступ к поиску, библиотеке и плееру.",
+    "emailLoginCta": "Войти по почте"
   },
   "auth": {
     "loginRequired": "Требуется повторный вход",
@@ -256,6 +256,14 @@
       "errorCodeFormat": "Код должен состоять из 6 цифр",
       "errorRequest": "Не удалось отправить код. Попробуй позже.",
       "errorVerify": "Не удалось проверить код. Попробуй ещё раз."
+    },
+    "emailPage": {
+      "eyebrow": "Вход по почте",
+      "title": "Войдите в BRATAN MUSIC",
+      "subtitle": "Введите свою почту — мы отправим одноразовый код. Без паролей и без регистрации.",
+      "back": "Назад",
+      "altLoginHint": "Уже есть Telegram?",
+      "altLoginCta": "Вернуться к входу через Telegram"
     }
   },
   "languages": {

@@ -85,10 +85,9 @@
       "emailNotLinked": "Not linked",
       "linked": "Linked",
       "linkCta": "Link",
-      "unlinkCta": "Unlink",
       "formEmailLabel": "Enter the email to link",
       "confirmCta": "Link",
-      "errorUnlink": "Could not unlink the email."
+      "emailLockedHint": "Email is linked and cannot be changed."
     },
     "crossfadeSeconds": "{value}s"
   },
@@ -233,7 +232,8 @@
   "authGuard": {
     "eyebrow": "Sign in",
     "title": "Sign in to keep going",
-    "body": "Hop in with Telegram to unlock search, your library and the player."
+    "body": "Hop in with Telegram to unlock search, your library and the player.",
+    "emailLoginCta": "Sign in with email"
   },
   "auth": {
     "loginRequired": "Sign in again",
@@ -256,6 +256,14 @@
       "errorCodeFormat": "The code must be 6 digits",
       "errorRequest": "Could not send the code. Try again later.",
       "errorVerify": "Could not verify the code. Try again."
+    },
+    "emailPage": {
+      "eyebrow": "Email sign-in",
+      "title": "Sign in to BRATAN MUSIC",
+      "subtitle": "Enter your email — we'll send a one-time code. No passwords, no sign-up forms.",
+      "back": "Back",
+      "altLoginHint": "Got Telegram?",
+      "altLoginCta": "Use Telegram instead"
     }
   },
   "languages": {

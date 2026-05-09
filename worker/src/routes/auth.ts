@@ -3,7 +3,8 @@ import type { Env, Variables } from '../types/env';
 import { AuthService } from '../services/AuthService';
 import { UserService } from '../services/UserService';
 import { BrevoEmailService } from '../services/BrevoEmailService';
-import { EmailOtpService, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
+import { EmailOtpService, isDisposableEmail, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
+import { SignupLogService, extractIp } from '../services/SignupLogService';
 
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -51,11 +52,40 @@ auth.post('/telegram', async (c) => {
   };
 
   const userService = new UserService(c.env);
+  const userId = String(tgUser.id);
+  // Was the user new before this upsert? Check before so we know to
+  // log the signup (and apply the per-IP cap). The check has to
+  // happen against the row state BEFORE upsert; doing it after would
+  // always classify the user as existing.
+  const isNew = !(await userService.findById(userId));
+
+  if (isNew) {
+    // Per-IP cap on freshly-created accounts. Already-known Telegram
+    // users keep logging in unimpeded — the gate only triggers when
+    // the request would mint a new row. Without this, the email
+    // disposable-blocklist alone wouldn't stop an attacker from
+    // farming Telegram accounts off a single IP to multiply the
+    // free-tier daily quota.
+    const ip = extractIp(c.req.raw);
+    const signupLog = new SignupLogService(c.env);
+    if (!(await signupLog.canSignup(ip))) {
+      return c.json({ error: 'Слишком много новых аккаунтов с этого устройства. Попробуйте позже.' }, 429);
+    }
+  }
+
   const user = await userService.upsert({
-    id: String(tgUser.id),
+    id: userId,
     tgUsername: tgUser.username,
     tgName: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || undefined,
   });
+
+  if (isNew) {
+    // Best-effort log; do not fail the login flow on a write hiccup
+    // — the cap is a deterrent, not a hard auth gate.
+    const ip = extractIp(c.req.raw);
+    const signupLog = new SignupLogService(c.env);
+    await signupLog.record({ userId: user.id, ip, source: 'telegram' }).catch(() => {});
+  }
 
   const tokens = await authService.generateTokens(user.id, user.is_admin === 1);
 
@@ -141,6 +171,16 @@ auth.post('/email/request', async (c) => {
   }
   const email = normalizeEmail(rawEmail);
 
+  // Reject obvious disposable / temp-mail providers up-front.
+  // Otherwise an attacker can bypass the per-account daily play
+  // ceiling by farming throwaway addresses, since each verified
+  // address mints a fresh user row with its own quota. We surface a
+  // dedicated 400 (not the generic "ok") so legitimate users on a
+  // misclassified domain at least see a reason to try another address.
+  if (isDisposableEmail(email)) {
+    return c.json({ error: 'Одноразовые ящики не поддерживаются. Используйте свою основную почту.' }, 400);
+  }
+
   const otpService = new EmailOtpService(c.env);
   // Best-effort GC; swallow any failure so a bloated table doesn't
   // surface as a user-visible 500 on the request endpoint.
@@ -222,6 +262,17 @@ auth.post('/email/verify', async (c) => {
       .bind(Math.floor(Date.now() / 1000), userId)
       .run();
   } else {
+    // Per-IP cap on freshly-created accounts. Disposable-email
+    // blocklist already filters mail.tm / mailinator / etc; this
+    // gate covers the residual case of an attacker farming real
+    // Gmail / Outlook addresses from a single source IP. Both layers
+    // together raise the cost of paywall bypass enough that it's no
+    // longer the cheapest attack path against the free tier.
+    const ip = extractIp(c.req.raw);
+    const signupLog = new SignupLogService(c.env);
+    if (!(await signupLog.canSignup(ip))) {
+      return c.json({ error: 'Слишком много новых аккаунтов с этого устройства. Попробуйте позже.' }, 429);
+    }
     userId = `email_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
     const now = Math.floor(Date.now() / 1000);
     await c.env.DB
@@ -230,6 +281,7 @@ auth.post('/email/verify', async (c) => {
       )
       .bind(userId, email, now, now)
       .run();
+    await signupLog.record({ userId, ip, source: 'email' }).catch(() => {});
   }
 
   const user = await userService.findById(userId);
