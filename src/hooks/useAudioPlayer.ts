@@ -1628,6 +1628,12 @@ export function useAudioPlayer() {
         b.loaded[incoming] = nextTrack.id;
         b.lastRealT[incoming] = 0;
         b.lastSeekAt[incoming] = 0;
+        // tryLoadSrc above just succeeded; burn the CORS retry budget
+        // so a mid-stream error doesn't trigger `reloadWithoutCors`
+        // (which calls `audio.load()` and rewinds to 0). Same reasoning
+        // as the preloaded promotion path below — the loadTrack path
+        // that normally sets this flag is bypassed here.
+        corsRetried[incoming] = true;
       } else {
         ensureAudioGraph();
         setSlotGain(incoming, 0);
@@ -1639,6 +1645,17 @@ export function useAudioPlayer() {
         b.loaded[incoming] = nextTrack.id;
         b.lastRealT[incoming] = 0;
         b.lastSeekAt[incoming] = 0;
+        // The preload effect's tryLoadSrc already succeeded for this
+        // slot. Burn the CORS retry budget so a transient mid-stream
+        // `error` event during this track doesn't trigger
+        // `reloadWithoutCors`, which would call `audio.load()` and
+        // rewind to 0 (the user perceives this as "track 2 cut out
+        // mid-fade and started from the beginning"). Without this,
+        // every track promoted via auto-crossfade is exposed — and
+        // since slot b never goes through the loadTrack path that
+        // would normally set this flag, every other track in the
+        // queue (the ones that land on slot b) is vulnerable.
+        corsRetried[incoming] = true;
         if (preloadedIncoming?.slot === incoming) {
           preloadedIncoming = null;
         }
@@ -1834,6 +1851,17 @@ export function useAudioPlayer() {
         preloadedIncoming = { slot: incoming, trackId: nextTrack.id };
         b.lastRealT[incoming] = 0;
         b.lastSeekAt[incoming] = 0;
+        // tryLoadSrc just succeeded — burn the CORS retry budget so a
+        // mid-stream `error` event AFTER promotion doesn't trigger
+        // `reloadWithoutCors` (audio.load → rewind + pause). The
+        // alternating-track stutter the user saw on every other
+        // crossfade was this slot landing on the active pointer with
+        // its corsRetried flag still false: an `error` from a slow
+        // range request right at the fade boundary then called
+        // audio.load(), which paused the slot and snapped currentTime
+        // to 0 mid-fade — exactly the "stops, no smooth transition"
+        // symptom.
+        corsRetried[incoming] = true;
       } catch {
         // Swallow — the normal startCrossfade path will retry with its
         // own fallback chain.
