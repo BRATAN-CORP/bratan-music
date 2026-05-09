@@ -86,8 +86,7 @@
       "linked": "Linked",
       "linkCta": "Link",
       "formEmailLabel": "Enter the email to link",
-      "confirmCta": "Link",
-      "emailLockedHint": "Email is linked and cannot be changed."
+      "confirmCta": "Link"
     },
     "crossfadeSeconds": "{value}s"
   },
@@ -258,12 +257,10 @@
       "errorVerify": "Could not verify the code. Try again."
     },
     "emailPage": {
-      "eyebrow": "Email sign-in",
+      "eyebrow": "Sign in",
       "title": "Sign in to BRATAN MUSIC",
-      "subtitle": "Enter your email — we'll send a one-time code. No passwords, no sign-up forms.",
-      "back": "Back",
-      "altLoginHint": "Got Telegram?",
-      "altLoginCta": "Use Telegram instead"
+      "subtitle": "Sign in with Telegram or a one-time email code. No passwords, no sign-up forms.",
+      "back": "Back"
     }
   },
   "languages": {

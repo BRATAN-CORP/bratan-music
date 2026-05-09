@@ -120,11 +120,6 @@ export function EmailLoginCard() {
 
   return (
     <div className="w-full max-w-sm">
-      <div className="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-muted-foreground">
-        <span className="h-px flex-1 bg-border" aria-hidden />
-        <span>{t('auth.emailLogin.dividerLabel')}</span>
-        <span className="h-px flex-1 bg-border" aria-hidden />
-      </div>
       <AnimatePresence mode="wait" initial={false}>
         {step === 'email' ? (
           <motion.form

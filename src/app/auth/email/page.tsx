@@ -1,5 +1,5 @@
 import { ArrowLeft, ShieldOff } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { useAuthStore } from '@/store/auth';
 import { useAutoAuth } from '@/hooks/useAuth';
@@ -76,7 +76,7 @@ export function EmailAuthPage() {
             initial={reduce ? false : { opacity: 0, y: 12 }}
             animate={reduce ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.55, ease: EASE }}
-            className="rounded-[var(--radius-lg)] border border-border bg-card/80 p-6 backdrop-blur-sm sm:p-8"
+            className="rounded-[var(--radius-lg)] border border-border bg-card p-6 sm:p-8"
           >
             <div className="flex flex-col gap-3">
               <MetaChip size="sm">
@@ -92,22 +92,23 @@ export function EmailAuthPage() {
               </p>
             </div>
 
-            <div className="mt-6">
-              <EmailLoginCard />
+            {/* Telegram is the primary CTA app-wide, so we surface it
+                first and frame email as the alternative below the
+                divider. Previously the page led with the email form
+                and tucked Telegram underneath an "Already on
+                Telegram?" footer, which read as inverted next to the
+                divider label coming out of `EmailLoginCard`. */}
+            <div className="mt-6 flex flex-col gap-2">
+              <TelegramLoginButton />
             </div>
 
-            <div className="mt-7 flex flex-col gap-2 border-t border-border pt-5">
-              <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
-                {t('auth.emailPage.altLoginHint')}
-              </p>
-              <TelegramLoginButton />
-              <Link
-                to="/"
-                className="text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {t('auth.emailPage.altLoginCta')}
-              </Link>
+            <div className="mt-6 mb-4 flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-muted-foreground">
+              <span className="h-px flex-1 bg-border" aria-hidden />
+              <span>{t('auth.emailLogin.dividerLabel')}</span>
+              <span className="h-px flex-1 bg-border" aria-hidden />
             </div>
+
+            <EmailLoginCard />
           </motion.div>
         </div>
       </section>
