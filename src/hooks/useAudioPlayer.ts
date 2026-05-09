@@ -2466,7 +2466,7 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
  * the animation frame rate, matching the cost profile of
  * useAnalyserAmplitude.
  */
-export function useBassPulse(active: boolean): { amp: number; kick: number } {
+export function useBassPulse(active: boolean, resetKey?: string | number): { amp: number; kick: number } {
   const [state, setState] = useState({ amp: 0, kick: 0 });
   useEffect(() => {
     if (!active) {
@@ -2487,6 +2487,17 @@ export function useBassPulse(active: boolean): { amp: number; kick: number } {
     let kickEnv = 0;
     let lastAt = performance.now();
     const tick = (now: number) => {
+      // Defensive: if the AudioContext fell into 'suspended' (Chrome
+      // can do this when the tab loses focus or after long idle), the
+      // analyser stops being fed and `getByteFrequencyData` keeps
+      // returning zeros until something resumes the graph. The visible
+      // symptom was strobe / halo dying mid-track and never recovering
+      // until the user pressed pause + play (which calls
+      // `safePlay` → `ctx.resume()`). Resume here too so the visuals
+      // self-heal without user intervention.
+      if (b.ctx && b.ctx.state === 'suspended') {
+        b.ctx.resume().catch(() => {});
+      }
       analyser.getByteFrequencyData(buffer);
       let sum = 0;
       let count = 0;
@@ -2514,7 +2525,15 @@ export function useBassPulse(active: boolean): { amp: number; kick: number } {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [active]);
+    // `resetKey` is intentionally part of the deps so callers can force
+    // the RAF loop / smoothed envelope state to re-init on track
+    // change. Without this, the auto-crossfade keeps `active === true`
+    // through the transition, the effect doesn't re-run, and the
+    // smoothed / baseline / kickEnv internals stay frozen on the
+    // outgoing track's silence — which manifests as the strobe
+    // appearing to die after every crossfade until the user pauses
+    // and plays again.
+  }, [active, resetKey]);
   return state;
 }
 

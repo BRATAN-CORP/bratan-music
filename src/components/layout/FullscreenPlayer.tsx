@@ -121,7 +121,7 @@ export function FullscreenPlayer() {
   //   - `flash` (0..1) drives short visible flashes for visible kicks.
   // `flash` decays in ~280ms so even quiet passages with the occasional
   // soft thump still register visibly.
-  const { amp, kick } = useBassPulse(Boolean(fullscreen) && isPlaying);
+  const { amp, kick } = useBassPulse(Boolean(fullscreen) && isPlaying, currentTrack?.id);
   const pulse = Math.min(1, Math.sqrt(Math.max(0, amp - 0.05) * 4));
   const flash = Math.min(1, kick);
   const { isLiked, toggle } = useToggleLike();
@@ -406,35 +406,70 @@ export function FullscreenPlayer() {
                     className="absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
                     style={{ backgroundImage: `url(${trackCoverUrl})` }}
                     initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
-                    animate={{ opacity: 0.5 }}
+                    // Slow ambient drift on the static-cover backdrop —
+                    // a 30–48 s asymmetric translate + scale loop that
+                    // reads like the cover gently breathing / shifting.
+                    // Keeps the screen alive even during silent
+                    // passages without competing with the strobe (the
+                    // strobe operates on opacity / brightness; drift
+                    // operates on transform). Disabled when an animated
+                    // Tidal cover is present (the video already
+                    // provides motion) and when the user prefers
+                    // reduced motion. The decimal-percent travel
+                    // (≤ ~2.5 %) combined with the existing `blur-3xl`
+                    // hides the rectangular bounds — there is no edge
+                    // visible at the viewport border at any phase of
+                    // the loop because `scale: ≥1.05` over-renders the
+                    // backdrop beyond the viewport on every side.
+                    animate={
+                      reduce
+                        ? { opacity: 0.5 }
+                        : {
+                            opacity: 0.5,
+                            x: ['-1.2%', '1.4%', '-0.6%', '1.8%', '-1.2%'],
+                            y: ['0.6%', '-1.4%', '1.6%', '-0.4%', '0.6%'],
+                            scale: [1.06, 1.09, 1.05, 1.08, 1.06],
+                          }
+                    }
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
-                    transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1] }}
+                    transition={
+                      reduce
+                        ? { duration: 0.85, ease: [0.4, 0, 0.2, 1] }
+                        : {
+                            opacity: { duration: 0.85, ease: [0.4, 0, 0.2, 1] },
+                            x: { duration: 42, repeat: Infinity, ease: 'easeInOut' },
+                            y: { duration: 36, repeat: Infinity, ease: 'easeInOut' },
+                            scale: { duration: 48, repeat: Infinity, ease: 'easeInOut' },
+                          }
+                    }
                     aria-hidden
                   />
                 )}
               </AnimatePresence>
-              {/* Beat-driven strobe on the blurred backdrop. White
-                  layer composited with `screen` blend brightens
-                  whatever bright pixels are already in the blurred
-                  cover behind it — visually reads as the white parts
-                  of the artwork briefly punching through on every
-                  detected kick. Sits BEFORE the dark gradient so the
-                  bottom half of the screen (where readability matters
-                  for track / artist text) gets the gradient's
-                  darkening on top of the strobe and the strobe never
-                  reaches a blinding luminance there. Capped at 0.42
-                  base opacity so even a sustained run of kicks stays
-                  comfortable. `reduce` users get a static, dim layer
-                  (no animation) instead of strobing. */}
-              <div
-                className="pointer-events-none absolute inset-0 -z-10 bg-white blur-3xl"
-                style={{
-                  mixBlendMode: 'screen',
-                  opacity: reduce ? 0 : flash * 0.42,
-                  transition: 'opacity 90ms ease-out',
-                }}
-                aria-hidden
-              />
+              {/* Beat-driven strobe on the blurred backdrop. Second
+                  copy of the SAME blurred cover, layered on top of the
+                  static one with normal blend so the visible effect is
+                  the cover briefly brightening on every detected kick
+                  rather than a white wash. Capped at 0.22 base opacity
+                  (= 0.5 static + ≤0.22 strobe ≈ 0.72 peak) and a 160 ms
+                  ease-out transition — softer / slower than the
+                  earlier white-screen version the user asked us to
+                  tone down. Sits BEFORE the dark gradient so the
+                  bottom-of-screen text retains contrast even at peak
+                  flash. Suppressed for animated Tidal covers (the
+                  video already varies frame-to-frame) and respects
+                  `prefers-reduced-motion`. */}
+              {trackCoverUrl && !coverVideoUrl && (
+                <div
+                  className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
+                  style={{
+                    backgroundImage: `url(${trackCoverUrl})`,
+                    opacity: reduce ? 0 : flash * 0.22,
+                    transition: 'opacity 160ms ease-out',
+                  }}
+                  aria-hidden
+                />
+              )}
               {/* Lighter than the original 40/60/80 — the user said
                   the previous gradient darkened the cover too much.
                   This curve still clears the white-on-white case
