@@ -180,19 +180,28 @@ export function PlaylistGridSkeleton({ count = 10 }: CountProps) {
  * loading. Renders a row eyebrow + a horizontal strip of square card
  * placeholders so the layout pre-allocates the same vertical space
  * the live `<ExploreModules>` row will fill in.
+ *
+ * The strip mirrors the live `<SnapScroller>` bleed pattern
+ * (`-mx-4 overflow-x-hidden px-4` etc.) so the row clips at the
+ * page padding instead of leaking past the viewport on narrow
+ * screens — the live scroller is horizontally scrollable, but the
+ * skeleton stays static (no scrollbar / drag gestures while there's
+ * nothing to scroll yet) so we use `overflow-x-hidden` here.
  */
 export function ExploreModuleSkeleton() {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <Skeleton className="h-3 w-32" />
-      <div className="flex gap-4 overflow-hidden">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex w-32 shrink-0 flex-col gap-2 sm:w-40">
-            <Skeleton className="aspect-square w-full rounded-[var(--radius-md)]" />
-            <Skeleton className="h-3 w-3/4" />
-            <Skeleton className="h-2.5 w-1/2" />
-          </div>
-        ))}
+      <div className="-mx-4 overflow-x-hidden px-4 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+        <div className="flex gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex w-32 shrink-0 flex-col gap-2 sm:w-40">
+              <Skeleton className="aspect-square w-full rounded-[var(--radius-md)]" />
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-2.5 w-1/2" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -200,7 +209,7 @@ export function ExploreModuleSkeleton() {
 
 export function ExploreFeedSkeleton({ count = 3 }: CountProps) {
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex min-w-0 flex-col gap-10">
       {Array.from({ length: count }).map((_, i) => (
         <ExploreModuleSkeleton key={i} />
       ))}

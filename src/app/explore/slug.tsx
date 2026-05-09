@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { AlertCircle, ChevronLeft } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { ExploreModules } from '@/components/features/ExploreModules';
@@ -7,9 +7,20 @@ import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePage } from '@/hooks/useExplore';
 import { useT } from '@/i18n';
 
+/**
+ * `state.title` may be carried in by upstream `<Link>`s (e.g. genre
+ * tiles in `<ExploreModules>`) so we can paint the human-readable
+ * heading immediately on first paint instead of flashing the raw
+ * slug (`genre_kids`) until the `/explore/page/:slug` request lands.
+ */
+type ExploreSlugLocationState = { title?: string } | null;
+
 export function ExploreSlugPage() {
   const t = useT();
   const { slug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  const navState = location.state as ExploreSlugLocationState;
+  const initialTitle = navState?.title;
   const { data, isLoading, error } = useExplorePage(slug);
 
   return (
@@ -25,7 +36,7 @@ export function ExploreSlugPage() {
             {t('exploreSlug.eyebrow')}
           </Eyebrow>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {data?.title ?? slug}
+            {data?.title ?? initialTitle ?? slug}
           </h1>
         </div>
 
