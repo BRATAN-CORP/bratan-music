@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Mail, Loader2, Link2, Unlink, Send } from 'lucide-react';
+import { Mail, Loader2, Link2, Send, Lock } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -17,12 +17,19 @@ type Step = 'idle' | 'email' | 'code';
 
 /**
  * Profile-page section that lets a signed-in user attach an email
- * to their account or detach one. Mirrors the unauth EmailLoginCard
- * flow (request code → verify code) but routed through the
- * authenticated `/user/me/email/*` endpoints. Source-of-truth for
- * the linked email is the React-Query cache key `['profile']`,
- * which `<ProfilePage />` already consumes — we re-key off the same
+ * to their account. Mirrors the unauth EmailLoginCard flow (request
+ * code → verify code) but routed through the authenticated
+ * `/user/me/email/*` endpoints. Source-of-truth for the linked
+ * email is the React-Query cache key `['profile']`, which
+ * `<ProfilePage />` already consumes — we re-key off the same
  * query so the page-wide profile stays in sync.
+ *
+ * The link is one-way and permanent: once an email is bound, the
+ * row renders as read-only. Re-binding (or unlinking) is
+ * intentionally not supported on the client — and the corresponding
+ * backend endpoint refuses re-issues with a 409 — because the email
+ * is the only out-of-band recovery handle for an email-first
+ * account, and silently swapping it would break that recovery flow.
  */
 export function LinkedAccountsPanel() {
   const t = useT();
@@ -130,22 +137,6 @@ export function LinkedAccountsPanel() {
     }
   };
 
-  const handleUnlink = async () => {
-    if (submitting) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      await api.post<{ ok: true; email: null }>('/user/me/email/unlink', undefined);
-      patchUser({ email: null });
-      await queryClient.invalidateQueries({ queryKey: ['profile'] });
-      await refetch();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : t('profile.linkedAccounts.errorUnlink'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <section className="rounded-[var(--radius-xl)] border border-border bg-card p-5 sm:p-6">
       <div className="flex items-start gap-3">
@@ -199,10 +190,13 @@ export function LinkedAccountsPanel() {
                   <div className="mt-0.5 truncate text-sm text-foreground" title={linkedEmail}>{linkedEmail}</div>
                 </div>
               </div>
-              <Button onClick={handleUnlink} disabled={submitting} variant="outline" size="sm">
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Unlink size={14} />}
-                {t('profile.linkedAccounts.unlinkCta')}
-              </Button>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-accent)]"
+                title={t('profile.linkedAccounts.emailLockedHint')}
+              >
+                <Lock size={11} />
+                {t('profile.linkedAccounts.linked')}
+              </span>
             </div>
           ) : step === 'idle' ? (
             <div className="flex items-center justify-between gap-3">

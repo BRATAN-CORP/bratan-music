@@ -188,6 +188,94 @@ export function isPlausibleEmail(email: string): boolean {
   return true;
 }
 
+/**
+ * Hand-curated set of disposable / temp-mail provider domains. These
+ * are the providers that ship random inboxes with no signup, free
+ * via API, and would otherwise let an attacker fan out across N
+ * "fresh" addresses to rack up the per-account daily free-listen
+ * quota. The list trades coverage for false-positive safety: only
+ * domains we've actually seen as scraper-grade temp-mail surface
+ * make it in. Real users on Gmail / Yandex / Outlook / iCloud are
+ * never affected.
+ *
+ * If a real provider sneaks onto this list, the user-facing failure
+ * is "Одноразовые ящики не поддерживаются. Используйте свою
+ * основную почту." — they pick another address and move on, no
+ * data loss.
+ *
+ * Curated against current top temp-mail providers (Dec 2024) — the
+ * long tail is endless but these are the ones surfaced in
+ * "best free temp mail 2024" results that any farming script
+ * would discover first.
+ */
+const DISPOSABLE_EMAIL_DOMAINS = new Set<string>([
+  // mail.tm + sister domains (free API, used in /auth/email/verify
+  // smoke-test ourselves so we know the API is real).
+  'mail.tm', 'wshu.net', 'edny.net', 'rover.info', 'tiden.org',
+  'tippsy.org', 'oranek.com', 'wireconnected.com', 'bingobongoo.fun',
+  // Mailinator family.
+  'mailinator.com', 'mailinator.net', 'mailinator.org', 'mailinator2.com',
+  'binkmail.com', 'safetymail.info', 'sogetthis.com', 'spamherelots.com',
+  'spamhereplease.com', 'thisisnotmyrealemail.com', 'tradermail.info',
+  'veryrealemail.com', 'zippymail.info', 'mailinator.gq', 'reallymymail.com',
+  // GuerrillaMail family.
+  'guerrillamail.com', 'guerrillamail.org', 'guerrillamail.net',
+  'guerrillamail.biz', 'guerrillamailblock.com', 'sharklasers.com',
+  'grr.la', 'spam4.me', 'pokemail.net', 'guerrillamail.de',
+  // 10minutemail / variants.
+  '10minutemail.com', '10minutemail.net', '10minemail.com',
+  '20minutemail.com', '30minutemail.com', '60minutemail.com',
+  // tempmail / temp-mail family.
+  'tempmail.com', 'temp-mail.org', 'temp-mail.io', 'tempmail.dev',
+  'tempmailer.com', 'tempmailo.com', 'tempr.email', 'temp-link.net',
+  'discard.email', 'discardmail.com', 'discardmail.de',
+  // YOPmail family.
+  'yopmail.com', 'yopmail.fr', 'yopmail.net', 'cool.fr.nf', 'jetable.fr.nf',
+  'nospam.ze.tc', 'nomail.xl.cx', 'mega.zik.dj', 'speed.1s.fr',
+  'courriel.fr.nf', 'moncourrier.fr.nf', 'monemail.fr.nf', 'monmail.fr.nf',
+  // throwawaymail / fakeinbox.
+  'throwawaymail.com', 'fakeinbox.com', 'mintemail.com', 'mt2014.com',
+  'mt2015.com', 'mytemp.email', 'smashmail.de', 'spamgourmet.com',
+  // dispostable / others.
+  'dispostable.com', 'mailnesia.com', 'mailcatch.com', 'maildrop.cc',
+  'getairmail.com', 'spambox.us', 'mvrht.net', 'mvrht.com',
+  // emailondeck / muleemail / mohmal / inboxbear.
+  'emailondeck.com', 'muleemail.com', 'mohmal.com', 'inboxbear.com',
+  'mohmal.in', 'inboxkitten.com', 'rcpt.at',
+  // burnermail.io + family.
+  'burnermail.io', 'tmpmail.org', 'tmpmail.net', 'tmpeml.com',
+  // simpleinbox / luxusmail / fakemail / generator.email.
+  'simpleinbox.com', 'fakemail.fr', 'fakemail.net', 'generator.email',
+  'mailfa.tk', 'getnada.com', 'nada.email', 'getmail.tools',
+]);
+
+/**
+ * Reject obvious disposable / temp-mail domains. The free-listen
+ * quota is per-user, so without this gate an attacker who wants to
+ * bypass the 3-tracks/day paywall just spins through random temp
+ * addresses and creates one account per code. Combined with the
+ * per-IP signup cap (`signup_log` table) and Brevo's own
+ * deliverability filters this closes the cheap end of the bypass
+ * funnel — VPN-rotating attackers can still get through, but the
+ * cost is no longer "open browser → click → free account".
+ */
+export function isDisposableEmail(email: string): boolean {
+  if (typeof email !== 'string') return false;
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return false;
+  const domain = email.slice(at + 1).trim().toLowerCase();
+  if (!domain) return false;
+  if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) return true;
+  // Catch obvious sub-domain variants (e.g. "foo.mail.tm" from
+  // mail.tm's pool). We only suffix-match against bases that
+  // consist of two-or-more labels so single-label TLDs aren't
+  // accidentally caught.
+  for (const base of DISPOSABLE_EMAIL_DOMAINS) {
+    if (base.includes('.') && domain.endsWith('.' + base)) return true;
+  }
+  return false;
+}
+
 function generateCode(): string {
   // Six independent decimal digits drawn from crypto.getRandomValues —
   // the previous "Math.floor(Math.random() * 1e6)" version produced

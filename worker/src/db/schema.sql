@@ -30,6 +30,20 @@ CREATE TABLE email_otps (
 );
 CREATE INDEX IF NOT EXISTS idx_email_otps_expires_at ON email_otps(expires_at);
 
+-- Per-IP signup ledger — caps account-creation per source IP at the
+-- auth route so the free-tier daily ceiling can't be trivially
+-- multiplied by spinning up N accounts. See migration
+-- 0026_signup_log.sql for the rationale.
+CREATE TABLE IF NOT EXISTS signup_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT NOT NULL,
+    ip          TEXT NOT NULL,
+    source      TEXT NOT NULL CHECK(source IN ('email','telegram')),
+    created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_signup_log_ip_created_at ON signup_log(ip, created_at);
+CREATE INDEX IF NOT EXISTS idx_signup_log_user ON signup_log(user_id);
+
 CREATE TABLE subscriptions (
     id              TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
