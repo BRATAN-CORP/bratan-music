@@ -54,8 +54,8 @@
 
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
-| 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | open | (этот PR) |
-| 2 | (TBD) | Mobile lyrics layout — на узких экранах прятать обложку + анимированный halo при открытом lyrics, рендерить тот же side-panel дизайн в области обложки | pending | — |
+| 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | open | #425 |
+| 2 | `devin/1778362720-lyrics-mobile-inline` | Mobile lyrics layout — на узких экранах прятать обложку + анимированный halo при открытом lyrics, рендерить тот же side-panel дизайн в области обложки | open | (этот PR) |
 | 3 | (TBD) | FullscreenPlayer volume slider — убрать `transition-[width] duration-100` с fill, чтобы dragged value совпадал с курсором (как в mini-плеере) | pending | — |
 | 4 | (TBD) | Solid skip icons — Player / FullscreenPlayer / MobileBottomDock: SkipBack / SkipForward с `fill="currentColor"` + `strokeWidth={0}` | pending | — |
 
@@ -87,10 +87,10 @@
 
 ## Live status
 
-- 2026-05-09T21:30Z — старт офлайн-lyrics батча (PR
-  `devin/1778362098-offline-lyrics`). Расширил `OfflineTrack` новым
-  опциональным полем `lyrics: OfflineLyrics`, добавил
-  `fetchLyricsPayload` рядом с `fetchCoverBlob` в
+- 2026-05-09T21:30Z — старт офлайн-lyrics батча (PR #425
+  `devin/1778362098-offline-lyrics`, CI зелёный). Расширил
+  `OfflineTrack` новым опциональным полем `lyrics: OfflineLyrics`,
+  добавил `fetchLyricsPayload` рядом с `fetchCoverBlob` в
   `streamResolver.ts`, в `downloads.ts :: runTrack` запускаем
   лирику параллельно с аудио (нулевая прибавка к wall-clock),
   записываем в IDB при создании / обновлении строки трека.
@@ -98,6 +98,18 @@
   успешной сетевой загрузке backfill-ит старые офлайн-строки без
   лирики. Audio engine не тронут (изменения только в путях
   загрузки и в lyrics-хуке).
+- 2026-05-09T21:55Z — задача 2 (mobile lyrics layout, branch
+  `devin/1778362720-lyrics-mobile-inline`). В `LyricsPanel`
+  заменил `mode='overlay'` на `mode='cover'` (тот же бледный
+  side-panel дизайн без X-кнопки и оверлей-скрима, fade+scale
+  in/out вместо bottom-slide). В `FullscreenPlayer` на узких
+  экранах при `lyricsOpen` теперь не рендерится cover-wrapper
+  (animated halo + TiltCard), вместо него в той же колонке
+  выводится `LyricsPanel` с `flex-1 min-h-0 w-full max-w-md` —
+  title row, прогресс, transport, volume и фоновый блюр
+  обложки остаются на месте. На `md+` десктоп side-panel не
+  тронут. Удалил `lyrics.closeAria` из обоих локалей (ключ
+  больше не используется).
 
 ---
 
@@ -109,5 +121,6 @@
 | 2026-05-08 ~19:30..20:25 | `4dbcd574a1924b858d11b3b425ef8691` (предыдущий) | PR #400..#406 + tracker sync — language-switcher fix, PageHero polish, Library/Search/Rooms redesign, Admin UserCard, Boneyard archive. Все смерджены. |
 | 2026-05-08 ~21:25 | `2fa86d7feed2415c825633b09851548a` (предыдущий) | Boneyard skeletons — заменил оставшиеся `<PageLoader>` (7 страниц) на скелетоны, удалил компонент `PageLoader.tsx`, добавил `PlaylistRowSkeleton` / `PlaylistRowListSkeleton` в `Skeleton.tsx`. Tracker pruned. |
 | 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (текущий) | Offline lyrics — `OfflineTrack.lyrics`, `fetchLyricsPayload`, IDB-first `useLyrics` с back-fill сетевого ответа. Подготовил roadmap к 4-задачному батчу (lyrics offline / mobile lyrics layout / volume slider responsiveness / solid skip icons). |
+| 2026-05-09 ~21:55 | `33edb7b9174a455d99183f00e71a4b4d` (текущий) | Mobile lyrics layout — `LyricsPanel.mode='cover'` вместо `'overlay'`, в `FullscreenPlayer` cover-wrapper больше не рендерится при `lyricsOpen && !isMdUp`, на его месте — bare lyrics-body в стиле desktop side-panel. Удалил `lyrics.closeAria` из RU/EN локалей. |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
