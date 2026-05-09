@@ -442,7 +442,10 @@ export function Player() {
                 <Shuffle size={15} className={shuffle ? 'text-[var(--color-accent)]' : 'text-muted-foreground'} />
               </Button>
               <Button onClick={() => previous()} variant="ghost" size="icon" aria-label={t('player.previous')}>
-                <SkipBack size={16} />
+                {/* Solid wedge to match the play/pause icon next to it.
+                    Lucide outline glyphs only become solid when fill is
+                    set + stroke width is zeroed. */}
+                <SkipBack size={16} fill="currentColor" strokeWidth={0} />
               </Button>
               <motion.div whileTap={reduce ? undefined : { scale: 0.92 }}>
                 <Button onClick={togglePlay} size="icon" className="h-10 w-10 rounded-full" aria-label={isPlaying ? t('player.pause') : t('player.play')}>
@@ -450,7 +453,7 @@ export function Player() {
                 </Button>
               </motion.div>
               <Button onClick={nextManual} variant="ghost" size="icon" aria-label={t('player.next')}>
-                <SkipForward size={16} />
+                <SkipForward size={16} fill="currentColor" strokeWidth={0} />
               </Button>
               <Button onClick={cycleRepeat} variant="ghost" size="icon" className="hidden md:inline-flex" aria-label={t('player.repeat')}>
                 {repeat === 'one' ? (
