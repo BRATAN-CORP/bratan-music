@@ -257,7 +257,19 @@
     "sectionArtists": "Артисты",
     "pageEyebrow": "Поиск",
     "pageTitle": "Найдите треки, альбомы и артистов",
-    "loadingMore": "Загружаем ещё…"
+    "loadingMore": "Загружаем ещё…",
+    "discoverTitle": "Подборки от Tidal",
+    "shortcuts": {
+      "aiEyebrow": "AI",
+      "aiTitle": "AI-плейлист",
+      "aiHint": "Опиши вайб — соберём плейлист под него.",
+      "waveEyebrow": "Волна",
+      "waveTitle": "Моя волна",
+      "waveHint": "Бесконечный поток под твой вкус.",
+      "roomsEyebrow": "Вместе",
+      "roomsTitle": "Слушать с друзьями",
+      "roomsHint": "Создай комнату или зайди по коду."
+    }
   },
   "queue": {
     "title": "Очередь",

@@ -257,7 +257,19 @@
     "sectionArtists": "Artists",
     "pageEyebrow": "Search",
     "pageTitle": "Find tracks, albums and artists",
-    "loadingMore": "Loading more…"
+    "loadingMore": "Loading more…",
+    "discoverTitle": "Picked by Tidal",
+    "shortcuts": {
+      "aiEyebrow": "AI",
+      "aiTitle": "AI playlist",
+      "aiHint": "Describe a vibe — we'll spin up the playlist.",
+      "waveEyebrow": "Wave",
+      "waveTitle": "My Wave",
+      "waveHint": "An endless stream tuned to your taste.",
+      "roomsEyebrow": "Together",
+      "roomsTitle": "Listen with friends",
+      "roomsHint": "Open a room or join with a code."
+    }
   },
   "queue": {
     "title": "Queue",

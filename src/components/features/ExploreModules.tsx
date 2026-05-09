@@ -246,6 +246,7 @@ function PageLinksDecadeGrid({ title, items }: { title: string; items: ExplorePa
           >
             <Link
               to={`/explore/${it.slug}`}
+              state={{ title: it.title }}
               className="inline-flex items-center rounded-full border border-border bg-card px-4 py-1.5 text-sm transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
             >
               {it.title}
@@ -284,6 +285,7 @@ function GenreTile({
     >
       <Link
         to={`/explore/${item.slug}`}
+        state={{ title: item.title }}
         className={
           'relative block w-full overflow-hidden rounded-[var(--radius-md)] border border-border bg-card transition-all duration-300 will-change-transform hover:-translate-y-0.5 hover:border-[var(--color-border-strong)] hover:shadow-xl ' +
           (variant === 'hero' ? 'aspect-[4/5]' : 'aspect-square')
@@ -361,6 +363,7 @@ function PageLinksCloud({ title, items }: { title: string; items: ExplorePageLin
           >
             <Link
               to={`/explore/${it.slug}`}
+              state={{ title: it.title }}
               className="inline-flex items-center rounded-full border border-border bg-card px-4 py-1.5 text-sm transition-colors hover:border-[var(--color-accent-soft)] hover:bg-secondary"
             >
               {it.title}
