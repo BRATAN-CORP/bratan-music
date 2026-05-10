@@ -787,65 +787,81 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
    ────────────────────────────────────────────────────────────────────
    The fullscreen player paints a heavily blurred copy of the cover as
    its ambience layer. For tracks that don't ship an animated
-   `coverVideoUrl` we add two slowly drifting copies of the cover on
-   top of the static rim copy — the result is a continuous, organic
-   colour flow that makes static covers feel alive without the GPU
-   cost of an SVG `feDisplacementMap` (the previous PR #433 attempt
-   used `feTurbulence` + animated `feOffset` and ran hot on iOS).
+   `coverVideoUrl` we layer two slowly drifting copies of the cover on
+   top of an oversized static rim copy. The result is a continuous,
+   organic flow that makes static covers feel alive without the GPU
+   cost of an SVG `feDisplacementMap` (PR #433 used `feTurbulence`
+   plus animated `feOffset` and ran hot on iOS Safari).
 
    Design notes:
    • The wrapper applies `filter: blur(64px) saturate(1.5)` to the
      whole composition, so the blur is the LAST step in the rendering
-     chain — exactly what the user asked for («блюр последним слоем
-     идёт обязательно»).
-   • Each drifting layer is masked with a radial gradient that fades
-     to transparent at the rim, so motion is confined to the centre
-     of the viewport and the edges never visibly move («движение, но
-     так чтобы его не было у краёв»).
+     chain («блюр последним слоем идёт обязательно»).
+   • Drift layers are NOT masked — motion happens across the full
+     viewport. The trick is that every layer is scaled up enough
+     (~1.30) to have a fat margin around the visible box, so when the
+     layer translates by up to ±6% it never exposes the static rim
+     or the page background; the user requirement «чтобы когда края
+     трогались, там же ниче нет позади» is satisfied by keeping each
+     translated layer wider than the viewport instead of by masking
+     the motion away.
+   • The static rim copy underneath is also overscaled (1.30) and
+     stays put, so even in the (impossible by construction) case of
+     a drift layer leaving a gap, the rim fills it with the same
+     image — there is never a black, transparent or out-of-image
+     pixel on the screen.
    • Animation uses pure GPU `transform: translate3d` + `scale` (no
-     filter recomputation, no layout, no paint). Periods are 32s and
-     47s with `ease-in-out` and opposite phases — long enough that
-     the loop is invisible and the flow feels seamless.
-   • Skipped under `prefers-reduced-motion`; the wrapper still renders
-     the static rim copy so the visual stays consistent.
+     filter recomputation, no layout, no paint). Periods are 28s and
+     41s with `ease-in-out` and opposite phases — long enough that
+     the loop is invisible, fast enough that the user actually sees
+     the cover move.
+   • The second drift layer rides at `opacity: 0.55`, so the two
+     layers blend rather than the topmost one occluding the lower
+     one — the cross-stroke is what reads as «watercolor».
+   • Skipped under `prefers-reduced-motion`; the wrapper still
+     renders the static rim copy so the visual stays consistent.
 */
 .fullscreen-player-watercolor {
   filter: blur(64px) saturate(1.5);
 }
 
 .watercolor-drift {
-  /* Mask the drifting layer so its motion fades out at the edges of
-     the viewport. The static rim copy underneath stays fully opaque,
-     which means the rim is locked in place no matter how far the
-     drifting layer translates. The mask is identical for both layers
-     so they have a matched falloff. */
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 28%, transparent 78%);
-          mask-image: radial-gradient(ellipse at center, #000 28%, transparent 78%);
+  /* Each drift layer is positioned `inset-0`, but is scaled up so it
+     overflows the viewport on every side. Translating the scaled
+     layer therefore shifts which part of the cover is centred under
+     the user's eye without ever revealing what is behind the layer
+     — there is always more cover left to translate into. */
   will-change: transform;
 }
 
+.watercolor-drift-b {
+  /* Top layer rides at half opacity so it blends with the bottom
+     drift layer instead of fully covering it. */
+  opacity: 0.55;
+}
+
 @keyframes watercolor-drift-a {
-  0%   { transform: translate3d(0, 0, 0) scale(1.20); }
-  25%  { transform: translate3d(2.4%, -1.8%, 0) scale(1.22); }
-  50%  { transform: translate3d(-1.6%, 2.4%, 0) scale(1.21); }
-  75%  { transform: translate3d(-2.2%, -1.4%, 0) scale(1.23); }
-  100% { transform: translate3d(0, 0, 0) scale(1.20); }
+  0%   { transform: translate3d(0, 0, 0) scale(1.28); }
+  25%  { transform: translate3d(5.5%, -4.5%, 0) scale(1.30); }
+  50%  { transform: translate3d(-4.5%, 5.5%, 0) scale(1.29); }
+  75%  { transform: translate3d(-5.5%, -3.5%, 0) scale(1.31); }
+  100% { transform: translate3d(0, 0, 0) scale(1.28); }
 }
 
 @keyframes watercolor-drift-b {
-  0%   { transform: translate3d(0, 0, 0) scale(1.22); }
-  20%  { transform: translate3d(-2.0%, 1.8%, 0) scale(1.20); }
-  55%  { transform: translate3d(2.4%, -2.0%, 0) scale(1.23); }
-  85%  { transform: translate3d(-1.6%, -2.2%, 0) scale(1.21); }
-  100% { transform: translate3d(0, 0, 0) scale(1.22); }
+  0%   { transform: translate3d(0, 0, 0) scale(1.32); }
+  20%  { transform: translate3d(-5.0%, 4.5%, 0) scale(1.30); }
+  55%  { transform: translate3d(5.5%, -5.0%, 0) scale(1.33); }
+  85%  { transform: translate3d(-4.0%, -5.5%, 0) scale(1.31); }
+  100% { transform: translate3d(0, 0, 0) scale(1.32); }
 }
 
 .watercolor-drift-a {
-  animation: watercolor-drift-a 32s ease-in-out infinite;
+  animation: watercolor-drift-a 28s ease-in-out infinite;
 }
 
 .watercolor-drift-b {
-  animation: watercolor-drift-b 47s ease-in-out infinite;
+  animation: watercolor-drift-b 41s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
