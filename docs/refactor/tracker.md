@@ -53,6 +53,7 @@
 
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
+| 2 | `devin/1778436207-watercolor-no-mask` | **Watercolor fix — drop center mask, full-area drift.** Cherry-pick потерянного при squash-merge PR #435 второго коммита: `.watercolor-drift` без `mask-image`, периоды 28s/41s, амплитуды ±5.5%, scale 1.28–1.33, второй слой opacity 0.55, rim copy scale 1.30 (defence-in-depth). Без этого фикса на проде была старая версия «движение только в центре ±2.4%», которая после 64px блюра не видна. | merged | #437 |
 | 1 | `devin/1778433068-watercolor-bg` | **Watercolor background для фуллскрин-плеера (replay PR #433).** В `FullscreenPlayer.tsx` ветка с обычной обложкой (без `coverVideoUrl`) рендерит `motion.div.fullscreen-player-watercolor` с `filter: blur(64px) saturate(1.5)` — внутри статичная rim-копия обложки (`scale(1.30)`) + два дрейфующих слоя `bg-cover` (`.watercolor-drift-a` 28s / `.watercolor-drift-b` 41s, противоположные фазы, `ease-in-out`, второй на `opacity: 0.55` — слои блендятся как watercolor). Дрейфы — pure GPU `transform: translate3d` + `scale`, никаких `feDisplacementMap`/`feTurbulence` (PR #433 был реверчен из-за стоимости рендеринга на iOS). Движение по всей площади (без радиального mask): каждый слой scale ~1.28–1.33, перевод до ±5.5% не открывает фон, defence-in-depth — статичная rim-копия снизу тоже scale 1.30. Блюр + saturate применяются на обёртке как ПОСЛЕДНИЙ шаг рендера. Skipped для `coverVideoUrl` и под `prefers-reduced-motion` (рендерится только rim-копия). | merged | #435 |
 
 ---
@@ -83,6 +84,21 @@
 
 ## Live status
 
+- 2026-05-10T18:00Z — watercolor-фон для фуллскрин-плеера «довезён» на прод
+  (PR #437 → squash `c0fceaee2`). PR #435 был смержен, но с squash-merge
+  выпал второй коммит ветки (с убранным radial mask и более крупной
+  амплитудой); PR head в GitHub'е на момент API merge ещё указывал
+  на старый sha. На проде оказалась изначальная версия «движение
+  только в центре ±2.4%» — юзер правильно заметил «на проде ниче нету».
+  Потерянный коммит cherry-pickнут на свежий main, залит PR #437,
+  смержен (при merge указываю SHA явно, чтобы не нарваться на ту
+  же проблему). GitHub Pages деплой успешный, живой CSS содержит
+  правильные значения (28s / 41s, scale 1.28–1.33, opacity 0.55, без
+  `mask-image`). **Урок:** при squash-merge через GitHub API всегда
+  передавать явный `sha` в боди (взяв его через GET непосредственно
+  перед merge); иначе рассинхрон между push и PR head может привести
+  к тихой потере последнего коммита.
+
 - 2026-05-10T17:30Z — watercolor-фон для фуллскрин-плеера merged в `main`
   (PR #435 → squash `ef94be755`). Реализация: `FullscreenPlayer.tsx`
   ветка без `coverVideoUrl` рендерит `motion.div.fullscreen-player-watercolor`
@@ -112,6 +128,7 @@
 | 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (предыдущий) | Offline lyrics — `OfflineTrack.lyrics`, `fetchLyricsPayload`, IDB-first `useLyrics` с back-fill сетевого ответа. Подготовил roadmap к 4-задачному батчу (lyrics offline / mobile lyrics layout / volume slider responsiveness / solid skip icons). PR #425 merged. |
 | 2026-05-09 ~21:50 | (предыдущий, batch-fixes) | Volume slider responsiveness + solid skip icons + PWA bottom inset (½) + mini-player touch hit area. PR #427 merged, но `strokeWidth={0}` на skip-иконках стирал 1-D `<line>` элемент → пользователь сообщил регрессию иконок. |
 | 2026-05-09 ~22:30 | `d8eeb192309c4c2d95225d362c18fa37` (предыдущий) | Follow-up батч: откатил `strokeWidth={0}` на SkipBack/SkipForward (Player / FullscreenPlayer / MobileBottomDock), убрал `var(--pwa-safe-bottom)/2` из bottom-инсета (теперь `bottom-4`/`sm:bottom-6` = боковым полям), переписал `OfflineToastWatcher` на прямые `online`/`offline` event listener'ы + `visibilitychange` re-sync для iOS PWA, `t` через ref. Верифицировал, что lyrics fix (PR #425) реально задеплоился. |
+| 2026-05-10 ~18:00 | `d9cc4c860e514bdab2945780dfd40a11` (текущий) | Watercolor follow-up PR #437 merged (`c0fceaee2`) — cherry-pick потерянного при squash PR #435 второго коммита. Без этого на проде жила версия «радиальный mask + ±2.4%» (юзер жаловался «на проде ниче нету, нет движения»). Теперь прод CSS = full-area drift, 28s/41s, ±5.5%, scale 1.28–1.33, opacity 0.55, без mask. GitHub Pages deploy success. На будущее: при squash-merge через API передавать явный `sha` в боди. |
 | 2026-05-10 ~17:30 | `d9cc4c860e514bdab2945780dfd40a11` (текущий) | Watercolor-фон для фуллскрин-плеера — PR #435 merged (squash `ef94be755`). Чисто CSS, без `feDisplacementMap`/`feTurbulence`. `FullscreenPlayer.tsx` для не-видео обложек рендерит `.fullscreen-player-watercolor` обёртку с `filter: blur(64px) saturate(1.5)` (блюр — последний шаг), внутри статичная rim-копия (scale 1.30) + два дрейфующих слоя `.watercolor-drift-a` (28s) и `.watercolor-drift-b` (41s, opacity 0.55) с противоположными фазами и opposite scale (1.28–1.33). Движение по всей площади viewport (изначально был radial mask, но юзер отверг → переделал на overscale-стратегию: трансляция до ±5.5% не открывает фон). Keyframes/utility-классы в `src/styles/globals.scss`. CI зелёный (Build + Lint & Typecheck). |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
