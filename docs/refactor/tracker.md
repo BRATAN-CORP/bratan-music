@@ -55,7 +55,8 @@
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
 | 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | merged | #425 |
-| 2 | `devin/1778409485-fix-queue-lyrics` | **Mobile lyrics layout (final):** на <md рендерим `<LyricsContent>` прямо в слоте обложки + verb 1-к-1 со словами пользователя «замещали обложку и пространство сверху чуть»; кебаб «…» в шапке превращается в крестик-закрытие; old `mode="overlay"` overlay убран. Queue: модалка центрируется на любом breakpoint (Sheet → Modal align="center"); drag-to-reorder split: touch — только grip-handle, mouse — везде (старое). | open | (этот PR) |
+| 2 | `devin/1778409485-fix-queue-lyrics` | **Mobile lyrics layout + queue centering + queue touch-vs-mouse drag.** Lyrics на <md рендерится в слоте обложки (`flex-1 min-h-0` — позже заменён, см. строку 5); кебаб «…» в шапке → крестик; old `mode="overlay"` overlay убран. Queue: Sheet → Modal align="center"; drag split touch=grip / mouse=всюду. | merged | #429 |
+| 5 | `devin/1778410247-lyrics-no-shift` | **Follow-up под фидбэк:** (a) лирика занимает РОВНО тот же слот что и обложка (`aspect-square w-full max-w-md` + maxWidth-clamp) — title/progress/transport/volume не двигаются; (b) кнопка «Прокручивать вместе с песней» центрирована и стилизована `liquid-glass` как navbar; (c) скроллбар в лирике скрыт (`.no-scrollbar` utility); (d) swipe-to-dismiss fullscreen работает в свободной зоне даже когда лирика открыта (`lyricsOpen` исключён из `anyModalOpen`; `data-no-sheet-drag` на лирике сохраняет ввод там). | open | (этот PR) |
 | 3 | `devin/1778363267-batch-fixes` | FullscreenPlayer volume slider, solid skip icons (initial), PWA navbar inset (½), mini-player touch hit area | merged (regression) | #427 |
 | 4 | `devin/1778365680-fix-batch` | revert broken skip icons, drop PWA safe-bottom inset, robust offline toast watcher | merged | #428 |
 

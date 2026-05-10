@@ -324,13 +324,23 @@ export function FullscreenPlayer() {
   // contract: every modal closes on its own affordance (X button,
   // scrim tap, Esc) and only after the topmost surface is closed does
   // the dismiss-anywhere swipe wake back up. This prevents (a) EQ
-  // band-gain strokes / lyrics scrolls from double-counting as a
+  // band-gain strokes / queue reorder pointers double-counting as a
   // dismiss, and (b) accidentally collapsing the player while a queue
   // / add-to-playlist / track-override / kebab menu is open and the
   // user reaches past the dialog scrim onto the player surface.
+  //
+  // `lyricsOpen` is intentionally NOT in this list: lyrics no longer
+  // overlays the player as a separate modal window — on <md it
+  // replaces the cover slot, on md+ it slides in as an absolute
+  // side-panel. In both cases the user explicitly asked for the
+  // swipe-to-dismiss to keep working from the free area outside the
+  // lyrics body and outside the player controls. The lyrics body
+  // itself opts out of the dismiss gesture via `data-no-sheet-drag`
+  // (matched by SHEET_DRAG_EXCLUDE_SELECTOR below) so a wheel /
+  // touch-drag inside the lyric verses still scrolls the panel
+  // instead of dragging the sheet.
   const anyModalOpen =
     eqOpen ||
-    lyricsOpen ||
     queueOpen ||
     addToPlaylistOpen ||
     overrideOpen ||
@@ -832,18 +842,31 @@ export function FullscreenPlayer() {
 
                 On narrow viewports the cover slot is conditionally
                 replaced by the lyrics body — the user explicitly asked
-                for the lyric layer to "замещали обложку и пространство
-                сверху чуть" rather than overlay the player as a
-                separate window. We size the lyrics block with
-                `flex-1 min-h-0` so it grows into both the cover's slot
-                AND the empty justify-center breathing space above it,
-                while the title / progress / transport / volume rows
-                below stay anchored at their normal positions. md+ keeps
-                the side-panel layout (see desktop side-panel below) so
-                this swap is gated on `!isMdUp`. */}
+                for the lyric layer to "замещали обложку" rather than
+                overlay the player as a separate window. The lyrics
+                block is sized IDENTICALLY to the cover (same
+                aspect-square + max-w-md + the same viewport-height
+                clamp) — that's a hard constraint from the user: title
+                / progress / transport / volume must NOT shift pixels
+                when lyrics open. md+ keeps the side-panel layout (see
+                desktop side-panel below) so this swap is gated on
+                `!isMdUp`. */}
             {lyricsOpen && !isMdUp ? (
               <div
                 key="lyrics-cover-slot"
+                // Drop-in replacement for the cover wrapper: same
+                // `aspect-square w-full max-w-md` outer dimensions
+                // and the same viewport-height clamp via inline
+                // `maxWidth`. Sizing the lyrics block IDENTICALLY to
+                // the cover (rather than `flex-1` to grow into the
+                // breathing space above) is a hard constraint from
+                // the user — title / progress / transport / volume
+                // sit in the parent's `justify-center` flow and must
+                // NOT shift positions when lyrics open. With the
+                // lyrics block matching the cover footprint, the
+                // entire row layout below stays anchored to the same
+                // pixels regardless of `lyricsOpen`.
+                //
                 // `data-no-sheet-drag` keeps the parent fullscreen
                 // sheet's drag-to-dismiss from grabbing pointer events
                 // that originate inside the lyrics body. The
@@ -852,7 +875,8 @@ export function FullscreenPlayer() {
                 // even though the surrounding fullscreen-drag-zone
                 // pins `touch-action: none`.
                 data-no-sheet-drag
-                className="relative mx-auto flex w-full min-h-0 flex-1 max-w-md overflow-hidden"
+                className="relative mx-auto flex aspect-square w-full max-w-md overflow-hidden"
+                style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
               >
                 <LyricsContent trackId={currentTrack.id} onSeek={seek} />
               </div>

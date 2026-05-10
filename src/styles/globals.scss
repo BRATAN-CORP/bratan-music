@@ -587,6 +587,23 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
   background: var(--color-text-subtle);
 }
 
+/* Utility for surfaces that scroll but should NOT show a visible
+   scrollbar — used by the lyrics body in the fullscreen player so
+   the verse text reads as a continuous block (a thin bar at the
+   side breaks the song-sheet aesthetic, especially on the cover
+   slot replacement on narrow screens where the lyrics block is
+   only ~28rem wide). Hides both the WebKit-painted scrollbar and
+   the Firefox / standards `scrollbar-width: none` track. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
