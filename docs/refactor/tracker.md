@@ -53,7 +53,7 @@
 
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
-| 1 | `devin/1778433068-watercolor-bg` | **Watercolor background для фуллскрин-плеера (replay PR #433).** В `FullscreenPlayer.tsx` ветка с обычной обложкой (без `coverVideoUrl`) теперь рендерит `motion.div` с `filter: blur(64px) saturate(1.5)` — внутри статичная rim-копия обложки + два дрейфующих слоя `bg-cover` (`.watercolor-drift-a` 32s / `.watercolor-drift-b` 47s, противоположные фазы, `ease-in-out`). Дрейфы — pure GPU `transform: translate3d` + `scale`, никаких `feDisplacementMap`/`feTurbulence` (PR #433 был реверчен из-за стоимости рендеринга на iOS). Радиальный mask `radial-gradient(ellipse at center, #000 28%, transparent 78%)` на обоих дрейфующих слоях прижимает движение к центру — края всегда показывают статичную rim-копию (требование «движение, но не у краёв»). Блюр + saturate применяются на обёртке как ПОСЛЕДНИЙ шаг рендера (требование «блюр последним слоем идёт обязательно»). Skipped для `coverVideoUrl` (анимированные обложки сами двигаются) и под `prefers-reduced-motion` — там рендерится только rim-копия. | open | #435 |
+| 1 | `devin/1778433068-watercolor-bg` | **Watercolor background для фуллскрин-плеера (replay PR #433).** В `FullscreenPlayer.tsx` ветка с обычной обложкой (без `coverVideoUrl`) рендерит `motion.div.fullscreen-player-watercolor` с `filter: blur(64px) saturate(1.5)` — внутри статичная rim-копия обложки (`scale(1.30)`) + два дрейфующих слоя `bg-cover` (`.watercolor-drift-a` 28s / `.watercolor-drift-b` 41s, противоположные фазы, `ease-in-out`, второй на `opacity: 0.55` — слои блендятся как watercolor). Дрейфы — pure GPU `transform: translate3d` + `scale`, никаких `feDisplacementMap`/`feTurbulence` (PR #433 был реверчен из-за стоимости рендеринга на iOS). Движение по всей площади (без радиального mask): каждый слой scale ~1.28–1.33, перевод до ±5.5% не открывает фон, defence-in-depth — статичная rim-копия снизу тоже scale 1.30. Блюр + saturate применяются на обёртке как ПОСЛЕДНИЙ шаг рендера. Skipped для `coverVideoUrl` и под `prefers-reduced-motion` (рендерится только rim-копия). | merged | #435 |
 
 ---
 
@@ -83,31 +83,22 @@
 
 ## Live status
 
-- 2026-05-10T17:00Z — replay watercolor-фона для фуллскрин-плеера
-  (PR `devin/1778433068-watercolor-bg`). Пользователь сказал, что
-  в предыдущей попытке (PR #433, реверт #434) эффект был «слишком
-  быстрым, лагал и без блюра, кривой по краям». Старый импорт
-  `feTurbulence` + `<animate>`-driven `feOffset` в SVG: тяжёлый
-  GPU-cost на iOS Safari, displacement-карта пересчитывалась каждый
-  кадр; жил отдельным `-z-20` слоем за блюр-слоем `-z-10`, поэтому
-  CSS `filter: blur` (свой контент, не backdrop) к displaced слою
-  не применялся.
-
-  Новая реализация — pure CSS, без SVG-фильтров. В `FullscreenPlayer.tsx`
-  ветка с обычной обложкой (без `coverVideoUrl`) рендерит
-  `motion.div.fullscreen-player-watercolor` с `filter: blur(64px)
-  saturate(1.5)` (блюр — ПОСЛЕДНИЙ шаг рендера, как просил юзер).
-  Внутри: статичная rim-копия (`scale(1.15)`) + два слоя
-  `.watercolor-drift-a` (32s) и `.watercolor-drift-b` (47s) с
-  противоположными фазами; анимация — `transform: translate3d` +
-  `scale` (только GPU, никаких repaints / layout). Радиальный mask
-  `radial-gradient(ellipse at center, #000 28%, transparent 78%)` на
-  drift-слоях фиксирует движение в центре — края показывают
-  статичную rim-копию (требование «движения у краёв нет»).
-  Skipped: `coverVideoUrl` (анимированные обложки сами двигаются),
-  `prefers-reduced-motion` (только rim-копия, без drift). Crossfade
-  между треками сохранён через тот же `AnimatePresence + motion.div
-  key={trackCoverUrl}`.
+- 2026-05-10T17:30Z — watercolor-фон для фуллскрин-плеера merged в `main`
+  (PR #435 → squash `ef94be755`). Реализация: `FullscreenPlayer.tsx`
+  ветка без `coverVideoUrl` рендерит `motion.div.fullscreen-player-watercolor`
+  с `filter: blur(64px) saturate(1.5)` (блюр — ПОСЛЕДНИЙ шаг рендера,
+  как просил юзер). Внутри: статичная rim-копия (`scale(1.30)`) +
+  два слоя `.watercolor-drift-a` (28s) и `.watercolor-drift-b` (41s,
+  `opacity: 0.55`) с противоположными фазами; анимация — `transform:
+  translate3d` + `scale` (только GPU). Движение по всей площади
+  viewport — изначально была попытка с радиальным mask «только в
+  центре», но юзер отверг («ну ты бля по центру сделал нахуя»),
+  переделал на overscale-стратегию: каждый слой scale 1.28–1.33,
+  трансляция до ±5.5% никогда не открывает фон (всегда есть «запас»
+  обложки за пределами viewport), статичная rim-копия — defence-in-depth
+  второй защитный слой. Pure CSS, никаких `feDisplacementMap`/
+  `feTurbulence` (PR #433 был реверчен #434 из-за стоимости рендеринга
+  на iOS Safari). Skipped: `coverVideoUrl` и `prefers-reduced-motion`.
 
 ---
 
@@ -121,6 +112,6 @@
 | 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (предыдущий) | Offline lyrics — `OfflineTrack.lyrics`, `fetchLyricsPayload`, IDB-first `useLyrics` с back-fill сетевого ответа. Подготовил roadmap к 4-задачному батчу (lyrics offline / mobile lyrics layout / volume slider responsiveness / solid skip icons). PR #425 merged. |
 | 2026-05-09 ~21:50 | (предыдущий, batch-fixes) | Volume slider responsiveness + solid skip icons + PWA bottom inset (½) + mini-player touch hit area. PR #427 merged, но `strokeWidth={0}` на skip-иконках стирал 1-D `<line>` элемент → пользователь сообщил регрессию иконок. |
 | 2026-05-09 ~22:30 | `d8eeb192309c4c2d95225d362c18fa37` (предыдущий) | Follow-up батч: откатил `strokeWidth={0}` на SkipBack/SkipForward (Player / FullscreenPlayer / MobileBottomDock), убрал `var(--pwa-safe-bottom)/2` из bottom-инсета (теперь `bottom-4`/`sm:bottom-6` = боковым полям), переписал `OfflineToastWatcher` на прямые `online`/`offline` event listener'ы + `visibilitychange` re-sync для iOS PWA, `t` через ref. Верифицировал, что lyrics fix (PR #425) реально задеплоился. |
-| 2026-05-10 ~17:00 | `d9cc4c860e514bdab2945780dfd40a11` (текущий) | Replay watercolor-фона для фуллскрин-плеера (replay PR #433, реверт #434). Чисто CSS реализация — без `feDisplacementMap`/`feTurbulence`. `FullscreenPlayer.tsx` для не-видео обложек рендерит `.fullscreen-player-watercolor` обёртку с `filter: blur(64px) saturate(1.5)` (блюр — последний шаг), внутри статичная rim-копия + два дрейфующих слоя (32s / 47s, GPU `translate3d` + `scale`, противоположные фазы). Радиальный mask на drift-слоях прижимает движение к центру → края статичны. Keyframes/utility-классы добавлены в `src/styles/globals.scss`. Tracker pruned (старые merged строки убраны). |
+| 2026-05-10 ~17:30 | `d9cc4c860e514bdab2945780dfd40a11` (текущий) | Watercolor-фон для фуллскрин-плеера — PR #435 merged (squash `ef94be755`). Чисто CSS, без `feDisplacementMap`/`feTurbulence`. `FullscreenPlayer.tsx` для не-видео обложек рендерит `.fullscreen-player-watercolor` обёртку с `filter: blur(64px) saturate(1.5)` (блюр — последний шаг), внутри статичная rim-копия (scale 1.30) + два дрейфующих слоя `.watercolor-drift-a` (28s) и `.watercolor-drift-b` (41s, opacity 0.55) с противоположными фазами и opposite scale (1.28–1.33). Движение по всей площади viewport (изначально был radial mask, но юзер отверг → переделал на overscale-стратегию: трансляция до ±5.5% не открывает фон). Keyframes/utility-классы в `src/styles/globals.scss`. CI зелёный (Build + Lint & Typecheck). |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
