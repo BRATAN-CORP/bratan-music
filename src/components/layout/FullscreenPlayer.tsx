@@ -416,14 +416,52 @@ export function FullscreenPlayer() {
                 ) : (
                   <motion.div
                     key={(trackCoverUrl ?? '') + '-bg'}
-                    className="absolute inset-0 -z-10 bg-cover bg-center blur-3xl saturate-150"
-                    style={{ backgroundImage: `url(${trackCoverUrl})` }}
+                    className="fullscreen-player-watercolor absolute inset-0 -z-10 overflow-hidden"
                     initial={reduce ? { opacity: 0.5 } : { opacity: 0 }}
                     animate={{ opacity: 0.5 }}
                     exit={reduce ? { opacity: 0 } : { opacity: 0 }}
                     transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1] }}
                     aria-hidden
-                  />
+                  >
+                    {/* Watercolor background for static covers.
+                        Two slowly drifting copies of the cover sit on
+                        top of a static rim copy and create a continuous,
+                        organic flow — no SVG filters, no per-frame
+                        recomposition: the motion is a pure GPU
+                        `transform: translate3d` + `scale`, so even iOS
+                        Safari renders it at 60fps without thermal cost.
+                        The radial-gradient mask on the moving layers
+                        keeps motion confined to the centre — the rim
+                        is always the static base copy, so the edges
+                        of the viewport never visibly move («движение,
+                        но так чтобы его не было у краёв»). The wrapper
+                        applies `filter: blur(64px) saturate(1.5)` to
+                        the whole composition AFTER the layers blend,
+                        so the user-mandated «блюр последним слоем»
+                        is the very last step in the rendering chain.
+                        Skipped automatically for animated covers
+                        (`coverVideoUrl` branch above) and dropped
+                        under `prefers-reduced-motion`. */}
+                    <div
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${trackCoverUrl})`,
+                        transform: 'scale(1.15)',
+                      }}
+                    />
+                    {!reduce && (
+                      <>
+                        <div
+                          className="watercolor-drift watercolor-drift-a absolute inset-0 bg-cover bg-center"
+                          style={{ backgroundImage: `url(${trackCoverUrl})` }}
+                        />
+                        <div
+                          className="watercolor-drift watercolor-drift-b absolute inset-0 bg-cover bg-center"
+                          style={{ backgroundImage: `url(${trackCoverUrl})` }}
+                        />
+                      </>
+                    )}
+                  </motion.div>
                 )}
               </AnimatePresence>
               {/* Lighter than the original 40/60/80 — the user said

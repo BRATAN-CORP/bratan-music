@@ -23,17 +23,16 @@
 >
 > Каждая задача — отдельный PR. После каждого PR — апдейт этого файла.
 
-Свежий батч (2026-05-09):
+Свежий батч (2026-05-10):
 
-> 1. Офлайн lyrics: при загрузке трека прогружать его lyrics, чтобы
->    они работали и в офлайн режиме (PWA точно).
-> 2. Мобильная адаптация lyrics: при включённом lyrics прятать обложку
->    и анимированный блюр от неё, на их месте показывать lyrics
->    (бекграунд блюр обложки оставлять). Дизайн lyrics — как на
->    широком экране (десктоп side-panel).
-> 3. Полноэкранный плеер: пофиксить отзывчивость ползунка громкости
->    (привести к поведению mini-плеера, без отстающей CSS-анимации).
-> 4. Иконки next/prev в плеере (везде где встречаются) — solid.
+> Полноэкранный плеер: для треков без видео-обложки добавить
+> анимированный фон под существующим блюром — liquid /
+> watercolor / plastic эффект. Движение обложки только в центре
+> (у краёв — статика, чтобы не было артефактов / швов),
+> анимация бесшовная и максимально плавная, блюр последним
+> слоем поверх эффекта, чтобы картинка казалась живой. PR #433
+> (`feTurbulence` + animated `feOffset` через SVG) был слишком
+> быстрым, лагал на iOS Safari и ломал блюр — реверт #434.
 
 ## Hard constraints (не нарушаем)
 
@@ -54,13 +53,7 @@
 
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
-| 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | merged | #425 |
-| 2 | `devin/1778409485-fix-queue-lyrics` | **Mobile lyrics layout + queue centering + queue touch-vs-mouse drag.** Lyrics на <md рендерится в слоте обложки (`flex-1 min-h-0` — позже заменён, см. строку 5); кебаб «…» в шапке → крестик; old `mode="overlay"` overlay убран. Queue: Sheet → Modal align="center"; drag split touch=grip / mouse=всюду. | merged | #429 |
-| 5 | `devin/1778410247-lyrics-no-shift` | **Follow-up под фидбэк:** (a) лирика занимает РОВНО тот же слот что и обложка (`aspect-square w-full max-w-md` + maxWidth-clamp) — title/progress/transport/volume не двигаются; (b) кнопка «Прокручивать вместе с песней» центрирована и стилизована `liquid-glass` как navbar; (c) скроллбар в лирике скрыт (`.no-scrollbar` utility); (d) swipe-to-dismiss fullscreen работает в свободной зоне даже когда лирика открыта. | merged | #430 |
-| 6 | `devin/1778412962-lyrics-pwa-followup` | **Lyrics polish + PWA hardening:** (a) loader/error/empty состояния LyricsContent получают `w-full` → spinner + label по центру cover-slot а не по левому краю; (b) blur(0.5px) на неактивных строках убран — на DPR≥2 он мерцал при смене строк; (c) lyrics-cover-slot сохраняет фиксированный bounding box (`aspect-square w-full max-w-md`) НО внутренний wrapper `absolute inset-x-0 bottom-0` с `top:-5rem` визуально расширяет лирику вверх в breathing-зону — title/progress/transport/volume не двигаются; (d) ArtistLinks получает `onNavigate` callback, FullscreenPlayer multi-credit передаёт `closeFullscreen` → клик по артисту в фуллскрине плавно сворачивает и переходит на artist page; (e) PWA: `navigateFallback: 'index.html'` (deep links работают офлайн), runtimeCaching для cover-art, `globPatterns` явно включает woff2/png/svg, `navigator.storage.persist()` на boot — устойчивость к eviction. | merged | #431 |
-| 7 | `devin/1778415081-artist-picker-mini-bar` | **Multi-credit «Перейти к артисту» picker + mini-player rail geometry restore.** (a) Новый компонент `ArtistGoToMenuItems` с двумя view (`'main'` + `'artist-go-picker'`) зеркалит `ArtistDislikeMenuItems`; общий `ArtistMenuPickerView` — back-row + caption + список артистов — переиспользуется обоими (dislike-picker отрефакторен на него тоже). На multi-credit треке «Перейти к артисту» открывает picker внутри того же popover, single-credit — направляет напрямую как раньше. Подключено в miniplayer kebab (Player.tsx), TrackKebabMenu, FullscreenPlayer (там же `beforeNavigate={closeFullscreen}` чтобы overlay свернулся до перехода). i18n: добавлены `track.goToArtistPickerTitle` / `track.goToArtistPickerBack`. (b) MobileBottomDock: верстка прогресс-бара переписана так, что видимая 3px полоска снова прижата к верху дока, а 14px тач-зона рендерится как `absolute inset-x-0 top-0 h-3.5` overlay поверх рейла; overlay перекрывает только 11px верхнего padding'а cover-row (где нет интерактивных элементов) — тап-сик работает на мобиле, бар не сдвинулся. | open | (этот PR) |
-| 3 | `devin/1778363267-batch-fixes` | FullscreenPlayer volume slider, solid skip icons (initial), PWA navbar inset (½), mini-player touch hit area | merged (regression) | #427 |
-| 4 | `devin/1778365680-fix-batch` | revert broken skip icons, drop PWA safe-bottom inset, robust offline toast watcher | merged | #428 |
+| 1 | `devin/1778433068-watercolor-bg` | **Watercolor background для фуллскрин-плеера (replay PR #433).** В `FullscreenPlayer.tsx` ветка с обычной обложкой (без `coverVideoUrl`) теперь рендерит `motion.div` с `filter: blur(64px) saturate(1.5)` — внутри статичная rim-копия обложки + два дрейфующих слоя `bg-cover` (`.watercolor-drift-a` 32s / `.watercolor-drift-b` 47s, противоположные фазы, `ease-in-out`). Дрейфы — pure GPU `transform: translate3d` + `scale`, никаких `feDisplacementMap`/`feTurbulence` (PR #433 был реверчен из-за стоимости рендеринга на iOS). Радиальный mask `radial-gradient(ellipse at center, #000 28%, transparent 78%)` на обоих дрейфующих слоях прижимает движение к центру — края всегда показывают статичную rim-копию (требование «движение, но не у краёв»). Блюр + saturate применяются на обёртке как ПОСЛЕДНИЙ шаг рендера (требование «блюр последним слоем идёт обязательно»). Skipped для `coverVideoUrl` (анимированные обложки сами двигаются) и под `prefers-reduced-motion` — там рендерится только rim-копия. | open | (этот PR) |
 
 ---
 
@@ -90,37 +83,31 @@
 
 ## Live status
 
-- 2026-05-09T22:30Z — батч follow-up фиксов (PR
-  `devin/1778365680-fix-batch`). После PR #427 пользователь
-  сообщил три регрессии: (а) prev/next иконки в плеерах
-  «получились совершенно другие» — оказалось, lucide-react
-  `SkipBack`/`SkipForward` собраны из `<polygon>` + `<line>`,
-  и `strokeWidth={0}` уничтожал 1-D полосу. Откатил `strokeWidth=0`,
-  оставил `fill="currentColor"` — треугольник solid, вертикальная
-  полоса с дефолтной обводкой; (б) bottom navbar в PWA нужно ниже
-  — убрал `var(--pwa-safe-bottom)/2` инсет полностью, теперь
-  `bottom-4`/`sm:bottom-6` симметрично боковым полям; (в) тосты
-  «вы офлайн / вы онлайн» перестали показываться в PWA — переписал
-  `OfflineToastWatcher` на прямые `online`/`offline` event
-  listener'ы, добавил `visibilitychange` re-sync (известный
-  iOS PWA edge case с пропущенными событиями), `t` через ref —
-  смена локали больше не пересубскрайбит слушатели. Дополнительно
-  верифицировал что фикс lyrics из PR #425 задеплоился (поля
-  `fetchedAt`, `isRightToLeft` в актуальном бандле); если у юзера
-  не работает — нужен один cold-open PWA, чтобы workbox с
-  `skipWaiting`+`clientsClaim` подхватил новый SW.
+- 2026-05-10T17:00Z — replay watercolor-фона для фуллскрин-плеера
+  (PR `devin/1778433068-watercolor-bg`). Пользователь сказал, что
+  в предыдущей попытке (PR #433, реверт #434) эффект был «слишком
+  быстрым, лагал и без блюра, кривой по краям». Старый импорт
+  `feTurbulence` + `<animate>`-driven `feOffset` в SVG: тяжёлый
+  GPU-cost на iOS Safari, displacement-карта пересчитывалась каждый
+  кадр; жил отдельным `-z-20` слоем за блюр-слоем `-z-10`, поэтому
+  CSS `filter: blur` (свой контент, не backdrop) к displaced слою
+  не применялся.
 
-- 2026-05-09T21:30Z — старт офлайн-lyrics батча (PR
-  `devin/1778362098-offline-lyrics`, merged как #425). Расширил
-  `OfflineTrack` новым опциональным полем `lyrics: OfflineLyrics`,
-  добавил `fetchLyricsPayload` рядом с `fetchCoverBlob` в
-  `streamResolver.ts`, в `downloads.ts :: runTrack` запускаем
-  лирику параллельно с аудио (нулевая прибавка к wall-clock),
-  записываем в IDB при создании / обновлении строки трека.
-  `useLyrics` теперь сначала смотрит в IDB, потом сеть, и при
-  успешной сетевой загрузке backfill-ит старые офлайн-строки без
-  лирики. Audio engine не тронут (изменения только в путях
-  загрузки и в lyrics-хуке).
+  Новая реализация — pure CSS, без SVG-фильтров. В `FullscreenPlayer.tsx`
+  ветка с обычной обложкой (без `coverVideoUrl`) рендерит
+  `motion.div.fullscreen-player-watercolor` с `filter: blur(64px)
+  saturate(1.5)` (блюр — ПОСЛЕДНИЙ шаг рендера, как просил юзер).
+  Внутри: статичная rim-копия (`scale(1.15)`) + два слоя
+  `.watercolor-drift-a` (32s) и `.watercolor-drift-b` (47s) с
+  противоположными фазами; анимация — `transform: translate3d` +
+  `scale` (только GPU, никаких repaints / layout). Радиальный mask
+  `radial-gradient(ellipse at center, #000 28%, transparent 78%)` на
+  drift-слоях фиксирует движение в центре — края показывают
+  статичную rim-копию (требование «движения у краёв нет»).
+  Skipped: `coverVideoUrl` (анимированные обложки сами двигаются),
+  `prefers-reduced-motion` (только rim-копия, без drift). Crossfade
+  между треками сохранён через тот же `AnimatePresence + motion.div
+  key={trackCoverUrl}`.
 
 ---
 
@@ -133,6 +120,7 @@
 | 2026-05-08 ~21:25 | `2fa86d7feed2415c825633b09851548a` (предыдущий) | Boneyard skeletons — заменил оставшиеся `<PageLoader>` (7 страниц) на скелетоны, удалил компонент `PageLoader.tsx`, добавил `PlaylistRowSkeleton` / `PlaylistRowListSkeleton` в `Skeleton.tsx`. Tracker pruned. |
 | 2026-05-09 ~21:30 | `33edb7b9174a455d99183f00e71a4b4d` (предыдущий) | Offline lyrics — `OfflineTrack.lyrics`, `fetchLyricsPayload`, IDB-first `useLyrics` с back-fill сетевого ответа. Подготовил roadmap к 4-задачному батчу (lyrics offline / mobile lyrics layout / volume slider responsiveness / solid skip icons). PR #425 merged. |
 | 2026-05-09 ~21:50 | (предыдущий, batch-fixes) | Volume slider responsiveness + solid skip icons + PWA bottom inset (½) + mini-player touch hit area. PR #427 merged, но `strokeWidth={0}` на skip-иконках стирал 1-D `<line>` элемент → пользователь сообщил регрессию иконок. |
-| 2026-05-09 ~22:30 | `d8eeb192309c4c2d95225d362c18fa37` (текущий) | Follow-up батч: откатил `strokeWidth={0}` на SkipBack/SkipForward (Player / FullscreenPlayer / MobileBottomDock), убрал `var(--pwa-safe-bottom)/2` из bottom-инсета (теперь `bottom-4`/`sm:bottom-6` = боковым полям), переписал `OfflineToastWatcher` на прямые `online`/`offline` event listener'ы + `visibilitychange` re-sync для iOS PWA, `t` через ref. Верифицировал, что lyrics fix (PR #425) реально задеплоился. |
+| 2026-05-09 ~22:30 | `d8eeb192309c4c2d95225d362c18fa37` (предыдущий) | Follow-up батч: откатил `strokeWidth={0}` на SkipBack/SkipForward (Player / FullscreenPlayer / MobileBottomDock), убрал `var(--pwa-safe-bottom)/2` из bottom-инсета (теперь `bottom-4`/`sm:bottom-6` = боковым полям), переписал `OfflineToastWatcher` на прямые `online`/`offline` event listener'ы + `visibilitychange` re-sync для iOS PWA, `t` через ref. Верифицировал, что lyrics fix (PR #425) реально задеплоился. |
+| 2026-05-10 ~17:00 | `d9cc4c860e514bdab2945780dfd40a11` (текущий) | Replay watercolor-фона для фуллскрин-плеера (replay PR #433, реверт #434). Чисто CSS реализация — без `feDisplacementMap`/`feTurbulence`. `FullscreenPlayer.tsx` для не-видео обложек рендерит `.fullscreen-player-watercolor` обёртку с `filter: blur(64px) saturate(1.5)` (блюр — последний шаг), внутри статичная rim-копия + два дрейфующих слоя (32s / 47s, GPU `translate3d` + `scale`, противоположные фазы). Радиальный mask на drift-слоях прижимает движение к центру → края статичны. Keyframes/utility-классы добавлены в `src/styles/globals.scss`. Tracker pruned (старые merged строки убраны). |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.
