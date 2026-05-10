@@ -854,31 +854,53 @@ export function FullscreenPlayer() {
             {lyricsOpen && !isMdUp ? (
               <div
                 key="lyrics-cover-slot"
-                // Drop-in replacement for the cover wrapper: same
-                // `aspect-square w-full max-w-md` outer dimensions
-                // and the same viewport-height clamp via inline
-                // `maxWidth`. Sizing the lyrics block IDENTICALLY to
-                // the cover (rather than `flex-1` to grow into the
-                // breathing space above) is a hard constraint from
-                // the user — title / progress / transport / volume
-                // sit in the parent's `justify-center` flow and must
-                // NOT shift positions when lyrics open. With the
-                // lyrics block matching the cover footprint, the
-                // entire row layout below stays anchored to the same
-                // pixels regardless of `lyricsOpen`.
+                // OUTER wrapper occupies the EXACT same flow box as
+                // the cover (`aspect-square w-full max-w-md` + the
+                // identical viewport-height clamp). Keeping this
+                // wrapper at the same in-flow dimensions is what
+                // anchors the title / progress / transport / volume
+                // rows below — they must not shift pixels when
+                // lyrics open (hard user constraint).
+                //
+                // `overflow-visible` lets the absolute INNER wrapper
+                // (below) paint upward past the slot's top edge so
+                // the lyrics body visually consumes the breathing
+                // space above the cover. Without `overflow-visible`,
+                // the upward extension is clipped at the slot's top.
                 //
                 // `data-no-sheet-drag` keeps the parent fullscreen
-                // sheet's drag-to-dismiss from grabbing pointer events
-                // that originate inside the lyrics body. The
+                // sheet's drag-to-dismiss from grabbing pointer
+                // events that originate inside the lyrics body. The
                 // `LyricsContent` itself owns `data-allow-pan-y` so
                 // the user can scroll through verses with a finger
                 // even though the surrounding fullscreen-drag-zone
                 // pins `touch-action: none`.
                 data-no-sheet-drag
-                className="relative mx-auto flex aspect-square w-full max-w-md overflow-hidden"
+                className="relative mx-auto aspect-square w-full max-w-md overflow-visible"
                 style={{ maxWidth: 'min(28rem, calc(100vh - 28rem))' }}
               >
-                <LyricsContent trackId={currentTrack.id} onSeek={seek} />
+                {/*
+                  INNER wrapper extends ~5rem upward past the slot's
+                  top edge so the lyrics body fills more of the
+                  breathing space the parent `justify-center` leaves
+                  between the fullscreen header strip and the cover
+                  row, while leaving a small visual gap from the
+                  X / kebab icon row above. The bottom edge stays
+                  pinned to the slot's bottom (`bottom-0`) so the
+                  title row below remains in place. 5rem is the
+                  empirically-stable middle ground: on phone-sized
+                  viewports (~600px tall) the breathing space above
+                  the cover is ~7rem, so a 5rem extension leaves a
+                  ~2rem gap from the header; on tablet-sized
+                  viewports (~900px) it leaves ~7rem of gap which
+                  still reads as comfortable padding.
+                */}
+                <div
+                  className="absolute inset-x-0 bottom-0"
+                  style={{ top: '-5rem' }}
+                >
+                  <LyricsContent trackId={currentTrack.id} onSeek={seek} />
+                </div>
               </div>
             ) : (
             <motion.div
@@ -1213,6 +1235,17 @@ export function FullscreenPlayer() {
                         fallbackName={currentTrack.artist}
                         fallbackId={currentTrack.artistId}
                         className="hover:text-foreground hover:underline"
+                        // Without this hook the fullscreen overlay
+                        // stayed mounted on top of the freshly-loaded
+                        // artist page (the user reported the click
+                        // "didn't work" on mobile because the URL
+                        // changed but no visible transition fired —
+                        // the fullscreen sheet at z-50 hid the artist
+                        // page underneath until manually dismissed).
+                        // Mirrors the single-credit `goToArtist`
+                        // button which already calls closeFullscreen
+                        // before navigate().
+                        onNavigate={closeFullscreen}
                       />
                     </Marquee>
                   </div>

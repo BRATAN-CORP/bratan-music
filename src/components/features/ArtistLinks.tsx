@@ -42,6 +42,18 @@ interface ArtistLinksProps {
    *  collaboration list never grows the column vertically — instead
    *  the row is wrapped in a Marquee that scrolls horizontally. */
   nowrap?: boolean;
+  /** Called BEFORE the navigation fires (synchronously, in the
+   *  Link's onClick capture path so it lands in the same React
+   *  commit as `navigate`). Used by the fullscreen player to call
+   *  `closeFullscreen()` so the fullscreen overlay starts its
+   *  exit animation as the artist page mounts behind it — without
+   *  this hook, multi-credit clicks left the fullscreen sheet on
+   *  top of the freshly-loaded artist page on mobile (the user
+   *  saw the URL change but no visible transition because the
+   *  fullscreen overlay is `fixed inset-0 z-50`). The single-
+   *  credit case has its own `<button onClick={goToArtist}>`
+   *  shell that already does this. */
+  onNavigate?: () => void;
 }
 
 export function ArtistLinks({
@@ -53,7 +65,17 @@ export function ArtistLinks({
   wrapperClassName,
   separator = ', ',
   nowrap = false,
+  onNavigate,
 }: ArtistLinksProps) {
+  // Wrap the optional `onNavigate` together with the existing
+  // `stopPropagation` semantics into a single onClick handler.
+  // Order matters: stopPropagation first (so the parent row's
+  // onClick — e.g. play-track-on-row-click — doesn't also fire),
+  // then onNavigate which can do things like `closeFullscreen()`.
+  const handleLinkClick = (e: React.MouseEvent) => {
+    if (stopPropagation) e.stopPropagation();
+    onNavigate?.();
+  };
   const rowClass = nowrap
     ? 'inline whitespace-nowrap'
     : 'inline-flex flex-wrap items-baseline gap-x-0';
@@ -117,7 +139,7 @@ export function ArtistLinks({
       return (
         <Link
           to={`/artist/${fallbackId}`}
-          onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
+          onClick={handleLinkClick}
           className={cn('hover:text-foreground hover:underline', className)}
         >
           {text}
@@ -134,7 +156,7 @@ export function ArtistLinks({
         <span key={a.id + ':' + i} className="contents">
           <Link
             to={`/artist/${a.id}`}
-            onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
+            onClick={handleLinkClick}
             className={cn('hover:text-foreground hover:underline', className)}
           >
             {a.name}

@@ -222,9 +222,19 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
     return () => controls.stop();
   }, [activeIndex, autoScroll, reduce]);
 
+  // Status-state shells: loading / error / empty. We size them
+  // `h-full w-full` because the cover-slot wrapper around
+  // `LyricsContent` uses `display: flex` (row) with default
+  // `align-items: stretch`. Without `w-full` the child only
+  // takes content-width, which makes `justify-center` collapse to
+  // "centred inside the loader's own intrinsic width" — visually
+  // the spinner + label sit at the LEFT of the panel. Adding
+  // `w-full` lets the flex-row child fill the slot's width so the
+  // inner `justify-center` actually centres horizontally. The
+  // same fix applies to error / empty states.
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+      <div className="flex h-full w-full items-center justify-center gap-2 text-sm text-muted-foreground">
         <Loader2 size={16} className="animate-spin" />
         {t('lyrics.loading')}
       </div>
@@ -232,14 +242,14 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
   }
   if (isError) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         {t('lyrics.error')}
       </div>
     );
   }
   if (!data?.available) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
         {t('lyrics.empty')}
       </div>
     );
@@ -296,7 +306,19 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
                   animate={{
                     opacity: isActive ? 1 : isPast ? 0.22 : 0.34,
                     scale: isActive ? 1.04 : 1,
-                    filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
+                    // Blur on inactive lines was a half-pixel
+                    // (0.5px) — DevTools rounds it to 0 so on PC
+                    // the effect was invisible, but real-device
+                    // DPR ≥ 2 (every modern phone) renders the
+                    // half-pixel as a visible smear that flickers
+                    // off-and-on as each new line activates. The
+                    // user reported this exact pattern: "очень
+                    // слабый блюр… пропадает когда строчка
+                    // переключается и потом опять накладывается".
+                    // Removing the filter entirely keeps opacity +
+                    // scale as the only depth cues, which is what
+                    // the desktop view always actually showed.
+                    filter: 'blur(0px)',
                   }}
                   // Spring-based handoff so consecutive line changes
                   // don't visibly "step" — the previous tween's easing
