@@ -425,28 +425,33 @@ export function FullscreenPlayer() {
                   >
                     {/* Watercolor background for static covers.
                         Two slowly drifting copies of the cover sit on
-                        top of a static rim copy and create a continuous,
-                        organic flow — no SVG filters, no per-frame
+                        top of an oversized static rim copy and create
+                        a continuous, organic flow across the entire
+                        viewport — no SVG filters, no per-frame
                         recomposition: the motion is a pure GPU
-                        `transform: translate3d` + `scale`, so even iOS
-                        Safari renders it at 60fps without thermal cost.
-                        The radial-gradient mask on the moving layers
-                        keeps motion confined to the centre — the rim
-                        is always the static base copy, so the edges
-                        of the viewport never visibly move («движение,
-                        но так чтобы его не было у краёв»). The wrapper
-                        applies `filter: blur(64px) saturate(1.5)` to
-                        the whole composition AFTER the layers blend,
-                        so the user-mandated «блюр последним слоем»
-                        is the very last step in the rendering chain.
-                        Skipped automatically for animated covers
-                        (`coverVideoUrl` branch above) and dropped
-                        under `prefers-reduced-motion`. */}
+                        `transform: translate3d` + `scale`, so even
+                        iOS Safari renders at 60fps without thermal
+                        cost. Each drift layer is scaled to ~1.30 so
+                        translating it by up to ±6% never exposes
+                        what is behind the layer — the user
+                        requirement «чтобы когда края трогались, там
+                        же ниче нет позади, не было черного или иного
+                        цвета» holds because every drift always still
+                        covers the rim of the viewport with the same
+                        cover image, AND the static rim copy below
+                        is itself scaled to 1.30 as a defence-in-depth
+                        backup. The wrapper applies `filter: blur(64px)
+                        saturate(1.5)` to the WHOLE composition AFTER
+                        the layers blend, so the user-mandated «блюр
+                        последним слоем» is the very last step in the
+                        rendering chain. Skipped automatically for
+                        animated covers (`coverVideoUrl` branch above)
+                        and reduced under `prefers-reduced-motion`. */}
                     <div
                       className="absolute inset-0 bg-cover bg-center"
                       style={{
                         backgroundImage: `url(${trackCoverUrl})`,
-                        transform: 'scale(1.15)',
+                        transform: 'scale(1.30)',
                       }}
                     />
                     {!reduce && (
