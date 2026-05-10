@@ -781,3 +781,76 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
 .tilt-flatten {
   transform: none !important;
 }
+
+/* ────────────────────────────────────────────────────────────────────
+   Fullscreen player — watercolor background for static covers
+   ────────────────────────────────────────────────────────────────────
+   The fullscreen player paints a heavily blurred copy of the cover as
+   its ambience layer. For tracks that don't ship an animated
+   `coverVideoUrl` we add two slowly drifting copies of the cover on
+   top of the static rim copy — the result is a continuous, organic
+   colour flow that makes static covers feel alive without the GPU
+   cost of an SVG `feDisplacementMap` (the previous PR #433 attempt
+   used `feTurbulence` + animated `feOffset` and ran hot on iOS).
+
+   Design notes:
+   • The wrapper applies `filter: blur(64px) saturate(1.5)` to the
+     whole composition, so the blur is the LAST step in the rendering
+     chain — exactly what the user asked for («блюр последним слоем
+     идёт обязательно»).
+   • Each drifting layer is masked with a radial gradient that fades
+     to transparent at the rim, so motion is confined to the centre
+     of the viewport and the edges never visibly move («движение, но
+     так чтобы его не было у краёв»).
+   • Animation uses pure GPU `transform: translate3d` + `scale` (no
+     filter recomputation, no layout, no paint). Periods are 32s and
+     47s with `ease-in-out` and opposite phases — long enough that
+     the loop is invisible and the flow feels seamless.
+   • Skipped under `prefers-reduced-motion`; the wrapper still renders
+     the static rim copy so the visual stays consistent.
+*/
+.fullscreen-player-watercolor {
+  filter: blur(64px) saturate(1.5);
+}
+
+.watercolor-drift {
+  /* Mask the drifting layer so its motion fades out at the edges of
+     the viewport. The static rim copy underneath stays fully opaque,
+     which means the rim is locked in place no matter how far the
+     drifting layer translates. The mask is identical for both layers
+     so they have a matched falloff. */
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 28%, transparent 78%);
+          mask-image: radial-gradient(ellipse at center, #000 28%, transparent 78%);
+  will-change: transform;
+}
+
+@keyframes watercolor-drift-a {
+  0%   { transform: translate3d(0, 0, 0) scale(1.20); }
+  25%  { transform: translate3d(2.4%, -1.8%, 0) scale(1.22); }
+  50%  { transform: translate3d(-1.6%, 2.4%, 0) scale(1.21); }
+  75%  { transform: translate3d(-2.2%, -1.4%, 0) scale(1.23); }
+  100% { transform: translate3d(0, 0, 0) scale(1.20); }
+}
+
+@keyframes watercolor-drift-b {
+  0%   { transform: translate3d(0, 0, 0) scale(1.22); }
+  20%  { transform: translate3d(-2.0%, 1.8%, 0) scale(1.20); }
+  55%  { transform: translate3d(2.4%, -2.0%, 0) scale(1.23); }
+  85%  { transform: translate3d(-1.6%, -2.2%, 0) scale(1.21); }
+  100% { transform: translate3d(0, 0, 0) scale(1.22); }
+}
+
+.watercolor-drift-a {
+  animation: watercolor-drift-a 32s ease-in-out infinite;
+}
+
+.watercolor-drift-b {
+  animation: watercolor-drift-b 47s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watercolor-drift-a,
+  .watercolor-drift-b {
+    animation: none;
+  }
+}
