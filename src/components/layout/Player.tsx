@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, Maximize2, Heart,
-  MoreHorizontal, ListPlus, ListOrdered, Share2, User as UserIcon, Check, Radio, Loader2,
+  MoreHorizontal, ListPlus, ListOrdered, Share2, Check, Radio, Loader2,
   Download, Upload, Disc, Ban, RotateCcw, ArrowDownToLine,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion, useTransform } from 'motion/react';
@@ -22,7 +22,8 @@ import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
-import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistGoToMenuItems } from '@/components/features/ArtistGoToMenuItems';
 import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
@@ -125,10 +126,11 @@ export function Player() {
   };
 
   const [menuOpen, setMenuOpenRaw] = useState(false);
-  // The kebab can drill into a per-artist picker for multi-credit
-  // tracks. The picker reuses the same popover so position and
-  // outside-click handling don't change between views.
-  const [menuView, setMenuView] = useState<ArtistDislikeMenuView>('main');
+  // The kebab can drill into a per-credit picker for multi-artist
+  // tracks. There are two picker variants — "Hide artist" and "Go
+  // to artist" — both rendered inside the same popover (so position
+  // / outside-click handling stays identical between views).
+  const [menuView, setMenuView] = useState<'main' | 'artist-hide-picker' | 'artist-go-picker'>('main');
   const setMenuOpen = (next: boolean | ((v: boolean) => boolean)) => {
     setMenuOpenRaw((prev) => {
       const value = typeof next === 'function' ? (next as (v: boolean) => boolean)(prev) : next;
@@ -218,12 +220,6 @@ export function Player() {
       },
     );
     setMenuOpen(false);
-  };
-
-  const handleGoToArtist = () => {
-    if (!currentTrack?.artistId) return;
-    setMenuOpen(false);
-    navigate(`/artist/${currentTrack.artistId}`);
   };
 
   const [radioBusy, setRadioBusy] = useState(false);
@@ -490,11 +486,18 @@ export function Player() {
                 align="end"
                 width={224}
               >
-                {menuView === 'artist-picker' ? (
+                {menuView === 'artist-hide-picker' ? (
                   <ArtistDislikeMenuItems
                     track={currentTrack}
                     view="artist-picker"
-                    onViewChange={setMenuView}
+                    onViewChange={(v) => setMenuView(v === 'artist-picker' ? 'artist-hide-picker' : 'main')}
+                    onAction={() => setMenuOpen(false)}
+                  />
+                ) : menuView === 'artist-go-picker' ? (
+                  <ArtistGoToMenuItems
+                    track={currentTrack}
+                    view="artist-go-picker"
+                    onViewChange={(v) => setMenuView(v === 'artist-go-picker' ? 'artist-go-picker' : 'main')}
                     onAction={() => setMenuOpen(false)}
                   />
                 ) : (
@@ -581,14 +584,12 @@ export function Player() {
                 >
                   {shareCopied ? t('track.shareCopied') : t('track.share')}
                 </MenuItem>
-                {currentTrack.artistId && (
-                  <MenuItem
-                    onClick={handleGoToArtist}
-                    icon={<UserIcon size={14} />}
-                  >
-                    {t('track.goToArtist')}
-                  </MenuItem>
-                )}
+                <ArtistGoToMenuItems
+                  track={currentTrack}
+                  view="main"
+                  onViewChange={(v) => setMenuView(v === 'artist-go-picker' ? 'artist-go-picker' : 'main')}
+                  onAction={() => setMenuOpen(false)}
+                />
                 {currentTrack.albumId && (
                   <MenuItem
                     onClick={handleGoToAlbum}
@@ -610,7 +611,7 @@ export function Player() {
                     <ArtistDislikeMenuItems
                       track={currentTrack}
                       view="main"
-                      onViewChange={setMenuView}
+                      onViewChange={(v) => setMenuView(v === 'artist-picker' ? 'artist-hide-picker' : 'main')}
                       onAction={() => setMenuOpen(false)}
                     />
                   </>

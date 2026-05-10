@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
-import { ArrowLeft, Ban, ChevronRight, RotateCcw, UserMinus } from 'lucide-react';
-import { MenuDivider, MenuItem } from '@/components/ui/PopoverMenu';
+import { Ban, ChevronRight, RotateCcw, UserMinus } from 'lucide-react';
+import { MenuItem } from '@/components/ui/PopoverMenu';
+import { ArtistMenuPickerView } from './ArtistMenuPickerView';
 import type { ArtistRef, Track } from '@/types';
 import { useDislikesStore } from '@/store/dislikes';
 import { useToggleDislike } from '@/hooks/useDislikes';
@@ -108,45 +109,33 @@ export function ArtistDislikeMenuItems({ track, view, onViewChange, onAction }: 
   };
 
   // ── Picker view (multi-artist only) ─────────────────────────────
+  // Rendered through the shared `ArtistMenuPickerView` so the visual
+  // shell (back row, divider, caption, list) stays in lock-step with
+  // the "Go to artist" picker (`ArtistGoToMenuItems`). The dislike-
+  // specific bits — per-row icon (Ban / RotateCcw) and the "уже
+  // скрыт" subtext — are passed in as render hooks.
   if (view === 'artist-picker' && artists.length > 1) {
     return (
-      <>
-        <MenuItem
-          onClick={() => onViewChange('main')}
-          icon={<ArrowLeft size={14} />}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          {t('dislike.artistPickerBack')}
-        </MenuItem>
-        <MenuDivider />
-        <div className="px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-          {t('dislike.artistPickerTitle')}
-        </div>
-        {artists.map((a) => {
-          const disliked = dislikedArtists.has(a.id);
-          return (
-            <MenuItem
-              key={a.id}
-              onClick={() => {
-                fireToggle(a);
-                onViewChange('main');
-                onAction?.();
-              }}
-              disabled={toggleDislike.isPending}
-              icon={disliked ? <RotateCcw size={14} /> : <Ban size={14} />}
-            >
-              <span className="flex flex-col items-start">
-                <span className="truncate">{a.name}</span>
-                {disliked && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {t('dislike.artistPickerHidden')}
-                  </span>
-                )}
-              </span>
-            </MenuItem>
-          );
-        })}
-      </>
+      <ArtistMenuPickerView
+        artists={artists}
+        title={t('dislike.artistPickerTitle')}
+        backLabel={t('dislike.artistPickerBack')}
+        onBack={() => onViewChange('main')}
+        iconFor={(a) => (dislikedArtists.has(a.id) ? <RotateCcw size={14} /> : <Ban size={14} />)}
+        subtextFor={(a) =>
+          dislikedArtists.has(a.id) ? (
+            <span className="text-[10px] text-muted-foreground">
+              {t('dislike.artistPickerHidden')}
+            </span>
+          ) : null
+        }
+        rowDisabled={() => toggleDislike.isPending}
+        onPick={(a) => {
+          fireToggle(a);
+          onViewChange('main');
+          onAction?.();
+        }}
+      />
     );
   }
 

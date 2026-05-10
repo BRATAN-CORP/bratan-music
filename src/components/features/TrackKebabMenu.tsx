@@ -5,14 +5,15 @@ import {
   // Loader2 still used for the radio + per-file download spinners (no
   // job-progress signal available there). The offline-save action
   // uses `OfflineProgressIcon` so the user sees a real percentage.
-  MoreHorizontal, Radio, RotateCcw, Share2, Trash2, Upload, User as UserIcon,
+  MoreHorizontal, Radio, RotateCcw, Share2, Trash2, Upload,
 } from 'lucide-react';
 import type { Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { PopoverMenu, MenuItem, MenuDivider } from '@/components/ui/PopoverMenu';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
-import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistGoToMenuItems } from '@/components/features/ArtistGoToMenuItems';
 import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { useDislikesStore } from '@/store/dislikes';
@@ -120,7 +121,7 @@ export function TrackKebabMenu({
   // handling stay in lockstep — the picker simply replaces the main
   // rows in place. Reset back to 'main' whenever the popover closes
   // so the next open always lands on the standard list.
-  const [menuView, setMenuView] = useState<ArtistDislikeMenuView>('main');
+  const [menuView, setMenuView] = useState<'main' | 'artist-hide-picker' | 'artist-go-picker'>('main');
   const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
     setOpenState((prev) => {
       const value = typeof next === 'function' ? (next as (v: boolean) => boolean)(prev) : next;
@@ -217,12 +218,6 @@ export function TrackKebabMenu({
     close();
   };
 
-  const handleGoToArtist = () => {
-    if (!track.artistId) return;
-    navigate(`/artist/${track.artistId}`);
-    close();
-  };
-
   const handleGoToAlbum = () => {
     if (!track.albumId) return;
     navigate(`/album/${track.albumId}`);
@@ -277,11 +272,18 @@ export function TrackKebabMenu({
         align={align}
         width={width}
       >
-        {menuView === 'artist-picker' ? (
+        {menuView === 'artist-hide-picker' ? (
           <ArtistDislikeMenuItems
             track={track}
             view="artist-picker"
-            onViewChange={setMenuView}
+            onViewChange={(v) => setMenuView(v === 'artist-picker' ? 'artist-hide-picker' : 'main')}
+            onAction={close}
+          />
+        ) : menuView === 'artist-go-picker' ? (
+          <ArtistGoToMenuItems
+            track={track}
+            view="artist-go-picker"
+            onViewChange={(v) => setMenuView(v === 'artist-go-picker' ? 'artist-go-picker' : 'main')}
             onAction={close}
           />
         ) : (
@@ -356,9 +358,12 @@ export function TrackKebabMenu({
 
             {(track.artistId || track.albumId) && <MenuDivider />}
             {track.artistId && (
-              <MenuItem onClick={handleGoToArtist} icon={<UserIcon size={14} />}>
-                {t('track.goToArtist')}
-              </MenuItem>
+              <ArtistGoToMenuItems
+                track={track}
+                view="main"
+                onViewChange={(v) => setMenuView(v === 'artist-go-picker' ? 'artist-go-picker' : 'main')}
+                onAction={close}
+              />
             )}
             {track.albumId && (
               <MenuItem onClick={handleGoToAlbum} icon={<Disc size={14} />}>
@@ -379,7 +384,7 @@ export function TrackKebabMenu({
                 <ArtistDislikeMenuItems
                   track={track}
                   view="main"
-                  onViewChange={setMenuView}
+                  onViewChange={(v) => setMenuView(v === 'artist-picker' ? 'artist-hide-picker' : 'main')}
                   onAction={close}
                 />
               </>

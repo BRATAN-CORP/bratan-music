@@ -501,6 +501,8 @@
     "download": "Download file",
     "uploadOwn": "Upload your version",
     "goToArtist": "Go to artist",
+    "goToArtistPickerTitle": "Pick an artist to open",
+    "goToArtistPickerBack": "Back",
     "goToAlbum": "Go to album",
     "copyPrompt": "Copy the link:",
     "trackTitleByArtist": "{artist} — {title}",

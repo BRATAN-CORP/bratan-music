@@ -163,72 +163,73 @@ export function MobileBottomDock() {
             className="flex flex-col"
           >
             {/* Progress bar — visible 3px rail FLUSH with the dock's
-                top edge, sitting inside a 14px-tall transparent hit
-                zone. The wrapper element is what receives the
-                pointer events (`onPointerDown` → seek), the inner
-                3px child is purely visual.
+                top edge, with a 14px-tall transparent touch hit zone
+                rendered as an ABSOLUTE overlay on top of the rail.
+                The overlay extends 11px below the visible rail and
+                overlaps the cover row's `py-2.5` top padding (10 px
+                of empty space + a 1 px sliver of the cover button's
+                top edge — far smaller than a 40 px finger pad, so no
+                button-tap is lost in practice).
 
-                Why the wrapper is taller than the rail: a finger has
-                a touch surface of ~40px, and the previous 3px hit
-                area was so narrow that the user's tap on a real
-                phone (or DevTools touch emulator) almost never
-                landed on the rail — it was the "тaймлайн нельзя
-                перемещать на мобильном" complaint. Mouse cursors
-                CAN land precisely on a 3px line, which is why the
-                bug only showed up on touch. The 11px of dead space
-                below the visible rail eats only into the cover
-                row's `py-2.5` top padding, so no interactive element
-                inside the row loses its hit zone.
+                Why the overlay is absolute and not in flow: a
+                previous iteration made the wrapper itself 14 px tall
+                so it could double as the hit zone. That worked for
+                touch but visibly pushed the entire cover row down by
+                11 px — the user reported the mini-player rail had
+                slid down after that fix. Splitting "visible 3 px in
+                flow" from "14 px hit zone overlay" keeps the dock
+                geometry unchanged AND keeps the generous tap area.
 
-                The thumb is still rendered OUTSIDE this wrapper as
-                a sibling of the visual surface, so it can extend
-                above the dock's rounded top edge. Its `top: 1px`
-                anchors it to the centre of the visible 3px rail
-                (which still starts at the top of the wrapper). */}
-            <div
-              className="group/seek relative flex h-3.5 w-full shrink-0 cursor-pointer touch-none select-none items-start"
-              role="slider"
-              aria-label={t('player.seek')}
-              aria-valuemin={0}
-              aria-valuemax={Math.max(1, Math.round(duration))}
-              aria-valuenow={Math.round(progress)}
-              onPointerEnter={() => setSeekHover(true)}
-              onPointerLeave={() => setSeekHover(false)}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                const rect = e.currentTarget.getBoundingClientRect();
-                const seekFromX = (clientX: number) => {
-                  // Pointer-to-position mapping matches the bar+thumb
-                  // inset coordinate system so the cursor is always
-                  // exactly under the thumb when dragging — see
-                  // Player.tsx for the full rationale.
-                  const usable = Math.max(1, rect.width - RAIL_INSET_PX * 2);
-                  const pct = Math.min(1, Math.max(0, (clientX - rect.left - RAIL_INSET_PX) / usable));
-                  seekAudio(pct * duration);
-                };
-                seekFromX(e.clientX);
-                setSeekActive(true);
-                const target = e.currentTarget;
-                const onMove = (ev: PointerEvent) => seekFromX(ev.clientX);
-                const onUp = (ev: PointerEvent) => {
-                  seekFromX(ev.clientX);
-                  target.removeEventListener('pointermove', onMove);
-                  target.removeEventListener('pointerup', onUp);
-                  target.removeEventListener('pointercancel', onUp);
-                  try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
-                  setSeekActive(false);
-                };
-                target.addEventListener('pointermove', onMove);
-                target.addEventListener('pointerup', onUp);
-                target.addEventListener('pointercancel', onUp);
-              }}
-            >
+                The wrapper carries `z-10` so the overlay paints over
+                the cover row (which sits directly below in the same
+                flex flow). The thumb is still rendered OUTSIDE this
+                wrapper as a sibling of the dock surface, so it can
+                extend above the dock's rounded top edge. */}
+            <div className="relative z-10 w-full shrink-0">
               <div className="relative h-[3px] w-full overflow-hidden bg-white/[0.08]">
                 <motion.div
                   className="absolute inset-y-0 bg-gradient-to-r from-[var(--color-accent)] via-[var(--color-sub-accent)] to-[var(--color-accent)]"
                   style={{ left: `${RAIL_INSET_PX}px`, width: progressWidth }}
                 />
               </div>
+              <div
+                className="group/seek absolute inset-x-0 top-0 h-3.5 cursor-pointer touch-none select-none"
+                role="slider"
+                aria-label={t('player.seek')}
+                aria-valuemin={0}
+                aria-valuemax={Math.max(1, Math.round(duration))}
+                aria-valuenow={Math.round(progress)}
+                onPointerEnter={() => setSeekHover(true)}
+                onPointerLeave={() => setSeekHover(false)}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const seekFromX = (clientX: number) => {
+                    // Pointer-to-position mapping matches the bar+thumb
+                    // inset coordinate system so the cursor is always
+                    // exactly under the thumb when dragging — see
+                    // Player.tsx for the full rationale.
+                    const usable = Math.max(1, rect.width - RAIL_INSET_PX * 2);
+                    const pct = Math.min(1, Math.max(0, (clientX - rect.left - RAIL_INSET_PX) / usable));
+                    seekAudio(pct * duration);
+                  };
+                  seekFromX(e.clientX);
+                  setSeekActive(true);
+                  const target = e.currentTarget;
+                  const onMove = (ev: PointerEvent) => seekFromX(ev.clientX);
+                  const onUp = (ev: PointerEvent) => {
+                    seekFromX(ev.clientX);
+                    target.removeEventListener('pointermove', onMove);
+                    target.removeEventListener('pointerup', onUp);
+                    target.removeEventListener('pointercancel', onUp);
+                    try { target.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+                    setSeekActive(false);
+                  };
+                  target.addEventListener('pointermove', onMove);
+                  target.addEventListener('pointerup', onUp);
+                  target.addEventListener('pointercancel', onUp);
+                }}
+              />
             </div>
 
             <div
