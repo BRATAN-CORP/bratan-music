@@ -269,7 +269,13 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
       // this attribute the lyrics scroller would inherit `none` and
       // the user couldn't manually scroll through verses on touch.
       data-allow-pan-y
-      className="relative h-full overflow-y-auto px-5 py-10 sm:px-8"
+      // `no-scrollbar` (defined in globals.scss) hides the
+      // WebKit + Firefox scrollbars while preserving overflow
+      // behaviour. The lyrics layer leans heavily on the SCROLL_MASK
+      // fade for visual rhythm — a real bar at the side breaks the
+      // song-sheet aesthetic, doubly so on the narrow cover-slot
+      // variant on mobile where the panel is only ~28rem wide.
+      className="no-scrollbar relative h-full overflow-y-auto px-5 py-10 sm:px-8"
       style={{
         WebkitMaskImage: SCROLL_MASK,
         maskImage: SCROLL_MASK,
@@ -343,13 +349,34 @@ function LyricsBody({ isLoading, isError, data, lines, activeIndex, progress, is
         )}
       </div>
       {synced && !autoScroll && (
-        <button
-          type="button"
-          onClick={() => setAutoScroll(true)}
-          className="sticky bottom-4 left-1/2 mx-auto block -translate-x-1/2 rounded-full border border-border/60 bg-[var(--color-surface-elevated)]/85 px-4 py-2 text-xs font-medium text-foreground shadow-[0_10px_32px_-6px_rgba(0,0,0,0.55),0_0_24px_-2px_var(--color-accent-soft)] backdrop-blur ring-1 ring-white/10 transition-shadow hover:shadow-[0_12px_36px_-4px_rgba(0,0,0,0.65),0_0_32px_-2px_var(--color-accent-soft)]"
-        >
-          {t('lyrics.followAlong')}
-        </button>
+        // Sticky wrapper sits at the bottom of the lyrics scroll
+        // container; the inner button is `inline-flex` so its width
+        // is content-sized, then horizontally centred inside the
+        // wrapper via `justify-center`. Previously the button used
+        // `block + left-1/2 + -translate-x-1/2` which on `block`
+        // made the button stretch full-width and read as left-aligned
+        // text — visibly NOT centred relative to the lyrics panel.
+        // The wrapper is `pointer-events-none` so the empty space
+        // around the button still passes wheel / touch events
+        // through to the verse list below; the button itself
+        // re-enables pointer events on `pointer-events-auto`.
+        <div className="sticky bottom-4 z-10 flex justify-center pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setAutoScroll(true)}
+            // `liquid-glass` is the same surface recipe the navbar
+            // / mobile dock / popovers use — multi-layer box-shadow
+            // chrome bezel + backdrop-filter blur. It paints the
+            // chrome itself; we just add the rounded-full pill,
+            // padding, typography and a soft accent halo so the
+            // button reads as part of the same family as the
+            // navbar/dock surfaces but with a distinguishing
+            // purple glow.
+            className="liquid-glass pointer-events-auto rounded-full px-4 py-2 text-xs font-medium text-foreground shadow-[0_0_24px_-2px_var(--color-accent-soft)] transition-shadow hover:shadow-[0_0_32px_-2px_var(--color-accent-soft)]"
+          >
+            {t('lyrics.followAlong')}
+          </button>
+        </div>
       )}
     </div>
   );
