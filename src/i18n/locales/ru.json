@@ -501,6 +501,8 @@
     "download": "Скачать файл",
     "uploadOwn": "Загрузить свою версию",
     "goToArtist": "Перейти к артисту",
+    "goToArtistPickerTitle": "Кого из соавторов открыть",
+    "goToArtistPickerBack": "Назад",
     "goToAlbum": "Перейти к альбому",
     "copyPrompt": "Скопируйте ссылку:",
     "trackTitleByArtist": "{artist} — {title}",

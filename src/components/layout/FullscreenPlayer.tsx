@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownToLine, ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
-  SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check, Ban, RotateCcw, X,
+  SkipBack, SkipForward, Sliders, Upload, Volume2, VolumeX, Check, Ban, RotateCcw, X,
 } from 'lucide-react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -16,7 +16,8 @@ import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
 import { LyricsPanel, LyricsContent } from '@/components/features/LyricsPanel';
-import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistDislikeMenuItems } from '@/components/features/ArtistDislikeMenuItems';
+import { ArtistGoToMenuItems } from '@/components/features/ArtistGoToMenuItems';
 import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { useToggleLike } from '@/hooks/useLibrary';
@@ -102,9 +103,11 @@ export function FullscreenPlayer() {
   const [downloading, setDownloading] = useState(false);
   const [radioBusy, setRadioBusy] = useState(false);
   const [moreOpen, setMoreOpenRaw] = useState(false);
-  // The kebab can drill into a per-artist picker for multi-credit
-  // tracks. Picker swaps inside the same popover.
-  const [moreView, setMoreView] = useState<ArtistDislikeMenuView>('main');
+  // The kebab can drill into a per-credit picker for multi-artist
+  // tracks. There are two picker variants — "Hide artist" and "Go
+  // to artist" — both rendered inside the same popover (so position
+  // / outside-click handling stays identical between views).
+  const [moreView, setMoreView] = useState<'main' | 'artist-hide-picker' | 'artist-go-picker'>('main');
   const setMoreOpen = (next: boolean | ((v: boolean) => boolean)) => {
     setMoreOpenRaw((prev) => {
       const value = typeof next === 'function' ? (next as (v: boolean) => boolean)(prev) : next;
@@ -612,12 +615,20 @@ export function FullscreenPlayer() {
                 align="end"
                 width={240}
               >
-                {moreView === 'artist-picker' ? (
+                {moreView === 'artist-hide-picker' ? (
                   <ArtistDislikeMenuItems
                     track={currentTrack}
                     view="artist-picker"
-                    onViewChange={setMoreView}
+                    onViewChange={(v) => setMoreView(v === 'artist-picker' ? 'artist-hide-picker' : 'main')}
                     onAction={() => setMoreOpen(false)}
+                  />
+                ) : moreView === 'artist-go-picker' ? (
+                  <ArtistGoToMenuItems
+                    track={currentTrack}
+                    view="artist-go-picker"
+                    onViewChange={(v) => setMoreView(v === 'artist-go-picker' ? 'artist-go-picker' : 'main')}
+                    onAction={() => setMoreOpen(false)}
+                    beforeNavigate={closeFullscreen}
                   />
                 ) : (
                   <>
@@ -682,14 +693,13 @@ export function FullscreenPlayer() {
                 >
                   {t('track.addToPlaylist')}
                 </MenuItem>
-                {currentTrack.artistId && (
-                  <MenuItem
-                    onClick={() => { goToArtist(); setMoreOpen(false); }}
-                    icon={<User size={14} />}
-                  >
-                    {t('track.goToArtist')}
-                  </MenuItem>
-                )}
+                <ArtistGoToMenuItems
+                  track={currentTrack}
+                  view="main"
+                  onViewChange={(v) => setMoreView(v === 'artist-go-picker' ? 'artist-go-picker' : 'main')}
+                  onAction={() => setMoreOpen(false)}
+                  beforeNavigate={closeFullscreen}
+                />
                 {currentTrack.albumId && (
                   <MenuItem
                     onClick={() => { goToAlbum(); setMoreOpen(false); }}
@@ -752,7 +762,7 @@ export function FullscreenPlayer() {
                     <ArtistDislikeMenuItems
                       track={currentTrack}
                       view="main"
-                      onViewChange={setMoreView}
+                      onViewChange={(v) => setMoreView(v === 'artist-picker' ? 'artist-hide-picker' : 'main')}
                       onAction={() => setMoreOpen(false)}
                     />
                   </>
