@@ -328,7 +328,8 @@
     "removeTrack": "Remove {title} from the queue",
     "playing": "Now playing",
     "paused": "Paused",
-    "removeTooltip": "Remove from queue"
+    "removeTooltip": "Remove from queue",
+    "dragHandle": "Drag track"
   },
   "library": {
     "likedPlaylistName": "Liked",
