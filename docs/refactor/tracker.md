@@ -55,9 +55,9 @@
 | # | Branch | Title | Status | PR |
 | --- | --- | --- | --- | --- |
 | 1 | `devin/1778362098-offline-lyrics` | Offline lyrics — fetch + persist `OfflineTrack.lyrics` при загрузке трека, IDB-fallback в `useLyrics` | merged | #425 |
-| 2 | (TBD) | Mobile lyrics layout — на узких экранах прятать обложку + анимированный halo при открытом lyrics, рендерить тот же side-panel дизайн в области обложки | pending | — |
+| 2 | `devin/1778409485-fix-queue-lyrics` | **Mobile lyrics layout (final):** на <md рендерим `<LyricsContent>` прямо в слоте обложки + verb 1-к-1 со словами пользователя «замещали обложку и пространство сверху чуть»; кебаб «…» в шапке превращается в крестик-закрытие; old `mode="overlay"` overlay убран. Queue: модалка центрируется на любом breakpoint (Sheet → Modal align="center"); drag-to-reorder split: touch — только grip-handle, mouse — везде (старое). | open | (этот PR) |
 | 3 | `devin/1778363267-batch-fixes` | FullscreenPlayer volume slider, solid skip icons (initial), PWA navbar inset (½), mini-player touch hit area | merged (regression) | #427 |
-| 4 | `devin/1778365680-fix-batch` | **Follow-up:** revert broken skip icons, drop PWA safe-bottom inset, robust offline toast watcher | open | (этот PR) |
+| 4 | `devin/1778365680-fix-batch` | revert broken skip icons, drop PWA safe-bottom inset, robust offline toast watcher | merged | #428 |
 
 ---
 

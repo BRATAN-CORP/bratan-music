@@ -13,9 +13,12 @@ interface LyricsContentProps {
 /**
  * Inner lyrics view — fetches, parses and renders the (possibly synced)
  * lyrics in Apple-Music style. Has no positioning of its own so it can be
- * embedded as a side panel on desktop or as a full-screen overlay on mobile.
+ * embedded as a side panel on desktop, as a full-screen overlay, or
+ * (on narrow viewports) as a direct cover-slot replacement inside the
+ * fullscreen player. Exported so callers that already own the surrounding
+ * layout can drop it in without the `LyricsPanel` shell.
  */
-function LyricsContent({ trackId, onSeek }: LyricsContentProps) {
+export function LyricsContent({ trackId, onSeek }: LyricsContentProps) {
   const { data, isLoading, isError } = useLyrics(trackId);
   const progress = usePlayerStore((s) => s.progress);
 

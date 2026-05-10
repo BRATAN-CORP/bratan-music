@@ -328,7 +328,8 @@
     "removeTrack": "Убрать {title} из очереди",
     "playing": "Сейчас играет",
     "paused": "На паузе",
-    "removeTooltip": "Убрать из очереди"
+    "removeTooltip": "Убрать из очереди",
+    "dragHandle": "Перетащить трек"
   },
   "library": {
     "likedPlaylistName": "Любимое",

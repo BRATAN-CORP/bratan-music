@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Reorder } from 'motion/react';
+import { Reorder, useDragControls } from 'motion/react';
 import { Ban, GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-react';
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
-import { Sheet } from '@/components/ui/Sheet';
+import { Modal } from '@/components/ui/Modal';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { useT } from '@/i18n';
@@ -15,9 +15,25 @@ interface QueueDialogProps {
 }
 
 /**
- * Queue editor. Bottom-sheet on mobile, centered modal on md+ via the
- * shared `Sheet` primitive. Uses motion's `Reorder.Group` so surrounding
- * tracks visibly flow around the dragged item.
+ * Queue editor. Centred dialog at every breakpoint — the user explicitly
+ * asked for the modal to land in the middle of the screen on mobile too,
+ * because the previous bottom-sheet positioning visibly drifted off the
+ * vertical centre line of the fullscreen player and read as off-axis.
+ * The shared `Modal` primitive owns the scrim + dismiss; we just pin the
+ * panel size and let `align="center"` vertically centre it inside the
+ * viewport. The mobile dock at z-40 sits behind the modal scrim (z-60),
+ * so the dock is blurred-out by the scrim while the panel is visible.
+ *
+ * Drag-to-reorder is split by pointer type (the original bug: a finger
+ * swipe over a row was committing to a `Reorder.Item` drag instead of
+ * scrolling the list, because motion's default `dragListener` claims
+ * vertical pointer-down anywhere on the item). Mouse keeps the original
+ * "drag from anywhere on the row" behaviour because there's no
+ * scroll-vs-drag gesture conflict on a desktop pointer (wheel scrolls
+ * the list, pointer-down drags rows). Touch is restricted to the
+ * `GripVertical` handle on the left so a finger anywhere ELSE on the
+ * row falls through to the parent's native vertical pan, which scrolls
+ * the queue.
  */
 export function QueueDialog({ open, onClose }: QueueDialogProps) {
   const t = useT();
@@ -36,11 +52,20 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
   };
 
   return (
-    <Sheet
+    <Modal
       open={open}
       onClose={onClose}
+      align="center"
       ariaLabel={t('queue.title')}
-      panelClassName="flex w-[min(520px,calc(100vw-24px))] flex-col max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
+      // The panel max-height leaves enough vertical room above and
+      // below for the centred layout to clear (a) the persistent
+      // mobile bottom dock that sits at `bottom-4` + ~5rem of stacked
+      // mini-player + nav, and (b) the iOS PWA safe-bottom inset.
+      // 9rem of total reduction → ~4.5rem of margin on each side
+      // when the queue fills the full panel height; on shorter
+      // queues the panel collapses to its content and the centre
+      // alignment puts it visually mid-screen.
+      panelClassName="flex w-[min(520px,calc(100vw-24px))] flex-col max-h-[calc(100dvh-9rem-var(--pwa-safe-bottom))]"
     >
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
@@ -93,7 +118,7 @@ export function QueueDialog({ open, onClose }: QueueDialogProps) {
           </Reorder.Group>
         )}
       </div>
-    </Sheet>
+    </Modal>
   );
 }
 
@@ -114,6 +139,11 @@ interface RowProps {
  * surrounding rows automatically reflow around it via motion's layout
  * animation while the user drags. We bump the dragged row's z-index and
  * scale slightly so it visually lifts above its neighbours.
+ *
+ * Drag is started manually via `useDragControls` so we can split touch
+ * vs mouse: mouse path drags from anywhere on the row, touch path is
+ * restricted to the `GripVertical` handle. See `QueueDialog` doc-comment
+ * for the rationale.
  */
 function QueueRow({
   track,
@@ -132,11 +162,37 @@ function QueueRow({
   // device is offline (otherwise the network URL fails and the
   // browser falls back to its broken-image glyph).
   const coverUrl = useOfflineCoverUrl('track', track.id, track.coverUrl);
+  const dragControls = useDragControls();
+
+  // Mouse-only drag start on the row body. We early-return for any
+  // non-mouse pointer so touch falls through to the parent
+  // `overflow-y-auto` container and the user can scroll the queue with
+  // their finger. Motion's tap-vs-drag heuristic fires the inner
+  // button's `onClick` if the pointer never moves past the drag
+  // threshold, so a plain mouse click on the row still toggles play.
+  const handleRowPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse') return;
+    dragControls.start(e);
+  };
+  // Grip-handle drag start is unconditional (touch + mouse). We
+  // `preventDefault` so the desktop browser doesn't start a native
+  // text-selection drag from the icon, and `stopPropagation` so the
+  // row's own pointer-down listener doesn't double-start the drag for
+  // a mouse press on the handle.
+  const handleHandlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragControls.start(e);
+  };
+
   return (
     <Reorder.Item
       value={track}
+      dragListener={false}
+      dragControls={dragControls}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onPointerDown={handleRowPointerDown}
       // Spring tuned to feel "liquid" — neighbours reflow with a soft
       // bounce-free curve, but the dragged item snaps tightly to the
       // pointer so it doesn't feel rubbery.
@@ -160,8 +216,14 @@ function QueueRow({
       ].join(' ')}
     >
       <span
-        className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/70 active:cursor-grabbing"
-        aria-hidden
+        // `touch-none` opts the handle out of the parent's native
+        // vertical pan so a finger press-and-drag on the icon goes
+        // straight into motion's drag pipeline (the rest of the row
+        // keeps `pan-y` so a finger anywhere else scrolls the queue).
+        className="flex h-7 w-5 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground/70 active:cursor-grabbing"
+        onPointerDown={handleHandlePointerDown}
+        aria-label={t('queue.dragHandle')}
+        role="button"
       >
         <GripVertical size={14} />
       </span>

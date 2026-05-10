@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownToLine, ChevronDown, Disc, Download, Heart, ListOrdered, ListPlus, Loader2, Mic2, MoreHorizontal, Pause, Play, Radio, Repeat, Repeat1, Share2, Shuffle,
-  SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check, Ban, RotateCcw,
+  SkipBack, SkipForward, Sliders, Upload, User, Volume2, VolumeX, Check, Ban, RotateCcw, X,
 } from 'lucide-react';
 import { animate, AnimatePresence, motion, useDragControls, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { usePlayerStore } from '@/store/player';
@@ -15,7 +15,7 @@ import { Equalizer } from '@/components/features/Equalizer';
 import { AddToPlaylistDialog } from '@/components/features/AddToPlaylistDialog';
 import { QueueDialog } from '@/components/features/QueueDialog';
 import { TrackOverrideModal } from '@/components/features/TrackOverrideModal';
-import { LyricsPanel } from '@/components/features/LyricsPanel';
+import { LyricsPanel, LyricsContent } from '@/components/features/LyricsPanel';
 import { ArtistDislikeMenuItems, type ArtistDislikeMenuView } from '@/components/features/ArtistDislikeMenuItems';
 import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { TiltCard } from '@/components/ui/TiltCard';
@@ -570,16 +570,29 @@ export function FullscreenPlayer() {
                 <Sliders size={18} />
               </Button>
 
+              {/* Kebab → X-close swap on narrow screens. When lyrics
+                  are open in the cover slot (mobile-only redesign), the
+                  user-asked-for affordance is for the same top-right
+                  control to flip into a close button rather than carry
+                  any of the kebab's actions: there's no parallel use
+                  for the kebab while reading lyrics, and the only thing
+                  the user wants from that corner is "stop showing
+                  lyrics". On md+ the kebab stays put because lyrics
+                  there is a side-panel with its own dismiss. */}
               <Button
                 ref={moreTriggerRef}
                 variant="ghost"
                 size="icon"
-                onClick={() => setMoreOpen((v) => !v)}
-                aria-label={t('track.actions')}
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
+                onClick={
+                  lyricsOpen && !isMdUp
+                    ? () => setLyricsOpen(false)
+                    : () => setMoreOpen((v) => !v)
+                }
+                aria-label={lyricsOpen && !isMdUp ? t('lyrics.closeAria') : t('track.actions')}
+                aria-haspopup={lyricsOpen && !isMdUp ? undefined : 'menu'}
+                aria-expanded={lyricsOpen && !isMdUp ? undefined : moreOpen}
               >
-                <MoreHorizontal size={18} />
+                {lyricsOpen && !isMdUp ? <X size={18} /> : <MoreHorizontal size={18} />}
               </Button>
               <PopoverMenu
                 open={moreOpen}
@@ -815,7 +828,35 @@ export function FullscreenPlayer() {
                 both dimensions of the wrapper shrink together with
                 the maxWidth clamp — without it, only width
                 shrinks and the TiltCard inside (which derives its
-                own size from `aspect-square`) wouldn't follow. */}
+                own size from `aspect-square`) wouldn't follow.
+
+                On narrow viewports the cover slot is conditionally
+                replaced by the lyrics body — the user explicitly asked
+                for the lyric layer to "замещали обложку и пространство
+                сверху чуть" rather than overlay the player as a
+                separate window. We size the lyrics block with
+                `flex-1 min-h-0` so it grows into both the cover's slot
+                AND the empty justify-center breathing space above it,
+                while the title / progress / transport / volume rows
+                below stay anchored at their normal positions. md+ keeps
+                the side-panel layout (see desktop side-panel below) so
+                this swap is gated on `!isMdUp`. */}
+            {lyricsOpen && !isMdUp ? (
+              <div
+                key="lyrics-cover-slot"
+                // `data-no-sheet-drag` keeps the parent fullscreen
+                // sheet's drag-to-dismiss from grabbing pointer events
+                // that originate inside the lyrics body. The
+                // `LyricsContent` itself owns `data-allow-pan-y` so
+                // the user can scroll through verses with a finger
+                // even though the surrounding fullscreen-drag-zone
+                // pins `touch-action: none`.
+                data-no-sheet-drag
+                className="relative mx-auto flex w-full min-h-0 flex-1 max-w-md overflow-hidden"
+              >
+                <LyricsContent trackId={currentTrack.id} onSeek={seek} />
+              </div>
+            ) : (
             <motion.div
               // Outer wrapper keeps a stable position across track changes
               // (П11). Previously this was keyed by `currentTrack.id`, which
@@ -1087,6 +1128,7 @@ export function FullscreenPlayer() {
                 </AnimatePresence>
               </TiltCard>
             </motion.div>
+            )}
 
             {/* Title row. Important: NO `overflow-hidden` and an
                 explicit `shrink-0` here. The fullscreen layout puts
@@ -1357,18 +1399,14 @@ export function FullscreenPlayer() {
           )}
           </div>
 
-          {/* Mobile overlay: covers the whole player surface. */}
-          {currentTrack && (
-            <div data-no-sheet-drag>
-              <LyricsPanel
-                trackId={currentTrack.id}
-                open={lyricsOpen}
-                onClose={() => setLyricsOpen(false)}
-                mode="overlay"
-                onSeek={seek}
-              />
-            </div>
-          )}
+          {/* Mobile lyrics: rendered inline as a cover-slot replacement
+              (see the `lyricsOpen && !isMdUp` branch above) instead of
+              the previous full-surface overlay. The user explicitly
+              asked for lyrics to "замещали обложку и пространство
+              сверху чуть" rather than cover the entire player as a
+              separate window — the overlay path is intentionally
+              dropped here. md+ still uses the absolute-positioned
+              side-panel above (LyricsPanel mode="side"). */}
 
           <AddToPlaylistDialog
             open={addToPlaylistOpen}
