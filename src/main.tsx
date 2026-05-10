@@ -35,6 +35,29 @@ startSyncQueueAutoFlush();
 // they reconnect.
 startCoverBackfill();
 
+// Ask the browser for persistent storage so the SW precache, the
+// IndexedDB-backed offline library (downloaded tracks + covers),
+// and Workbox runtime caches survive aggressive eviction under
+// storage pressure. Without this, browsers may evict cached PWA
+// data when disk space is tight — exactly the failure mode the
+// user asked about ("файлы pwa отвечающие за фронт не сотрутся
+// после перезагрузки"). The API is gated on user-engagement
+// signals (the user installed the PWA, granted notifications,
+// bookmarked the page, etc.); browsers that decline simply return
+// `false` and we fall back to best-effort transient storage. Fire-
+// and-forget — no UI feedback so the request is invisible to users
+// who don't yet meet the engagement threshold.
+if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+  navigator.storage.persisted().then((alreadyPersistent) => {
+    if (alreadyPersistent) return;
+    navigator.storage.persist().catch(() => {
+      // Browser declined or API unavailable — non-fatal.
+    });
+  }).catch(() => {
+    // `persisted()` itself failed — non-fatal.
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
