@@ -1,6 +1,6 @@
 import type { Env } from '../types/env';
 import type { Track } from '../types/music';
-import { RecommendationService } from './RecommendationService';
+import { RecommendationService, WAVE_MOODS, type WaveMood } from './RecommendationService';
 import { TasteService } from './TasteService';
 import { TidalService } from './tidal/TidalService';
 import { loadDislikes, filterTracksByDislikes } from './dislikes';
@@ -168,10 +168,42 @@ export class DailyPlaylistService {
     // variants stay consistent.
     const dislikes = await loadDislikes(this.env, userId);
 
-    for (const variant of variants) {
+    // Cross-variant claim-set. Familiar / discover / mood used to be
+    // built independently and each call into `rec.wave()` without a
+    // character returned the SAME taste-aligned pool, so playlists
+    // 1 and 3 frequently shipped overlapping (or identical) tracks
+    // — user reported "плейлисты 1 и 3 как будто содержат одни и те же
+    // треки". The fix is two-pronged: (1) each variant calls
+    // `rec.wave` with its OWN `character` so the underlying rerank
+    // produces distinct results (familiar pushes known-favourite
+    // bias, discover penalises it); (2) once a track has been picked
+    // into one variant we mark it as claimed and skip it everywhere
+    // else, including during backfill. The order — familiar →
+    // discover → mood — means the most user-aligned variant gets
+    // first dibs on the tightest pool and mood is left to differentiate
+    // via genre/mood-tagged tracks the others wouldn't have surfaced.
+    const claimed = new Set<string>();
+    // Sort the input list into the canonical variant order so the
+    // claim semantics stay deterministic regardless of which subset
+    // the caller asked for (cron passes all three; lazy on-read can
+    // pass a subset).
+    const ordered = variants.slice().sort((a, b) => VARIANTS.indexOf(a) - VARIANTS.indexOf(b));
+
+    for (const variant of ordered) {
       const spec = SPECS[variant];
-      const built = await this.buildVariantTracks(variant, userId, profile.completedTrackIds, genreSeeds);
+      const built = await this.buildVariantTracks(
+        variant,
+        userId,
+        profile.completedTrackIds,
+        genreSeeds,
+        claimed,
+      );
       let tracks = filterTracksByDislikes(built, dislikes);
+      // Anti-overlap: even after the variant-specific build the
+      // upstream pools (track-radio, genre pages, wave) can echo into
+      // each other for users with narrow taste. Strip anything a
+      // previous variant already shipped.
+      tracks = tracks.filter((t) => !claimed.has(trackKey(t)));
 
       // Backfill so each variant always reaches PLAYLIST_LENGTH when
       // possible. Without this the user would intermittently see
@@ -197,7 +229,7 @@ export class DailyPlaylistService {
           const filler = filterTracksByDislikes(
             await this.tracksFromGenre(slug),
             dislikes,
-          );
+          ).filter((t) => !claimed.has(trackKey(t)));
           tracks = mergeUnique(tracks, filler, PLAYLIST_LENGTH);
         }
       }
@@ -206,6 +238,12 @@ export class DailyPlaylistService {
       // the contracted PLAYLIST_LENGTH (the home-page UI assumes 50).
       if (tracks.length > PLAYLIST_LENGTH) tracks = tracks.slice(0, PLAYLIST_LENGTH);
       if (tracks.length === 0) continue;
+
+      // Claim every track shipped in this variant so the next variant
+      // in `ordered` can't ship the same id again. Has to run AFTER
+      // the slice/cap so partial-playlist fallbacks don't pre-claim
+      // tracks they ended up not using.
+      for (const t of tracks) claimed.add(trackKey(t));
 
       const cover = pickCover(tracks);
       const name = spec.name;
@@ -240,42 +278,77 @@ export class DailyPlaylistService {
     userId: string,
     completedTrackIds: string[],
     genreSeeds: string[],
+    claimed: Set<string>,
   ): Promise<Track[]> {
     const hasHistory = completedTrackIds.length > 0;
 
     if (variant === 'familiar') {
-      // 70% from wave (which respects taste); 30% known favourites.
-      // We re-use wave so the rerank stays in one place.
-      const wave = await this.rec.wave(userId, { limit: PLAYLIST_LENGTH });
-      const familiar = wave.slice(0, Math.floor(PLAYLIST_LENGTH * 0.7));
+      // Familiar leans into stuff the user already knows / loves:
+      // call wave with `character: 'familiar'` so the rerank doubles
+      // W_FAMILIAR_BONUS instead of running the neutral profile. We
+      // oversample (2× PLAYLIST_LENGTH) so the cross-variant claim
+      // strip in `generateVariants` doesn't shrink the final result
+      // below the contracted length.
+      const wave = await this.rec.wave(userId, {
+        limit: PLAYLIST_LENGTH * 2,
+        character: 'familiar',
+      });
+      const familiarHead = wave.slice(0, Math.floor(PLAYLIST_LENGTH * 0.7));
       // Padding from completed tracks if wave came back short.
       const padPool = await this.tracksFromIds(completedTrackIds.slice(0, 30));
-      return mergeUnique(familiar, padPool, PLAYLIST_LENGTH);
+      return mergeUnique(familiarHead, padPool, PLAYLIST_LENGTH * 2);
     }
 
     if (variant === 'discover') {
-      const wave = await this.rec.wave(userId, { limit: PLAYLIST_LENGTH * 2 });
+      // Discover flips W_FAMILIAR_BONUS into a penalty inside the
+      // rerank (`character: 'discover'`) so the pool comes back
+      // taste-adjacent but tilted toward fresh artists — a genuinely
+      // different distribution from familiar's pool, NOT just
+      // "familiar minus history". Oversample 3× so the history-strip
+      // + cross-variant-claim still leaves us PLAYLIST_LENGTH room.
+      const wave = await this.rec.wave(userId, {
+        limit: PLAYLIST_LENGTH * 3,
+        character: 'discover',
+      });
       // Strip anything in the user's history → real "discovery".
       const known = new Set(completedTrackIds);
-      const unknown = wave.filter((t) => !known.has(t.id));
+      const unknown = wave.filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
       if (unknown.length >= PLAYLIST_LENGTH) return unknown.slice(0, PLAYLIST_LENGTH);
       // Pad with a genre-seeded pool when wave came back short.
       // Previously this only ran for cold-start users (no history),
       // which meant returning users with a thin wave got a partial
       // (10–30 track) discover playlist instead of the contracted 50.
       const fillerSlug = genreSeeds[0] ?? SPECS.discover.fallbackGenres[0] ?? 'genre_pop';
-      const filler = await this.tracksFromGenre(fillerSlug);
+      const filler = (await this.tracksFromGenre(fillerSlug))
+        .filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
       return mergeUnique(unknown, filler, PLAYLIST_LENGTH);
     }
 
     // mood — pick the slug from the user's actual time-of-day pattern
     // when we have enough history, fall back to wall-clock UTC hour
-    // for cold-start users.
+    // for cold-start users. The primary source is the mood-tagged
+    // explore page (a fundamentally different pool from familiar /
+    // discover); only fall back to wave when that pool is too thin
+    // to reach PLAYLIST_LENGTH, in which case we also pass the same
+    // mood signal into wave so the filler pool is still mood-tinted
+    // instead of returning the neutral pool that used to overlap
+    // with familiar.
     const moodSlug = await this.pickPersonalMoodSlug(userId, hasHistory);
-    const moodTracks = await this.tracksFromGenre(moodSlug);
+    const moodTracks = (await this.tracksFromGenre(moodSlug))
+      .filter((t) => !claimed.has(trackKey(t)));
     if (moodTracks.length >= PLAYLIST_LENGTH) return moodTracks.slice(0, PLAYLIST_LENGTH);
-    const fillerWave = await this.rec.wave(userId, { limit: PLAYLIST_LENGTH });
-    return mergeUnique(moodTracks, fillerWave, PLAYLIST_LENGTH);
+    // Map our internal mood slug back to the WaveMood enum used by
+    // `rec.wave` so the filler pool gets a mood-pool boost in rerank.
+    // Best-effort: if the slug doesn't map (e.g. a future mood without
+    // a matching enum), call wave without the mood and accept the
+    // neutral filler.
+    const moodEnum = moodSlugToWaveMood(moodSlug);
+    const fillerWave = await this.rec.wave(userId, {
+      limit: PLAYLIST_LENGTH * 2,
+      mood: moodEnum,
+    });
+    const fillerFiltered = fillerWave.filter((t) => !claimed.has(trackKey(t)));
+    return mergeUnique(moodTracks, fillerFiltered, PLAYLIST_LENGTH);
   }
 
   private async tracksFromIds(ids: string[]): Promise<Track[]> {
@@ -383,11 +456,41 @@ function mergeUnique(a: Track[], b: Track[], cap: number): Track[] {
   const seen = new Set<string>();
   const out: Track[] = [];
   for (const t of [...a, ...b]) {
-    const key = `${t.source ?? 'tidal'}:${t.id}`;
+    const key = trackKey(t);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(t);
     if (out.length >= cap) break;
   }
   return out;
+}
+
+/**
+ * Canonical cross-table key for a track: source-namespaced track id.
+ * Used by both `mergeUnique` (for in-pool dedup) and the cross-variant
+ * `claimed` set in `generateVariants` so a user/tidal/upload track
+ * can't be ambiguously claimed by two providers under the same id.
+ */
+function trackKey(t: Track): string {
+  return `${t.source ?? 'tidal'}:${t.id}`;
+}
+
+/**
+ * Map an internal `mood_<slug>` (the format we store in
+ * `daily_playlists.variant` rows and that
+ * `pickPersonalMoodSlug` returns) to the `WaveMood` enum understood
+ * by `RecommendationService.wave({ mood })`. Returns `null` when the
+ * slug isn't a mood enum (e.g. a future quadrant default or a generic
+ * genre slug) — callers can treat that as "no mood bias" and pass the
+ * neutral wave through.
+ */
+function moodSlugToWaveMood(slug: string): WaveMood | null {
+  // The WAVE_MOODS tuple is the source of truth for valid enum values;
+  // slugs in this codebase are uniformly `mood_<enum>` so the prefix
+  // strip + table lookup is exact (no fuzzy matching).
+  const stripped = slug.replace(/^mood_/, '');
+  for (const m of WAVE_MOODS) {
+    if (m === stripped) return m;
+  }
+  return null;
 }
