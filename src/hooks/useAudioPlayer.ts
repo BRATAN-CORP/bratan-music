@@ -186,6 +186,25 @@ interface AudioBundle {
  *  the trigger arms again well before a typical track ends. */
 const AUTO_CROSSFADE_SEEK_GUARD_MS = 750;
 
+/** Maximum wall-clock setTimeout that the scheduled-trigger uses to
+ *  fire `startCrossfade` at `(duration - crossfadeDuration)` ahead of
+ *  the end of track. The native `timeupdate` event is unreliable when
+ *  the tab is backgrounded (Chrome/Edge clamp it to ~1s but with
+ *  multi-second jitter; iOS Safari is even worse with the screen
+ *  locked), and a long-tail mode of the bug was: track plays to its
+ *  natural end → no timeupdate ever lands inside the
+ *  `dur - currentTime <= crossfadeDuration` window → `onEnded` fires →
+ *  hard switch via `next()` instead of a smooth fade. We bridge this
+ *  by also arming a wall-clock setTimeout the moment the track is
+ *  loaded / seeked / unpaused. Browser timers ARE throttled in
+ *  background tabs (the spec floor is once per second, in practice
+ *  Chromium clamps to ~1 min after 5 min of being hidden), but for the
+ *  end-of-track window in particular this is plenty — even a 1-min
+ *  clamp lands well inside the trigger range on every typical track.
+ *  Anything longer than this cap we still let `timeupdate` handle so
+ *  pinned timers don't accumulate across an entire album play. */
+const AUTO_CROSSFADE_TIMER_CAP_MS = 30 * 60 * 1000;
+
 let bundle: AudioBundle | null = null;
 let corsRetried: Record<Slot, boolean> = { a: false, b: false };
 
@@ -939,6 +958,23 @@ export function useAudioPlayer() {
   currentQualityRef.current = tidalQuality;
   const fallbackInProgressRef = useRef(false);
 
+  /** Wall-clock setTimeout handle for the scheduled auto-crossfade
+   *  trigger — the complement to the timeupdate-driven one in
+   *  `onTimeUpdate`. Background tab timeupdate is throttled (and on
+   *  iOS Safari with the screen locked, sometimes silent for long
+   *  stretches) so the timeupdate gate misses the
+   *  `dur - currentTime <= crossfadeDuration` window entirely and
+   *  the track hard-cuts on `onEnded`. The scheduled timer fires
+   *  exactly `crossfadeDuration` ms before the projected end-of-track,
+   *  independent of any audio event firing, and re-validates all the
+   *  same preconditions before kicking off the fade. */
+  const autoCrossfadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Track id the currently-scheduled timer was armed for. Used by the
+   *  reschedule helper to skip no-op re-arms when nothing changed,
+   *  and to defensively bail when the timer fires for a track that
+   *  isn't current anymore. */
+  const autoCrossfadeArmedForRef = useRef<string | null>(null);
+
   /** When restoring from localStorage on page load, the audio element will
    *  fire `timeupdate` (currentTime=0) as soon as the new src loads, which
    *  would clobber the persisted progress with 0 before we get a chance to
@@ -1496,6 +1532,18 @@ export function useAudioPlayer() {
    * common case where the next track is already preloaded (see the
    * pre-load effect), both sides ramp fully in parallel.
    */
+  /**
+   * Cancel any pending wall-clock auto-crossfade trigger and clear the
+   * bookkeeping. Safe to call even when nothing is armed.
+   */
+  const clearAutoCrossfadeTimer = useCallback(() => {
+    if (autoCrossfadeTimerRef.current !== null) {
+      clearTimeout(autoCrossfadeTimerRef.current);
+      autoCrossfadeTimerRef.current = null;
+    }
+    autoCrossfadeArmedForRef.current = null;
+  }, []);
+
   const startCrossfade = useCallback(async () => {
     const b = getBundle();
     if (crossfadingRef.current) return;
@@ -1769,6 +1817,119 @@ export function useAudioPlayer() {
     }
   }, [currentTrack, queue, volume, muted, crossfadeDuration, setTrack, setDuration, setProgress, tidalQuality]);
 
+  /**
+   * Re-arm the wall-clock auto-crossfade trigger for the currently
+   * playing track. Idempotent; clears any prior timer first.
+   *
+   * The native `timeupdate` event \u2014 which the legacy trigger inside
+   * `onTimeUpdate` relies on \u2014 is heavily throttled when the tab is
+   * backgrounded or the device screen is locked. Chrome clamps it to
+   * ~1 Hz with multi-second jitter; iOS Safari can go silent for tens
+   * of seconds at a time on a locked screen with a PWA in the
+   * background. When the throttle window straddles the
+   * `dur - currentTime <= crossfadeDuration` gate, the timeupdate
+   * trigger never fires and the track hard-cuts via `onEnded` \u2192
+   * `next()` instead of fading. That's the "\u0438\u043d\u043e\u0433\u0434\u0430 \u0440\u0435\u0437\u043a\u043e
+   * \u043f\u0435\u0440\u0435\u043a\u043b\u044e\u0447\u0430\u0435\u0442 \u0438 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043a\u0440\u0438\u0432\u043e" symptom on playlists / albums /
+   * \u041c\u043e\u044f \u0432\u043e\u043b\u043d\u0430 in the background.
+   *
+   * We bridge it with a real wall-clock setTimeout aimed at the moment
+   * the fade should start. setTimeout is also throttled in the
+   * background, but only to a coarser granularity (\u22651 s, \u22641 min after
+   * deep idle on Chromium). For end-of-track timing that's still
+   * orders of magnitude better than relying on timeupdate to ever land
+   * inside the trigger window at all \u2014 the fade may start a couple of
+   * hundred ms late under heavy throttling, but it WILL start.
+   *
+   * Hard preconditions enforced both at schedule time and again inside
+   * the timer callback (the player state can change between the two):
+   *   - playback is enabled and currentTrack matches
+   *   - there is a next track in the queue
+   *   - the smooth-crossfade setting is on
+   *   - no crossfade is already in flight
+   *   - the active slot hasn't been seeked within
+   *     `AUTO_CROSSFADE_SEEK_GUARD_MS`
+   *   - duration is known and finite
+   *
+   * Cancellation is owned by `clearAutoCrossfadeTimer` and is called
+   * on track change, pause, settings flip, and unmount.
+   */
+  const scheduleAutoCrossfade = useCallback(() => {
+    clearAutoCrossfadeTimer();
+    if (!crossfade) return;
+    if (!isPlaying) return;
+    if (!currentTrack) return;
+    if (crossfadingRef.current) return;
+    const idx = queue.findIndex((t) => t.id === currentTrack.id);
+    if (idx < 0) return;
+    const nextTrack = queue[idx + 1];
+    if (!nextTrack) return;
+
+    const b = getBundle();
+    const slot = ownerSlotFor(b, currentTrack.id);
+    const audio = b.audios[slot];
+    const dur = audio.duration;
+    if (!isFinite(dur) || dur <= 0) return;
+    const remainingMs = (dur - audio.currentTime) * 1000;
+    // Subtract the configured crossfade duration so the fade STARTS
+    // `crossfadeDuration` seconds before the track ends \u2014 same window
+    // the timeupdate-driven trigger uses, just measured against the
+    // wall clock instead of the audio element's tick.
+    const triggerInMs = remainingMs - crossfadeDuration * 1000;
+    // Already at or past the trigger window \u2014 just kick off the fade
+    // (the existing timeupdate trigger may have missed it because of
+    // background throttling). The `crossfadeAttemptedTrackId` gate
+    // inside `startCrossfade` keeps this from busy-looping.
+    if (triggerInMs <= 0) {
+      void startCrossfade();
+      return;
+    }
+    // The native trigger is still active and can land it; skip the
+    // wall-clock arm for very long tail windows so we don't pin a
+    // pile of timers across an entire album.
+    if (triggerInMs > AUTO_CROSSFADE_TIMER_CAP_MS) return;
+
+    autoCrossfadeArmedForRef.current = currentTrack.id;
+    autoCrossfadeTimerRef.current = setTimeout(() => {
+      autoCrossfadeTimerRef.current = null;
+      // Re-validate everything from scratch: the player state can
+      // have moved on between schedule time and firing (track change,
+      // pause, seek, crossfade-in-flight, etc.). All of these are
+      // independently re-checked inside `startCrossfade` itself, but
+      // we mirror the cheap ones here so the no-op path doesn't even
+      // round-trip into the crossfade body.
+      const live = usePlayerStore.getState();
+      if (!live.isPlaying) return;
+      if (!live.currentTrack || live.currentTrack.id !== currentTrack.id) return;
+      const liveBundle = getBundle();
+      if (crossfadingRef.current) return;
+      if (liveBundle.crossfadingInto !== null) return;
+      const liveSlot = ownerSlotFor(liveBundle, live.currentTrack.id);
+      const liveAudio = liveBundle.audios[liveSlot];
+      if (liveAudio.seeking) return;
+      const sinceSeek = performance.now() - liveBundle.lastSeekAt[liveSlot];
+      if (sinceSeek <= AUTO_CROSSFADE_SEEK_GUARD_MS) return;
+      void startCrossfade();
+    }, triggerInMs);
+  }, [
+    clearAutoCrossfadeTimer,
+    crossfade,
+    crossfadeDuration,
+    currentTrack,
+    isPlaying,
+    queue,
+    startCrossfade,
+  ]);
+
+  // Re-arm the wall-clock crossfade trigger on every change that can
+  // shift its target time: a new track, a new isPlaying state, a
+  // settings flip (on/off, duration), or a queue mutation that changes
+  // whether `queue[idx+1]` exists.
+  useEffect(() => {
+    scheduleAutoCrossfade();
+    return clearAutoCrossfadeTimer;
+  }, [scheduleAutoCrossfade, clearAutoCrossfadeTimer]);
+
   // Proactive preload of queue[idx+1] into the inactive slot while the
   // user is playing. By the time startCrossfade fires (or the user
   // clicks `next` manually), the incoming stream is already buffered —
@@ -2015,6 +2176,12 @@ export function useAudioPlayer() {
       const onDurationChange = () => {
         if (!isOwnerSlot()) return;
         setDuration(audio.duration || 0);
+        // Duration just became known (or shifted) — re-arm the
+        // wall-clock crossfade trigger so it fires the right number
+        // of ms before this track's actual end. The reschedule effect
+        // can't catch this because `duration` lives on the audio
+        // element, not in store / hook state.
+        scheduleAutoCrossfade();
       };
       const onLoadedMetadata = () => {
         if (!isOwnerSlot()) return;
@@ -2027,6 +2194,10 @@ export function useAudioPlayer() {
           // zero updates would clobber the persisted progress.
           audio.currentTime = Math.min(target, audio.duration);
         }
+        // Metadata + duration are now reliable — same rationale as the
+        // durationchange path: re-arm the wall-clock trigger now that
+        // we know exactly when this track ends.
+        scheduleAutoCrossfade();
       };
       const onEnded = () => {
         if (!isOwnerSlot()) return;
@@ -2152,7 +2323,7 @@ export function useAudioPlayer() {
     const offA = wireSlot('a');
     const offB = wireSlot('b');
     return () => { offA(); offB(); };
-  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade, currentTrack, loadTrack, t]);
+  }, [repeat, next, setProgress, setDuration, setError, crossfade, crossfadeDuration, startCrossfade, currentTrack, loadTrack, scheduleAutoCrossfade, t]);
 
   const seek = useCallback((time: number) => {
     const b = getBundle();
@@ -2183,7 +2354,14 @@ export function useAudioPlayer() {
     b.lastRealT[slot] = time;
     b.lastSeekAt[slot] = performance.now();
     audio.currentTime = time;
-  }, [setProgress]);
+    // A seek changes the time remaining on this track, so the
+    // wall-clock crossfade trigger needs to be re-aimed at the new
+    // projected end. The schedule helper itself respects the
+    // `AUTO_CROSSFADE_SEEK_GUARD_MS` gate, but we still want the new
+    // timeout armed so the fade lands at the right moment even when
+    // the user scrubbed forward into the same track.
+    scheduleAutoCrossfade();
+  }, [setProgress, scheduleAutoCrossfade]);
 
   // Respond to store's _seekToZero (triggered by the "previous" action
   // when progress > 3s — restarts current track).
@@ -2222,6 +2400,12 @@ export function useAudioPlayer() {
           audio.play().catch(() => {});
         }
       }
+      // Re-arm the wall-clock crossfade trigger. Background timers
+      // can drift, fire late, or land after their target window if
+      // the OS deeply suspended the page — once the user brings us
+      // back to the foreground we recompute from the now-trusted
+      // playhead so the next fade hits the right moment.
+      scheduleAutoCrossfade();
     };
     const onVisibility = () => {
       if (document.visibilityState === 'visible') resumeIfNeeded();
@@ -2234,7 +2418,7 @@ export function useAudioPlayer() {
       window.removeEventListener('focus', resumeIfNeeded);
       window.removeEventListener('pageshow', resumeIfNeeded);
     };
-  }, []);
+  }, [scheduleAutoCrossfade]);
 
   // Mount-time only: aggressively revoke any seek handlers that
   // earlier builds may have registered. iOS Safari caches the
