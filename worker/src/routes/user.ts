@@ -488,12 +488,12 @@ user.get('/sessions', async (c) => {
  * the caller — the SessionService.revoke already scopes by user_id so
  * a successful delete is proof of ownership.
  *
- * Note: if the user revokes their *current* session (id ===
- * sessionId from the access token), their access token is still
- * within its 1h TTL and would keep working. That's a defensible
- * behaviour for a self-initiated revoke (it's their own device), but
- * to mirror "Logout" semantics we ALSO bump `min_token_iat` to now
- * when the revoked row matches the caller's session.
+ * Per-session invalidation is handled by the JWT middleware's
+ * sessions-row gate (`SELECT 1 FROM sessions WHERE id = payload.sid`):
+ * once the row is gone, that session's access token starts 401-ing
+ * on its next request, regardless of the 1h JWT TTL. This works for
+ * both the "kill another device" and "log myself out from here" use
+ * cases — no separate `min_token_iat` bump required.
  */
 user.delete('/sessions/:id', async (c) => {
   const userId = c.get('userId');
@@ -502,28 +502,21 @@ user.delete('/sessions/:id', async (c) => {
   const svc = new SessionService(c.env);
   const ok = await svc.revoke(userId, sid);
   if (!ok) return c.json({ error: 'Сессия не найдена' }, 404);
-  // If the user just killed their own active session, also forfeit
-  // the access token immediately by bumping `min_token_iat`. Other
-  // sessions are unaffected because they were minted with a later
-  // iat than the bump value.
-  if (c.get('sessionId') === sid) {
-    const now = Math.floor(Date.now() / 1000);
-    await c.env.DB
-      .prepare('UPDATE users SET min_token_iat = ? WHERE id = ?')
-      .bind(now, userId)
-      .run();
-  }
+  // The middleware's per-session gate (`SELECT 1 FROM sessions WHERE
+  // id = payload.sid`) handles invalidation — the deleted row's
+  // access token 401s on its next request. No min_token_iat bump
+  // needed even when the caller revokes their own session (their
+  // very next /user/me will fail, kicking the frontend into a
+  // re-login flow).
   return c.json({ ok: true });
 });
 
 /**
  * "Выйти со всех других устройств". Drops every refresh-token row
- * except the caller's current session AND bumps `min_token_iat` so
- * any access token issued for a different session forfeits on its
- * next request. The current session's access token survives because
- * SessionService.revokeAllExcept bumps to `now - 1` (the current
- * token's iat is >= now since it was issued at or after the same
- * second).
+ * except the caller's current session. The middleware's per-session
+ * gate handles invalidation for the deleted rows — the other devices'
+ * access tokens 401 on their next request without needing a
+ * `min_token_iat` bump (which would also kill the caller's own token).
  *
  * Why we don't also rotate the current refresh token here:
  * - The refresh row is unchanged, so the next /auth/refresh call
@@ -535,8 +528,8 @@ user.delete('/sessions/:id', async (c) => {
 user.post('/sessions/logout-all', async (c) => {
   const userId = c.get('userId');
   const keep = c.get('sessionId') ?? null;
-  const cutoff = await new SessionService(c.env).revokeAllExcept(userId, keep);
-  return c.json({ ok: true, minTokenIat: cutoff, keptSessionId: keep });
+  const revoked = await new SessionService(c.env).revokeAllExcept(userId, keep);
+  return c.json({ ok: true, revoked, keptSessionId: keep });
 });
 
 export { user };

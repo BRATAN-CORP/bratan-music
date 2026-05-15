@@ -22,7 +22,7 @@ interface SessionListResponse {
 
 interface LogoutAllResponse {
   ok: boolean;
-  minTokenIat: number;
+  revoked: number;
   keptSessionId: string | null;
 }
 
@@ -86,14 +86,12 @@ export function SessionsPanel() {
 
   const logoutAll = useMutation({
     mutationFn: () => api.post<LogoutAllResponse>('/user/sessions/logout-all', {}),
-    onSuccess: async () => {
-      const before = data?.sessions.length ?? 0;
-      const others = Math.max(0, before - 1);
+    onSuccess: async (res) => {
       await queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      if (others === 0) {
+      if (!res.revoked) {
         toast.success(t('profile.sessions.logoutAllNoOthers'));
       } else {
-        toast.success(t('profile.sessions.logoutAllToast', { count: others }));
+        toast.success(t('profile.sessions.logoutAllToast', { count: res.revoked }));
       }
     },
     onError: (err) => {

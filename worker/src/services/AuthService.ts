@@ -116,7 +116,83 @@ export class AuthService {
       .bind(now, session.id)
       .run()
       .catch(() => { /* ignore */ });
-    return payload;
+    // Stamp the verified payload with the actual sessions.id we matched
+    // against (refresh tokens minted before the `sid` claim shipped
+    // won't carry one — keep them working by back-filling here).
+    return { ...payload, sid: session.id };
+  }
+
+  /**
+   * Rotate the access+refresh JWT pair for an EXISTING session row,
+   * keeping the same `sid` so the access token's claim stays stable
+   * across refreshes. Used by `/auth/refresh` instead of the
+   * delete-then-create dance that used to mint a fresh sid every
+   * hour — that broke the per-session revoke model added in PR #443
+   * (middleware now gates on the sessions row existing, so a stale
+   * `sid` would lock the user out immediately on first refresh).
+   *
+   * Caller has already verified the refresh token and knows the
+   * `sessionId` it belongs to. We UPDATE token_hash / expires_at /
+   * last_used_at / metadata on the row and return the new pair.
+   */
+  async rotateSession(
+    sessionId: string,
+    userId: string,
+    isAdmin: boolean,
+    metadata: SessionMetadata = {},
+  ): Promise<TokenPair> {
+    const now = Math.floor(Date.now() / 1000);
+    const accessPayload: TokenPayload = {
+      sub: userId,
+      iat: now,
+      exp: now + ACCESS_TOKEN_TTL,
+      admin: isAdmin,
+      sid: sessionId,
+    };
+    const refreshPayload: TokenPayload = {
+      sub: userId,
+      iat: now,
+      exp: now + REFRESH_TOKEN_TTL,
+      admin: isAdmin,
+      sid: sessionId,
+    };
+    const accessToken = await this.signJwt(accessPayload, this.env.JWT_SECRET);
+    const refreshToken = await this.signJwt(refreshPayload, this.env.JWT_REFRESH_SECRET);
+    const tokenHash = await this.hashToken(refreshToken);
+    // Set metadata only when the caller passed it — refreshes from
+    // background tabs / service workers sometimes drop the
+    // User-Agent, and we'd rather keep the last good label than
+    // overwrite it with an empty string.
+    if (metadata.userAgent || metadata.ipHash || metadata.clientLabel) {
+      await this.env.DB.prepare(
+        `UPDATE sessions
+           SET token_hash = ?, expires_at = ?, last_used_at = ?,
+               user_agent = ?, ip_hash = ?, client_label = ?
+         WHERE id = ? AND user_id = ?`,
+      ).bind(
+        tokenHash,
+        now + REFRESH_TOKEN_TTL,
+        now,
+        metadata.userAgent ?? '',
+        metadata.ipHash ?? '',
+        metadata.clientLabel ?? '',
+        sessionId,
+        userId,
+      ).run();
+    } else {
+      await this.env.DB.prepare(
+        `UPDATE sessions
+           SET token_hash = ?, expires_at = ?, last_used_at = ?
+         WHERE id = ? AND user_id = ?`,
+      ).bind(
+        tokenHash,
+        now + REFRESH_TOKEN_TTL,
+        now,
+        sessionId,
+        userId,
+      ).run();
+    }
+    return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL, sessionId };
   }
 
   /**

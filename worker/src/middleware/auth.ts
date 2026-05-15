@@ -53,6 +53,25 @@ export const jwtAuth = createMiddleware<{ Bindings: Env; Variables: Variables }>
   if (row && payload.iat < (row.min_token_iat ?? 0)) {
     return c.json({ error: 'Сессия завершена. Войдите снова.' }, 401);
   }
+  // Per-session revoke gate: an access token whose `sid` no longer
+  // points to a `sessions` row is dead immediately. This is what
+  // makes the "Завершить" button on the Sessions tab actually take
+  // effect on OTHER devices — the deleted row drops their token's
+  // sid out of existence, and the next request comes back 401
+  // instead of riding out the 1h TTL. `payload.sid` is required
+  // for every token minted on or after PR #443 (migration 0028 +
+  // global logout sweep guarantee no live token without sid), so
+  // an absent sid means a stale pre-migration token and forfeits.
+  if (!payload.sid) {
+    return c.json({ error: 'Сессия завершена. Войдите снова.' }, 401);
+  }
+  const sess = await c.env.DB
+    .prepare('SELECT 1 AS ok FROM sessions WHERE id = ? AND user_id = ? LIMIT 1')
+    .bind(payload.sid, payload.sub)
+    .first<{ ok: number }>();
+  if (!sess) {
+    return c.json({ error: 'Сессия завершена. Войдите снова.' }, 401);
+  }
   await next();
 });
 

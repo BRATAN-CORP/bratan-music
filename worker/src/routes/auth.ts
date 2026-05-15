@@ -363,15 +363,18 @@ auth.post('/refresh', async (c) => {
   const authService = new AuthService(c.env);
   const payload = await authService.verifyRefreshToken(body.refreshToken);
 
-  if (!payload) {
+  if (!payload || !payload.sid) {
     return c.json({ error: 'Недействительный refresh token' }, 401);
   }
 
-  await authService.revokeRefreshToken(body.refreshToken);
-
   const userService = new UserService(c.env);
   const isAdmin = await userService.isAdmin(payload.sub);
-  const tokens = await authService.generateTokens(
+  // Rotate IN PLACE on the existing sessions row so the `sid` claim
+  // stays stable. Critical for the per-session revoke model: middleware
+  // gates on `SELECT 1 FROM sessions WHERE id = sid` and would
+  // immediately log the user out if we minted a fresh sid every hour.
+  const tokens = await authService.rotateSession(
+    payload.sid,
     payload.sub,
     isAdmin,
     await sessionMetadataFromRequest(c),
