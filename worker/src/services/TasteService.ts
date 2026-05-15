@@ -33,6 +33,23 @@ import type { Env } from '../types/env';
  * Rebuilt nightly by the scheduled handler. Recomputed on-demand if the
  * stored snapshot is older than 24h or doesn't exist yet.
  */
+/**
+ * Distribution of writing systems across the user's listening history
+ * (i.e. what scripts dominate `play_history.artist_name`). Used by the
+ * recommendation reranker to penalise candidates from a region whose
+ * language the user demonstrably doesn't listen to — the historical
+ * symptom was Polish rap surfacing for a Russian/English-rap listener
+ * via Tidal's track-radio cross-pollination. Sums to 1 when there's
+ * any history; all-zero when there isn't (cold start, treated as
+ * neutral by the reranker).
+ */
+export interface ScriptMix {
+  cyrillic: number;
+  latin: number;
+  cjk: number;
+  other: number;
+}
+
 export interface TasteProfile {
   artistWeights: Record<string, number>;
   /** Track ids the user has played to completion at least once, ordered
@@ -40,7 +57,22 @@ export interface TasteProfile {
   completedTrackIds: string[];
   /** Total play_history rows considered. Used to gate cold-start. */
   totalPlays: number;
-  version: 1;
+  /** Per-script share of the user's listening (decay-weighted same as
+   *  `artistWeights`). Source: `play_history.artist_name`. Cold-start
+   *  users get a zero distribution and the reranker treats them
+   *  neutrally (no language penalty). */
+  scriptMix: ScriptMix;
+  /** Per-genre weight (genre slug as in Tidal explore-page format,
+   *  e.g. `genre_rap`) summed from (a) onboarding genre picks and
+   *  (b) the user's seed artists' implicit genres. Values are
+   *  normalised to [0, 1]. Empty for users with no seeds and no
+   *  history that touched genre pages. */
+  genreWeights: Record<string, number>;
+  /** Version stamp. Bumped from 1 → 2 when we added `scriptMix` /
+   *  `genreWeights` (PR "recs-country-genre-vector"): any v1 profile
+   *  read from the cache is treated as stale and recomputed so the
+   *  new signals start populating before the 24h cron sweep. */
+  version: 2;
 }
 
 const HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -55,9 +87,24 @@ const LIKED_WEIGHT = 1.5;
  *  switching off after the first completed play). */
 const SEED_ARTIST_WEIGHT = 0.6;
 
+/** When summing `play_history.artist_name` chars into `scriptMix`, we
+ *  treat each play row with the same exponential decay used for
+ *  `artistWeights` (more recent listening = higher impact on the
+ *  distribution). Liked tracks contribute their primary script too,
+ *  weighted by `LIKED_WEIGHT`, so a user who liked a lot of Russian
+ *  rap two years ago still reads as "prefers Cyrillic" even after
+ *  the play-history decay nears zero. */
+
+/** Genre slugs assumed when an onboarding-picked seed artist's id is
+ *  in this map. Empty for now — future PR can hydrate this from a
+ *  cached Tidal lookup. Kept as a constant so the wire-up is one
+ *  edit when we add the mapping. */
+const SEED_ARTIST_GENRE_MAP: Record<string, string[]> = {};
+
 interface PlayHistoryRow {
   track_id: string;
   artist_id: string | null;
+  artist_name: string;
   completed: number;
   played_at: number;
 }
@@ -96,7 +143,7 @@ export class TasteService {
 
     const playsRes = await this.env.DB
       .prepare(
-        `SELECT track_id, artist_id, completed, played_at
+        `SELECT track_id, artist_id, artist_name, completed, played_at
            FROM play_history
           WHERE user_id = ? AND played_at >= ?
           ORDER BY played_at DESC
@@ -121,6 +168,10 @@ export class TasteService {
     // Track-id → recency-weighted score. We pick the top N as
     // `completedTrackIds` — these are the seeds that feed track-radio.
     const trackScores: Record<string, number> = {};
+    // Raw script counters — normalised at the bottom of recompute()
+    // into a {sum=1} distribution stored on the profile. Cyrillic /
+    // latin / cjk / other; see `detectScript` for the buckets.
+    const scriptCounters: ScriptMix = { cyrillic: 0, latin: 0, cjk: 0, other: 0 };
 
     for (const row of playsRes.results ?? []) {
       if (dislikedTracks.has(row.track_id)) continue;
@@ -133,6 +184,13 @@ export class TasteService {
       if (row.completed) {
         trackScores[row.track_id] = (trackScores[row.track_id] ?? 0) + w;
       }
+      // Script signal: derive from artist_name (column populated by
+      // every PlaybackEventsService write since migration 0011). The
+      // null/empty fallback drops into `other` so a malformed row
+      // can't blow up the distribution — mostly defensive against
+      // historical rows from before artist_name became NOT NULL.
+      const script = detectScript(row.artist_name);
+      scriptCounters[script] += w;
     }
 
     // Pull liked tracks (rows in the user's is_liked playlist). The
@@ -161,13 +219,31 @@ export class TasteService {
     // who I picked" problem — picks always land in the vector and only
     // get *outweighed* once heavy listening on someone else builds up.
     const seedRow = await this.env.DB
-      .prepare(`SELECT seed_artist_ids FROM user_taste_profile WHERE user_id = ?`)
+      .prepare(`SELECT seed_artist_ids, genre_seeds FROM user_taste_profile WHERE user_id = ?`)
       .bind(userId)
-      .first<{ seed_artist_ids: string }>();
+      .first<{ seed_artist_ids: string; genre_seeds: string }>();
     for (const aid of parseStringArray(seedRow?.seed_artist_ids ?? '[]')) {
       if (dislikedArtists.has(aid)) continue;
       artistWeights[aid] = (artistWeights[aid] ?? 0) + SEED_ARTIST_WEIGHT;
     }
+
+    // Genre vector: blend (a) onboarding genre picks (full LIKED_WEIGHT
+    // per slug because they're explicit declarations of taste) and (b)
+    // a future per-artist genre lookup (empty map for now). The result
+    // is normalised to [0, 1] so the reranker can mix it with other
+    // 0..1 signals safely. Empty for users with no genre seeds and no
+    // mapped seed artists.
+    const genreWeights: Record<string, number> = {};
+    const genreSeedSlugs = parseStringArray(seedRow?.genre_seeds ?? '[]');
+    for (const slug of genreSeedSlugs) {
+      genreWeights[slug] = (genreWeights[slug] ?? 0) + LIKED_WEIGHT;
+    }
+    for (const aid of parseStringArray(seedRow?.seed_artist_ids ?? '[]')) {
+      for (const slug of SEED_ARTIST_GENRE_MAP[aid] ?? []) {
+        genreWeights[slug] = (genreWeights[slug] ?? 0) + SEED_ARTIST_WEIGHT;
+      }
+    }
+    normaliseInPlace(genreWeights);
 
     // Normalise artist weights to [0, 1] so re-rank can mix them with
     // other 0..1 signals without any one user's heavy listening pulling
@@ -184,11 +260,26 @@ export class TasteService {
       .slice(0, 50)
       .map(([id]) => id);
 
+    // Normalise script counters into a distribution that sums to 1.
+    // Cold-start users (zero history) get an all-zero distribution —
+    // the reranker checks for that and applies no language penalty.
+    const scriptTotal = scriptCounters.cyrillic + scriptCounters.latin + scriptCounters.cjk + scriptCounters.other;
+    const scriptMix: ScriptMix = scriptTotal > 0
+      ? {
+          cyrillic: scriptCounters.cyrillic / scriptTotal,
+          latin: scriptCounters.latin / scriptTotal,
+          cjk: scriptCounters.cjk / scriptTotal,
+          other: scriptCounters.other / scriptTotal,
+        }
+      : { cyrillic: 0, latin: 0, cjk: 0, other: 0 };
+
     const profile: TasteProfile = {
       artistWeights,
       completedTrackIds,
       totalPlays: playsRes.results?.length ?? 0,
-      version: 1,
+      scriptMix,
+      genreWeights,
+      version: 2,
     };
 
     await this.env.DB
@@ -237,11 +328,18 @@ export class TasteService {
 
     const now = Date.now();
     if (row && now - row.computed_at < 24 * 60 * 60 * 1000) {
-      return {
-        profile: JSON.parse(row.profile) as TasteProfile,
-        genreSeeds: parseStringArray(row.genre_seeds),
-        seedArtistIds: parseStringArray(row.seed_artist_ids),
-      };
+      const parsed = JSON.parse(row.profile) as Partial<TasteProfile>;
+      // Force a recompute when the cached profile predates the
+      // scriptMix / genreWeights signals (version: 2). Without this
+      // the rerank would treat every existing user as cold-start for
+      // language penalties until their next nightly cron sweep.
+      if (parsed.version === 2) {
+        return {
+          profile: parsed as TasteProfile,
+          genreSeeds: parseStringArray(row.genre_seeds),
+          seedArtistIds: parseStringArray(row.seed_artist_ids),
+        };
+      }
     }
 
     const profile = await this.recompute(userId);
@@ -295,11 +393,18 @@ export class TasteService {
         .bind(json, now, userId)
         .run();
     } else {
+      // Placeholder so the row exists and the next `recompute()` can
+      // do an `UPDATE` instead of a duplicate insert. scriptMix /
+      // genreWeights are all-zero / empty because the user hasn't yet
+      // produced enough history for them to mean anything; the next
+      // recompute will refill from `play_history` + seed picks.
       const empty: TasteProfile = {
         artistWeights: {},
         completedTrackIds: [],
         totalPlays: 0,
-        version: 1,
+        scriptMix: { cyrillic: 0, latin: 0, cjk: 0, other: 0 },
+        genreWeights: {},
+        version: 2,
       };
       const otherCol = column === 'genre_seeds' ? 'seed_artist_ids' : 'genre_seeds';
       await this.env.DB
@@ -311,6 +416,76 @@ export class TasteService {
         .bind(userId, JSON.stringify(empty), json, now, now)
         .run();
     }
+  }
+}
+
+/**
+ * Detect which writing system dominates a short string of text. Used
+ * on `play_history.artist_name` to derive a per-user script
+ * distribution that the rerank then turns into a language-mismatch
+ * penalty. We bucket into four broad regions; finer-grained sub-
+ * detection (Greek, Arabic, Hebrew, Thai, Devanagari etc.) all go to
+ * `other` so they don't accidentally collide with the four major
+ * buckets we DO act on.
+ *
+ * Exported so callers (rerank) can run the same detection on candidate
+ * artist names without re-deriving the heuristic. Keeps the algorithm
+ * a single source of truth.
+ */
+export function detectScript(name: string): keyof ScriptMix {
+  if (!name) return 'other';
+  let cyr = 0;
+  let lat = 0;
+  let cjk = 0;
+  let other = 0;
+  for (const ch of name) {
+    const cp = ch.codePointAt(0) ?? 0;
+    // Cyrillic block + Cyrillic Supplement.
+    if ((cp >= 0x0400 && cp <= 0x04FF) || (cp >= 0x0500 && cp <= 0x052F)) {
+      cyr += 1;
+      continue;
+    }
+    // Basic Latin letters + Latin-1 Supplement + Latin Extended-A/B.
+    if (
+      (cp >= 0x0041 && cp <= 0x005A) || // A-Z
+      (cp >= 0x0061 && cp <= 0x007A) || // a-z
+      (cp >= 0x00C0 && cp <= 0x024F)
+    ) {
+      lat += 1;
+      continue;
+    }
+    // CJK ideographs + Hangul + Hiragana + Katakana (rough union).
+    if (
+      (cp >= 0x3040 && cp <= 0x30FF) || // Hiragana + Katakana
+      (cp >= 0x3400 && cp <= 0x9FFF) || // CJK Unified Ideographs + Ext A
+      (cp >= 0xAC00 && cp <= 0xD7AF)    // Hangul Syllables
+    ) {
+      cjk += 1;
+      continue;
+    }
+    // Whitespace, digits, punctuation, ASCII punctuation, etc. don't
+    // count toward any bucket; everything else falls into `other`.
+    if (/\s|\d|[!-/:-@[-`{-~]/.test(ch)) continue;
+    other += 1;
+  }
+  const max = Math.max(cyr, lat, cjk, other);
+  if (max === 0) return 'other';
+  if (max === cyr) return 'cyrillic';
+  if (max === lat) return 'latin';
+  if (max === cjk) return 'cjk';
+  return 'other';
+}
+
+/**
+ * Rescale a sparse `Record<string, number>` so the largest value lands
+ * at 1.0 (and everything else proportionally below). Mutates the
+ * argument in place; no-op when the record is empty or all zeros.
+ */
+function normaliseInPlace(weights: Record<string, number>): void {
+  const max = Object.values(weights).reduce((a, b) => Math.max(a, b), 0);
+  if (max <= 0) return;
+  for (const k of Object.keys(weights)) {
+    weights[k] = (weights[k] ?? 0) / max;
   }
 }
 

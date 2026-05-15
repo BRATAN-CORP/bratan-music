@@ -1,7 +1,7 @@
 import type { Env } from '../types/env';
 import type { Track } from '../types/music';
 import { TidalService } from './tidal/TidalService';
-import { TasteService, type TasteProfile } from './TasteService';
+import { TasteService, type TasteProfile, detectScript } from './TasteService';
 import { CACHE_TTL_S as SEED_CACHE_TTL_S, getCachedGenreTracks } from './seedCache';
 
 /**
@@ -44,13 +44,47 @@ const SEED_FAN_OUT = 5;
 const RADIO_PAGE_SIZE = 50;
 
 /** Re-rank weights. Hand-tuned, not learned. Sum doesn't have to be 1 —
- *  the absolute scale only matters in comparison between candidates. */
-const W_TASTE = 0.55;
-const W_NOVELTY = 0.20;
+ *  the absolute scale only matters in comparison between candidates.
+ *
+ *  Tuned 2026-05 after user feedback "Polish rap leaks into wave despite
+ *  100% RU/EN listening". The fix was twofold: (1) drown out random
+ *  novelty so it can't out-score taste signal for cold artists, by
+ *  bumping W_TASTE up and trimming W_NOVELTY; (2) introduce a hard
+ *  W_LANG_MISMATCH penalty on the user's underrepresented scripts. */
+const W_TASTE = 0.85;
+const W_NOVELTY = 0.10;
 const W_DISLIKE_ARTIST = -1.0;
 const W_RECENT_SEEN_PENALTY = -0.50;
 const W_FAMILIAR_BONUS = 0.10;
 const W_DIVERSITY_PENALTY = -0.15;
+/** Per-genre slug bonus when a candidate's track was pulled from a
+ *  Tidal explore page slug that matches one of the user's strong
+ *  genres (see `TasteProfile.genreWeights`). Scaled by the genre's
+ *  normalised weight so the user's dominant genre gets the full
+ *  bonus and weaker matches get a proportional slice. */
+const W_GENRE_MATCH = 0.20;
+/** Penalty applied when the candidate's artist name is in a script
+ *  the user almost never listens to. Built from `TasteProfile.scriptMix`
+ *  — we only apply the penalty when the user has enough history that
+ *  the distribution is meaningful (`min total signal` gate inside
+ *  `rerank`). Polish rap surfaces in latin-script artist names; a
+ *  user who listens 95% Cyrillic and 5% Latin gets a -0.40 hit on
+ *  every Latin candidate, which is enough to push the cleaner Cyrillic
+ *  candidates above them. */
+const W_LANG_MISMATCH = -0.40;
+/** A user's script counts as "underrepresented" (i.e. eligible for
+ *  the W_LANG_MISMATCH penalty) when its share is below this. We pick
+ *  10% as the floor because Russian rap fans typically have ~5-10%
+ *  English in their listening and we DON'T want to penalise that
+ *  long-tail; we only want to nuke the genuine misfires (Polish,
+ *  German, French rap leaking through Tidal track-radio for the same
+ *  user). */
+const LANG_MIN_SHARE = 0.10;
+/** Minimum total play signal before we trust `scriptMix` enough to
+ *  apply a language penalty. Cold-start users (0 plays) and very-thin
+ *  users (a handful) get the neutral treatment so we don't lock them
+ *  into one region from an accidental first-play. */
+const LANG_MIN_HISTORY_PLAYS = 50;
 /** Bonus added to candidates pulled from the requested mood's explore
  *  page. Big enough to bias the top of the wave toward that mood,
  *  small enough that taste signal still wins for the user's strongest
@@ -155,6 +189,12 @@ export class RecommendationService {
 
     const pools: Track[][] = [];
     const moodIds = new Set<string>();
+    // Provenance map: which Tidal explore-page slug introduced a
+    // candidate. Used by rerank to award `W_GENRE_MATCH` when the
+    // slug aligns with the user's `genreWeights`. Track-radio /
+    // artist-radio sources don't have a single canonical slug so
+    // they're left absent (treated as neutral by rerank).
+    const genreProvenance = new Map<string, string>();
 
     if (profile.completedTrackIds.length > 0) {
       // Sample, don't always grab the very top-N, otherwise the wave
@@ -173,14 +213,26 @@ export class RecommendationService {
     }
 
     if (pools.length === 0 && genreSeeds.length > 0) {
-      pools.push(await this.candidatesFromGenres(genreSeeds));
+      const genrePool = await this.candidatesFromGenres(genreSeeds);
+      // Tag each track with the first genre seed in the list — we
+      // pulled the pool from those slugs so they're the closest
+      // provenance we have. Multiple slugs collapse to the strongest
+      // (= first picked) because seed_artist_ids picks come ordered.
+      const tagSlug = genreSeeds[0];
+      if (tagSlug) {
+        for (const t of genrePool) genreProvenance.set(trackKey(t), tagSlug);
+      }
+      pools.push(genrePool);
     }
 
     // Mood pool — only when explicitly requested. Tagged via `moodIds`
     // so re-rank can hand out a bonus to anything from this slice.
     if (mood && MOOD_SLUG[mood]) {
       const moodPool = await this.candidatesFromGenres([MOOD_SLUG[mood]]);
-      for (const t of moodPool) moodIds.add(`${t.source ?? 'tidal'}:${t.id}`);
+      for (const t of moodPool) {
+        moodIds.add(trackKey(t));
+        genreProvenance.set(trackKey(t), MOOD_SLUG[mood]);
+      }
       pools.push(moodPool);
     }
 
@@ -191,7 +243,10 @@ export class RecommendationService {
     // from a curated pool, give it a nudge") are identical.
     if (character === 'popular') {
       const popPool = await this.candidatesFromGenres([POPULAR_EXPLORE_SLUG]);
-      for (const t of popPool) moodIds.add(`${t.source ?? 'tidal'}:${t.id}`);
+      for (const t of popPool) {
+        moodIds.add(trackKey(t));
+        genreProvenance.set(trackKey(t), POPULAR_EXPLORE_SLUG);
+      }
       pools.push(popPool);
     }
 
@@ -203,7 +258,7 @@ export class RecommendationService {
       candidates = await this.candidatesFromGenres(['genre_pop', 'genre_rap', 'genre_electronic']);
     }
 
-    return this.rerank(candidates, profile, dislikes, seen, limit, moodIds, character);
+    return this.rerank(candidates, profile, dislikes, seen, limit, moodIds, character, genreProvenance);
   }
 
   /**
@@ -324,6 +379,7 @@ export class RecommendationService {
     limit: number,
     moodIds: Set<string> = new Set(),
     character: WaveCharacter | null = null,
+    genreProvenance: Map<string, string> = new Map(),
   ): Track[] {
     if (candidates.length === 0) return [];
     const now = Date.now();
@@ -338,6 +394,12 @@ export class RecommendationService {
           ? W_FAMILIAR_BONUS * DISCOVER_BIAS
           : W_FAMILIAR_BONUS;
 
+    // Language penalty pre-flight: only meaningful when there's enough
+    // history to trust the distribution. Cold-start / thin-listening
+    // users get a no-op penalty.
+    const languageActive = profile.totalPlays >= LANG_MIN_HISTORY_PLAYS;
+    const scriptMix = profile.scriptMix;
+
     interface Scored { track: Track; score: number; }
     const scored: Scored[] = [];
 
@@ -346,7 +408,8 @@ export class RecommendationService {
       if (t.artistId && dislikes.artists.has(t.artistId)) continue;
 
       const tasteSig = t.artistId ? (profile.artistWeights[t.artistId] ?? 0) : 0;
-      const seenAt = seen.get(`${t.source ?? 'tidal'}:${t.id}`);
+      const key = trackKey(t);
+      const seenAt = seen.get(key);
       const seenAge = seenAt ? Math.max(0, now - seenAt) : Infinity;
       // Linear ramp from full penalty (just shown) to zero (>= 7 days ago).
       const seenPenalty = isFinite(seenAge)
@@ -358,14 +421,46 @@ export class RecommendationService {
       // not enough to drown out taste signal).
       const novelty = Math.random();
       const familiar = completed.has(t.id) ? 1 : 0;
-      const moodMatch = moodIds.has(`${t.source ?? 'tidal'}:${t.id}`) ? 1 : 0;
+      const moodMatch = moodIds.has(key) ? 1 : 0;
+
+      // Genre match: candidate gets bonus proportional to how strong
+      // the user's affinity for the slug that introduced it is. Tracks
+      // without provenance (track-radio, artist-radio) get 0 here
+      // — they fall back to relying on tasteSig.
+      const slug = genreProvenance.get(key);
+      const genreSig = slug ? (profile.genreWeights[slug] ?? 0) : 0;
+
+      // Language mismatch: penalise candidates whose artist name is in
+      // a script the user demonstrably doesn't listen to. The penalty
+      // is gated to userIds with non-trivial history
+      // (`LANG_MIN_HISTORY_PLAYS`) so cold-start users aren't locked
+      // into one region. The penalty also scales with how dominant the
+      // user's preferred scripts are — someone who's truly 50/50
+      // RU/EN won't get aggressive penalties on either side.
+      let languagePenalty = 0;
+      if (languageActive) {
+        const candidateScript = detectScript(t.artist ?? '');
+        const candidateShare = scriptMix[candidateScript];
+        if (candidateShare < LANG_MIN_SHARE) {
+          // Scale the penalty by how dominant the OTHER scripts are.
+          // If user is 70% cyrillic / 25% latin / 5% other, a candidate
+          // in `other` gets penalised at full -0.40. If user is more
+          // diffuse (say 40% / 35% / 25%), the penalty softens because
+          // the deficit (0.25 — a quarter of the user's listening)
+          // suggests they DO listen to that region occasionally.
+          const deficit = LANG_MIN_SHARE - candidateShare;
+          languagePenalty = W_LANG_MISMATCH * (deficit / LANG_MIN_SHARE);
+        }
+      }
 
       const score =
         W_TASTE * tasteSig +
         W_NOVELTY * novelty +
         W_RECENT_SEEN_PENALTY * seenPenalty +
         familiarWeight * familiar +
-        W_MOOD_BONUS * moodMatch;
+        W_MOOD_BONUS * moodMatch +
+        W_GENRE_MATCH * genreSig +
+        languagePenalty;
 
       scored.push({ track: t, score });
     }
@@ -390,14 +485,14 @@ export class RecommendationService {
 
     // If we ran short, relax the cap and pad with the rest.
     if (out.length < limit) {
-      const already = new Set(out.map((t) => `${t.source ?? 'tidal'}:${t.id}`));
+      const already = new Set(out.map(trackKey));
       for (const { track } of scored) {
-        const key = `${track.source ?? 'tidal'}:${track.id}`;
-        if (already.has(key)) continue;
+        const k = trackKey(track);
+        if (already.has(k)) continue;
         // Apply soft diversity penalty (already filtered above) — but at
         // this point we accept anything not duplicated.
         out.push(track);
-        already.add(key);
+        already.add(k);
         if (out.length >= limit) break;
       }
     }
@@ -444,11 +539,23 @@ export class RecommendationService {
   }
 }
 
+/**
+ * Canonical cross-table key for a track. Mirrors the helper in
+ * `DailyPlaylistService` (they should ALWAYS produce the same key for
+ * the same track or anti-overlap logic across services breaks). Pulled
+ * out here so the wave / rerank / seen-map / mood-set / genre-
+ * provenance code paths all share one source of truth instead of
+ * the inline template literals they had before.
+ */
+function trackKey(t: Track): string {
+  return `${t.source ?? 'tidal'}:${t.id}`;
+}
+
 function dedupTracks(tracks: Track[]): Track[] {
   const seen = new Set<string>();
   const out: Track[] = [];
   for (const t of tracks) {
-    const key = `${t.source ?? 'tidal'}:${t.id}`;
+    const key = trackKey(t);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(t);
