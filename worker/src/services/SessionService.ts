@@ -12,15 +12,15 @@ import type { Env } from '../types/env';
  *
  *   - `list(userId)` — rows for the "Sessions" list. Sorted by
  *     `last_used_at DESC` so the freshest devices appear at the top.
- *   - `revoke(userId, sessionId)` — single-device logout. Just drops
- *     the refresh-token row; the corresponding access token (if any)
- *     is left to expire on its own one-hour TTL.
+ *   - `revoke(userId, sessionId)` — single-device logout. Drops the
+ *     refresh-token row; the JWT middleware's per-session gate
+ *     (`SELECT 1 FROM sessions WHERE id = sid`) makes the deleted
+ *     row's access token 401 on its very next request, so the
+ *     hour-long TTL doesn't keep the other device alive.
  *   - `revokeAllExcept(userId, keepSessionId)` — "kill every device
- *     except this one". Drops all sessions except the kept one AND
- *     bumps `users.min_token_iat` so the access tokens that haven't
- *     expired yet ALSO forfeit. The kept session's access token is
- *     unaffected (its iat will already be >= the bump value because
- *     it was issued strictly after we read the current time).
+ *     except this one". Just deletes every row but `keepSessionId`;
+ *     the per-session gate handles invalidation for every dropped
+ *     row. The kept session is untouched.
  *
  * Notes on security:
  *   - Every method scopes by `user_id` so a compromised user can't
@@ -73,46 +73,31 @@ export class SessionService {
 
   /**
    * Drop every refresh-token row for this user except the one passed
-   * in, AND bump the user's `min_token_iat` so any access token still
-   * within its 1h TTL also forfeits. The kept session's access token
-   * is safe because the bump value (current epoch) is strictly less
-   * than its `iat` for any session newer than 1 second old; in
-   * practice the caller will refresh shortly after this returns
-   * anyway, so any race window is < 1 RTT.
+   * in. The middleware's per-session gate (`SELECT 1 FROM sessions
+   * WHERE id = payload.sid`) takes effect on the deleted rows'
+   * access tokens immediately — they 401 on their next request even
+   * though the JWT itself hasn't expired. The kept session is
+   * untouched and continues to authenticate normally.
    *
-   * Returns the new `min_token_iat` so the route can echo it back in
-   * the response (useful for debugging / future audit log).
+   * Returns the number of rows that were revoked, for the response
+   * payload that drives the success toast in the UI.
    */
   async revokeAllExcept(userId: string, keepSessionId: string | null): Promise<number> {
-    const now = Math.floor(Date.now() / 1000);
+    let res;
     if (keepSessionId) {
-      await this.env.DB
+      res = await this.env.DB
         .prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?')
         .bind(userId, keepSessionId)
         .run();
     } else {
       // No "current" id supplied — purge everything. Used by an
       // explicit "выйти со всех устройств" path (not the default).
-      await this.env.DB
+      res = await this.env.DB
         .prepare('DELETE FROM sessions WHERE user_id = ?')
         .bind(userId)
         .run();
     }
-    // Bumping min_token_iat to `now` means any access token issued
-    // BEFORE this exact second is rejected on its next use. The kept
-    // session's access token has `iat <= now` though, so we'd kill
-    // it too. To avoid that, bump to `now - 1`: anything signed at
-    // or after the previous second survives, which is fine because
-    // we just rotated the kept session anyway and the caller will
-    // typically have already refreshed. The 1-second window is also
-    // why we don't expose this method to the API directly without a
-    // companion token refresh — handlers MUST refresh before calling.
-    const cutoff = now - 1;
-    await this.env.DB
-      .prepare('UPDATE users SET min_token_iat = ? WHERE id = ?')
-      .bind(cutoff, userId)
-      .run();
-    return cutoff;
+    return res.meta?.changes ?? 0;
   }
 }
 
