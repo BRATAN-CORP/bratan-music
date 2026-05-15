@@ -94,6 +94,24 @@
       "telegramConflict": "Этот Telegram уже привязан к другому аккаунту.",
       "telegramStartFailed": "Не удалось начать привязку Telegram. Попробуйте позже."
     },
+    "sessions": {
+      "title": "Сессии",
+      "hint": "Список устройств, которые сейчас вошли в твой аккаунт. Можно завершить любую сессию.",
+      "currentBadge": "Текущая",
+      "lastUsed": "Последняя активность: {when}",
+      "createdAt": "Вход: {when}",
+      "logoutOne": "Завершить",
+      "logoutAll": "Выйти со всех других устройств",
+      "loading": "Загрузка…",
+      "empty": "Активных сессий не найдено.",
+      "loadError": "Не удалось загрузить сессии",
+      "revokeError": "Не удалось завершить сессию",
+      "logoutAllError": "Не удалось завершить остальные сессии",
+      "revokedToast": "Сессия завершена",
+      "logoutAllToast": "Завершено сессий: {count}",
+      "logoutAllNoOthers": "Кроме текущей сессий нет",
+      "unknownDevice": "Неизвестное устройство"
+    },
     "crossfadeSeconds": "{value} с"
   },
   "rooms": {

@@ -5,12 +5,37 @@ interface TokenPayload {
   iat: number;
   exp: number;
   admin: boolean;
+  /** Session row id this token was issued under. Lets middleware
+   *  identify which `sessions` row the request belongs to without an
+   *  extra DB lookup, and lets `/user/sessions` mark the active row
+   *  in its list. Optional for backward compatibility with refresh
+   *  tokens minted before the field existed (we'll just look those
+   *  up by `token_hash` instead). */
+  sid?: string;
 }
+
+export type AccessTokenPayload = TokenPayload;
 
 interface TokenPair {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  /** Server-issued session row id for the refresh token we just stored.
+   *  The /me/sessions endpoint uses this to mark the currently-active
+   *  session in the list (vs. the user's other devices). Surfaced to
+   *  the client via the refresh response so it can be remembered. */
+  sessionId: string;
+}
+
+/** Optional metadata captured at signin time and persisted on the new
+ *  `sessions.{user_agent,ip_hash,client_label,last_used_at}` columns
+ *  added by migration 0028. All fields are optional so the existing
+ *  auth callers don't have to change shape — we feed in whatever the
+ *  request gives us at signin via the helper in this file. */
+export interface SessionMetadata {
+  userAgent?: string;
+  ipHash?: string;
+  clientLabel?: string;
 }
 
 const ACCESS_TOKEN_TTL = 3600;
@@ -19,14 +44,21 @@ const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30;
 export class AuthService {
   constructor(private env: Env) {}
 
-  async generateTokens(userId: string, isAdmin: boolean): Promise<TokenPair> {
+  async generateTokens(
+    userId: string,
+    isAdmin: boolean,
+    metadata: SessionMetadata = {},
+  ): Promise<TokenPair> {
     const now = Math.floor(Date.now() / 1000);
+
+    const sessionId = crypto.randomUUID();
 
     const accessPayload: TokenPayload = {
       sub: userId,
       iat: now,
       exp: now + ACCESS_TOKEN_TTL,
       admin: isAdmin,
+      sid: sessionId,
     };
 
     const refreshPayload: TokenPayload = {
@@ -34,6 +66,7 @@ export class AuthService {
       iat: now,
       exp: now + REFRESH_TOKEN_TTL,
       admin: isAdmin,
+      sid: sessionId,
     };
 
     const accessToken = await this.signJwt(accessPayload, this.env.JWT_SECRET);
@@ -41,10 +74,23 @@ export class AuthService {
 
     const tokenHash = await this.hashToken(refreshToken);
     await this.env.DB.prepare(
-      'INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).bind(crypto.randomUUID(), userId, tokenHash, now + REFRESH_TOKEN_TTL, now).run();
+      `INSERT INTO sessions
+         (id, user_id, token_hash, expires_at, created_at,
+          last_used_at, user_agent, ip_hash, client_label)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      sessionId,
+      userId,
+      tokenHash,
+      now + REFRESH_TOKEN_TTL,
+      now,
+      now,
+      metadata.userAgent ?? '',
+      metadata.ipHash ?? '',
+      metadata.clientLabel ?? '',
+    ).run();
 
-    return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL };
+    return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL, sessionId };
   }
 
   async verifyAccessToken(token: string): Promise<TokenPayload | null> {
@@ -56,12 +102,35 @@ export class AuthService {
     if (!payload) return null;
 
     const tokenHash = await this.hashToken(token);
+    const now = Math.floor(Date.now() / 1000);
     const session = await this.env.DB.prepare(
       'SELECT id FROM sessions WHERE user_id = ? AND token_hash = ? AND expires_at > ?'
-    ).bind(payload.sub, tokenHash, Math.floor(Date.now() / 1000)).first();
+    ).bind(payload.sub, tokenHash, now).first<{ id: string }>();
 
     if (!session) return null;
+    // Bump last_used_at on every successful refresh so the "Сессии" UI
+    // sorts active devices newest-first. Cheap PK update, fire-and-forget
+    // semantics (a write hiccup doesn't fail the refresh).
+    await this.env.DB
+      .prepare('UPDATE sessions SET last_used_at = ? WHERE id = ?')
+      .bind(now, session.id)
+      .run()
+      .catch(() => { /* ignore */ });
     return payload;
+  }
+
+  /**
+   * Look up the `sessions.id` for a given refresh token. Used by the
+   * /auth/telegram and /auth/refresh handlers so the response can
+   * echo the active session id back to the client (matches what's
+   * displayed in the new "Сессии" tab).
+   */
+  async sessionIdForRefreshToken(token: string): Promise<string | null> {
+    const tokenHash = await this.hashToken(token);
+    const row = await this.env.DB.prepare(
+      'SELECT id FROM sessions WHERE token_hash = ? LIMIT 1'
+    ).bind(tokenHash).first<{ id: string }>();
+    return row?.id ?? null;
   }
 
   async revokeRefreshToken(token: string): Promise<void> {

@@ -1,10 +1,31 @@
 import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
-import { AuthService } from '../services/AuthService';
+import { AuthService, type SessionMetadata } from '../services/AuthService';
 import { UserService } from '../services/UserService';
 import { BrevoEmailService } from '../services/BrevoEmailService';
 import { EmailOtpService, isDisposableEmail, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
 import { SignupLogService, extractIp } from '../services/SignupLogService';
+import { clientLabelFromUa, hashIp } from '../services/SessionService';
+
+/**
+ * Build a `SessionMetadata` payload from the incoming request so the
+ * row inserted by `AuthService.generateTokens` has user-readable
+ * fields (`client_label`, `user_agent`, `ip_hash`) populated. Shared
+ * across every signin entrypoint — Telegram, email OTP, nonce
+ * confirmation, refresh rotation — so the new "Сессии" tab gets
+ * consistent labels regardless of which code path created the row.
+ */
+async function sessionMetadataFromRequest(
+  c: { req: { header: (k: string) => string | undefined; raw: Request } },
+): Promise<SessionMetadata> {
+  const ua = c.req.header('User-Agent') ?? '';
+  const ip = extractIp(c.req.raw);
+  return {
+    userAgent: ua,
+    ipHash: await hashIp(ip),
+    clientLabel: clientLabelFromUa(ua),
+  };
+}
 
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -90,12 +111,17 @@ auth.post('/telegram', async (c) => {
     await signupLog.record({ userId: user.id, ip, source: 'telegram' }).catch(() => {});
   }
 
-  const tokens = await authService.generateTokens(user.id, user.is_admin === 1);
+  const tokens = await authService.generateTokens(
+    user.id,
+    user.is_admin === 1,
+    await sessionMetadataFromRequest(c),
+  );
 
   return c.json({
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: tokens.expiresIn,
+    sessionId: tokens.sessionId,
     user: {
       id: user.id,
       username: user.tg_username,
@@ -131,13 +157,18 @@ auth.get('/nonce/:nonce', async (c) => {
   }
 
   const authService = new AuthService(c.env);
-  const tokens = await authService.generateTokens(user.id, user.is_admin === 1);
+  const tokens = await authService.generateTokens(
+    user.id,
+    user.is_admin === 1,
+    await sessionMetadataFromRequest(c),
+  );
 
   return c.json({
     status: 'confirmed',
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: tokens.expiresIn,
+    sessionId: tokens.sessionId,
     user: {
       id: user.id,
       username: user.tg_username,
@@ -300,12 +331,17 @@ auth.post('/email/verify', async (c) => {
   }
 
   const authService = new AuthService(c.env);
-  const tokens = await authService.generateTokens(user.id, user.is_admin === 1);
+  const tokens = await authService.generateTokens(
+    user.id,
+    user.is_admin === 1,
+    await sessionMetadataFromRequest(c),
+  );
 
   return c.json({
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: tokens.expiresIn,
+    sessionId: tokens.sessionId,
     user: {
       id: user.id,
       username: user.tg_username,
@@ -335,12 +371,17 @@ auth.post('/refresh', async (c) => {
 
   const userService = new UserService(c.env);
   const isAdmin = await userService.isAdmin(payload.sub);
-  const tokens = await authService.generateTokens(payload.sub, isAdmin);
+  const tokens = await authService.generateTokens(
+    payload.sub,
+    isAdmin,
+    await sessionMetadataFromRequest(c),
+  );
 
   return c.json({
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: tokens.expiresIn,
+    sessionId: tokens.sessionId,
   });
 });
 
