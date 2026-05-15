@@ -44,4 +44,11 @@ export interface Env {
 export interface Variables {
   userId: string;
   isAdmin: boolean;
+  /** Row id from the `sessions` table that issued the current access
+   *  token. Populated by `jwtAuth` middleware from the JWT's `sid`
+   *  claim. Used by `/user/sessions` to mark "current" in the device
+   *  list and by `/user/sessions/logout-all` to know which row to
+   *  preserve. Optional because access tokens minted before the
+   *  `sid` claim existed don't carry one. */
+  sessionId?: string;
 }

@@ -4,6 +4,7 @@ import { UserService } from '../services/UserService';
 import { SubscriptionService } from '../services/SubscriptionService';
 import { BrevoEmailService } from '../services/BrevoEmailService';
 import { EmailOtpService, isDisposableEmail, isPlausibleEmail, normalizeEmail } from '../services/EmailOtpService';
+import { SessionService } from '../services/SessionService';
 import { jwtAuth } from '../middleware/auth';
 
 const user = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -466,6 +467,76 @@ user.post('/reset-recommendations', async (c) => {
     .bind(Date.now(), Math.floor(Date.now() / 1000), userId)
     .run();
   return c.json({ ok: true, deleted });
+});
+
+/**
+ * Active sessions list. Shows every refresh-token row for this user
+ * that hasn't expired yet, with the access token's `sid` (if present)
+ * used to mark which entry is "this device". The Профиль → Сессии tab
+ * renders the result; no admin override is required since user_id
+ * scoping happens inside SessionService.
+ */
+user.get('/sessions', async (c) => {
+  const userId = c.get('userId');
+  const currentSessionId = c.get('sessionId') ?? null;
+  const sessions = await new SessionService(c.env).list(userId, currentSessionId);
+  return c.json({ sessions, currentSessionId });
+});
+
+/**
+ * Revoke a specific session. Returns 404 if the id doesn't belong to
+ * the caller — the SessionService.revoke already scopes by user_id so
+ * a successful delete is proof of ownership.
+ *
+ * Note: if the user revokes their *current* session (id ===
+ * sessionId from the access token), their access token is still
+ * within its 1h TTL and would keep working. That's a defensible
+ * behaviour for a self-initiated revoke (it's their own device), but
+ * to mirror "Logout" semantics we ALSO bump `min_token_iat` to now
+ * when the revoked row matches the caller's session.
+ */
+user.delete('/sessions/:id', async (c) => {
+  const userId = c.get('userId');
+  const sid = c.req.param('id');
+  if (!sid) return c.json({ error: 'session id обязателен' }, 400);
+  const svc = new SessionService(c.env);
+  const ok = await svc.revoke(userId, sid);
+  if (!ok) return c.json({ error: 'Сессия не найдена' }, 404);
+  // If the user just killed their own active session, also forfeit
+  // the access token immediately by bumping `min_token_iat`. Other
+  // sessions are unaffected because they were minted with a later
+  // iat than the bump value.
+  if (c.get('sessionId') === sid) {
+    const now = Math.floor(Date.now() / 1000);
+    await c.env.DB
+      .prepare('UPDATE users SET min_token_iat = ? WHERE id = ?')
+      .bind(now, userId)
+      .run();
+  }
+  return c.json({ ok: true });
+});
+
+/**
+ * "Выйти со всех других устройств". Drops every refresh-token row
+ * except the caller's current session AND bumps `min_token_iat` so
+ * any access token issued for a different session forfeits on its
+ * next request. The current session's access token survives because
+ * SessionService.revokeAllExcept bumps to `now - 1` (the current
+ * token's iat is >= now since it was issued at or after the same
+ * second).
+ *
+ * Why we don't also rotate the current refresh token here:
+ * - The refresh row is unchanged, so the next /auth/refresh call
+ *   from this device will succeed and rotate normally.
+ * - Forcing a rotation here would require sending the new pair back
+ *   in the response, which couples this endpoint to refresh-token
+ *   lifecycle. Cleaner to keep the two flows orthogonal.
+ */
+user.post('/sessions/logout-all', async (c) => {
+  const userId = c.get('userId');
+  const keep = c.get('sessionId') ?? null;
+  const cutoff = await new SessionService(c.env).revokeAllExcept(userId, keep);
+  return c.json({ ok: true, minTokenIat: cutoff, keptSessionId: keep });
 });
 
 export { user };

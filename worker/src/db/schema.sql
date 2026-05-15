@@ -9,6 +9,12 @@ CREATE TABLE users (
     banned_by         TEXT,
     banned_reason     TEXT,
     tour_completed_at INTEGER,
+    -- Global revocation cutoff (UNIX seconds, same units as JWT `iat`).
+    -- Any access token issued before this timestamp is rejected by
+    -- the auth middleware. Backs both the per-user "logout other
+    -- devices" button and (when bumped en masse) a system-wide
+    -- forced re-login. See migration 0028_session_management.sql.
+    min_token_iat     INTEGER NOT NULL DEFAULT 0,
     created_at        INTEGER NOT NULL,
     updated_at        INTEGER NOT NULL
 );
@@ -111,12 +117,22 @@ CREATE TABLE track_overrides (
 );
 
 CREATE TABLE sessions (
-    id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash  TEXT NOT NULL,
-    expires_at  INTEGER NOT NULL,
-    created_at  INTEGER NOT NULL
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash    TEXT NOT NULL,
+    expires_at    INTEGER NOT NULL,
+    created_at    INTEGER NOT NULL,
+    -- See migration 0028_session_management.sql for the rationale
+    -- behind each of the four metadata columns. Defaults are
+    -- intentionally '' / 0 so the ALTER on a populated table is safe
+    -- and the next login backfills real data.
+    last_used_at  INTEGER NOT NULL DEFAULT 0,
+    user_agent    TEXT    NOT NULL DEFAULT '',
+    ip_hash       TEXT    NOT NULL DEFAULT '',
+    client_label  TEXT    NOT NULL DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS idx_sessions_user_last_used
+  ON sessions(user_id, last_used_at DESC);
 
 CREATE TABLE service_accounts (
     id          TEXT PRIMARY KEY,

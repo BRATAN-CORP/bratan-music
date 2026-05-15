@@ -94,6 +94,24 @@
       "telegramConflict": "This Telegram account is already linked to another user.",
       "telegramStartFailed": "Couldn't start the Telegram link. Try again later."
     },
+    "sessions": {
+      "title": "Sessions",
+      "hint": "Devices currently signed in to your account. You can end any session.",
+      "currentBadge": "Current",
+      "lastUsed": "Last active: {when}",
+      "createdAt": "Signed in: {when}",
+      "logoutOne": "Log out",
+      "logoutAll": "Log out from every other device",
+      "loading": "Loading…",
+      "empty": "No active sessions found.",
+      "loadError": "Couldn't load sessions",
+      "revokeError": "Couldn't end the session",
+      "logoutAllError": "Couldn't log out the other sessions",
+      "revokedToast": "Session ended",
+      "logoutAllToast": "Sessions ended: {count}",
+      "logoutAllNoOthers": "No sessions other than the current one",
+      "unknownDevice": "Unknown device"
+    },
     "crossfadeSeconds": "{value}s"
   },
   "rooms": {
