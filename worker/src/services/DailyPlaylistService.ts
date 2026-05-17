@@ -60,6 +60,18 @@ const SPECS: Record<Variant, ColdStartSpec> = {
 
 const PLAYLIST_LENGTH = 50;
 
+/** Wide pool of Tidal explore-page slugs used as a last-resort backfill
+ *  when the primary genre seeds + user genre seeds aren't enough to
+ *  fill a variant to PLAYLIST_LENGTH. Ordered roughly by pool size
+ *  (popular genres first) so we hit the biggest reservoirs early. */
+const EXTENDED_BACKFILL_SLUGS: string[] = [
+  'genre_rnb', 'genre_soul', 'genre_rock', 'genre_metal',
+  'genre_jazz', 'genre_classical', 'genre_latin', 'genre_country',
+  'genre_reggae', 'genre_world', 'genre_indie',
+  'mood_chill', 'mood_workout', 'mood_focus', 'mood_party', 'mood_throwback',
+  'top_popular',
+];
+
 interface DailyPlaylistRow {
   id: string;
   variant: Variant;
@@ -205,14 +217,14 @@ export class DailyPlaylistService {
       // previous variant already shipped.
       tracks = tracks.filter((t) => !claimed.has(trackKey(t)));
 
-      // Backfill so each variant always reaches PLAYLIST_LENGTH when
-      // possible. Without this the user would intermittently see
-      // 10–30 tracks on a daily playlist whenever the wave/genre
-      // pool came back short or after dislikes filtered out enough
-      // candidates to drop the count under the cap. Cycle through
-      // the variant's fallback genres + the user's taste-derived
-      // genre seeds so we exhaust reasonable sources before
-      // shipping a partial playlist.
+      // ── Multi-phase backfill ──────────────────────────────────────
+      // When dislikes + cross-variant claim filtering shrink the pool
+      // below PLAYLIST_LENGTH the single-pass genre backfill used to
+      // give up too early (the old ~5 slug set was quickly exhausted).
+      // We now run three progressively wider phases so the user always
+      // sees 50 tracks unless the entire Tidal catalogue is disliked.
+
+      // Phase 1: variant fallback genres + user genre seeds + core genres.
       if (tracks.length < PLAYLIST_LENGTH) {
         const fallbackSlugs = [
           ...spec.fallbackGenres,
@@ -231,6 +243,35 @@ export class DailyPlaylistService {
             dislikes,
           ).filter((t) => !claimed.has(trackKey(t)));
           tracks = mergeUnique(tracks, filler, PLAYLIST_LENGTH);
+        }
+
+        // Phase 2: broad wave (no character / mood) — a fundamentally
+        // different candidate source that uses track-radio fan-out from
+        // the user's top seeds. This yields tracks that explore pages
+        // wouldn't surface and is usually the phase that closes the gap.
+        if (tracks.length < PLAYLIST_LENGTH) {
+          const broadWave = await this.rec.wave(userId, {
+            limit: PLAYLIST_LENGTH * 4,
+          });
+          const broadFiltered = filterTracksByDislikes(broadWave, dislikes)
+            .filter((t) => !claimed.has(trackKey(t)));
+          tracks = mergeUnique(tracks, broadFiltered, PLAYLIST_LENGTH);
+        }
+
+        // Phase 3: extended genre/mood/popular slug pool — a wide net
+        // across every Tidal explore page we know about. Last resort
+        // before accepting a partial playlist.
+        if (tracks.length < PLAYLIST_LENGTH) {
+          for (const slug of EXTENDED_BACKFILL_SLUGS) {
+            if (tracks.length >= PLAYLIST_LENGTH) break;
+            if (seenSlugs.has(slug)) continue;
+            seenSlugs.add(slug);
+            const filler = filterTracksByDislikes(
+              await this.tracksFromGenre(slug),
+              dislikes,
+            ).filter((t) => !claimed.has(trackKey(t)));
+            tracks = mergeUnique(tracks, filler, PLAYLIST_LENGTH);
+          }
         }
       }
 
@@ -286,17 +327,16 @@ export class DailyPlaylistService {
       // Familiar leans into stuff the user already knows / loves:
       // call wave with `character: 'familiar'` so the rerank doubles
       // W_FAMILIAR_BONUS instead of running the neutral profile. We
-      // oversample (2× PLAYLIST_LENGTH) so the cross-variant claim
-      // strip in `generateVariants` doesn't shrink the final result
-      // below the contracted length.
+      // oversample (3× PLAYLIST_LENGTH) so the cross-variant claim
+      // strip + dislike filtering in `generateVariants` doesn't shrink
+      // the final result below the contracted length.
       const wave = await this.rec.wave(userId, {
-        limit: PLAYLIST_LENGTH * 2,
+        limit: PLAYLIST_LENGTH * 3,
         character: 'familiar',
       });
       const familiarHead = wave.slice(0, Math.floor(PLAYLIST_LENGTH * 0.7));
-      // Padding from completed tracks if wave came back short.
       const padPool = await this.tracksFromIds(completedTrackIds.slice(0, 30));
-      return mergeUnique(familiarHead, padPool, PLAYLIST_LENGTH * 2);
+      return mergeUnique(familiarHead, padPool, PLAYLIST_LENGTH * 3);
     }
 
     if (variant === 'discover') {
@@ -304,51 +344,71 @@ export class DailyPlaylistService {
       // rerank (`character: 'discover'`) so the pool comes back
       // taste-adjacent but tilted toward fresh artists — a genuinely
       // different distribution from familiar's pool, NOT just
-      // "familiar minus history". Oversample 3× so the history-strip
-      // + cross-variant-claim still leaves us PLAYLIST_LENGTH room.
+      // "familiar minus history". Oversample 5× so the history-strip
+      // + dislike-filter + cross-variant-claim still leaves us room.
       const wave = await this.rec.wave(userId, {
-        limit: PLAYLIST_LENGTH * 3,
+        limit: PLAYLIST_LENGTH * 5,
         character: 'discover',
       });
-      // Strip anything in the user's history → real "discovery".
       const known = new Set(completedTrackIds);
       const unknown = wave.filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
       if (unknown.length >= PLAYLIST_LENGTH) return unknown.slice(0, PLAYLIST_LENGTH);
-      // Pad with a genre-seeded pool when wave came back short.
-      // Previously this only ran for cold-start users (no history),
-      // which meant returning users with a thin wave got a partial
-      // (10–30 track) discover playlist instead of the contracted 50.
-      const fillerSlug = genreSeeds[0] ?? SPECS.discover.fallbackGenres[0] ?? 'genre_pop';
-      const filler = (await this.tracksFromGenre(fillerSlug))
-        .filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
-      return mergeUnique(unknown, filler, PLAYLIST_LENGTH);
+      // Pad with ALL genre seeds + fallback genres instead of just the
+      // first slug. Previously a single slug couldn't compensate for
+      // heavy dislike/claim filtering, leaving 10–30 track playlists.
+      const fillerSlugs = [
+        ...genreSeeds,
+        ...SPECS.discover.fallbackGenres,
+        'genre_pop', 'genre_rap', 'genre_electronic',
+      ];
+      let padded = unknown;
+      const triedSlugs = new Set<string>();
+      for (const slug of fillerSlugs) {
+        if (padded.length >= PLAYLIST_LENGTH) break;
+        if (triedSlugs.has(slug)) continue;
+        triedSlugs.add(slug);
+        const filler = (await this.tracksFromGenre(slug))
+          .filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
+        padded = mergeUnique(padded, filler, PLAYLIST_LENGTH);
+      }
+      return padded;
     }
 
     // mood — pick the slug from the user's actual time-of-day pattern
     // when we have enough history, fall back to wall-clock UTC hour
     // for cold-start users. The primary source is the mood-tagged
     // explore page (a fundamentally different pool from familiar /
-    // discover); only fall back to wave when that pool is too thin
-    // to reach PLAYLIST_LENGTH, in which case we also pass the same
-    // mood signal into wave so the filler pool is still mood-tinted
-    // instead of returning the neutral pool that used to overlap
-    // with familiar.
+    // discover); when that pool is too thin we layer in other mood
+    // pages + a mood-tinted wave so the variant still reaches 50.
     const moodSlug = await this.pickPersonalMoodSlug(userId, hasHistory);
-    const moodTracks = (await this.tracksFromGenre(moodSlug))
+    let moodResult = (await this.tracksFromGenre(moodSlug))
       .filter((t) => !claimed.has(trackKey(t)));
-    if (moodTracks.length >= PLAYLIST_LENGTH) return moodTracks.slice(0, PLAYLIST_LENGTH);
-    // Map our internal mood slug back to the WaveMood enum used by
-    // `rec.wave` so the filler pool gets a mood-pool boost in rerank.
-    // Best-effort: if the slug doesn't map (e.g. a future mood without
-    // a matching enum), call wave without the mood and accept the
-    // neutral filler.
+
+    // Try other mood slugs before falling back to wave — mood pages
+    // are a different pool from track-radio and tend to have minimal
+    // overlap with familiar/discover.
+    if (moodResult.length < PLAYLIST_LENGTH) {
+      const ALL_MOOD_SLUGS = ['mood_chill', 'mood_workout', 'mood_focus', 'mood_party', 'mood_throwback'];
+      const triedMoods = new Set([moodSlug]);
+      for (const slug of ALL_MOOD_SLUGS) {
+        if (moodResult.length >= PLAYLIST_LENGTH) break;
+        if (triedMoods.has(slug)) continue;
+        triedMoods.add(slug);
+        const extra = (await this.tracksFromGenre(slug))
+          .filter((t) => !claimed.has(trackKey(t)));
+        moodResult = mergeUnique(moodResult, extra, PLAYLIST_LENGTH);
+      }
+    }
+
+    if (moodResult.length >= PLAYLIST_LENGTH) return moodResult.slice(0, PLAYLIST_LENGTH);
+
     const moodEnum = moodSlugToWaveMood(moodSlug);
     const fillerWave = await this.rec.wave(userId, {
-      limit: PLAYLIST_LENGTH * 2,
+      limit: PLAYLIST_LENGTH * 4,
       mood: moodEnum,
     });
     const fillerFiltered = fillerWave.filter((t) => !claimed.has(trackKey(t)));
-    return mergeUnique(moodTracks, fillerFiltered, PLAYLIST_LENGTH);
+    return mergeUnique(moodResult, fillerFiltered, PLAYLIST_LENGTH);
   }
 
   private async tracksFromIds(ids: string[]): Promise<Track[]> {
