@@ -212,12 +212,14 @@ export class RecommendationService {
       pools.push(await this.candidatesFromArtistSeeds(seedArtistIds));
     }
 
-    if (pools.length === 0 && genreSeeds.length > 0) {
+    // Always co-include genre-seed explore pages so the candidate pool
+    // reflects the user's declared genre preferences even after history
+    // accumulates. The old cold-start-only gate meant users with history
+    // never got genre-aligned candidates in the pool, leaving the rerank
+    // to work entirely off track-radio serendipity. W_GENRE_MATCH in
+    // rerank scores these proportionally to the user's genre affinity.
+    if (genreSeeds.length > 0) {
       const genrePool = await this.candidatesFromGenres(genreSeeds);
-      // Tag each track with the first genre seed in the list — we
-      // pulled the pool from those slugs so they're the closest
-      // provenance we have. Multiple slugs collapse to the strongest
-      // (= first picked) because seed_artist_ids picks come ordered.
       const tagSlug = genreSeeds[0];
       if (tagSlug) {
         for (const t of genrePool) genreProvenance.set(trackKey(t), tagSlug);
