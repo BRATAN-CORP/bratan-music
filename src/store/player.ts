@@ -42,6 +42,11 @@ interface Track {
   /** Animated cover (mp4). Used in the fullscreen player as a tasteful loop. */
   coverVideoUrl?: string;
   duration: number;
+  /** Source-provider "Explicit" flag. Carried through the player so the
+   * mini-player, fullscreen player and mobile dock can render the small
+   * "E" badge next to the title for uncensored versions. Optional —
+   * defaults to undefined / false when the source omits it. */
+  explicit?: boolean;
   /** Provider tag — "tidal" | "upload" | "override". Optional because
    *  legacy tracks default to "tidal" downstream. */
   source?: string;

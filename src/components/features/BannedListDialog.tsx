@@ -3,6 +3,7 @@ import { Ban, Loader2, RotateCcw, X } from 'lucide-react';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import {
   useDislikesDetails,
   useToggleDislike,
@@ -234,13 +235,14 @@ function TrackRow({
           to={unavailable ? '#' : `/track/${track.id}`}
           onClick={unavailable ? undefined : onNavigate}
           className={[
-            'block truncate text-sm font-medium',
+            'flex items-center gap-1.5 truncate text-sm font-medium',
             unavailable ? 'pointer-events-none text-muted-foreground' : 'hover:underline',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          {unavailable ? t('bannedList.unavailableTrack') : track.title}
+          <span className="truncate">{unavailable ? t('bannedList.unavailableTrack') : track.title}</span>
+          <ExplicitBadge explicit={track.explicit} size={12} />
         </Link>
         <p className="truncate text-[11px] text-muted-foreground">
           {unavailable ? '' : track.artist}

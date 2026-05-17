@@ -13,6 +13,7 @@ import { Skeleton, TrackListSkeleton } from '@/components/ui/Skeleton';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { toPlayerTrack } from '@/lib/playerTrack';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { useT } from '@/i18n';
 
 export function TrackPage() {
@@ -76,7 +77,10 @@ export function TrackPage() {
               )}
               <div className="flex flex-col justify-end gap-3">
                 <Eyebrow>{t('track.pageEyebrow')}</Eyebrow>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{track.title}</h1>
+                <h1 className="flex flex-wrap items-center gap-2 text-3xl font-semibold tracking-tight sm:text-5xl">
+                  <span>{track.title}</span>
+                  <ExplicitBadge explicit={track.explicit} size={24} />
+                </h1>
                 <div className="text-sm text-muted-foreground">
                   <ArtistLinks
                     artists={track.artists}

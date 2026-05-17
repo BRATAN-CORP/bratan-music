@@ -9,6 +9,7 @@ import { Marquee } from '@/components/ui/Marquee';
 import { CoverFallback } from '@/components/ui/CoverFallback';
 import { SwipeTrackStrip } from '@/components/layout/SwipeTrackStrip';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { hasMultiCredit } from '@/lib/artistCredit';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import type { Track } from '@/types';
@@ -295,10 +296,13 @@ export function MobileBottomDock() {
                         type="button"
                         onClick={position === 'current' ? openFullscreen : undefined}
                         tabIndex={position === 'current' ? 0 : -1}
-                        className="block w-full max-w-full min-w-0 overflow-hidden text-left text-sm font-medium leading-tight"
+                        className="flex w-full max-w-full min-w-0 items-center gap-1.5 overflow-hidden text-left text-sm font-medium leading-tight"
                         aria-label={t('player.openPlayer')}
                       >
-                        <Marquee text={track.title} />
+                        <span className="block min-w-0 flex-1">
+                          <Marquee text={track.title} />
+                        </span>
+                        <ExplicitBadge explicit={track.explicit} size={12} />
                       </button>
                       {position === 'current' && hasMultiCredit(track.artists, track.artist) ? (
                         <div className="block w-full overflow-hidden text-left text-xs text-muted-foreground">

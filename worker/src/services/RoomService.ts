@@ -58,6 +58,10 @@ export interface RoomTrackSnapshot {
   coverVideoUrl?: string | null;
   duration: number;
   source: string;
+  /** Source-provider "Explicit" flag. Carried through the room snapshot
+   *  so guest clients can render the "E" badge consistently with the
+   *  host's local UI. Optional — older snapshots may omit it. */
+  explicit?: boolean;
 }
 
 export interface RoomRow {
@@ -668,5 +672,6 @@ function sanitiseTrack(t: RoomTrackSnapshot): RoomTrackSnapshot {
       ? Math.max(0, Math.floor(t.duration))
       : 0,
     source: str(t.source || 'tidal', 32) || 'tidal',
+    explicit: typeof t.explicit === 'boolean' ? t.explicit : undefined,
   };
 }

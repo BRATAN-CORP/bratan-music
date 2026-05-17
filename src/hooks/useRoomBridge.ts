@@ -41,6 +41,7 @@ interface SnapshotSource {
   coverVideoUrl?: string;
   duration: number;
   source?: string;
+  explicit?: boolean;
 }
 
 function snapshotFromTrack(t: SnapshotSource): RoomTrackSnapshot {
@@ -56,6 +57,7 @@ function snapshotFromTrack(t: SnapshotSource): RoomTrackSnapshot {
     coverVideoUrl: t.coverVideoUrl ?? null,
     duration: t.duration ?? 0,
     source: t.source ?? (t.id.startsWith('upload:') ? 'upload' : 'tidal'),
+    explicit: t.explicit,
   };
 }
 

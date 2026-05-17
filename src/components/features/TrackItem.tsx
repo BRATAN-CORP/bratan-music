@@ -8,6 +8,7 @@ import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackInlineActions } from '@/components/features/TrackInlineActions';
 import { OfflineBadge } from '@/components/features/OfflineBadge';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { useT } from '@/i18n';
 
 interface TrackItemProps {
@@ -130,6 +131,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
             </span>
           )}
           <span className="truncate">{track.title}</span>
+          <ExplicitBadge explicit={track.explicit} size={12} />
           <OfflineBadge trackId={track.id} size={14} />
         </p>
         <p className="truncate text-xs text-muted-foreground">

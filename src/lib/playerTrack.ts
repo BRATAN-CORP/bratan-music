@@ -18,5 +18,6 @@ export function toPlayerTrack(t: Track) {
     coverUrl: t.coverUrl,
     coverVideoUrl: t.coverVideoUrl,
     duration: t.duration,
+    explicit: t.explicit,
   };
 }

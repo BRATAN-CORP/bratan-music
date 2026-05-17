@@ -28,6 +28,7 @@ import { OfflineProgressIcon } from '@/components/features/OfflineProgressIcon';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { downloadTrack } from '@/lib/trackActions';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { hasMultiCredit } from '@/lib/artistCredit';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
@@ -387,10 +388,13 @@ export function Player() {
                 <button
                   type="button"
                   onClick={openFullscreen}
-                  className="block w-full text-left text-sm font-medium transition-opacity hover:opacity-90"
+                  className="flex w-full items-center gap-1.5 text-left text-sm font-medium transition-opacity hover:opacity-90"
                   aria-label={t('player.openPlayer')}
                 >
-                  <Marquee text={currentTrack.title} />
+                  <span className="block min-w-0 flex-1">
+                    <Marquee text={currentTrack.title} />
+                  </span>
+                  <ExplicitBadge explicit={currentTrack.explicit} size={12} />
                 </button>
                 {hasMultiCredit(currentTrack.artists, currentTrack.artist) ? (
                   <div className="block w-full overflow-hidden text-xs text-muted-foreground">

@@ -31,6 +31,7 @@ import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { downloadTrack } from '@/lib/trackActions';
 import { startTrackRadio } from '@/lib/trackRadio';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { hasMultiCredit } from '@/lib/artistCredit';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
@@ -1226,8 +1227,11 @@ export function FullscreenPlayer() {
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   className="block w-full min-w-0 text-center"
                 >
-                  <h1 className="block w-full min-w-0 text-xl font-semibold tracking-tight sm:text-3xl">
-                    <Marquee text={currentTrack.title} />
+                  <h1 className="flex w-full min-w-0 items-center justify-center gap-2 text-xl font-semibold tracking-tight sm:text-3xl">
+                    <span className="block min-w-0 flex-1">
+                      <Marquee text={currentTrack.title} />
+                    </span>
+                    <ExplicitBadge explicit={currentTrack.explicit} size={18} />
                   </h1>
                 </motion.div>
                 {/* Always render the artist line inside a `block w-full
