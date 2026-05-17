@@ -60,17 +60,12 @@ const SPECS: Record<Variant, ColdStartSpec> = {
 
 const PLAYLIST_LENGTH = 50;
 
-/** Wide pool of Tidal explore-page slugs used as a last-resort backfill
- *  when the primary genre seeds + user genre seeds aren't enough to
- *  fill a variant to PLAYLIST_LENGTH. Ordered roughly by pool size
- *  (popular genres first) so we hit the biggest reservoirs early. */
-const EXTENDED_BACKFILL_SLUGS: string[] = [
-  'genre_rnb', 'genre_soul', 'genre_rock', 'genre_metal',
-  'genre_jazz', 'genre_classical', 'genre_latin', 'genre_country',
-  'genre_reggae', 'genre_world', 'genre_indie',
-  'mood_chill', 'mood_workout', 'mood_focus', 'mood_party', 'mood_throwback',
-  'top_popular',
-];
+/** How many completed-track seeds (beyond wave's top-15 sampling
+ *  window) to fan out for taste-seeded radio backfill. Each seed
+ *  yields ~50 candidates from a neighbourhood wave() doesn't reach.
+ *  5 × 50 = 250 raw candidates — enough to fill a 50-track gap
+ *  after dislike + claim filtering for most users. */
+const BACKFILL_DEEP_SEEDS = 5;
 
 interface DailyPlaylistRow {
   id: string;
@@ -258,20 +253,20 @@ export class DailyPlaylistService {
           tracks = mergeUnique(tracks, broadFiltered, PLAYLIST_LENGTH);
         }
 
-        // Phase 3: extended genre/mood/popular slug pool — a wide net
-        // across every Tidal explore page we know about. Last resort
-        // before accepting a partial playlist.
+        // Phase 3: taste-seeded track-radio from the user's deeper
+        // completed tracks (positions 15+, which wave() rarely samples)
+        // plus the user's genre-seed pages. Replaces the old generic-
+        // genre backfill (EXTENDED_BACKFILL_SLUGS) that surfaced genres
+        // the user never listened to.
         if (tracks.length < PLAYLIST_LENGTH) {
-          for (const slug of EXTENDED_BACKFILL_SLUGS) {
-            if (tracks.length >= PLAYLIST_LENGTH) break;
-            if (seenSlugs.has(slug)) continue;
-            seenSlugs.add(slug);
-            const filler = filterTracksByDislikes(
-              await this.tracksFromGenre(slug),
-              dislikes,
-            ).filter((t) => !claimed.has(trackKey(t)));
-            tracks = mergeUnique(tracks, filler, PLAYLIST_LENGTH);
-          }
+          const tasteFill = await this.tasteSeedRadio(
+            profile.completedTrackIds,
+            genreSeeds,
+            claimed,
+            dislikes,
+            PLAYLIST_LENGTH - tracks.length,
+          );
+          tracks = mergeUnique(tracks, tasteFill, PLAYLIST_LENGTH);
         }
       }
 
@@ -394,13 +389,39 @@ export class DailyPlaylistService {
 
     if (moodResult.length >= PLAYLIST_LENGTH) return moodResult.slice(0, PLAYLIST_LENGTH);
 
-    // Mood-tinted wave — wave() already strips dislikes via rerank.
+    // Mood-tinted wave with higher oversample — mood is built last
+    // (after familiar + discover claim ~100 tracks) so it needs a
+    // wider pool to compensate for the cross-variant overlap.
     const moodEnum = moodSlugToWaveMood(moodSlug);
     const fillerWave = (await this.rec.wave(userId, {
-      limit: PLAYLIST_LENGTH * 4,
+      limit: PLAYLIST_LENGTH * 8,
       mood: moodEnum,
     })).filter(isClean);
-    return mergeUnique(moodResult, fillerWave, PLAYLIST_LENGTH);
+    moodResult = mergeUnique(moodResult, fillerWave, PLAYLIST_LENGTH);
+    if (moodResult.length >= PLAYLIST_LENGTH) return moodResult;
+
+    // User's genre seeds — taste-aligned tracks from a pool the mood
+    // pages and wave don't cover.
+    for (const slug of genreSeeds) {
+      if (moodResult.length >= PLAYLIST_LENGTH) break;
+      const extra = (await this.tracksFromGenre(slug)).filter(isClean);
+      moodResult = mergeUnique(moodResult, extra, PLAYLIST_LENGTH);
+    }
+    if (moodResult.length >= PLAYLIST_LENGTH) return moodResult;
+
+    // Track-radio from deeper seeds (positions 15+) that wave() rarely
+    // samples — taste-aligned but from a different neighbourhood.
+    const deepSeeds = completedTrackIds.slice(15, 50);
+    const shuffled = [...deepSeeds].sort(() => Math.random() - 0.5);
+    for (const id of shuffled.slice(0, BACKFILL_DEEP_SEEDS)) {
+      if (moodResult.length >= PLAYLIST_LENGTH) break;
+      try {
+        const radio = await this.tidal.getTrackRadio(id, 50);
+        moodResult = mergeUnique(moodResult, radio.filter(isClean), PLAYLIST_LENGTH);
+      } catch { /* skip failed radio */ }
+    }
+
+    return moodResult;
   }
 
   private async tracksFromIds(ids: string[]): Promise<Track[]> {
@@ -422,6 +443,57 @@ export class DailyPlaylistService {
 
   private async tracksFromGenre(slug: string): Promise<Track[]> {
     return getCachedGenreTracks(this.env, this.tidal, slug);
+  }
+
+  /**
+   * Taste-seeded backfill: track-radio from completed tracks that
+   * wave() rarely samples (positions 15+) plus the user's genre-seed
+   * pages. Returns up to `needed` clean, unclaimed tracks that align
+   * with the user's actual listening history.
+   */
+  private async tasteSeedRadio(
+    completedTrackIds: string[],
+    genreSeeds: string[],
+    claimed: Set<string>,
+    dislikes: import('./dislikes').DislikeSets,
+    needed: number,
+  ): Promise<Track[]> {
+    const isClean = (t: Track): boolean =>
+      !claimed.has(trackKey(t)) &&
+      !dislikes.tracks.has(t.id) &&
+      !(t.artistId && dislikes.artists.has(t.artistId)) &&
+      !(Array.isArray(t.artists) && t.artists.some((a) => a.id && dislikes.artists.has(a.id)));
+
+    const seen = new Set<string>();
+    const out: Track[] = [];
+    const tryAdd = (t: Track): void => {
+      const k = trackKey(t);
+      if (seen.has(k) || !isClean(t)) return;
+      seen.add(k);
+      out.push(t);
+    };
+
+    // Deep-seed track-radio (positions 15+ of completedTrackIds).
+    const deepSeeds = completedTrackIds.slice(15, 50);
+    const shuffled = [...deepSeeds].sort(() => Math.random() - 0.5);
+    for (const id of shuffled.slice(0, BACKFILL_DEEP_SEEDS)) {
+      if (out.length >= needed) break;
+      try {
+        const radio = await this.tidal.getTrackRadio(id, 50);
+        for (const t of radio) tryAdd(t);
+      } catch { /* skip */ }
+    }
+
+    // User's genre-seed pages.
+    if (out.length < needed) {
+      for (const slug of genreSeeds) {
+        if (out.length >= needed) break;
+        const page = await this.tracksFromGenre(slug);
+        for (const t of page) tryAdd(t);
+      }
+    }
+
+    return out.slice(0, needed);
   }
 
   /**
