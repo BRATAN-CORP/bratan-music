@@ -209,13 +209,13 @@ export class DailyPlaylistService {
         profile.completedTrackIds,
         genreSeeds,
         claimed,
+        dislikes,
       );
-      let tracks = filterTracksByDislikes(built, dislikes);
-      // Anti-overlap: even after the variant-specific build the
-      // upstream pools (track-radio, genre pages, wave) can echo into
-      // each other for users with narrow taste. Strip anything a
-      // previous variant already shipped.
-      tracks = tracks.filter((t) => !claimed.has(trackKey(t)));
+      // buildVariantTracks now applies dislike + claim filtering
+      // internally so its padding loops see the real deficit. The
+      // belt-and-braces pass here catches any edge-case leaks.
+      let tracks = filterTracksByDislikes(built, dislikes)
+        .filter((t) => !claimed.has(trackKey(t)));
 
       // ── Multi-phase backfill ──────────────────────────────────────
       // When dislikes + cross-variant claim filtering shrink the pool
@@ -320,42 +320,38 @@ export class DailyPlaylistService {
     completedTrackIds: string[],
     genreSeeds: string[],
     claimed: Set<string>,
+    dislikes: import('./dislikes').DislikeSets,
   ): Promise<Track[]> {
     const hasHistory = completedTrackIds.length > 0;
+    const isClean = (t: Track): boolean =>
+      !claimed.has(trackKey(t)) &&
+      !dislikes.tracks.has(t.id) &&
+      !(t.artistId && dislikes.artists.has(t.artistId)) &&
+      !(Array.isArray(t.artists) && t.artists.some((a) => a.id && dislikes.artists.has(a.id)));
 
     if (variant === 'familiar') {
-      // Familiar leans into stuff the user already knows / loves:
-      // call wave with `character: 'familiar'` so the rerank doubles
-      // W_FAMILIAR_BONUS instead of running the neutral profile. We
-      // oversample (3× PLAYLIST_LENGTH) so the cross-variant claim
-      // strip + dislike filtering in `generateVariants` doesn't shrink
-      // the final result below the contracted length.
-      const wave = await this.rec.wave(userId, {
+      // wave() already strips dislikes internally via rerank, but
+      // apply isClean so claimed tracks are also excluded early.
+      const wave = (await this.rec.wave(userId, {
         limit: PLAYLIST_LENGTH * 3,
         character: 'familiar',
-      });
+      })).filter(isClean);
       const familiarHead = wave.slice(0, Math.floor(PLAYLIST_LENGTH * 0.7));
-      const padPool = await this.tracksFromIds(completedTrackIds.slice(0, 30));
+      const padPool = (await this.tracksFromIds(completedTrackIds.slice(0, 30)))
+        .filter(isClean);
       return mergeUnique(familiarHead, padPool, PLAYLIST_LENGTH * 3);
     }
 
     if (variant === 'discover') {
-      // Discover flips W_FAMILIAR_BONUS into a penalty inside the
-      // rerank (`character: 'discover'`) so the pool comes back
-      // taste-adjacent but tilted toward fresh artists — a genuinely
-      // different distribution from familiar's pool, NOT just
-      // "familiar minus history". Oversample 5× so the history-strip
-      // + dislike-filter + cross-variant-claim still leaves us room.
-      const wave = await this.rec.wave(userId, {
+      const wave = (await this.rec.wave(userId, {
         limit: PLAYLIST_LENGTH * 5,
         character: 'discover',
-      });
+      })).filter(isClean);
       const known = new Set(completedTrackIds);
-      const unknown = wave.filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
+      const unknown = wave.filter((t) => !known.has(t.id));
       if (unknown.length >= PLAYLIST_LENGTH) return unknown.slice(0, PLAYLIST_LENGTH);
-      // Pad with ALL genre seeds + fallback genres instead of just the
-      // first slug. Previously a single slug couldn't compensate for
-      // heavy dislike/claim filtering, leaving 10–30 track playlists.
+      // Pad with genre seeds + fallback genres; filter every filler
+      // pool through isClean so the padding loop sees real counts.
       const fillerSlugs = [
         ...genreSeeds,
         ...SPECS.discover.fallbackGenres,
@@ -368,7 +364,7 @@ export class DailyPlaylistService {
         if (triedSlugs.has(slug)) continue;
         triedSlugs.add(slug);
         const filler = (await this.tracksFromGenre(slug))
-          .filter((t) => !known.has(t.id) && !claimed.has(trackKey(t)));
+          .filter((t) => !known.has(t.id) && isClean(t));
         padded = mergeUnique(padded, filler, PLAYLIST_LENGTH);
       }
       return padded;
@@ -381,12 +377,9 @@ export class DailyPlaylistService {
     // discover); when that pool is too thin we layer in other mood
     // pages + a mood-tinted wave so the variant still reaches 50.
     const moodSlug = await this.pickPersonalMoodSlug(userId, hasHistory);
-    let moodResult = (await this.tracksFromGenre(moodSlug))
-      .filter((t) => !claimed.has(trackKey(t)));
+    let moodResult = (await this.tracksFromGenre(moodSlug)).filter(isClean);
 
-    // Try other mood slugs before falling back to wave — mood pages
-    // are a different pool from track-radio and tend to have minimal
-    // overlap with familiar/discover.
+    // Try other mood slugs before falling back to wave.
     if (moodResult.length < PLAYLIST_LENGTH) {
       const ALL_MOOD_SLUGS = ['mood_chill', 'mood_workout', 'mood_focus', 'mood_party', 'mood_throwback'];
       const triedMoods = new Set([moodSlug]);
@@ -394,21 +387,20 @@ export class DailyPlaylistService {
         if (moodResult.length >= PLAYLIST_LENGTH) break;
         if (triedMoods.has(slug)) continue;
         triedMoods.add(slug);
-        const extra = (await this.tracksFromGenre(slug))
-          .filter((t) => !claimed.has(trackKey(t)));
+        const extra = (await this.tracksFromGenre(slug)).filter(isClean);
         moodResult = mergeUnique(moodResult, extra, PLAYLIST_LENGTH);
       }
     }
 
     if (moodResult.length >= PLAYLIST_LENGTH) return moodResult.slice(0, PLAYLIST_LENGTH);
 
+    // Mood-tinted wave — wave() already strips dislikes via rerank.
     const moodEnum = moodSlugToWaveMood(moodSlug);
-    const fillerWave = await this.rec.wave(userId, {
+    const fillerWave = (await this.rec.wave(userId, {
       limit: PLAYLIST_LENGTH * 4,
       mood: moodEnum,
-    });
-    const fillerFiltered = fillerWave.filter((t) => !claimed.has(trackKey(t)));
-    return mergeUnique(moodResult, fillerFiltered, PLAYLIST_LENGTH);
+    })).filter(isClean);
+    return mergeUnique(moodResult, fillerWave, PLAYLIST_LENGTH);
   }
 
   private async tracksFromIds(ids: string[]): Promise<Track[]> {
