@@ -38,6 +38,10 @@ export interface BannedTrackDetail {
   duration: number;
   addedAt: number | null;
   unavailable: boolean;
+  /** Source-provider "Explicit" flag from Tidal. Optional — the banned
+   *  list pre-dates the badge, and stub rows for unavailable tracks
+   *  don't carry it. The UI only renders the badge when `true`. */
+  explicit?: boolean;
 }
 
 export interface BannedArtistDetail {

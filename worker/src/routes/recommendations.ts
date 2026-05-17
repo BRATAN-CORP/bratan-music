@@ -139,6 +139,7 @@ recommendations.get('/dislikes/details', async (c) => {
         duration: t.duration,
         addedAt: createdAt.get(`track:${id}`) ?? null,
         unavailable: false,
+        explicit: t.explicit ?? false,
       };
     } catch {
       return {

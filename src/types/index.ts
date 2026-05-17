@@ -29,6 +29,14 @@ export interface Track {
   coverVideoUrl?: string;
   /** Provider tag. Tracks without a known source default to "tidal" downstream. */
   source?: string;
+  /**
+   * Source-provider "Explicit" flag. Surfaced as a small "E" badge next to
+   * the title across every track-row, queue entry, and player surface so the
+   * listener can tell at a glance which versions contain uncensored language.
+   * Defaults to undefined / false when the source omits it — we never invent
+   * a value, the badge only renders for explicit-true tracks.
+   */
+  explicit?: boolean;
 }
 
 export interface Album {

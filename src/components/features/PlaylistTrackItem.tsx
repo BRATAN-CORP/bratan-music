@@ -7,6 +7,7 @@ import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
 import { TrackInlineActions } from '@/components/features/TrackInlineActions';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { useT } from '@/i18n';
 
 interface PlaylistTrackItemProps {
@@ -118,6 +119,7 @@ export function PlaylistTrackItem({
             </span>
           )}
           <span className="truncate">{track.title}</span>
+          <ExplicitBadge explicit={track.explicit} size={12} />
         </p>
         <p className="truncate text-xs text-muted-foreground">
           <ArtistLinks

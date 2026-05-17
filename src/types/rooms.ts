@@ -16,6 +16,10 @@ export interface RoomTrackSnapshot {
   coverVideoUrl?: string | null;
   duration: number;
   source: string;
+  /** Source-provider "Explicit" flag. Carried through the room snapshot
+   *  so guest clients can render the "E" badge consistently with the
+   *  host's local UI. Optional — older snapshots may omit it. */
+  explicit?: boolean;
 }
 
 export interface RoomMember {

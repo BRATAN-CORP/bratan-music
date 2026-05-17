@@ -35,6 +35,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { MetaChip } from '@/components/ui/MetaChip';
 import { TrackItem } from '@/components/features/TrackItem';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { ArtistPicker } from '@/components/features/ArtistPicker';
 
 import {
@@ -812,8 +813,9 @@ function PreviewStripRow({ track, index, tracks }: { track: Track; index: number
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className={cn('truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
-          {track.title}
+        <div className={cn('flex items-center gap-1.5 truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
+          <span className="truncate">{track.title}</span>
+          <ExplicitBadge explicit={track.explicit} size={12} />
         </div>
         <div className="truncate text-xs text-muted-foreground">{track.artist}</div>
       </div>

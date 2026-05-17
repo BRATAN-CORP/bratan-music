@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { RoomChat } from '@/components/features/RoomChat';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CoverFallback } from '@/components/ui/CoverFallback';
@@ -248,8 +249,9 @@ function RoomPageInner() {
                 {isLive ? t('rooms.page.statusLive') : t('rooms.page.statusReconnect')}
               </span>
             </div>
-            <div className="mt-2 truncate text-xl font-semibold tracking-tight sm:text-2xl">
-              {track?.title || t('rooms.page.placeholderTrack')}
+            <div className="mt-2 flex items-center gap-2 text-xl font-semibold tracking-tight sm:text-2xl">
+              <span className="truncate">{track?.title || t('rooms.page.placeholderTrack')}</span>
+              <ExplicitBadge explicit={track?.explicit} size={16} />
             </div>
             <div className="mt-1 truncate text-sm text-muted-foreground">
               {track?.artist || '—'}

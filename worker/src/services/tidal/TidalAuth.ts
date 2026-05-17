@@ -1,6 +1,7 @@
 import type { Env } from '../../types/env';
 import { encryptSecret, decryptSecret } from './sessionCrypto';
 import { TidalPool, fetchSubscriptionInfo } from './TidalPool';
+import { ensureExplicitAllowed } from './TidalExplicitFilter';
 
 interface TidalTokens {
   accessToken: string;
@@ -231,6 +232,22 @@ export class TidalAuth {
       };
 
       await this.cacheSession(tokens);
+
+      // Best-effort: ensure the per-account "Explicit Content" filter
+      // is OFF so search results, audio variants, and lyrics come back
+      // uncensored. Memoised in KV per Tidal user id so this only fires
+      // on the first refresh per account per 30 days; subsequent
+      // refreshes short-circuit on a cache hit. Always-safe — failures
+      // are logged but never bubble up to the auth flow. See
+      // TidalExplicitFilter.ts for the full rationale.
+      await ensureExplicitAllowed(this.env, {
+        accessToken: tokens.accessToken,
+        userId: tokens.userId,
+        countryCode: tokens.countryCode,
+        clientId: tokens.clientId,
+        clientVersion: this.getClientVersion(),
+      }).catch(() => null);
+
       return tokens;
     } catch {
       return null;

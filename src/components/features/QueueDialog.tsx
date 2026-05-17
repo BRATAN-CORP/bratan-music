@@ -4,6 +4,7 @@ import { Ban, GripVertical, ListOrdered, Pause, Play, Trash2, X } from 'lucide-r
 import { usePlayerStore } from '@/store/player';
 import type { Track } from '@/types';
 import { ArtistLinks } from '@/components/features/ArtistLinks';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { Modal } from '@/components/ui/Modal';
 import { useIsTrackBanned } from '@/hooks/useDislikedTrack';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
@@ -256,6 +257,7 @@ function QueueRow({
               </span>
             )}
             <span className="truncate">{track.title}</span>
+            <ExplicitBadge explicit={track.explicit} size={12} />
           </p>
           <p className="truncate text-xs text-muted-foreground">
             <ArtistLinks
