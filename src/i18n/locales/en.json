@@ -1385,6 +1385,14 @@
       "success": "Granted {user} for {days} days (until {date})",
       "failed": "Couldn't grant access",
       "genericError": "Error"
+    },
+    "dailyReset": {
+      "title": "Regenerate daily playlists",
+      "hint": "Force-recompute taste profiles and regenerate daily playlists for all active users. No need to wait for the nightly cron.",
+      "cta": "Regenerate now",
+      "running": "Generating…",
+      "success": "Done: {processed} processed, {errors} errors",
+      "failed": "Failed to start regeneration"
     }
   },
   "admin_page": {

@@ -23,6 +23,7 @@ import { AdminHealthPanel } from '@/components/features/AdminHealthPanel';
 import { LanguageSwitcher } from '@/components/features/LanguageSwitcher';
 import { AdminUserPurgePanel } from '@/components/features/AdminUserPurgePanel';
 import { AdminAdminFlagPanel } from '@/components/features/AdminAdminFlagPanel';
+import { AdminDailyPlaylistsResetPanel } from '@/components/features/AdminDailyPlaylistsResetPanel';
 import { ResetRecommendationsPanel } from '@/components/features/ResetRecommendationsPanel';
 import { ClearHistoryPanel } from '@/components/features/ClearHistoryPanel';
 import { ResetTourPanel } from '@/components/features/ResetTourPanel';
@@ -274,6 +275,7 @@ export function ProfilePage() {
               <div className="md:col-span-2">
                 <AdminTidalPanel />
               </div>
+              <AdminDailyPlaylistsResetPanel />
               <AdminUserPurgePanel />
             </div>
             {/* Full user grid lives under the same divider — used to be

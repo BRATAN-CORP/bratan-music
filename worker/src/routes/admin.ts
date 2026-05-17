@@ -6,6 +6,8 @@ import { SubscriptionService } from '../services/SubscriptionService';
 import { TidalAuth } from '../services/tidal/TidalAuth';
 import { TidalPool } from '../services/tidal/TidalPool';
 import { HealthService } from '../services/HealthService';
+import { DailyPlaylistService } from '../services/DailyPlaylistService';
+import { TasteService } from '../services/TasteService';
 
 const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -691,6 +693,77 @@ admin.post('/tidal/accounts/:id/refresh', async (c) => {
   const sub = await auth.refreshSubscriptionInfo(id);
   if (!sub) return c.json({ error: 'Не удалось обновить подписку' }, 502);
   return c.json({ ok: true, ...sub });
+});
+
+// ---------------------------------------------------------------------------
+// Daily playlists — force-regenerate without waiting for the nightly cron.
+//
+// POST /admin/daily-playlists/reset
+//   body: { userId?: string }
+//   • userId present  → regenerate for that single user
+//   • userId absent   → regenerate for ALL active users (same set as cron)
+// ---------------------------------------------------------------------------
+
+admin.post('/daily-playlists/reset', async (c) => {
+  interface Body { userId?: string }
+  const body = await c.req.json<Body>().catch(() => ({} as Body));
+  const taste = new TasteService(c.env);
+  const daily = new DailyPlaylistService(c.env);
+
+  if (body.userId) {
+    const userService = new UserService(c.env);
+    const user = await userService.findById(body.userId);
+    if (!user) return c.json({ error: 'Пользователь не найден' }, 404);
+    await taste.recompute(body.userId);
+    const playlists = await daily.regenerate(body.userId);
+    return c.json({
+      ok: true,
+      processed: 1,
+      errors: 0,
+      variants: playlists.map((p) => ({
+        variant: p.variant,
+        name: p.name,
+        trackCount: p.tracks.length,
+      })),
+    });
+  }
+
+  // Regenerate for all active users — mirrors the cron logic.
+  const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const activeRes = await c.env.DB
+    .prepare(
+      'SELECT DISTINCT user_id FROM play_history WHERE played_at >= ? LIMIT 500',
+    )
+    .bind(cutoff)
+    .all<{ user_id: string }>();
+  const seedRes = await c.env.DB
+    .prepare(
+      `SELECT user_id FROM user_taste_profile
+        WHERE genre_seeds != '[]' AND user_id NOT IN
+          (SELECT DISTINCT user_id FROM play_history WHERE played_at >= ?)
+        LIMIT 500`,
+    )
+    .bind(cutoff)
+    .all<{ user_id: string }>();
+  const userIds = Array.from(new Set([
+    ...(activeRes.results ?? []).map((r) => r.user_id),
+    ...(seedRes.results ?? []).map((r) => r.user_id),
+  ]));
+
+  let processed = 0;
+  let errors = 0;
+  for (const uid of userIds) {
+    try {
+      await taste.recompute(uid);
+      await daily.regenerate(uid);
+      processed++;
+    } catch (err) {
+      console.error('[admin/daily-playlists/reset] user', uid, err instanceof Error ? err.message : err);
+      errors++;
+    }
+  }
+
+  return c.json({ ok: true, processed, errors, total: userIds.length });
 });
 
 // ---------------------------------------------------------------------------
