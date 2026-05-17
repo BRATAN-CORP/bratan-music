@@ -60,12 +60,12 @@ const SPECS: Record<Variant, ColdStartSpec> = {
 
 const PLAYLIST_LENGTH = 50;
 
-/** How many completed-track seeds (beyond wave's top-15 sampling
- *  window) to fan out for taste-seeded radio backfill. Each seed
- *  yields ~50 candidates from a neighbourhood wave() doesn't reach.
- *  5 × 50 = 250 raw candidates — enough to fill a 50-track gap
- *  after dislike + claim filtering for most users. */
-const BACKFILL_DEEP_SEEDS = 5;
+/** How many liked/completed track seeds to fan out for taste-seeded
+ *  radio backfill. Each seed yields ~50 candidates from a
+ *  neighbourhood wave() doesn't reach. 8 × 50 = 400 raw candidates
+ *  — enough to fill a 50-track gap after aggressive dislike + claim
+ *  filtering for users with narrow taste. */
+const BACKFILL_RADIO_SEEDS = 8;
 
 interface DailyPlaylistRow {
   id: string;
@@ -202,6 +202,7 @@ export class DailyPlaylistService {
         variant,
         userId,
         profile.completedTrackIds,
+        profile.likedTrackIds,
         genreSeeds,
         claimed,
         dislikes,
@@ -219,14 +220,13 @@ export class DailyPlaylistService {
       // We now run three progressively wider phases so the user always
       // sees 50 tracks unless the entire Tidal catalogue is disliked.
 
-      // Phase 1: variant fallback genres + user genre seeds + core genres.
+      // Phase 1: user genre seeds + variant fallback genres. No
+      // generic pop/rap/electronic — those surfaced irrelevant tracks
+      // for users who never listen to those genres.
       if (tracks.length < PLAYLIST_LENGTH) {
         const fallbackSlugs = [
-          ...spec.fallbackGenres,
           ...genreSeeds,
-          'genre_pop',
-          'genre_rap',
-          'genre_electronic',
+          ...spec.fallbackGenres,
         ];
         const seenSlugs = new Set<string>();
         for (const slug of fallbackSlugs) {
@@ -253,13 +253,12 @@ export class DailyPlaylistService {
           tracks = mergeUnique(tracks, broadFiltered, PLAYLIST_LENGTH);
         }
 
-        // Phase 3: taste-seeded track-radio from the user's deeper
-        // completed tracks (positions 15+, which wave() rarely samples)
-        // plus the user's genre-seed pages. Replaces the old generic-
-        // genre backfill (EXTENDED_BACKFILL_SLUGS) that surfaced genres
-        // the user never listened to.
+        // Phase 3: taste-seeded track-radio from liked + deeper
+        // completed tracks. Liked tracks are the strongest taste
+        // signal and produce the most relevant radio candidates.
         if (tracks.length < PLAYLIST_LENGTH) {
           const tasteFill = await this.tasteSeedRadio(
+            profile.likedTrackIds,
             profile.completedTrackIds,
             genreSeeds,
             claimed,
@@ -313,6 +312,7 @@ export class DailyPlaylistService {
     variant: Variant,
     userId: string,
     completedTrackIds: string[],
+    likedTrackIds: string[],
     genreSeeds: string[],
     claimed: Set<string>,
     dislikes: import('./dislikes').DislikeSets,
@@ -325,36 +325,39 @@ export class DailyPlaylistService {
       !(Array.isArray(t.artists) && t.artists.some((a) => a.id && dislikes.artists.has(a.id)));
 
     if (variant === 'familiar') {
-      // wave() already strips dislikes internally via rerank, but
-      // apply isClean so claimed tracks are also excluded early.
+      // wave() uses liked+completed seeds internally (PR #451), so
+      // the candidate pool is already taste-aligned. Apply isClean
+      // so claimed tracks are excluded early.
       const wave = (await this.rec.wave(userId, {
-        limit: PLAYLIST_LENGTH * 3,
+        limit: PLAYLIST_LENGTH * 4,
         character: 'familiar',
       })).filter(isClean);
-      const familiarHead = wave.slice(0, Math.floor(PLAYLIST_LENGTH * 0.7));
-      const padPool = (await this.tracksFromIds(completedTrackIds.slice(0, 30)))
+      if (wave.length >= PLAYLIST_LENGTH) return wave.slice(0, PLAYLIST_LENGTH);
+      // Pad from liked track radio — taste-aligned candidates from a
+      // different neighbourhood than wave's sampled seeds.
+      const padSeeds = [...new Set([...likedTrackIds, ...completedTrackIds])];
+      const padPool = (await this.radioFromSeeds(padSeeds.slice(0, 15)))
         .filter(isClean);
-      return mergeUnique(familiarHead, padPool, PLAYLIST_LENGTH * 3);
+      return mergeUnique(wave, padPool, PLAYLIST_LENGTH);
     }
 
     if (variant === 'discover') {
       const wave = (await this.rec.wave(userId, {
-        limit: PLAYLIST_LENGTH * 5,
+        limit: PLAYLIST_LENGTH * 6,
         character: 'discover',
       })).filter(isClean);
       const known = new Set(completedTrackIds);
       const unknown = wave.filter((t) => !known.has(t.id));
       if (unknown.length >= PLAYLIST_LENGTH) return unknown.slice(0, PLAYLIST_LENGTH);
-      // Pad with genre seeds + fallback genres; filter every filler
-      // pool through isClean so the padding loop sees real counts.
-      const fillerSlugs = [
-        ...genreSeeds,
-        ...SPECS.discover.fallbackGenres,
-        'genre_pop', 'genre_rap', 'genre_electronic',
-      ];
-      let padded = unknown;
+      // Pad with liked-track radio filtered to unknown — these
+      // are taste-adjacent tracks the user hasn't heard yet.
+      const likedRadio = (await this.radioFromSeeds(likedTrackIds.slice(0, 10)))
+        .filter((t) => !known.has(t.id) && isClean(t));
+      let padded = mergeUnique(unknown, likedRadio, PLAYLIST_LENGTH);
+      if (padded.length >= PLAYLIST_LENGTH) return padded;
+      // Genre seeds as final padding (taste-aligned, no generic genres).
       const triedSlugs = new Set<string>();
-      for (const slug of fillerSlugs) {
+      for (const slug of genreSeeds) {
         if (padded.length >= PLAYLIST_LENGTH) break;
         if (triedSlugs.has(slug)) continue;
         triedSlugs.add(slug);
@@ -389,7 +392,7 @@ export class DailyPlaylistService {
 
     if (moodResult.length >= PLAYLIST_LENGTH) return moodResult.slice(0, PLAYLIST_LENGTH);
 
-    // Mood-tinted wave with higher oversample — mood is built last
+    // Mood-tinted wave with high oversample — mood is built last
     // (after familiar + discover claim ~100 tracks) so it needs a
     // wider pool to compensate for the cross-variant overlap.
     const moodEnum = moodSlugToWaveMood(moodSlug);
@@ -400,45 +403,40 @@ export class DailyPlaylistService {
     moodResult = mergeUnique(moodResult, fillerWave, PLAYLIST_LENGTH);
     if (moodResult.length >= PLAYLIST_LENGTH) return moodResult;
 
-    // User's genre seeds — taste-aligned tracks from a pool the mood
-    // pages and wave don't cover.
+    // Liked-track radio — taste-aligned candidates from a different
+    // neighbourhood than wave's sampled seeds.
+    const moodLikedRadio = (await this.radioFromSeeds(likedTrackIds.slice(0, 10)))
+      .filter(isClean);
+    moodResult = mergeUnique(moodResult, moodLikedRadio, PLAYLIST_LENGTH);
+    if (moodResult.length >= PLAYLIST_LENGTH) return moodResult;
+
+    // User's genre seeds as final padding.
     for (const slug of genreSeeds) {
       if (moodResult.length >= PLAYLIST_LENGTH) break;
       const extra = (await this.tracksFromGenre(slug)).filter(isClean);
       moodResult = mergeUnique(moodResult, extra, PLAYLIST_LENGTH);
     }
-    if (moodResult.length >= PLAYLIST_LENGTH) return moodResult;
-
-    // Track-radio from deeper seeds (positions 15+) that wave() rarely
-    // samples — taste-aligned but from a different neighbourhood.
-    const deepSeeds = completedTrackIds.slice(15, 50);
-    const shuffled = [...deepSeeds].sort(() => Math.random() - 0.5);
-    for (const id of shuffled.slice(0, BACKFILL_DEEP_SEEDS)) {
-      if (moodResult.length >= PLAYLIST_LENGTH) break;
-      try {
-        const radio = await this.tidal.getTrackRadio(id, 50);
-        moodResult = mergeUnique(moodResult, radio.filter(isClean), PLAYLIST_LENGTH);
-      } catch { /* skip failed radio */ }
-    }
 
     return moodResult;
   }
 
-  private async tracksFromIds(ids: string[]): Promise<Track[]> {
+  /**
+   * Fan out track-radio from a list of seed IDs and return the full
+   * pool of candidates (not just the first result per seed). This is
+   * much richer than the old `tracksFromIds` which only took the
+   * first track from each radio call.
+   */
+  private async radioFromSeeds(ids: string[]): Promise<Track[]> {
     if (ids.length === 0) return [];
-    // Cheap: fan out individual track fetches. Tidal has no bulk endpoint
-    // we use elsewhere, and these requests get hit rarely enough that
-    // serialised parallel fetch with a small cap is fine.
     const limited = ids.slice(0, 15);
-    const results = await Promise.all(limited.map(async (id) => {
+    const pools = await Promise.all(limited.map(async (id) => {
       try {
-        const radio = await this.tidal.getTrackRadio(id);
-        return radio[0] ?? null;
+        return await this.tidal.getTrackRadio(id, 50);
       } catch {
-        return null;
+        return [] as Track[];
       }
     }));
-    return results.filter((t): t is Track => t !== null);
+    return mergeUnique(pools.flat(), [], pools.flat().length);
   }
 
   private async tracksFromGenre(slug: string): Promise<Track[]> {
@@ -446,12 +444,13 @@ export class DailyPlaylistService {
   }
 
   /**
-   * Taste-seeded backfill: track-radio from completed tracks that
-   * wave() rarely samples (positions 15+) plus the user's genre-seed
-   * pages. Returns up to `needed` clean, unclaimed tracks that align
-   * with the user's actual listening history.
+   * Taste-seeded backfill: track-radio from liked tracks (strongest
+   * signal) then completed tracks, plus the user's genre-seed pages.
+   * Returns up to `needed` clean, unclaimed tracks aligned with
+   * the user's actual taste.
    */
   private async tasteSeedRadio(
+    likedTrackIds: string[],
     completedTrackIds: string[],
     genreSeeds: string[],
     claimed: Set<string>,
@@ -473,10 +472,11 @@ export class DailyPlaylistService {
       out.push(t);
     };
 
-    // Deep-seed track-radio (positions 15+ of completedTrackIds).
-    const deepSeeds = completedTrackIds.slice(15, 50);
-    const shuffled = [...deepSeeds].sort(() => Math.random() - 0.5);
-    for (const id of shuffled.slice(0, BACKFILL_DEEP_SEEDS)) {
+    // Liked-track radio first (strongest taste signal). Shuffle
+    // to avoid always hitting the same seeds.
+    const allSeeds = [...new Set([...likedTrackIds, ...completedTrackIds])];
+    const shuffled = [...allSeeds].sort(() => Math.random() - 0.5);
+    for (const id of shuffled.slice(0, BACKFILL_RADIO_SEEDS)) {
       if (out.length >= needed) break;
       try {
         const radio = await this.tidal.getTrackRadio(id, 50);

@@ -35,9 +35,10 @@ const RADIO_CACHE_TTL_S = SEED_CACHE_TTL_S;
 const SEEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** How many seeds we fan out into Tidal per wave/continue request. More
- *  seeds = more diversity but also more upstream calls. 4 is empirically
- *  enough to fill 50 candidates after dedup + dislike filtering. */
-const SEED_FAN_OUT = 5;
+ *  seeds = more diversity but also more upstream calls. 8 gives ~400
+ *  raw candidates after dedup — enough to fill 50 after aggressive
+ *  dislike + claim filtering for users with narrow taste. */
+const SEED_FAN_OUT = 8;
 /** How many tracks we ask Tidal for per seed. Larger pool → better
  *  re-rank quality, but more bytes through the proxy. 50 is the
  *  sweet spot for our scale. */
@@ -196,10 +197,15 @@ export class RecommendationService {
     // they're left absent (treated as neutral by rerank).
     const genreProvenance = new Map<string, string>();
 
-    if (profile.completedTrackIds.length > 0) {
-      // Sample, don't always grab the very top-N, otherwise the wave
-      // starts identical every time the user hits "Моя волна".
-      const seeds = sampleN(profile.completedTrackIds, SEED_FAN_OUT);
+    // Liked tracks are the strongest taste signal — the user explicitly
+    // saved them. We merge liked + completed into a unified seed list
+    // (liked first so sampleN biases toward them) and fan out into
+    // track-radio from the sampled subset. This replaced the old
+    // completed-only seeding that produced irrelevant candidates for
+    // users whose play history diverged from their actual preferences.
+    const allSeeds = [...new Set([...profile.likedTrackIds, ...profile.completedTrackIds])];
+    if (allSeeds.length > 0) {
+      const seeds = sampleN(allSeeds, SEED_FAN_OUT);
       pools.push(await this.candidatesFromTrackSeeds(seeds));
     }
 
@@ -256,8 +262,12 @@ export class RecommendationService {
 
     if (candidates.length === 0) {
       // Last-resort fallback for brand-new users with neither artist
-      // picks nor genre picks. Generic global popular slice.
-      candidates = await this.candidatesFromGenres(['genre_pop', 'genre_rap', 'genre_electronic']);
+      // picks, genre picks, nor liked tracks. Use genre seeds if
+      // available (taste-aligned), else generic popular slice.
+      const fallbackSlugs = genreSeeds.length > 0
+        ? genreSeeds
+        : ['genre_pop', 'genre_rap'];
+      candidates = await this.candidatesFromGenres(fallbackSlugs);
     }
 
     return this.rerank(candidates, profile, dislikes, seen, limit, moodIds, character, genreProvenance);
@@ -408,6 +418,7 @@ export class RecommendationService {
     for (const t of candidates) {
       if (dislikes.tracks.has(t.id)) continue;
       if (t.artistId && dislikes.artists.has(t.artistId)) continue;
+      if (Array.isArray(t.artists) && t.artists.some((a) => a.id && dislikes.artists.has(a.id))) continue;
 
       const tasteSig = t.artistId ? (profile.artistWeights[t.artistId] ?? 0) : 0;
       const key = trackKey(t);
