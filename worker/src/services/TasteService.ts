@@ -55,6 +55,12 @@ export interface TasteProfile {
   /** Track ids the user has played to completion at least once, ordered
    *  by descending recency-weighted completion count. Truncated to 50. */
   completedTrackIds: string[];
+  /** Track ids the user has explicitly liked (heart button). These are
+   *  the strongest taste signal — the user voluntarily saved these
+   *  tracks. Used as primary seeds for track-radio candidate
+   *  generation in wave() and daily-playlist backfill. Truncated to
+   *  100. Disliked tracks/artists are excluded. */
+  likedTrackIds: string[];
   /** Total play_history rows considered. Used to gate cold-start. */
   totalPlays: number;
   /** Per-script share of the user's listening (decay-weighted same as
@@ -68,11 +74,10 @@ export interface TasteProfile {
    *  normalised to [0, 1]. Empty for users with no seeds and no
    *  history that touched genre pages. */
   genreWeights: Record<string, number>;
-  /** Version stamp. Bumped from 1 → 2 when we added `scriptMix` /
-   *  `genreWeights` (PR "recs-country-genre-vector"): any v1 profile
-   *  read from the cache is treated as stale and recomputed so the
-   *  new signals start populating before the 24h cron sweep. */
-  version: 2;
+  /** Version stamp. Bumped 2 → 3 when we added `likedTrackIds`:
+   *  any v2 profile is treated as stale and recomputed so liked
+   *  tracks start seeding recommendations immediately. */
+  version: 3;
 }
 
 const HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -199,14 +204,21 @@ export class TasteService {
     // featured artists also get credit, matching what the UI shows.
     const likedRes = await this.env.DB
       .prepare(
-        `SELECT pt.snapshot
+        `SELECT pt.track_id, pt.snapshot
            FROM playlist_tracks pt
            JOIN playlists p ON p.id = pt.playlist_id
           WHERE p.user_id = ? AND p.is_liked = 1`,
       )
       .bind(userId)
-      .all<{ snapshot: string | null }>();
+      .all<{ track_id: string; snapshot: string | null }>();
+    const likedTrackIds: string[] = [];
     for (const row of likedRes.results ?? []) {
+      // Collect liked track ids for seeding (strongest taste signal).
+      if (row.track_id && !dislikedTracks.has(row.track_id)) {
+        const artistIds = extractArtistIdsFromSnapshot(row.snapshot);
+        const artistBanned = artistIds.some((a) => dislikedArtists.has(a));
+        if (!artistBanned) likedTrackIds.push(row.track_id);
+      }
       const ids = extractArtistIdsFromSnapshot(row.snapshot);
       for (const aid of ids) {
         if (!aid || dislikedArtists.has(aid)) continue;
@@ -276,10 +288,11 @@ export class TasteService {
     const profile: TasteProfile = {
       artistWeights,
       completedTrackIds,
+      likedTrackIds: likedTrackIds.slice(0, 100),
       totalPlays: playsRes.results?.length ?? 0,
       scriptMix,
       genreWeights,
-      version: 2,
+      version: 3,
     };
 
     await this.env.DB
@@ -333,7 +346,7 @@ export class TasteService {
       // scriptMix / genreWeights signals (version: 2). Without this
       // the rerank would treat every existing user as cold-start for
       // language penalties until their next nightly cron sweep.
-      if (parsed.version === 2) {
+      if (parsed.version === 3) {
         return {
           profile: parsed as TasteProfile,
           genreSeeds: parseStringArray(row.genre_seeds),
@@ -401,10 +414,11 @@ export class TasteService {
       const empty: TasteProfile = {
         artistWeights: {},
         completedTrackIds: [],
+        likedTrackIds: [],
         totalPlays: 0,
         scriptMix: { cyrillic: 0, latin: 0, cjk: 0, other: 0 },
         genreWeights: {},
-        version: 2,
+        version: 3,
       };
       const otherCol = column === 'genre_seeds' ? 'seed_artist_ids' : 'genre_seeds';
       await this.env.DB
