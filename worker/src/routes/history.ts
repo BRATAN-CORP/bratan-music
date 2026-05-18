@@ -19,6 +19,15 @@ history.use('/*', jwtAuth);
  */
 history.post('/play', async (c) => {
   const userId = c.get('userId');
+  // Note on `explicit`: we deliberately do NOT persist the explicit
+  // flag on `play_history`. The schema doesn't carry the column and
+  // adding a D1 migration just for one boolean on a hot insert table
+  // isn't worth it; the recent-strip frontend resolves `explicit`
+  // from the cached track snapshot it already has via the
+  // recommendations / track-detail caches (see FEAT-003). If you
+  // ever need server-side explicit on history, add a 0029 migration
+  // and surface it through both PlayBody and the GET /recent
+  // SELECT below in the same PR.
   interface ArtistRefBody {
     id?: string;
     name?: string;

@@ -219,6 +219,93 @@ function dedupeAlbums(items: Album[]): Album[] {
 }
 
 /**
+ * Prefer-explicit dedupe for album lists. When Tidal serves both an
+ * explicit and a clean variant of the same release (different ids,
+ * same `(normalisedTitle, artistId, releaseDate)`), drop the clean
+ * one in favour of the explicit one. Otherwise keep the first-seen
+ * entry. Order is preserved.
+ *
+ * Why this exists: PR #454 added the per-account Explicit Content
+ * filter toggle and threaded explicit-content hints through the
+ * lyrics fallback. The user reports search and artist top-tracks
+ * still surface censored variant ids, proof that Tidal hosts the
+ * uncensored release under a different id and our search is picking
+ * the clean one. This helper is the response-side correction:
+ * collapse the two into one, prefer explicit. Pure, no side effects.
+ */
+function preferExplicitAlbums(albums: Album[]): Album[] {
+  const groups = new Map<string, Album[]>();
+  const order: string[] = [];
+  for (const album of albums) {
+    const fp = `${normaliseAlbumTitle(album.title)}::${album.artistId ?? ''}::${album.releaseDate ?? ''}`;
+    const bucket = groups.get(fp);
+    if (bucket) {
+      bucket.push(album);
+    } else {
+      groups.set(fp, [album]);
+      order.push(fp);
+    }
+  }
+  const out: Album[] = [];
+  for (const fp of order) {
+    const variants = groups.get(fp);
+    if (!variants || variants.length === 0) continue;
+    const explicit = variants.find((v) => v.explicit === true);
+    out.push(explicit ?? variants[0]);
+  }
+  return out;
+}
+
+/**
+ * Prefer-explicit dedupe for track lists. Equivalence key is
+ * `(normalisedTitle, artistId, roundedDuration)`; different
+ * durations mean different masters/edits and must NOT collapse, so
+ * we use a ±2s tolerance window. When two tracks land in the same
+ * bucket and exactly one is `explicit:true`, keep the explicit one.
+ * Otherwise keep the first-seen entry. Order is preserved.
+ *
+ * If `artistId` or `duration` are missing on a track we fall back to
+ * the first-seen behaviour (no merge) so we never silently drop a
+ * track on degraded upstream data.
+ */
+function preferExplicitTracks(tracks: Track[]): Track[] {
+  // Bucket key is `(normalisedTitle, artistId, roundedDuration)`;
+  // we round to the nearest second and search ±2s when looking for
+  // a peer to merge with. Tracks lacking artistId or duration get a
+  // unique sentinel key so they never collide with anything else.
+  const buckets: { key: string; titleKey: string; artistId: string; duration: number; track: Track }[] = [];
+  let unique = 0;
+  for (const track of tracks) {
+    const titleKey = normaliseAlbumTitle(track.title);
+    const artistId = track.artistId ?? '';
+    const duration = typeof track.duration === 'number' && Number.isFinite(track.duration)
+      ? Math.round(track.duration)
+      : -1;
+    if (!artistId || duration < 0) {
+      // Insufficient info for safe equivalence: emit as-is under a
+      // unique key so it can't merge.
+      buckets.push({ key: `__unique__::${unique++}`, titleKey, artistId, duration, track });
+      continue;
+    }
+    // Find an existing bucket with matching title + artistId and
+    // a duration within ±2s.
+    const peer = buckets.find(
+      (b) => b.titleKey === titleKey && b.artistId === artistId && Math.abs(b.duration - duration) <= 2,
+    );
+    if (peer) {
+      // Prefer explicit if exactly one is flagged; otherwise leave
+      // the first-seen entry alone.
+      if (peer.track.explicit !== true && track.explicit === true) {
+        peer.track = track;
+      }
+    } else {
+      buckets.push({ key: `${titleKey}::${artistId}::${duration}`, titleKey, artistId, duration, track });
+    }
+  }
+  return buckets.map((b) => b.track);
+}
+
+/**
  * Coerce Tidal's freeform `type` string into our four-bucket enum.
  * Tidal mostly returns `ALBUM` / `EP` / `SINGLE` / `COMPILATION`, but
  * we defensively normalise unknown values to `ALBUM`.
@@ -388,9 +475,18 @@ export class TidalService implements MusicService {
 
     const data = await this.api.search(query, typeMap[filter], opts.limit, opts.offset);
 
+    // Prefer-explicit dedupe on the response side: when Tidal serves
+    // both clean and explicit variants of the same release/track
+    // (different ids, same fingerprint), keep the explicit one. The
+    // request-side `includeExplicit/explicitContent/useEditedLyrics`
+    // hints in TidalApi.commonParams are best-effort; this is the
+    // deterministic backstop.
+    const albums = preferExplicitAlbums(this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)));
+    const tracks = preferExplicitTracks(this.api.unwrapSearchItems(data.tracks).map(mapTrack));
+
     return {
-      tracks: this.api.unwrapSearchItems(data.tracks).map(mapTrack),
-      albums: this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)),
+      tracks,
+      albums,
       artists: this.api.unwrapSearchItems(data.artists).map(mapArtist),
       totalTracks: data.tracks?.totalNumberOfItems,
       totalAlbums: data.albums?.totalNumberOfItems,
@@ -408,7 +504,18 @@ export class TidalService implements MusicService {
       this.api.getAlbum(id),
       this.api.getAlbumTracks(id),
     ]);
-    return mapAlbum(raw, tracksRes.items.map(mapTrack));
+    const album = mapAlbum(raw, tracksRes.items.map(mapTrack));
+    // Operator breadcrumb: when the user pastes a clean-edition id
+    // directly we honour it (the search/list path does prefer-
+    // explicit dedupe; on /album/:id we don't auto-redirect). Surface
+    // suspicious clean-suffix titles in `wrangler tail` so we can
+    // see the case in the wild without changing behaviour.
+    if (album.explicit !== true && /\b(clean(\s+version)?|\(\s*clean\s*\)|\[\s*clean\s*\])\b/i.test(album.title)) {
+      console.warn(
+        `[getAlbum] album ${id} looks like a clean-edition variant; title="${album.title}" explicit=${album.explicit ?? 'undefined'}`,
+      );
+    }
+    return album;
   }
 
   async getArtist(id: string): Promise<Artist> {
@@ -526,8 +633,8 @@ export class TidalService implements MusicService {
       console.error('[getArtistAlbumsAndSingles] page fetch failed, falling back to v1 buckets', err);
     }
 
-    let albums = dedupeAlbums([...albumsMod.items, ...compsMod.items]);
-    let singles = singlesMod.items;
+    let albums = dedupeAlbums(preferExplicitAlbums([...albumsMod.items, ...compsMod.items]));
+    let singles = preferExplicitAlbums(singlesMod.items);
     let albumsMore = albumsMod.morePath ?? compsMod.morePath;
     const albumsMoreTotal = albumsMod.moreTotal !== undefined || compsMod.moreTotal !== undefined
       ? (albumsMod.moreTotal ?? 0) + (compsMod.moreTotal ?? 0)
@@ -610,8 +717,9 @@ export class TidalService implements MusicService {
     ingest(compilations.items, 'COMPILATION');
 
     // Title-level dedupe so reissues / regional duplicates don't
-    // produce N copies of the same release.
-    return dedupeAlbums(Array.from(merged.values())).sort((a, b) => {
+    // produce N copies of the same release. Run prefer-explicit
+    // first so the explicit variant survives Tier-2 collapsing.
+    return dedupeAlbums(preferExplicitAlbums(Array.from(merged.values()))).sort((a, b) => {
       const da = a.releaseDate ?? '';
       const db = b.releaseDate ?? '';
       if (da === db) return a.title.localeCompare(b.title);
