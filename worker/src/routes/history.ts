@@ -19,25 +19,6 @@ history.use('/*', jwtAuth);
  */
 history.post('/play', async (c) => {
   const userId = c.get('userId');
-  // Note on `explicit`: we deliberately do NOT persist the explicit
-  // flag on `play_history`. The schema doesn't carry the column and
-  // adding a D1 migration just for one boolean on a hot insert table
-  // wasn't worth it for the scope of this PR. The downstream
-  // consequence is that the GET /recent SELECT below cannot surface
-  // `explicit`, so the home recent strip currently renders no E
-  // badge on history rows even though the frontend `toTrack(r)`
-  // mapper is wired to read `r.explicit` (forward-looking plumbing,
-  // a no-op until the worker side is filled in).
-  //
-  // To turn the badge on for recent rows pick one of:
-  //   1. Add `0029_play_history_explicit.sql` (ALTER TABLE
-  //      play_history ADD COLUMN explicit INTEGER), thread it
-  //      through PlayBody + the INSERT here + the GET /recent
-  //      SELECT + the response shape; OR
-  //   2. JOIN play_history → tracks on (track_id, source) and
-  //      surface tracks.explicit in the SELECT (no schema change to
-  //      play_history, but depends on the row still existing in
-  //      tracks at read time).
   interface ArtistRefBody {
     id?: string;
     name?: string;
@@ -56,6 +37,8 @@ history.post('/play', async (c) => {
     albumId?: string;
     coverUrl?: string;
     duration?: number;
+    /** Source-provider Explicit flag (Migration 0029). */
+    explicit?: boolean;
     listenedSeconds?: number;
     completed?: boolean;
   }
@@ -82,8 +65,8 @@ history.post('/play', async (c) => {
     .prepare(
       `INSERT INTO play_history
          (user_id, track_id, source, artist_id, artist_name, artists_json, title, album_id,
-          cover_url, duration, listened_seconds, completed, played_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          cover_url, duration, explicit, listened_seconds, completed, played_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       userId,
@@ -96,6 +79,7 @@ history.post('/play', async (c) => {
       typeof body.albumId === 'string' ? body.albumId : null,
       typeof body.coverUrl === 'string' ? body.coverUrl : null,
       typeof body.duration === 'number' && Number.isFinite(body.duration) ? Math.floor(body.duration) : 0,
+      body.explicit === true ? 1 : 0,
       typeof body.listenedSeconds === 'number' && Number.isFinite(body.listenedSeconds) ? Math.floor(body.listenedSeconds) : 0,
       body.completed ? 1 : 0,
       Date.now(),
@@ -115,6 +99,7 @@ interface RecentRow {
   album_id: string | null;
   cover_url: string | null;
   duration: number;
+  explicit: number;
   played_at: number;
 }
 
@@ -130,11 +115,15 @@ history.get('/recent', async (c) => {
   // wins the latest timestamp. We carry artists_json through the
   // grouping with MAX() too — for repeated plays the value is
   // either the same JSON or NULL, so MAX prefers the populated row.
+  // `explicit` uses MAX as well: any single explicit-tagged row in
+  // the group means the track is explicit (the flag is per-track,
+  // not per-play, so it should be stable across rows).
   const res = await c.env.DB
     .prepare(
       `SELECT track_id, source, artist_id, artist_name,
               MAX(artists_json) AS artists_json,
               title, album_id, cover_url, duration,
+              MAX(explicit) AS explicit,
               MAX(played_at) AS played_at
          FROM play_history
         WHERE user_id = ?
@@ -176,6 +165,7 @@ history.get('/recent', async (c) => {
       albumId: r.album_id ?? undefined,
       coverUrl: r.cover_url ?? undefined,
       duration: r.duration,
+      explicit: r.explicit === 1,
       playedAt: r.played_at,
     };
   });

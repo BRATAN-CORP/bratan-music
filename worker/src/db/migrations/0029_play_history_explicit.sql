@@ -1,0 +1,23 @@
+-- Source-provider Explicit flag for the listening history.
+--
+-- Before this migration `play_history` did not carry the per-track
+-- Explicit flag, which meant the home page "history" strip on
+-- /home (rendered from `GET /history/recent`) had no way to display
+-- the same `<ExplicitBadge>` we render everywhere else (search
+-- results, album / playlist tracklists, mini-player, fullscreen
+-- player, queue, banned-list dialog). Users reported that
+-- explicit-flagged tracks were missing the `E` badge specifically
+-- in the recent-plays strip even though the badge appeared
+-- correctly on the same track elsewhere in the UI.
+--
+-- Adding a `INTEGER NOT NULL DEFAULT 0` column lets the worker
+-- persist the flag at INSERT time (the frontend already sends it
+-- via `PlayLogPayload.explicit`) and the recent-plays SELECT
+-- forwards it through `MAX(explicit)` (any explicit-tagged row in
+-- the (track_id, source) group means the track is explicit — the
+-- flag is per-track, not per-play, so the column is stable across
+-- rows and MAX is the right grouping operator).
+--
+-- Old rows default to 0 (clean) which is the safe default — they
+-- get re-stamped to 1 the next time the user plays that track.
+ALTER TABLE play_history ADD COLUMN explicit INTEGER NOT NULL DEFAULT 0;

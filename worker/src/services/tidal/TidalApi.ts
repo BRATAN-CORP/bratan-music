@@ -139,42 +139,45 @@ export class TidalApi {
   constructor(private auth: TidalAuth) {}
 
   /**
-   * Shared query-string seed for every Tidal API call. Carries the
-   * region / locale / device hints the upstream server expects, plus
-   * the explicit-content trio (`includeExplicit`, `explicitContent`,
-   * `useEditedLyrics=false`).
+   * Common query parameters Tidal Web threads through every API call.
    *
-   * Tidal's transparent clean-swap (where search / artist / album
-   * endpoints quietly substitute the censored variant for an account
-   * that has the Explicit filter ON) is gated on these three hints.
-   * The `TidalExplicitFilter` service tries to flip the per-account
-   * toggle off (best-effort across 13 endpoint variants), but
-   * threading the same hints through every caller is a
-   * defence-in-depth layer for the case where the toggle didn't
-   * take. `useEditedLyrics=false` is the same mechanism applied to
-   * the lyrics fallback chain in `getTrackLyrics`.
+   * `includeExplicit=true` + `explicitContent=true` are the request-
+   * level overrides documented in leaked Web client builds: when the
+   * pool account's profile-level "Explicit Content" filter is ON
+   * (which we cannot reliably toggle via the public API — see
+   * TidalExplicitFilter.ts), some search / catalogue endpoints honour
+   * these params and return the uncensored variant. This is only one
+   * of three layers — TidalService also runs a response-side
+   * preferExplicit dedupe and an active explicit-twin lookup. We
+   * deliberately do NOT thread `useEditedLyrics=false` here: it's
+   * a lyrics-specific hint, threading it through search/album
+   * endpoints occasionally trips strict per-endpoint validators
+   * (Tidal documents non-lyrics endpoints as ignore-unknown-params,
+   * but unknown-param tolerance has regressed in past releases).
    */
-  private async commonParams(): Promise<URLSearchParams> {
+  private async commonParams(extra: Record<string, string> = {}): Promise<URLSearchParams> {
     const cc = await this.auth.getCountryCode();
-    return new URLSearchParams({
+    const params = new URLSearchParams({
       countryCode: cc,
       locale: this.auth.getLocale(),
       deviceType: 'BROWSER',
       includeExplicit: 'true',
       explicitContent: 'true',
-      useEditedLyrics: 'false',
+      ...extra,
     });
+    return params;
   }
 
   async search(query: string, types: string = 'ARTISTS,ALBUMS,TRACKS', limit: number = 25, offset: number = 0): Promise<TidalSearchResponse> {
-    const params = await this.commonParams();
-    params.set('query', query);
-    params.set('limit', String(limit));
-    params.set('offset', String(offset));
-    params.set('types', types);
-    params.set('includeContributors', 'true');
-    params.set('includeUserPlaylists', 'false');
-    params.set('supportsUserData', 'true');
+    const params = await this.commonParams({
+      query,
+      limit: String(limit),
+      offset: String(offset),
+      types,
+      includeContributors: 'true',
+      includeUserPlaylists: 'false',
+      supportsUserData: 'true',
+    });
     return this.get<TidalSearchResponse>(`/v1/search?${params}`);
   }
 
@@ -189,9 +192,7 @@ export class TidalApi {
   }
 
   async getAlbumTracks(albumId: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
+    const params = await this.commonParams({ limit: String(limit), offset: '0' });
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/albums/${albumId}/tracks?${params}`);
   }
 
@@ -201,30 +202,22 @@ export class TidalApi {
   }
 
   async getArtistTopTracks(artistId: string, limit: number = 10): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
+    const params = await this.commonParams({ limit: String(limit), offset: '0' });
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/artists/${artistId}/toptracks?${params}`);
   }
 
   async getArtistAlbums(artistId: string, limit: number = 50, filter: string = 'ALBUMS'): Promise<{ items: TidalAlbumRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
-    params.set('filter', filter);
+    const params = await this.commonParams({ limit: String(limit), offset: '0', filter });
     return this.get<{ items: TidalAlbumRaw[] }>(`/v1/artists/${artistId}/albums?${params}`);
   }
 
   async getSimilarArtists(artistId: string, limit: number = 10): Promise<{ items: TidalArtistRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
+    const params = await this.commonParams({ limit: String(limit) });
     return this.get<{ items: TidalArtistRaw[] }>(`/v1/artists/${artistId}/similar?${params}`);
   }
 
   async getTrackRadio(trackId: string, limit: number = 25): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
+    const params = await this.commonParams({ limit: String(limit), offset: '0' });
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/tracks/${trackId}/radio?${params}`);
   }
 
@@ -246,12 +239,10 @@ export class TidalApi {
    * only when needed.
    */
   async getArtistRadio(artistId: string, limit: number = 50): Promise<{ items: TidalTrackRaw[] }> {
-    const radioParams = await this.commonParams();
-    radioParams.set('limit', String(limit));
-    radioParams.set('offset', '0');
+    const params = await this.commonParams({ limit: String(limit), offset: '0' });
     try {
       return await this.get<{ items: TidalTrackRaw[] }>(
-        `/v1/artists/${artistId}/radio?${radioParams}`,
+        `/v1/artists/${artistId}/radio?${params}`,
       );
     } catch (err) {
       // `/radio` is region-gated; fall back to the mix flow only on
@@ -262,9 +253,7 @@ export class TidalApi {
       const mix = await this.get<{ id: string }>(
         `/v1/artists/${artistId}/mix?${mixParams}`,
       );
-      const itemsParams = await this.commonParams();
-      itemsParams.set('limit', String(limit));
-      itemsParams.set('offset', '0');
+      const itemsParams = await this.commonParams({ limit: String(limit), offset: '0' });
       const res = await this.get<{ items: { item?: TidalTrackRaw; type?: string }[] }>(
         `/v1/mixes/${mix.id}/items?${itemsParams}`,
       );
@@ -281,9 +270,7 @@ export class TidalApi {
    * up to `limit` (Tidal allows up to 100 per request).
    */
   async getPlaylistTracks(uuid: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
+    const params = await this.commonParams({ limit: String(limit), offset: '0' });
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/playlists/${uuid}/tracks?${params}`);
   }
 
@@ -355,8 +342,7 @@ export class TidalApi {
    * mix singles into ALBUMS).
    */
   async getArtistPage(artistId: string): Promise<TidalPageRaw> {
-    const params = await this.commonParams();
-    params.set('artistId', artistId);
+    const params = await this.commonParams({ artistId });
     return this.get<TidalPageRaw>(`/v1/pages/artist?${params}`);
   }
 
@@ -370,9 +356,10 @@ export class TidalApi {
     dataApiPath: string,
     opts: { limit?: number; offset?: number } = {},
   ): Promise<T> {
-    const params = await this.commonParams();
-    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
-    if (opts.offset !== undefined) params.set('offset', String(opts.offset));
+    const extra: Record<string, string> = {};
+    if (opts.limit !== undefined) extra.limit = String(opts.limit);
+    if (opts.offset !== undefined) extra.offset = String(opts.offset);
+    const params = await this.commonParams(extra);
     const cleaned = dataApiPath.startsWith('/') ? dataApiPath : `/${dataApiPath}`;
     return this.get<T>(`/v1${cleaned}?${params}`);
   }
@@ -392,7 +379,21 @@ export class TidalApi {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
-        'User-Agent': 'TIDAL/2026.4.23 CFNetwork/1494.0.7 Darwin/23.4.0',
+        // Posing as the Tidal Web client (`listen.tidal.com`) — some
+        // catalogue endpoints honour the request-level
+        // `includeExplicit` / `explicitContent` overrides only when
+        // the request looks like it originated from Tidal Web. The
+        // mobile UA we historically sent caused these endpoints to
+        // ignore the overrides and fall back to the per-account
+        // "Explicit Content" filter, which surfaced as clean variants
+        // in search / artist top-tracks even though the same account
+        // returns explicit on tidal.com itself.
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Origin: 'https://listen.tidal.com',
+        Referer: 'https://listen.tidal.com/',
         'x-tidal-client-version': this.auth.getClientVersion(),
       },
     });
