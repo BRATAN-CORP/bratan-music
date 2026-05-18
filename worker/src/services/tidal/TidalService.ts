@@ -152,10 +152,17 @@ function normaliseAlbumTitle(title: string): string {
   return title
     .toLowerCase()
     // Parenthesised edition tags: "(Deluxe)", "(Expanded Edition)",
-    // "(Remastered 2021)", "(Anniversary Edition)", …
-    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)[^()\[\]]*[)\]]\s*/gi, ' ')
-    // Trailing " - Deluxe" / " — Remastered 2018" suffixes.
-    .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)\b[^,]*$/gi, ' ')
+    // "(Remastered 2021)", "(Anniversary Edition)", "(Clean)",
+    // "[Explicit]", "(Edited Version)", … The `clean|explicit|edited`
+    // tokens were added so that prefer-explicit dedupe collapses
+    // dirty/clean variants whose only label difference is the
+    // variant tag itself (Tidal's actual labels for clean editions
+    // are `(Clean)`, `[Explicit]`, `(Edited)` as bare tags, not
+    // joined to `version`/`edition`).
+    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)[^()\[\]]*[)\]]\s*/gi, ' ')
+    // Trailing " - Deluxe" / " — Remastered 2018" / " - Clean Version"
+    // suffixes.
+    .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)\b[^,]*$/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -221,9 +228,9 @@ function dedupeAlbums(items: Album[]): Album[] {
 /**
  * Prefer-explicit dedupe for album lists. When Tidal serves both an
  * explicit and a clean variant of the same release (different ids,
- * same `(normalisedTitle, artistId, releaseDate)`), drop the clean
- * one in favour of the explicit one. Otherwise keep the first-seen
- * entry. Order is preserved.
+ * same `(normalisedTitle, artistId)`), drop the clean one in favour
+ * of the explicit one. Otherwise keep the first-seen entry. Order is
+ * preserved.
  *
  * Why this exists: PR #454 added the per-account Explicit Content
  * filter toggle and threaded explicit-content hints through the
@@ -232,12 +239,19 @@ function dedupeAlbums(items: Album[]): Album[] {
  * uncensored release under a different id and our search is picking
  * the clean one. This helper is the response-side correction:
  * collapse the two into one, prefer explicit. Pure, no side effects.
+ *
+ * The group key intentionally omits `releaseDate`. Tidal sometimes
+ * back-fills clean editions weeks or months after the original, so
+ * tying equivalence to the date silently bypassed the dedupe in the
+ * common case. `dedupeAlbums` (the Tier-2 collapser that runs after
+ * us in `getArtistReleases`) keys on the same `(artistId,
+ * normalisedTitle)` pair, so the two helpers stay aligned.
  */
 function preferExplicitAlbums(albums: Album[]): Album[] {
   const groups = new Map<string, Album[]>();
   const order: string[] = [];
   for (const album of albums) {
-    const fp = `${normaliseAlbumTitle(album.title)}::${album.artistId ?? ''}::${album.releaseDate ?? ''}`;
+    const fp = `${normaliseAlbumTitle(album.title)}::${album.artistId ?? ''}`;
     const bucket = groups.get(fp);
     if (bucket) {
       bucket.push(album);
@@ -269,12 +283,11 @@ function preferExplicitAlbums(albums: Album[]): Album[] {
  * track on degraded upstream data.
  */
 function preferExplicitTracks(tracks: Track[]): Track[] {
-  // Bucket key is `(normalisedTitle, artistId, roundedDuration)`;
-  // we round to the nearest second and search ±2s when looking for
-  // a peer to merge with. Tracks lacking artistId or duration get a
-  // unique sentinel key so they never collide with anything else.
-  const buckets: { key: string; titleKey: string; artistId: string; duration: number; track: Track }[] = [];
-  let unique = 0;
+  // Bucket entries carry only what the equivalence search reads:
+  // `titleKey / artistId / duration`. Tracks lacking artistId or
+  // duration are pushed under a unique sentinel marker so they
+  // can't merge with anything else.
+  const buckets: { titleKey: string; artistId: string; duration: number; track: Track }[] = [];
   for (const track of tracks) {
     const titleKey = normaliseAlbumTitle(track.title);
     const artistId = track.artistId ?? '';
@@ -283,8 +296,9 @@ function preferExplicitTracks(tracks: Track[]): Track[] {
       : -1;
     if (!artistId || duration < 0) {
       // Insufficient info for safe equivalence: emit as-is under a
-      // unique key so it can't merge.
-      buckets.push({ key: `__unique__::${unique++}`, titleKey, artistId, duration, track });
+      // sentinel artistId / duration so the find() peer-search
+      // can't match it.
+      buckets.push({ titleKey, artistId: '__unique__', duration: -1, track });
       continue;
     }
     // Find an existing bucket with matching title + artistId and
@@ -299,7 +313,7 @@ function preferExplicitTracks(tracks: Track[]): Track[] {
         peer.track = track;
       }
     } else {
-      buckets.push({ key: `${titleKey}::${artistId}::${duration}`, titleKey, artistId, duration, track });
+      buckets.push({ titleKey, artistId, duration, track });
     }
   }
   return buckets.map((b) => b.track);

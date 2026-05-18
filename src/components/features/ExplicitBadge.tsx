@@ -22,10 +22,13 @@
  *     slightly above the em-box centre that `inline-flex items-center`
  *     resolves to), the literal "E" lives in an inner block-level
  *     `<span>` whose `translateY` scales with the badge size: ~0.25 px
- *     on dense rows (≤12 px), ~0.5 px on standard rows (≤16 px) and
- *     1 px on hero / fullscreen surfaces (18-24 px). Replaces the
- *     previous single hardcoded -0.5 px lift that drifted at 18 px
- *     and 24 px.
+ *     on dense rows (≤12 px), ~0.5 px on standard rows (≤16 px),
+ *     ~0.75 px on the FullscreenPlayer bucket (17-18 px) and 1 px on
+ *     the larger hero surfaces (>18 px). The 18 px bucket is split
+ *     out of the original `>16` bucket because 1/18 ≈ 5.5% read
+ *     visibly high on the FullscreenPlayer hero, while 0.75/18 ≈
+ *     4.2% is closer to the 0.5/14 = 3.6% baseline the previous
+ *     design calibrated to.
  *
  * Renders nothing for clean tracks so callers can drop it inline next
  * to a title without conditional wrappers / extra layout shifts.
@@ -84,8 +87,10 @@ export function ExplicitBadge({
   // and visibly drifts at 18 px (FullscreenPlayer) and 24 px (Track
   // page hero). Bucketed corrections keep the glyph centred across
   // every size we use (12 / 14 / 18 / 20 / 24 px) without per-call
-  // tuning.
-  const innerLiftPx = size <= 12 ? 0.25 : size <= 16 ? 0.5 : 1;
+  // tuning. The 18 px bucket is split off so the FullscreenPlayer
+  // hero (the most prominent surface) doesn't read high: 0.75/18 is
+  // closer to the 0.5/14 baseline than 1/18 was.
+  const innerLiftPx = size <= 12 ? 0.25 : size <= 16 ? 0.5 : size <= 18 ? 0.75 : 1;
   const label = t('track.explicitBadge');
 
   const toneClasses =
