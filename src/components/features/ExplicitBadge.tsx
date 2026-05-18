@@ -17,10 +17,15 @@
  *   - `inline-flex shrink-0` with a tight pixel box, so the badge
  *     never reflows the parent on truncate and never disappears under
  *     a long title.
- *   - The letter is sized at ~70% of the box; a 1 px optical lift
- *     compensates for the caps-height-vs-mathematical-centre gap so
- *     the badge sits on the same visual baseline as the title's caps
- *     (was floating slightly low in the previous revision).
+ *   - The letter is sized at ~70% of the box. To compensate for the
+ *     caps-height-vs-mathematical-centre gap (caps-aligned glyphs sit
+ *     slightly above the em-box centre that `inline-flex items-center`
+ *     resolves to), the literal "E" lives in an inner block-level
+ *     `<span>` whose `translateY` scales with the badge size: ~0.25 px
+ *     on dense rows (≤12 px), ~0.5 px on standard rows (≤16 px) and
+ *     1 px on hero / fullscreen surfaces (18-24 px). Replaces the
+ *     previous single hardcoded -0.5 px lift that drifted at 18 px
+ *     and 24 px.
  *
  * Renders nothing for clean tracks so callers can drop it inline next
  * to a title without conditional wrappers / extra layout shifts.
@@ -72,6 +77,15 @@ export function ExplicitBadge({
   // corner radius reads. Floor at 9 px so it remains legible at the
   // densest row size we use (12 px box).
   const fontSize = Math.max(9, Math.round(size * 0.7));
+  // Optical-centering correction. `inline-flex items-center` aligns
+  // on the mathematical centre of the em-box, but caps-aligned glyphs
+  // render slightly off that centre — and the residual drift scales
+  // with the badge size. A single hardcoded lift looks right at 14 px
+  // and visibly drifts at 18 px (FullscreenPlayer) and 24 px (Track
+  // page hero). Bucketed corrections keep the glyph centred across
+  // every size we use (12 / 14 / 18 / 20 / 24 px) without per-call
+  // tuning.
+  const innerLiftPx = size <= 12 ? 0.25 : size <= 16 ? 0.5 : 1;
   const label = t('track.explicitBadge');
 
   const toneClasses =
@@ -88,22 +102,23 @@ export function ExplicitBadge({
         ' ' +
         className
       }
-      // Vertical alignment: `inline-flex items-center` centres the
-      // box on the parent's middle, but caps-height-aligned text sits
-      // slightly above that mathematical centre — so the badge reads
-      // ~1 px low next to lowercase-ending titles. A tiny upward
-      // translate corrects the optical drift without disturbing
-      // layout (it's purely a paint-time transform).
       style={{
         width: size,
         height: size,
         fontSize,
-        transform: 'translateY(-0.5px)',
+        lineHeight: 1,
       }}
       aria-label={label}
       title={label}
     >
-      E
+      <span
+        style={{
+          display: 'block',
+          transform: `translateY(-${innerLiftPx}px)`,
+        }}
+      >
+        E
+      </span>
     </span>
   );
 }

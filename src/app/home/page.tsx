@@ -1095,6 +1095,7 @@ function toTrack(r: RecentTrack): Track {
     coverUrl: r.coverUrl,
     duration: r.duration,
     source: r.source,
+    explicit: r.explicit,
   };
 }
 
