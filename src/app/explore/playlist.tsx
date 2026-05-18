@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ListMusic, Loader2, Pause, Play, Plus } from 'lucide-react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { TrackItem } from '@/components/features/TrackItem';
-import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePlaylistTracks } from '@/hooks/useExplore';
 import { useSaveTidalPlaylist } from '@/hooks/useShare';
@@ -172,9 +171,8 @@ export function TidalPlaylistPage() {
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <Eyebrow>{t('explorePlaylist.subtitleTidal')}</Eyebrow>
-                <h1 className="flex flex-wrap items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-                  <span>{meta?.title ?? t('explorePlaylist.fallbackTitle')}</span>
-                  <ExplicitBadge explicit={meta?.explicit} size={20} />
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                  {meta?.title ?? t('explorePlaylist.fallbackTitle')}
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   {meta?.curator ?? 'Tidal'}
