@@ -152,10 +152,27 @@ function normaliseAlbumTitle(title: string): string {
   return title
     .toLowerCase()
     // Parenthesised edition tags: "(Deluxe)", "(Expanded Edition)",
-    // "(Remastered 2021)", "(Anniversary Edition)", …
-    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)[^()\[\]]*[)\]]\s*/gi, ' ')
-    // Trailing " - Deluxe" / " — Remastered 2018" suffixes.
-    .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)\b[^,]*$/gi, ' ')
+    // "(Remastered 2021)", "(Anniversary Edition)", "(Clean)",
+    // "[Explicit]", "(Edited Version)", … The `clean|explicit|edited`
+    // tokens were added so that prefer-explicit dedupe collapses
+    // dirty/clean variants whose only label difference is the
+    // variant tag itself (Tidal's actual labels for clean editions
+    // are `(Clean)`, `[Explicit]`, `(Edited)` as bare tags, not
+    // joined to `version`/`edition`).
+    //
+    // The trailing `\b` on the alternation is required so prefix
+    // matches (`cleaning`, `cleaner`, `explicitly`, `versioning`,
+    // `editions`) don't accidentally collapse parenthesised tags
+    // that happen to start with one of these stems — e.g.
+    // `Album (Cleaning Up Mix)`, `Album (Clean Bandit Remix)`. The
+    // pre-PR tokens (`deluxe`, `version`, `edition`, etc.) had the
+    // same gap; tightening all of them at once because "clean" is
+    // a common stem in track / album titles and we already pay the
+    // alternation cost.
+    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)\b[^()\[\]]*[)\]]\s*/gi, ' ')
+    // Trailing " - Deluxe" / " — Remastered 2018" / " - Clean Version"
+    // suffixes.
+    .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)\b[^,]*$/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -216,6 +233,117 @@ function dedupeAlbums(items: Album[]): Album[] {
     byFingerprint.set(fp, existing ? better(existing, album) : album);
   }
   return Array.from(byFingerprint.values());
+}
+
+/**
+ * Prefer-explicit dedupe for album lists. When Tidal serves both an
+ * explicit and a clean variant of the same release (different ids,
+ * same `(normalisedTitle, artistId)`), drop the clean one in favour
+ * of the explicit one. Otherwise keep the first-seen entry. Order is
+ * preserved.
+ *
+ * Why this exists: PR #454 added the per-account Explicit Content
+ * filter toggle and threaded explicit-content hints through the
+ * lyrics fallback. The user reports search and artist top-tracks
+ * still surface censored variant ids, proof that Tidal hosts the
+ * uncensored release under a different id and our search is picking
+ * the clean one. This helper is the response-side correction:
+ * collapse the two into one, prefer explicit. Pure, no side effects.
+ *
+ * The group key intentionally omits `releaseDate`. Tidal sometimes
+ * back-fills clean editions weeks or months after the original, so
+ * tying equivalence to the date silently bypassed the dedupe in the
+ * common case. `dedupeAlbums` (the Tier-2 collapser that runs after
+ * us in `getArtistReleases`) keys on the same `(artistId,
+ * normalisedTitle)` pair, so the two helpers stay aligned.
+ *
+ * Behavioural note: `dedupeAlbums` runs only on `getArtistReleases`.
+ * On the `search` and `getArtistAlbumsAndSingles` paths
+ * `preferExplicitAlbums` runs on its own, which means it now also
+ * functions as the Tier-2 title-fingerprint collapser there — a
+ * paired standard + deluxe entry with the same artist and same
+ * normalised title (after stripping `(Deluxe)` / `[Explicit]` /
+ * `(Edited)` etc.) collapses to a single survivor. When both
+ * variants share the same `explicit` flag the first-seen wins,
+ * which is order-dependent on Tidal's response. Pre-PR these pairs
+ * sometimes both surfaced on `search` because the key included
+ * `releaseDate`; the v2 fix-up consciously trades that breadth for
+ * alignment with `dedupeAlbums`. If we ever need to reverse the
+ * trade-off (e.g. to keep both standard and deluxe on `search`)
+ * the cheapest path is a secondary disambiguator on the bucket
+ * (`releaseType`, `numberOfTracks`, or the deluxe/expanded suffix
+ * itself) when both variants are explicit-flag-equal.
+ */
+function preferExplicitAlbums(albums: Album[]): Album[] {
+  const groups = new Map<string, Album[]>();
+  const order: string[] = [];
+  for (const album of albums) {
+    const fp = `${normaliseAlbumTitle(album.title)}::${album.artistId ?? ''}`;
+    const bucket = groups.get(fp);
+    if (bucket) {
+      bucket.push(album);
+    } else {
+      groups.set(fp, [album]);
+      order.push(fp);
+    }
+  }
+  const out: Album[] = [];
+  for (const fp of order) {
+    const variants = groups.get(fp);
+    if (!variants || variants.length === 0) continue;
+    const explicit = variants.find((v) => v.explicit === true);
+    out.push(explicit ?? variants[0]);
+  }
+  return out;
+}
+
+/**
+ * Prefer-explicit dedupe for track lists. Equivalence key is
+ * `(normalisedTitle, artistId, roundedDuration)`; different
+ * durations mean different masters/edits and must NOT collapse, so
+ * we use a ±2s tolerance window. When two tracks land in the same
+ * bucket and exactly one is `explicit:true`, keep the explicit one.
+ * Otherwise keep the first-seen entry. Order is preserved.
+ *
+ * If `artistId` or `duration` are missing on a track we fall back to
+ * the first-seen behaviour (no merge) so we never silently drop a
+ * track on degraded upstream data.
+ */
+function preferExplicitTracks(tracks: Track[]): Track[] {
+  // Bucket entries carry only what the equivalence search reads:
+  // `titleKey / artistId / duration`. Tracks lacking artistId or
+  // duration are pushed under a unique sentinel marker so they
+  // can't merge with anything else.
+  const buckets: { titleKey: string; artistId: string; duration: number; track: Track }[] = [];
+  for (const track of tracks) {
+    const titleKey = normaliseAlbumTitle(track.title);
+    const artistId = track.artistId ?? '';
+    const duration = typeof track.duration === 'number' && Number.isFinite(track.duration)
+      ? Math.round(track.duration)
+      : -1;
+    if (!artistId || duration < 0) {
+      // Insufficient info for safe equivalence: emit as-is under a
+      // sentinel artistId / duration so the find() peer-search
+      // can't match it.
+      buckets.push({ titleKey, artistId: '__unique__', duration: -1, track });
+      continue;
+    }
+    // Find an existing bucket with matching title + artistId and
+    // a duration within ±2s.
+    const peer = buckets.find(
+      (b) => b.titleKey === titleKey && b.artistId === artistId && Math.abs(b.duration - duration) <= 2,
+    );
+    if (peer) {
+      // Prefer explicit if exactly one is flagged; otherwise leave
+      // the first-seen entry alone.
+      if (peer.track.explicit !== true && track.explicit === true) {
+        peer.track = track;
+      }
+    } else {
+      buckets.push({ titleKey, artistId, duration, track });
+    }
+  }
+  return buckets.map((b) => b.track);
 }
 
 /**
@@ -388,9 +516,18 @@ export class TidalService implements MusicService {
 
     const data = await this.api.search(query, typeMap[filter], opts.limit, opts.offset);
 
+    // Prefer-explicit dedupe on the response side: when Tidal serves
+    // both clean and explicit variants of the same release/track
+    // (different ids, same fingerprint), keep the explicit one. The
+    // request-side `includeExplicit/explicitContent/useEditedLyrics`
+    // hints in TidalApi.commonParams are best-effort; this is the
+    // deterministic backstop.
+    const albums = preferExplicitAlbums(this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)));
+    const tracks = preferExplicitTracks(this.api.unwrapSearchItems(data.tracks).map(mapTrack));
+
     return {
-      tracks: this.api.unwrapSearchItems(data.tracks).map(mapTrack),
-      albums: this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)),
+      tracks,
+      albums,
       artists: this.api.unwrapSearchItems(data.artists).map(mapArtist),
       totalTracks: data.tracks?.totalNumberOfItems,
       totalAlbums: data.albums?.totalNumberOfItems,
@@ -408,7 +545,18 @@ export class TidalService implements MusicService {
       this.api.getAlbum(id),
       this.api.getAlbumTracks(id),
     ]);
-    return mapAlbum(raw, tracksRes.items.map(mapTrack));
+    const album = mapAlbum(raw, tracksRes.items.map(mapTrack));
+    // Operator breadcrumb: when the user pastes a clean-edition id
+    // directly we honour it (the search/list path does prefer-
+    // explicit dedupe; on /album/:id we don't auto-redirect). Surface
+    // suspicious clean-suffix titles in `wrangler tail` so we can
+    // see the case in the wild without changing behaviour.
+    if (album.explicit !== true && /\b(clean(\s+version)?|\(\s*clean\s*\)|\[\s*clean\s*\])\b/i.test(album.title)) {
+      console.warn(
+        `[getAlbum] album ${id} looks like a clean-edition variant; title="${album.title}" explicit=${album.explicit ?? 'undefined'}`,
+      );
+    }
+    return album;
   }
 
   async getArtist(id: string): Promise<Artist> {
@@ -526,8 +674,8 @@ export class TidalService implements MusicService {
       console.error('[getArtistAlbumsAndSingles] page fetch failed, falling back to v1 buckets', err);
     }
 
-    let albums = dedupeAlbums([...albumsMod.items, ...compsMod.items]);
-    let singles = singlesMod.items;
+    let albums = dedupeAlbums(preferExplicitAlbums([...albumsMod.items, ...compsMod.items]));
+    let singles = preferExplicitAlbums(singlesMod.items);
     let albumsMore = albumsMod.morePath ?? compsMod.morePath;
     const albumsMoreTotal = albumsMod.moreTotal !== undefined || compsMod.moreTotal !== undefined
       ? (albumsMod.moreTotal ?? 0) + (compsMod.moreTotal ?? 0)
@@ -610,8 +758,9 @@ export class TidalService implements MusicService {
     ingest(compilations.items, 'COMPILATION');
 
     // Title-level dedupe so reissues / regional duplicates don't
-    // produce N copies of the same release.
-    return dedupeAlbums(Array.from(merged.values())).sort((a, b) => {
+    // produce N copies of the same release. Run prefer-explicit
+    // first so the explicit variant survives Tier-2 collapsing.
+    return dedupeAlbums(preferExplicitAlbums(Array.from(merged.values()))).sort((a, b) => {
       const da = a.releaseDate ?? '';
       const db = b.releaseDate ?? '';
       if (da === db) return a.title.localeCompare(b.title);

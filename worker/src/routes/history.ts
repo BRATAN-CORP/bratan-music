@@ -19,6 +19,25 @@ history.use('/*', jwtAuth);
  */
 history.post('/play', async (c) => {
   const userId = c.get('userId');
+  // Note on `explicit`: we deliberately do NOT persist the explicit
+  // flag on `play_history`. The schema doesn't carry the column and
+  // adding a D1 migration just for one boolean on a hot insert table
+  // wasn't worth it for the scope of this PR. The downstream
+  // consequence is that the GET /recent SELECT below cannot surface
+  // `explicit`, so the home recent strip currently renders no E
+  // badge on history rows even though the frontend `toTrack(r)`
+  // mapper is wired to read `r.explicit` (forward-looking plumbing,
+  // a no-op until the worker side is filled in).
+  //
+  // To turn the badge on for recent rows pick one of:
+  //   1. Add `0029_play_history_explicit.sql` (ALTER TABLE
+  //      play_history ADD COLUMN explicit INTEGER), thread it
+  //      through PlayBody + the INSERT here + the GET /recent
+  //      SELECT + the response shape; OR
+  //   2. JOIN play_history → tracks on (track_id, source) and
+  //      surface tracks.explicit in the SELECT (no schema change to
+  //      play_history, but depends on the row still existing in
+  //      tracks at read time).
   interface ArtistRefBody {
     id?: string;
     name?: string;
