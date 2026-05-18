@@ -25,6 +25,7 @@ import { ArtistCard } from './ArtistCard';
 import { TrackItem } from './TrackItem';
 import { ExplicitBadge } from './ExplicitBadge';
 import { usePlayerStore } from '@/store/player';
+import { toPlayerTrack } from '@/lib/playerTrack';
 import { api } from '@/lib/api';
 import { tidalImageUrl } from '@/lib/tidal-image';
 import { useT } from '@/i18n';
@@ -456,16 +457,10 @@ function TrackListRow({
   // editorial selection.
   const handlePlay = (track: Track) => {
     setQueue(items);
-    setTrack({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl,
-      coverVideoUrl: track.coverVideoUrl,
-      duration: track.duration,
-    });
+    // Forward the source-provider Explicit flag (and other player-
+    // relevant fields) through `toPlayerTrack` so the mini-player
+    // and fullscreen badge match what the row showed.
+    setTrack(toPlayerTrack(track));
   };
   return (
     <section className="flex flex-col gap-3">
@@ -928,16 +923,7 @@ function ExplorePlaylistCard({
       const first = items?.[0];
       if (!items || !first) return;
       setQueue(items);
-      setTrack({
-        id: first.id,
-        title: first.title,
-        artist: first.artist,
-        artistId: first.artistId,
-        artists: first.artists,
-        coverUrl: first.coverUrl,
-        coverVideoUrl: first.coverVideoUrl,
-        duration: first.duration,
-      });
+      setTrack(toPlayerTrack(first));
     } finally {
       setLoading(false);
     }

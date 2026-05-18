@@ -2,35 +2,31 @@
  * Small "E" badge for tracks / albums / playlists the source provider
  * tags as Explicit.
  *
+ * Implementation: SVG-based. Earlier iterations tried to centre an
+ * inline `<span>E</span>` inside a fixed-size flex box using
+ * `transform: translateY(-Xpx)` to fight the caps-vs-em-box gap of the
+ * loaded font. That approach was font-dependent and the user
+ * repeatedly reported the glyph reading "off-centre / too-much-padding"
+ * in mini-player rows and track lists. SVG removes the font-metrics
+ * dependency entirely: the path geometry is centred against the same
+ * 10×10 viewBox at every render, so the badge is pixel-stable across
+ * Inter / Instrument-Serif / system fallbacks at every supported size
+ * (12 / 14 / 16 / 18 / 20 / 24 px).
+ *
  * Visual contract (set against Apple Music / Spotify / Tidal Web):
- *   - Solid filled square with a high-contrast capital "E".
+ *   - Solid filled square with rounded corners and a high-contrast "E".
  *   - Default ("auto") tone is theme-aware: a `--color-text-muted`
- *     filled square with the surface colour cut out of the letter, so
- *     the badge inherits whatever palette the surrounding row uses
- *     under both light and dark themes.
+ *     filled square with the surface colour cut out of the letter.
  *   - Optional `tone="light"` paints a white-on-translucent variant
- *     for surfaces that are forced light independently of the user's
- *     theme — e.g. the fullscreen player which paints over
- *     cover-derived ambience and always reads as "light".
+ *     for surfaces forced light independent of the user's theme
+ *     (e.g. the fullscreen player painting over cover ambience).
  *
  * Layout contract:
  *   - `inline-flex shrink-0` with a tight pixel box, so the badge
  *     never reflows the parent on truncate and never disappears under
  *     a long title.
- *   - Letter is sized at ~70% of the box and rendered inside an inner
- *     `<span>` whose `transform: translateY(-Xpx)` corrects the
- *     caps-height-vs-mathematical-centre gap that makes the bare
- *     letter sit visibly low. The lift is scaled per size bucket so
- *     the optical centring holds at every callsite (12 / 14 / 18 /
- *     24 px). The previous implementation hardcoded the lift on the
- *     OUTER box and only looked correct at 14 px.
- *   - `padding: 0` and `lineHeight: 1` on the outer box, plus
- *     `display: block` on the inner span, prevents the small extra
- *     space some browsers reserve under inline text from
- *     un-centring the glyph horizontally on the right edge.
- *
- * Renders nothing for clean tracks so callers can drop it inline next
- * to a title without conditional wrappers / extra layout shifts.
+ *   - Renders nothing when `explicit !== true`, so callers can drop it
+ *     inline next to a title without conditional wrappers.
  *
  * Usage:
  *   <span className="flex items-center gap-1">
@@ -47,41 +43,22 @@ interface ExplicitBadgeProps {
   explicit: boolean | undefined | null;
   /**
    * Pixel size of the badge box (width = height). Defaults to 14, which
-   * pairs cleanly with the 12-14px title sizes used across track rows
-   * and the mini player. Use 12 for dense rows and 16-18 for hero
+   * pairs cleanly with the 12–14 px title sizes used across track rows
+   * and the mini player. Use 12 for dense rows and 16–24 for hero
    * surfaces (fullscreen player, album / playlist heroes).
    */
   size?: number;
   /**
    * Visual tone.
    *
-   * - `auto` (default): theme-aware filled square — `--color-text-muted`
-   *   square with the surface colour cut out of the letter. Inherits
-   *   the surrounding palette under both themes.
+   * - `auto` (default): theme-aware — `--color-text-muted` square with
+   *   the surface colour cut out of the letter. Inherits the
+   *   surrounding palette under both themes.
    * - `light`: white-on-translucent for surfaces forced light
    *   regardless of theme (e.g. fullscreen player).
    */
   tone?: ExplicitBadgeTone;
   className?: string;
-}
-
-/**
- * Optical-centring lift in pixels. The bare capital "E" rendered at
- * `lineHeight: 1` sits with its visual centre roughly at 56% of the
- * em-box height (caps-aligned text leaves more whitespace below the
- * baseline than above). A small upward translate brings the visual
- * centre back to the geometric centre.
- *
- * The lift scales sub-linearly with size — at 12 px even 0.5 px reads
- * as a clear visual shift, at 24 px we need ~1.25 px to look right.
- */
-function liftFor(size: number): number {
-  if (size <= 12) return 0.5;
-  if (size <= 14) return 0.5;
-  if (size <= 16) return 0.75;
-  if (size <= 18) return 1;
-  if (size <= 22) return 1;
-  return 1.25;
 }
 
 export function ExplicitBadge({
@@ -93,57 +70,60 @@ export function ExplicitBadge({
   const t = useT();
   if (explicit !== true) return null;
 
-  // Letter at ~70% of the box keeps the visual weight close to Apple
-  // Music's badge while leaving ~1 px of inset all-around so the
-  // corner radius reads. Floor at 9 px so it remains legible at the
-  // densest row size we use (12 px box).
-  const fontSize = Math.max(9, Math.round(size * 0.7));
   const label = t('track.explicitBadge');
-  const lift = liftFor(size);
 
-  const toneClasses =
+  // Two flat colours per tone. Both render as plain `fill=…` SVG paint
+  // — using `currentColor` everywhere would force the consumer to
+  // wrap the badge in an extra `text-…` class, and we want the badge
+  // to be self-contained.
+  const palette =
     tone === 'light'
-      ? 'bg-white/90 text-black/85'
-      : 'bg-[color:var(--color-text-muted)] text-[color:var(--color-bg)]';
+      ? { bg: 'rgba(255,255,255,0.92)', fg: 'rgba(0,0,0,0.85)' }
+      : { bg: 'var(--color-text-muted)', fg: 'var(--color-bg)' };
 
+  // 10×10 viewBox with a 1.6-radius corner gives the same visual
+  // softness as Tidal's own badge at every output size. The "E"
+  // path is centred at (5,5) with caps height 6 — geometrically
+  // identical to a 60-of-10 caps-aligned glyph but without any
+  // font-metric dependence. Stroke width 0.2 nudges the path
+  // anti-alias closer to the glyph weight rendered by the
+  // surrounding text.
   return (
     <span
       className={
-        'inline-flex shrink-0 select-none items-center justify-center font-bold uppercase ' +
-        'rounded-[3px] leading-none tracking-tight overflow-hidden ' +
-        toneClasses +
+        'inline-flex shrink-0 select-none items-center justify-center align-middle ' +
         (className ? ' ' + className : '')
       }
-      style={{
-        width: size,
-        height: size,
-        fontSize,
-        // No translate on the OUTER box — lifting the whole element
-        // visibly desyncs it from sibling text (e.g. inside a flex
-        // row with `items-center` it ends up sitting above the
-        // baseline). The inner span lift handles optical centring
-        // without disturbing the outer element's flow.
-        padding: 0,
-        lineHeight: 1,
-      }}
+      style={{ width: size, height: size, lineHeight: 1 }}
       aria-label={label}
       title={label}
+      role="img"
     >
-      <span
-        aria-hidden
-        // `block` strips the inline-leading trick, `lineHeight: 1`
-        // collapses the descender room, and the upward translate
-        // pulls the caps-aligned glyph up to the geometric centre.
-        // Combined this puts the "E" exactly in the middle of the
-        // box at every supported size (12 / 14 / 18 / 20 / 24 px).
-        style={{
-          display: 'block',
-          lineHeight: 1,
-          transform: `translateY(-${lift}px)`,
-        }}
+      <svg
+        viewBox="0 0 10 10"
+        width={size}
+        height={size}
+        style={{ display: 'block' }}
+        aria-hidden="true"
+        focusable="false"
       >
-        E
-      </span>
+        {/* Background square. Inline `style.fill` so CSS custom
+         *  properties (`var(--color-text-muted)` etc.) resolve
+         *  correctly in every browser — the `fill="…"` SVG attribute
+         *  has had var() support quirks historically. */}
+        <rect x="0" y="0" width="10" height="10" rx="1.6" ry="1.6" style={{ fill: palette.bg }} />
+        {/* Capital "E" rendered as a single closed path. Bars: top
+         *  (y=2 → 3.4), middle (y=4.5 → 5.5), bottom (y=6.6 → 8).
+         *  Vertical spine x=2.4 → 3.4. The geometry visually
+         *  centres at (5, 5) — top + bottom bars are equidistant
+         *  from the centreline, the middle bar is exactly on it,
+         *  and the spine width matches the bar thickness so weight
+         *  reads even on dark/light backgrounds. */}
+        <path
+          style={{ fill: palette.fg }}
+          d="M2.4 2 H7.6 V3.4 H3.4 V4.5 H7 V5.5 H3.4 V6.6 H7.6 V8 H2.4 Z"
+        />
+      </svg>
     </span>
   );
 }

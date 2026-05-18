@@ -10,6 +10,7 @@ import { useExplorePlaylistTracks } from '@/hooks/useExplore';
 import { useSaveTidalPlaylist } from '@/hooks/useShare';
 import { usePlaylistsList } from '@/hooks/useLibrary';
 import { usePlayerStore } from '@/store/player';
+import { toPlayerTrack } from '@/lib/playerTrack';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
 import type { ExplorePage, ExplorePlaylist, Track } from '@/types';
 import { useT } from '@/i18n';
@@ -79,16 +80,9 @@ export function TidalPlaylistPage() {
 
   const handlePlayTrack = (track: Track) => {
     setQueue(tracks);
-    setTrack({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl,
-      coverVideoUrl: track.coverVideoUrl,
-      duration: track.duration,
-    });
+    // Forward `explicit` (and the other player fields) through the
+    // canonical mapper so the mini-player E badge matches the row.
+    setTrack(toPlayerTrack(track));
   };
 
   const handleSave = () => {

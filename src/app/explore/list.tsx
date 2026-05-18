@@ -14,6 +14,7 @@ import {
 import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useExplorePage, useExploreList } from '@/hooks/useExplore';
 import { usePlayerStore } from '@/store/player';
+import { toPlayerTrack } from '@/lib/playerTrack';
 import { useT } from '@/i18n';
 import type {
   Album,
@@ -233,16 +234,10 @@ function ListView({
     const tracks = items as Track[];
     const handlePlay = (track: Track) => {
       setQueue(tracks);
-      setTrack({
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        artistId: track.artistId,
-        artists: track.artists,
-        coverUrl: track.coverUrl,
-        coverVideoUrl: track.coverVideoUrl,
-        duration: track.duration,
-      });
+      // Forward `explicit` (and other player fields) through the
+      // canonical `toPlayerTrack` mapper so the mini-player E badge
+      // matches the row badge.
+      setTrack(toPlayerTrack(track));
     };
     return (
       <div className="rounded-[var(--radius-md)] border border-border bg-background">

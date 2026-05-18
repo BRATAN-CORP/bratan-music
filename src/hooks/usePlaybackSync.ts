@@ -11,7 +11,7 @@ type PlayableTrack = Pick<
   Track,
   'id' | 'title' | 'artist' | 'duration'
 > &
-  Partial<Pick<Track, 'artistId' | 'albumId' | 'coverUrl' | 'coverVideoUrl'>>;
+  Partial<Pick<Track, 'artistId' | 'artists' | 'albumId' | 'coverUrl' | 'coverVideoUrl' | 'explicit' | 'source'>>;
 
 function toPlayable(t: PlayableTrack): PlayableTrack {
   return {
@@ -19,10 +19,19 @@ function toPlayable(t: PlayableTrack): PlayableTrack {
     title: t.title,
     artist: t.artist,
     artistId: t.artistId,
+    artists: t.artists,
     albumId: t.albumId,
     coverUrl: t.coverUrl,
     coverVideoUrl: t.coverVideoUrl,
     duration: t.duration,
+    // Carry the source-provider Explicit flag through so the player
+    // surfaces (mini-player, mobile dock, fullscreen) render the
+    // `<ExplicitBadge>` consistently with the row the user clicked.
+    // Without this the player track came back with explicit=undefined
+    // even when the source row had it set, and the mini-player E badge
+    // disappeared "on some tracks but not others".
+    explicit: t.explicit,
+    source: t.source,
   };
 }
 
