@@ -160,6 +160,35 @@
   template, но `AdminUserStatsRecentPlay` тип не несёт `explicit` —
   surface low-priority, отложил.
 
+  v3 review-fixup (2026-05-18 ~20:00 UTC): семантик-ревьюер
+  вернул 3 follow-on issue, все обработаны в одном fix-up
+  commit'е. (v2-i1) Residual misleading copy в handoff
+  bullet'е daily-changes переписан — recent-strip badge не
+  зажигается в этом PR, нужна 0029-миграция (`ALTER TABLE
+  play_history ADD COLUMN explicit`) или JOIN на `tracks`
+  в `GET /recent`. (v2-i2) `preferExplicitAlbums`
+  over-collapse на `search` / `getArtistAlbumsAndSingles`
+  (где `dedupeAlbums` не бежит) — выбрана опция (a):
+  JSDoc на `preferExplicitAlbums` дополнен «Behavioural
+  note» абзацем, документирующим что helper сам
+  работает как Tier-2 коллапсер на этих путях, при
+  равных explicit-флагах побеждает first-seen
+  (порядок-зависимо от Tidal). Опция (b) с secondary
+  disambiguator (`releaseType` / `numberOfTracks`) отложена
+  до конкретной жалобы на missing deluxe в search.
+  (v2-i3) `\bclean` / `\bexplicit` regex word-prefix gap —
+  обернул всю alternation в `\b(?:...)\b` сразу
+  (deluxe|expanded|remastered|anniversary|extended|special|
+  edition|version|bonus|reissue|clean|explicit|edited),
+  не только новые три токена. `(Cleaning Up Mix)` /
+  `(Cleaner Cut)` / `(Explicitly Mine)` / `(Versioning
+  Mishap)` / `(Editions)` теперь не collapse'ятся;
+  legitimate `(Clean)` / `(Deluxe)` / `(Remastered 2021)` /
+  `(Edited Version)` продолжают работать. Hazard
+  `(Clean Bandit Remix)` (collab с space-after-`clean`)
+  остался — не fix'абельно на regex-уровне без
+  context-sensitive логики, откладываем.
+
 - 2026-05-09T22:30Z — батч follow-up фиксов (PR
   `devin/1778365680-fix-batch`). После PR #427 пользователь
   сообщил три регрессии: (а) prev/next иконки в плеерах
@@ -209,5 +238,6 @@
 | 2026-05-17 ~10:40 | `4ddbc0d8c87e42228ab0e4620df9fd91` (текущий) | Recs overhaul — liked tracks as primary taste signal. TasteProfile v3 (likedTrackIds), wave() seeds from liked+completed, SEED_FAN_OUT 5→8, multi-credit artist dislike in rerank, all daily playlist variants seed from liked-track radio, removed generic genre fallback. PRs #447-#451 merged. |
 | 2026-05-18 19:14 | `(текущий)` | Tidal Explicit double-fix (наследует PR #452 / #454). Worker: `commonParams` в `TidalApi` (defence-in-depth, includeExplicit/explicitContent/useEditedLyrics на каждый search/album/artist call) + response-side prefer-explicit dedupe в `TidalService.search` / `getArtistAlbumsAndSingles` / `getArtistReleases` (groups by `normaliseTitle(title) × artistId × releaseDate`); `play_history` без миграции — explicit на recent-strip из cached track-snapshot. Frontend: `ExplicitBadge` оптическое центрирование заменено на size-scaled `translateY` (был один хардкоженный -0.5px который дрейфил на 18/24 px), title-row gap затянут с `gap-1.5`→`gap-1` в Player.tsx mini-player / MobileBottomDock / TrackItem / PlaylistTrackItem / QueueDialog / BannedListDialog (hero контексты сохранили `gap-2`), бэйдж добавлен на `src/app/explore/playlist.tsx` hero, `home/page.tsx :: toTrack(r)` пробрасывает `explicit: r.explicit`. Один PR на всё. |
 | 2026-05-18 19:30 | `(текущий, v2 review-fixup)` | Семантик-ревью вернул 6 issue. Fix-up commit на тот же working tree. (i1) Misleading recent-strip claim удалён — `history.ts` comment, tracker Live status, daily-changes явно говорят, что recent rows пока НЕ несут `explicit` (фронт-проводок `toTrack(r)` оставлен как forward-looking plumbing до 0029-миграции или JOIN'a). (i2) В `preferExplicitAlbums` ключ группы упрощён с `(normalisedTitle, artistId, releaseDate)` до `(normalisedTitle, artistId)` — Tidal back-fill'ит clean editions с другой датой. (i3) `normaliseAlbumTitle` regex дополнен токенами `clean\|explicit\|edited`, чтобы `(Clean)` / `[Explicit]` / `(Edited Version)` коллапсировали в общий bucket. (i4) `useEditedLyrics=false` сознательно оставлен в `commonParams` (Tidal ignore-unknown-params, staging-канала для smoke-test нет, консервативно оставляем). (i5) `ExplicitBadge` lift сплит'нут: `≤16 → 0.5 px`, `≤18 → 0.75 px`, `>18 → 1 px` — FullscreenPlayer (size=18) больше не lift'ится на 1 px. (i6) Dead `key` field в `preferExplicitTracks` bucket entries удалён. Validation green: root + worker `lint` + `typecheck` + `build` все exit 0. |
+| 2026-05-18 20:00 | `(текущий, v3 review-fixup)` | Семантик-ревью прогнан ещё раз; вернул 3 follow-on issue. Все обработаны в одном fix-up commit. (v2-i1) Misleading copy в «Что важно знать следующему агенту» tail-bullet'е daily-changes (всё ещё писал «читается из cached snapshot») переписан в стиле v2 caveat: recent-strip badge не зажигается в этом PR, нужна 0029-миграция или JOIN на `tracks`. (v2-i2) `preferExplicitAlbums` over-collapse на `search` / `getArtistAlbumsAndSingles` — выбрана опция (a) из двух предложенных ревьюером: JSDoc на helper'е дополнен абзацем, документирующим что без `dedupeAlbums` рядом он сам работает Tier-2 коллапсером (paired standard + deluxe схлопываются, при равных explicit-флагах побеждает first-seen). Опция (b) с secondary disambiguator отложена до конкретной жалобы. (v2-i3) `\bclean` / `\bexplicit` regex word-prefix gap — `\b` cap прикручен ко всей alternation сразу (`\b(?:deluxe\|expanded\|...\|clean\|explicit\|edited)\b`), не только к новым трём токенам, потому что `version` / `edition` тоже имели тот же gap pre-PR. `(Cleaning Up Mix)` / `(Cleaner Cut)` / `(Explicitly Mine)` / `(Versioning Mishap)` / `(Editions)` больше не collapse'ятся. Hazard `(Clean Bandit Remix)` (collab) остался — не fix'абельно на regex-уровне. Validation green: root + worker `lint` + `typecheck` + `build` все exit 0. |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

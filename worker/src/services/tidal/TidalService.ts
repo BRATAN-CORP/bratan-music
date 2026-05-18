@@ -159,7 +159,17 @@ function normaliseAlbumTitle(title: string): string {
     // variant tag itself (Tidal's actual labels for clean editions
     // are `(Clean)`, `[Explicit]`, `(Edited)` as bare tags, not
     // joined to `version`/`edition`).
-    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)[^()\[\]]*[)\]]\s*/gi, ' ')
+    //
+    // The trailing `\b` on the alternation is required so prefix
+    // matches (`cleaning`, `cleaner`, `explicitly`, `versioning`,
+    // `editions`) don't accidentally collapse parenthesised tags
+    // that happen to start with one of these stems — e.g.
+    // `Album (Cleaning Up Mix)`, `Album (Clean Bandit Remix)`. The
+    // pre-PR tokens (`deluxe`, `version`, `edition`, etc.) had the
+    // same gap; tightening all of them at once because "clean" is
+    // a common stem in track / album titles and we already pay the
+    // alternation cost.
+    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)\b[^()\[\]]*[)\]]\s*/gi, ' ')
     // Trailing " - Deluxe" / " — Remastered 2018" / " - Clean Version"
     // suffixes.
     .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited)\b[^,]*$/gi, ' ')
@@ -246,6 +256,23 @@ function dedupeAlbums(items: Album[]): Album[] {
  * common case. `dedupeAlbums` (the Tier-2 collapser that runs after
  * us in `getArtistReleases`) keys on the same `(artistId,
  * normalisedTitle)` pair, so the two helpers stay aligned.
+ *
+ * Behavioural note: `dedupeAlbums` runs only on `getArtistReleases`.
+ * On the `search` and `getArtistAlbumsAndSingles` paths
+ * `preferExplicitAlbums` runs on its own, which means it now also
+ * functions as the Tier-2 title-fingerprint collapser there — a
+ * paired standard + deluxe entry with the same artist and same
+ * normalised title (after stripping `(Deluxe)` / `[Explicit]` /
+ * `(Edited)` etc.) collapses to a single survivor. When both
+ * variants share the same `explicit` flag the first-seen wins,
+ * which is order-dependent on Tidal's response. Pre-PR these pairs
+ * sometimes both surfaced on `search` because the key included
+ * `releaseDate`; the v2 fix-up consciously trades that breadth for
+ * alignment with `dedupeAlbums`. If we ever need to reverse the
+ * trade-off (e.g. to keep both standard and deluxe on `search`)
+ * the cheapest path is a secondary disambiguator on the bucket
+ * (`releaseType`, `numberOfTracks`, or the deluxe/expanded suffix
+ * itself) when both variants are explicit-flag-equal.
  */
 function preferExplicitAlbums(albums: Album[]): Album[] {
   const groups = new Map<string, Album[]>();
