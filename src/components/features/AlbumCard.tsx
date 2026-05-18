@@ -48,7 +48,7 @@ export function AlbumCard({ album }: AlbumCardProps) {
         </div>
       </TiltCard>
       <div className="min-w-0">
-        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+        <p className="flex items-center gap-1 truncate text-sm font-medium">
           <span className="truncate">{album.title}</span>
           <ExplicitBadge explicit={album.explicit} size={12} />
         </p>

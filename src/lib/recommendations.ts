@@ -157,6 +157,12 @@ export interface PlayLogPayload {
   albumId?: string;
   coverUrl?: string;
   duration?: number;
+  /**
+   * Source-provider Explicit flag. Persisted to `play_history.explicit`
+   * (Migration 0029) so the home-page recent-plays strip can render
+   * the same `<ExplicitBadge>` we render everywhere else.
+   */
+  explicit?: boolean;
   listenedSeconds?: number;
   completed?: boolean;
 }

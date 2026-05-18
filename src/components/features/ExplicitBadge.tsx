@@ -17,16 +17,23 @@
  *   - `inline-flex shrink-0` with a tight pixel box, so the badge
  *     never reflows the parent on truncate and never disappears under
  *     a long title.
- *   - The letter is sized at ~70% of the box; a 1 px optical lift
- *     compensates for the caps-height-vs-mathematical-centre gap so
- *     the badge sits on the same visual baseline as the title's caps
- *     (was floating slightly low in the previous revision).
+ *   - Letter is sized at ~70% of the box and rendered inside an inner
+ *     `<span>` whose `transform: translateY(-Xpx)` corrects the
+ *     caps-height-vs-mathematical-centre gap that makes the bare
+ *     letter sit visibly low. The lift is scaled per size bucket so
+ *     the optical centring holds at every callsite (12 / 14 / 18 /
+ *     24 px). The previous implementation hardcoded the lift on the
+ *     OUTER box and only looked correct at 14 px.
+ *   - `padding: 0` and `lineHeight: 1` on the outer box, plus
+ *     `display: block` on the inner span, prevents the small extra
+ *     space some browsers reserve under inline text from
+ *     un-centring the glyph horizontally on the right edge.
  *
  * Renders nothing for clean tracks so callers can drop it inline next
  * to a title without conditional wrappers / extra layout shifts.
  *
  * Usage:
- *   <span className="flex items-center gap-1.5">
+ *   <span className="flex items-center gap-1">
  *     <span className="truncate">{track.title}</span>
  *     <ExplicitBadge explicit={track.explicit} />
  *   </span>
@@ -58,6 +65,25 @@ interface ExplicitBadgeProps {
   className?: string;
 }
 
+/**
+ * Optical-centring lift in pixels. The bare capital "E" rendered at
+ * `lineHeight: 1` sits with its visual centre roughly at 56% of the
+ * em-box height (caps-aligned text leaves more whitespace below the
+ * baseline than above). A small upward translate brings the visual
+ * centre back to the geometric centre.
+ *
+ * The lift scales sub-linearly with size — at 12 px even 0.5 px reads
+ * as a clear visual shift, at 24 px we need ~1.25 px to look right.
+ */
+function liftFor(size: number): number {
+  if (size <= 12) return 0.5;
+  if (size <= 14) return 0.5;
+  if (size <= 16) return 0.75;
+  if (size <= 18) return 1;
+  if (size <= 22) return 1;
+  return 1.25;
+}
+
 export function ExplicitBadge({
   explicit,
   size = 14,
@@ -73,6 +99,7 @@ export function ExplicitBadge({
   // densest row size we use (12 px box).
   const fontSize = Math.max(9, Math.round(size * 0.7));
   const label = t('track.explicitBadge');
+  const lift = liftFor(size);
 
   const toneClasses =
     tone === 'light'
@@ -83,27 +110,40 @@ export function ExplicitBadge({
     <span
       className={
         'inline-flex shrink-0 select-none items-center justify-center font-bold uppercase ' +
-        'rounded-[3px] leading-none tracking-tight ' +
+        'rounded-[3px] leading-none tracking-tight overflow-hidden ' +
         toneClasses +
-        ' ' +
-        className
+        (className ? ' ' + className : '')
       }
-      // Vertical alignment: `inline-flex items-center` centres the
-      // box on the parent's middle, but caps-height-aligned text sits
-      // slightly above that mathematical centre — so the badge reads
-      // ~1 px low next to lowercase-ending titles. A tiny upward
-      // translate corrects the optical drift without disturbing
-      // layout (it's purely a paint-time transform).
       style={{
         width: size,
         height: size,
         fontSize,
-        transform: 'translateY(-0.5px)',
+        // No translate on the OUTER box — lifting the whole element
+        // visibly desyncs it from sibling text (e.g. inside a flex
+        // row with `items-center` it ends up sitting above the
+        // baseline). The inner span lift handles optical centring
+        // without disturbing the outer element's flow.
+        padding: 0,
+        lineHeight: 1,
       }}
       aria-label={label}
       title={label}
     >
-      E
+      <span
+        aria-hidden
+        // `block` strips the inline-leading trick, `lineHeight: 1`
+        // collapses the descender room, and the upward translate
+        // pulls the caps-aligned glyph up to the geometric centre.
+        // Combined this puts the "E" exactly in the middle of the
+        // box at every supported size (12 / 14 / 18 / 20 / 24 px).
+        style={{
+          display: 'block',
+          lineHeight: 1,
+          transform: `translateY(-${lift}px)`,
+        }}
+      >
+        E
+      </span>
     </span>
   );
 }

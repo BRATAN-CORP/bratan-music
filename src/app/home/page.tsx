@@ -813,7 +813,7 @@ function PreviewStripRow({ track, index, tracks }: { track: Track; index: number
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className={cn('flex items-center gap-1.5 truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
+        <div className={cn('flex items-center gap-1 truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
           <span className="truncate">{track.title}</span>
           <ExplicitBadge explicit={track.explicit} size={12} />
         </div>
@@ -1095,6 +1095,11 @@ function toTrack(r: RecentTrack): Track {
     coverUrl: r.coverUrl,
     duration: r.duration,
     source: r.source,
+    // Forward the Explicit flag so the home recent strip and
+    // PreviewStripRow render the same `<ExplicitBadge>` we render
+    // everywhere else. The worker `/history/recent` endpoint
+    // surfaces this field as of migration 0029.
+    explicit: r.explicit,
   };
 }
 

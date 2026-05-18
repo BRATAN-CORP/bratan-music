@@ -22,6 +22,7 @@ import type {
   TidalPagedListRaw,
 } from './TidalApi';
 import { TidalWeb } from './TidalWeb';
+import { kvGetText, kvPutText } from '../streamCache';
 
 const IMG_BASE = 'https://resources.tidal.com/images';
 
@@ -146,16 +147,26 @@ function unwrapPagedAlbum(input: unknown): TidalAlbumRaw | undefined {
  * Strip release-edition decoration so that two album entries that
  * differ only by suffix — e.g. "Scorpion" vs "Scorpion (Deluxe)" vs
  * "Scorpion - Deluxe Edition" — collapse to the same fingerprint.
- * Used by the second-tier album dedupe (see {@link dedupeAlbums}).
+ * Also strips `Clean` / `Explicit` / `Edited (Version)` markers so
+ * the explicit-twin dedupe (see {@link preferExplicitAlbums}) sees
+ * the same fingerprint for `Album` and `Album (Clean)`.
+ *
+ * The token list is wrapped in `\b(?:…)\b` so legitimate titles like
+ * `(Cleaning Up Mix)`, `(Cleaner Cut)`, `(Explicitly Mine)`,
+ * `(Editions)` survive — only whole-word matches on the dedupe
+ * tokens collapse.
  */
 function normaliseAlbumTitle(title: string): string {
+  const TOKENS =
+    'deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue|clean|explicit|edited';
   return title
     .toLowerCase()
     // Parenthesised edition tags: "(Deluxe)", "(Expanded Edition)",
-    // "(Remastered 2021)", "(Anniversary Edition)", …
-    .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)[^()\[\]]*[)\]]\s*/gi, ' ')
+    // "(Remastered 2021)", "(Anniversary Edition)", "(Clean)",
+    // "[Explicit]", "(Edited Version)"…
+    .replace(new RegExp(`\\s*[([][^()\\[\\]]*\\b(?:${TOKENS})\\b[^()\\[\\]]*[)\\]]\\s*`, 'gi'), ' ')
     // Trailing " - Deluxe" / " — Remastered 2018" suffixes.
-    .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)\b[^,]*$/gi, ' ')
+    .replace(new RegExp(`\\s*[—–\\-]\\s*\\b(?:${TOKENS})\\b[^,]*$`, 'gi'), ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -216,6 +227,68 @@ function dedupeAlbums(items: Album[]): Album[] {
     byFingerprint.set(fp, existing ? better(existing, album) : album);
   }
   return Array.from(byFingerprint.values());
+}
+
+/**
+ * Response-side prefer-explicit dedupe for albums.
+ *
+ * When the same `(artistId, normalisedTitle)` is returned twice — once
+ * with `explicit=true` and once with `explicit=false` — keep only the
+ * explicit variant. This is the layer that handles "Tidal вернул и
+ * clean, и explicit edition в одном ответе": even when the request-
+ * level `includeExplicit=true` overrides land us both rows, we pick
+ * the uncensored one.
+ *
+ * Order-preserving: walks `items` once, drops the clean entry (or
+ * keeps it in place if it's the only variant). Albums lacking an
+ * artistId stay unique (we never collapse them).
+ */
+function preferExplicitAlbums(items: Album[]): Album[] {
+  // First pass — record where the explicit twin lives, so we can drop
+  // any clean twin we encounter later in the list.
+  const explicitTwin = new Map<string, true>();
+  for (const a of items) {
+    if (a.explicit !== true || !a.artistId) continue;
+    explicitTwin.set(`${a.artistId}::${normaliseAlbumTitle(a.title)}`, true);
+  }
+  // Second pass — drop clean entries that have an explicit twin.
+  return items.filter((a) => {
+    if (a.explicit === true) return true;
+    if (!a.artistId) return true;
+    const key = `${a.artistId}::${normaliseAlbumTitle(a.title)}`;
+    return !explicitTwin.has(key);
+  });
+}
+
+/**
+ * Response-side prefer-explicit dedupe for tracks.
+ *
+ * Like {@link preferExplicitAlbums} but groups by
+ * `(artistId, normalisedTitle, durationBucket)` — the duration bucket
+ * is `Math.round(duration / 2)` so a 3:14 vs 3:15 variant collapses
+ * (the audio is identical, only the metadata changed) but obviously
+ * different mixes don't accidentally merge.
+ *
+ * Tracks missing artistId or duration get unique sentinel keys so
+ * they can never be collapsed by accident.
+ */
+function preferExplicitTracks(items: Track[]): Track[] {
+  let sentinel = 0;
+  const fingerprint = (t: Track): string => {
+    if (!t.artistId || !t.duration) return `__unique_${sentinel++}`;
+    const bucket = Math.round(t.duration / 2);
+    return `${t.artistId}::${normaliseAlbumTitle(t.title)}::${bucket}`;
+  };
+  const keyByTrack = new Map<Track, string>();
+  for (const t of items) keyByTrack.set(t, fingerprint(t));
+  const explicitKeys = new Set<string>();
+  for (const t of items) {
+    if (t.explicit) explicitKeys.add(keyByTrack.get(t) as string);
+  }
+  return items.filter((t) => {
+    if (t.explicit) return true;
+    return !explicitKeys.has(keyByTrack.get(t) as string);
+  });
 }
 
 /**
@@ -367,11 +440,13 @@ function mapPageModule(raw: TidalPageModuleRaw): ExploreModule | null {
 export class TidalService implements MusicService {
   private api: TidalApi;
   private web: TidalWeb;
+  private env: Env;
 
   constructor(env: Env) {
     const auth = new TidalAuth(env);
     this.api = new TidalApi(auth);
     this.web = new TidalWeb(auth, env);
+    this.env = env;
   }
 
   async search(
@@ -388,9 +463,25 @@ export class TidalService implements MusicService {
 
     const data = await this.api.search(query, typeMap[filter], opts.limit, opts.offset);
 
+    let tracks = this.api.unwrapSearchItems(data.tracks).map(mapTrack);
+    let albums = this.api.unwrapSearchItems(data.albums).map((a) => mapAlbum(a));
+
+    // Layer 1: same-response prefer-explicit dedupe — drop the clean
+    // twin if Tidal returned both clean and explicit variants in the
+    // same search payload.
+    tracks = preferExplicitTracks(tracks);
+    albums = preferExplicitAlbums(albums);
+
+    // Layer 2: active twin lookup — for tracks that are still flagged
+    // as clean (Tidal returned ONLY the clean variant), do a
+    // per-track search to find the explicit twin and substitute. This
+    // is what the user reported: "сам поиск уже сразу с цензурой,
+    // если беру id explicit-альбома напрямую из tidal — uncensored".
+    tracks = await this.swapInExplicitTwins(tracks);
+
     return {
-      tracks: this.api.unwrapSearchItems(data.tracks).map(mapTrack),
-      albums: this.api.unwrapSearchItems(data.albums).map(a => mapAlbum(a)),
+      tracks,
+      albums,
       artists: this.api.unwrapSearchItems(data.artists).map(mapArtist),
       totalTracks: data.tracks?.totalNumberOfItems,
       totalAlbums: data.albums?.totalNumberOfItems,
@@ -408,6 +499,19 @@ export class TidalService implements MusicService {
       this.api.getAlbum(id),
       this.api.getAlbumTracks(id),
     ]);
+    // No active twin lookup on getAlbum — when the user opens an
+    // album, that album's id is the contract. If it's a clean-edition
+    // album the user pasted intentionally, we don't second-guess it.
+    // (The fix for "search returned the clean-edition album"
+    // happens at the search-result layer above, where `albums[]` is
+    // run through `preferExplicitAlbums`.)
+    //
+    // We still emit a console.warn breadcrumb when the title looks
+    // suffixed with a clean-edition marker so operators can see
+    // these in `wrangler tail`.
+    if (/\b(clean|edited)\b/i.test(raw.title)) {
+      console.warn(`[tidal] getAlbum: title suffix looks clean-edition (id=${id} title=${raw.title})`);
+    }
     return mapAlbum(raw, tracksRes.items.map(mapTrack));
   }
 
@@ -424,12 +528,15 @@ export class TidalService implements MusicService {
     // artist is the primary credit — match that, since the user
     // explicitly wants "только конкретно его треки из официальной
     // карточки тайдал".
-    return res.items.map(mapTrack).filter((t) => t.artistId === id);
+    let tracks = res.items.map(mapTrack).filter((t) => t.artistId === id);
+    tracks = preferExplicitTracks(tracks);
+    tracks = await this.swapInExplicitTwins(tracks);
+    return tracks;
   }
 
   async getArtistAlbums(id: string): Promise<Album[]> {
     const res = await this.api.getArtistAlbums(id);
-    return res.items.map(a => mapAlbum(a, [], 'ALBUM'));
+    return preferExplicitAlbums(res.items.map((a) => mapAlbum(a, [], 'ALBUM')));
   }
 
   /**
@@ -559,8 +666,8 @@ export class TidalService implements MusicService {
     });
 
     return {
-      albums: sortRelDesc(albums),
-      singles: sortRelDesc(singles),
+      albums: preferExplicitAlbums(sortRelDesc(albums)),
+      singles: preferExplicitAlbums(sortRelDesc(singles)),
       albumsMore,
       albumsMoreTotal,
       singlesMore,
@@ -610,8 +717,11 @@ export class TidalService implements MusicService {
     ingest(compilations.items, 'COMPILATION');
 
     // Title-level dedupe so reissues / regional duplicates don't
-    // produce N copies of the same release.
-    return dedupeAlbums(Array.from(merged.values())).sort((a, b) => {
+    // produce N copies of the same release. Apply prefer-explicit
+    // BEFORE the title-fingerprint dedupe so explicit twins survive
+    // the Tier-2 collapser.
+    const collapsed = preferExplicitAlbums(Array.from(merged.values()));
+    return dedupeAlbums(collapsed).sort((a, b) => {
       const da = a.releaseDate ?? '';
       const db = b.releaseDate ?? '';
       if (da === db) return a.title.localeCompare(b.title);
@@ -762,6 +872,140 @@ export class TidalService implements MusicService {
    */
   async getPlaylistTracks(uuid: string, limit = 100): Promise<Track[]> {
     const raw = await this.api.getPlaylistTracks(uuid, limit);
-    return raw.items.map(mapTrack);
+    let tracks = raw.items.map(mapTrack);
+    tracks = preferExplicitTracks(tracks);
+    // Editorial Tidal playlists are also subject to clean-substitution.
+    // Swap each clean track for its explicit twin where one exists,
+    // so a Drake / 21 Savage curated playlist plays uncensored.
+    tracks = await this.swapInExplicitTwins(tracks);
+    return tracks;
+  }
+
+  /**
+   * Substitute clean tracks for their explicit twins where a twin
+   * exists. The output preserves order — only the track payload at
+   * each position changes (id, title, explicit flag, artistId, etc.).
+   *
+   * Strategy:
+   *   1. Pick out tracks whose `explicit === false` AND that have
+   *      enough metadata (`artistId`, `duration`) to disambiguate.
+   *      Tracks that already are explicit, lack a duration, or lack
+   *      an artistId stay untouched.
+   *   2. For each such track, query Tidal search with the title and
+   *      look for an `explicit === true` row with matching artistId
+   *      and duration ±2s. KV-memoise the result so a second hit on
+   *      the same clean id is free.
+   *   3. Where a twin is found, fetch the full explicit track payload
+   *      via `getTrack` (so the substitution carries the explicit
+   *      cover / album metadata too) and swap in.
+   *
+   * Failure modes (no twin found, network error, KV miss) all
+   * silently fall through and keep the original clean track. Cap
+   * concurrency at 4 in-flight lookups to avoid bursting the
+   * upstream API and breaking through CF Workers' subrequest limit.
+   */
+  private async swapInExplicitTwins(items: Track[]): Promise<Track[]> {
+    if (items.length === 0) return items;
+    const cleanIndices: number[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const t = items[i];
+      if (t.source !== 'tidal') continue;
+      if (t.explicit === true) continue;
+      if (!t.artistId || !t.duration) continue;
+      cleanIndices.push(i);
+    }
+    if (cleanIndices.length === 0) return items;
+
+    const result = items.slice();
+    const CONCURRENCY = 4;
+    let cursor = 0;
+    const worker = async (): Promise<void> => {
+      while (cursor < cleanIndices.length) {
+        const myCursor = cursor++;
+        const idx = cleanIndices[myCursor];
+        const orig = items[idx];
+        try {
+          const twin = await this.resolveExplicitTwin(orig);
+          if (twin) result[idx] = twin;
+        } catch {
+          // Silent fallthrough — keep original on any error.
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, cleanIndices.length) }, worker));
+    return result;
+  }
+
+  /**
+   * Look up the explicit twin of a clean track. Returns the explicit
+   * Track on hit, null when no twin exists or the clean track is
+   * already the only variant.
+   *
+   * KV cache: `tidal-explicit-twin:<cleanId>` →
+   *   - `<explicitId>` for a known twin
+   *   - `__none__` for "checked, no twin exists" (negative cache)
+   * 30-day TTL for both. Stops us re-querying Tidal for every cold
+   * search hit.
+   */
+  private async resolveExplicitTwin(clean: Track): Promise<Track | null> {
+    const cacheKey = `tidal-explicit-twin:${clean.id}`;
+    try {
+      const cached = await kvGetText(this.env.SESSIONS, cacheKey);
+      if (cached === '__none__') return null;
+      if (cached) {
+        // A previously-resolved explicit id. Re-fetch the full
+        // payload so the substitution carries fresh cover / album
+        // metadata (the saved id alone is stable, but its
+        // catalogue row may have been updated upstream).
+        const raw = await this.api.getTrack(cached).catch(() => null);
+        if (raw && raw.explicit) return mapTrack(raw);
+        // Stale negative — fall through and re-resolve.
+      }
+    } catch {
+      // KV transient failure — proceed with the live lookup.
+    }
+
+    // Query Tidal search for the title + primary artist. Tidal's
+    // search ranks by relevance, so the explicit twin (when it
+    // exists) is almost always in the first 10 hits.
+    const artistName = clean.artists?.[0]?.name ?? clean.artist ?? '';
+    const queryParts = [clean.title, artistName].filter((s) => s && s.length > 0);
+    const query = queryParts.join(' ').slice(0, 200);
+    if (!query) return null;
+
+    // The api.search return type is internal (TidalSearchResponse);
+    // declare a structural local that's narrow enough for
+    // `unwrapSearchItems<TidalTrackRaw>` to typecheck without
+    // re-exporting the upstream type.
+    let res: Awaited<ReturnType<TidalApi['search']>>;
+    try {
+      res = await this.api.search(query, 'TRACKS', 20, 0);
+    } catch {
+      return null;
+    }
+
+    const candidates = this.api.unwrapSearchItems(res.tracks).map(mapTrack);
+    const targetTitle = normaliseAlbumTitle(clean.title);
+    let twin: Track | null = null;
+    for (const cand of candidates) {
+      if (cand.id === clean.id) continue;
+      if (cand.explicit !== true) continue;
+      if (cand.artistId !== clean.artistId) continue;
+      if (!cand.duration) continue;
+      if (Math.abs(cand.duration - clean.duration) > 2) continue;
+      if (normaliseAlbumTitle(cand.title) !== targetTitle) continue;
+      twin = cand;
+      break;
+    }
+
+    // Persist outcome (positive or negative) so subsequent searches
+    // don't re-query Tidal for the same clean id.
+    const TTL_S = 30 * 24 * 60 * 60;
+    try {
+      await kvPutText(this.env.SESSIONS, cacheKey, twin ? twin.id : '__none__', TTL_S);
+    } catch {
+      // best-effort
+    }
+    return twin;
   }
 }

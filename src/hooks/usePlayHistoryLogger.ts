@@ -42,6 +42,9 @@ interface InFlightTrack {
   albumId?: string;
   coverUrl?: string;
   duration: number;
+  /** Source-provider Explicit flag — surfaces in the home-page
+   *  recent-plays strip via `/history/recent` (Migration 0029). */
+  explicit?: boolean;
   startedAt: number;
 }
 
@@ -79,6 +82,7 @@ export function usePlayHistoryLogger() {
           albumId: prev.albumId,
           coverUrl: prev.coverUrl,
           duration: prev.duration,
+          explicit: prev.explicit,
           listenedSeconds: listened,
           completed,
         });
@@ -228,7 +232,7 @@ export function usePlayHistoryLogger() {
       flushPrevious();
 
       if (next) {
-        const t = next as typeof next & { source?: string; album?: string };
+        const t = next as typeof next & { source?: string; album?: string; explicit?: boolean };
         inFlight.current = {
           trackId: t.id,
           source: t.source ?? 'tidal',
@@ -244,6 +248,7 @@ export function usePlayHistoryLogger() {
           albumId: t.albumId,
           coverUrl: t.coverUrl,
           duration: t.duration ?? 0,
+          explicit: t.explicit === true,
           startedAt: Date.now(),
         };
         maxProgressRef.current = 0;
