@@ -71,7 +71,6 @@
 | 17 | `devin/1779014169-recs-overhaul` | **Recs overhaul — liked tracks as primary taste signal.** Complete redesign: (a) `TasteProfile` v2→v3: new `likedTrackIds[]` (up to 100 tracks from is_liked playlist, filtered for disliked tracks/artists); (b) `RecommendationService.wave()`: unified seed list merges liked+completed (liked first so `sampleN` biases toward them), `SEED_FAN_OUT` 5→8, multi-credit artist dislike check added to `rerank()`; (c) `DailyPlaylistService`: all three variants seed from liked tracks via `radioFromSeeds()` (full 50-track radio per seed, replaces old `tracksFromIds` that only took first result), `tasteSeedRadio()` merges liked+completed seeds, generic genre fallback (`genre_pop`/`genre_rap`/`genre_electronic`) removed, familiar oversample 3×→4×, discover 5×→6×, discover/mood pad from liked-track radio before genre seeds. | merged | #451 |
 | 18 | `devin/1779032563-tidal-explicit-uncensored` (merged → squash `9ae0506`) | **Tidal: uncensored audio+lyrics + Explicit "E" badge across UI.** Root cause: per-account "Explicit Content" filter в Tidal's user-profile transparently swaps explicit search hits for clean variants и сервит cenzured lyrics. У pool-аккаунтов он был включён по дефолту → весь сервис получал клин-версии. (a) Worker: новый `TidalExplicitFilter.ts` — best-effort пытается выключить фильтр через 4 endpoint-варианта (`/users/:id/profile`, `/settings/me`, legacy `/subscription/explicit-content`, v2 `me/explicit-content`), 4-секундный AbortController-timeout per attempt, KV-memo per userId (30-day TTL) чтоб не бить API каждый рефреш, comprehensive warn-логи. Hook'нут из `TidalAuth.refreshWithClient()` через `.catch(() => null)` — fail open, никогда не блокирует auth flow. Audio engine не трогали. (b) Frontend: `Track.explicit?: boolean` сквозной (Track, player Track, RoomTrackSnapshot, BannedTrackDetail, `toPlayerTrack`, `snapshotFromTrack`, RoomService.sanitiseTrack, `/dislikes/details`). Новый `<ExplicitBadge>` — neutral muted bg (`--color-bg-muted`/`--color-text-muted`), `inline-flex shrink-0`, renders ничего если `!== true`, scaled font-size с floor=8px, `aria-label`+`title` через i18n (`common.explicitBadge` RU «Ненормативная лексика» / EN «Explicit»). Интегрирован в: TrackItem, PlaylistTrackItem, QueueDialog, BannedListDialog, mini-Player, MobileBottomDock, FullscreenPlayer, Track page hero, Rooms now-playing, Home preview strip — flex wrapping предотвращает Marquee-overflow. | merged | #452 |
 | 19 | `devin/1779098469-tidal-explicit-ui-fixes` | **Tidal Explicit follow-up: badge на альбомах/плейлистах + lyrics fallback + расширенные endpoint-варианты фильтра.** После PR #452 пользователь сообщил, что (а) бэйдж E кривой/большой отступ + не везде показывается; (б) треки всё ещё с цензурой (в проде все 4 endpoint-варианта из #452 возвращали 404, фильтр на пул-аккаунте никогда не выключался). Фиксы: (1) **ExplicitBadge**: `font-bold` (был semibold), `transform: translateY(-0.5px)` (optical baseline correction — caps-aligned текст сидел чуть выше геом. центра em-box), новый `tone='light'` variant для FullscreenPlayer (белый bg / чёрный fg вне зависимости от темы). (2) **Album/Playlist explicit**: `Album.explicit?` и `ExplorePlaylist.explicit?` теперь сквозные (worker `music.ts`, frontend `types/index.ts`); `TidalService.mapAlbum()` извлекает поле из Tidal API + fallback «explicit если хоть один трек explicit» когда родительская запись забыла флаг; `mapExplorePlaylist` тоже. Бэйдж рендерится на: `AlbumCard`, `AlbumPage` hero, `ExplorePlaylistCard` (hero + grid). (3) **TidalExplicitFilter**: с 4-х до 13-ти endpoint-вариантов (`/v1/users/{uid}/profile/explicitContent` form+JSON, `/v1/users/{uid}/settings/explicit-content/enabled`, `PUT/PATCH /v1/users/{uid}/settings` с batched payload, host-варианты на `desktop.tidal.com` и `listen.tidal.com/api`), новые `Origin: https://listen.tidal.com`+Web `User-Agent`+`Accept-Language`. (4) **Lyrics fallback в `TidalApi.getTrackLyrics`**: цепочка `v1?includeExplicit=true&explicitContent=true&useEditedLyrics=false` → `v2?includeExplicit=true` → legacy v1, первый ответ с непустыми `lyrics`/`subtitles` побеждает — даёт шанс на uncensored-текст даже когда account-toggle упал. | merged | #454 |
-| 20 | `(этот PR)` | **Tidal Explicit double-fix: prefer-explicit search variant + history badge propagation + glyph optical centering.** Двухчастный fix после PR #452/#454. (a) Worker — defence-in-depth: новый `commonParams` helper в `TidalApi` пробрасывает `includeExplicit=true&explicitContent=true&useEditedLyrics=false` через каждый search/album/artist endpoint (был только на lyrics fallback). (b) Worker — response-side prefer-explicit dedupe в `TidalService.search` / `getArtistAlbumsAndSingles` / `getArtistReleases`: группирует по `normalisedTitle × artistId`, выбирает `explicit:true` вариант если Tidal вернул оба. `releaseDate` из ключа выкинут (v2 fixup, Tidal back-fill'ит clean editions с другой датой → date-tied equivalence silently bypassed dedupe). `normaliseAlbumTitle` теперь strip'ает `clean|explicit|edited` токены (v2 fixup). (c) D1 миграции на `play_history` НЕ заведены — поэтому в этом PR home recent-strip badge **остаётся пустым**: `toTrack(r)` пробрасывает `r.explicit` как forward-looking plumbing, но `/history/recent` payload поле не несёт. Чтобы badge появился — нужна 0029-миграция `ALTER TABLE play_history ADD COLUMN explicit` + проводка через PlayBody / SELECT / response, ИЛИ JOIN на `tracks`. (d) Frontend — `ExplicitBadge` оптическое центрирование: вместо одного хардкоженного `translateY(-0.5px)` (дрейфил при 18/24 px) теперь size-scaled inner-`<span>` с `translateY(-0.25/-0.5/-0.75/-1px)` для size ≤12 / ≤16 / ≤18 / >18 (v2 fixup сплит'нул 18 px в свой bucket чтобы FullscreenPlayer не читался высоко). (e) Mini-player + track-row title gap затянут с `gap-1.5` → `gap-1` (Player.tsx, MobileBottomDock, TrackItem, PlaylistTrackItem, QueueDialog, BannedListDialog) — hero контексты сохранили `gap-2`. (f) Бэйдж добавлен на hero `src/app/explore/playlist.tsx` (Tidal editorial playlist). (g) `useEditedLyrics=false` сознательно оставлен в `commonParams` (Tidal задокументирован как ignore-unknown-params; без staging нельзя прогнать smoke-test против всех endpoint-валидаторов). (h) `key` field в bucket-entries `preferExplicitTracks` удалён как dead (Array.find walks `titleKey / artistId / duration` напрямую). | open | (этот PR) |
 | 3 | `devin/1778363267-batch-fixes` | FullscreenPlayer volume slider, solid skip icons (initial), PWA navbar inset (½), mini-player touch hit area | merged (regression) | #427 |
 | 4 | `devin/1778365680-fix-batch` | revert broken skip icons, drop PWA safe-bottom inset, robust offline toast watcher | merged | #428 |
 
@@ -102,92 +101,6 @@
 ---
 
 ## Live status
-
-- 2026-05-18T19:14Z — Tidal Explicit double-fix батч (commits на
-  ветке локально, выйдет одним PR). Корень проблемы из юзер-фидбэка
-  после PR #454: (1) поиск и top-tracks артиста всё ещё иногда
-  возвращали clean-вариант альбома потому что filter-toggle на
-  pool-аккаунте может молча упасть; (2) бэйдж E не появлялся в home
-  recent-strip (worker `play_history` не хранит explicit, а
-  фронтовый `toTrack` мапер дропал поле даже если payload его нёс);
-  (3) бэйдж оптически плыл вниз при 18/24 px — старый хардкод
-  `translateY(-0.5px)` калибровался только под 14 px. Что сделано:
-  (а) **defence-in-depth в worker**: новый `commonParams` helper в
-  `TidalApi.ts` подмешивает
-  `includeExplicit=true&explicitContent=true&useEditedLyrics=false`
-  на каждый search/album/artist call (раньше эти параметры стояли
-  ТОЛЬКО на lyrics fallback chain); (б) **response-side
-  prefer-explicit dedupe** в `TidalService.search` /
-  `getArtistAlbumsAndSingles` / `getArtistReleases` — группирую по
-  `normaliseTitle(title) × artistId`, выбираю `explicit:true`
-  вариант если Tidal вернул оба (v2 fixup: `releaseDate` из ключа
-  выкинут — Tidal back-fill'ит clean editions с другой датой);
-  (в) **D1 миграции на `play_history` НЕ заведены**, поэтому
-  в этом PR home recent-strip badge **остаётся пустым** —
-  `/history/recent` payload не несёт `explicit`. Фронтовый
-  `toTrack(r)` пробрасывает `r.explicit` как forward-looking
-  plumbing (no-op до 0029-миграции или JOIN'a на `tracks`).
-  Комментарий в `worker/src/routes/history.ts` переписан, чтобы
-  явно признать этот пробел; (г) **`ExplicitBadge`**: убрал
-  хардкод `translateY(-0.5px)` на внешнем span, обернул литерал
-  «E» во внутренний `<span style="display:block;
-  transform: translateY(-Xpx)">` где X масштабируется
-  (0.25/0.5/0.75/1 px для size ≤12 / ≤16 / ≤18 / >18; v2 fixup
-  сплит'нул 18 px в свой bucket); (д) **gap затянут с
-  `gap-1.5` → `gap-1`** на title row в Player.tsx (mini-player),
-  MobileBottomDock, TrackItem, PlaylistTrackItem, QueueDialog,
-  BannedListDialog; hero-контексты (AlbumPage / FullscreenPlayer /
-  Track page / Rooms / AlbumCard / ExploreModules playlist tile)
-  сохранили `gap-2`; (е) **бэйдж на hero `src/app/explore/playlist.tsx`**
-  (Tidal editorial playlist) добавлен по паттерну AlbumPage —
-  `flex flex-wrap items-center gap-2` + `<ExplicitBadge size={20}>`.
-  v2 review-fixup (2026-05-18 ~19:30 UTC): семантик-ревьюер
-  выявил 6 issue. Исправлено 5: (i1) misleading recent-strip
-  claim снят из этого Live status / daily-changes / `history.ts`
-  comment; `toTrack` оставлен как forward-looking; (i2)
-  `releaseDate` выкинут из ключа `preferExplicitAlbums`;
-  (i3) `normaliseAlbumTitle` теперь strip'ает
-  `clean|explicit|edited` чтобы `(Clean)` / `[Explicit]` /
-  `(Edited Version)` коллапсировали в общий bucket; (i5) badge
-  18 px lift сплит'нут в свой bucket (0.75 px) чтобы
-  FullscreenPlayer не читался высоко; (i6) dead `key` field
-  в `preferExplicitTracks` buckets удалён. Не исправлен (i4):
-  `useEditedLyrics=false` оставлен в `commonParams` без
-  изменений — Tidal задокументирован как ignore-unknown-params,
-  staging-канала для smoke-test против всех endpoint-валидаторов
-  нет, консервативно оставляем. Audit:
-  AdminUserDetailDialog рендерит recent-plays через кастомный inline
-  template, но `AdminUserStatsRecentPlay` тип не несёт `explicit` —
-  surface low-priority, отложил.
-
-  v3 review-fixup (2026-05-18 ~20:00 UTC): семантик-ревьюер
-  вернул 3 follow-on issue, все обработаны в одном fix-up
-  commit'е. (v2-i1) Residual misleading copy в handoff
-  bullet'е daily-changes переписан — recent-strip badge не
-  зажигается в этом PR, нужна 0029-миграция (`ALTER TABLE
-  play_history ADD COLUMN explicit`) или JOIN на `tracks`
-  в `GET /recent`. (v2-i2) `preferExplicitAlbums`
-  over-collapse на `search` / `getArtistAlbumsAndSingles`
-  (где `dedupeAlbums` не бежит) — выбрана опция (a):
-  JSDoc на `preferExplicitAlbums` дополнен «Behavioural
-  note» абзацем, документирующим что helper сам
-  работает как Tier-2 коллапсер на этих путях, при
-  равных explicit-флагах побеждает first-seen
-  (порядок-зависимо от Tidal). Опция (b) с secondary
-  disambiguator (`releaseType` / `numberOfTracks`) отложена
-  до конкретной жалобы на missing deluxe в search.
-  (v2-i3) `\bclean` / `\bexplicit` regex word-prefix gap —
-  обернул всю alternation в `\b(?:...)\b` сразу
-  (deluxe|expanded|remastered|anniversary|extended|special|
-  edition|version|bonus|reissue|clean|explicit|edited),
-  не только новые три токена. `(Cleaning Up Mix)` /
-  `(Cleaner Cut)` / `(Explicitly Mine)` / `(Versioning
-  Mishap)` / `(Editions)` теперь не collapse'ятся;
-  legitimate `(Clean)` / `(Deluxe)` / `(Remastered 2021)` /
-  `(Edited Version)` продолжают работать. Hazard
-  `(Clean Bandit Remix)` (collab с space-after-`clean`)
-  остался — не fix'абельно на regex-уровне без
-  context-sensitive логики, откладываем.
 
 - 2026-05-09T22:30Z — батч follow-up фиксов (PR
   `devin/1778365680-fix-batch`). После PR #427 пользователь
@@ -236,8 +149,5 @@
 
 | 2026-05-17 ~09:30 | `4ddbc0d8c87e42228ab0e4620df9fd91` (текущий) | Daily playlists backfill fix — 3-phase backfill pipeline, bumped oversample multipliers, multi-slug discover padding, multi-mood-page mood fallback. Причина бага: cascading shrinkage — dislikes + cross-variant claimed set + artist cap в rerank выжимали пулы до <50, а single-pass genre backfill (5 слагов) не мог скомпенсировать. |
 | 2026-05-17 ~10:40 | `4ddbc0d8c87e42228ab0e4620df9fd91` (текущий) | Recs overhaul — liked tracks as primary taste signal. TasteProfile v3 (likedTrackIds), wave() seeds from liked+completed, SEED_FAN_OUT 5→8, multi-credit artist dislike in rerank, all daily playlist variants seed from liked-track radio, removed generic genre fallback. PRs #447-#451 merged. |
-| 2026-05-18 19:14 | `(текущий)` | Tidal Explicit double-fix (наследует PR #452 / #454). Worker: `commonParams` в `TidalApi` (defence-in-depth, includeExplicit/explicitContent/useEditedLyrics на каждый search/album/artist call) + response-side prefer-explicit dedupe в `TidalService.search` / `getArtistAlbumsAndSingles` / `getArtistReleases` (groups by `normaliseTitle(title) × artistId × releaseDate`); `play_history` без миграции — explicit на recent-strip из cached track-snapshot. Frontend: `ExplicitBadge` оптическое центрирование заменено на size-scaled `translateY` (был один хардкоженный -0.5px который дрейфил на 18/24 px), title-row gap затянут с `gap-1.5`→`gap-1` в Player.tsx mini-player / MobileBottomDock / TrackItem / PlaylistTrackItem / QueueDialog / BannedListDialog (hero контексты сохранили `gap-2`), бэйдж добавлен на `src/app/explore/playlist.tsx` hero, `home/page.tsx :: toTrack(r)` пробрасывает `explicit: r.explicit`. Один PR на всё. |
-| 2026-05-18 19:30 | `(текущий, v2 review-fixup)` | Семантик-ревью вернул 6 issue. Fix-up commit на тот же working tree. (i1) Misleading recent-strip claim удалён — `history.ts` comment, tracker Live status, daily-changes явно говорят, что recent rows пока НЕ несут `explicit` (фронт-проводок `toTrack(r)` оставлен как forward-looking plumbing до 0029-миграции или JOIN'a). (i2) В `preferExplicitAlbums` ключ группы упрощён с `(normalisedTitle, artistId, releaseDate)` до `(normalisedTitle, artistId)` — Tidal back-fill'ит clean editions с другой датой. (i3) `normaliseAlbumTitle` regex дополнен токенами `clean\|explicit\|edited`, чтобы `(Clean)` / `[Explicit]` / `(Edited Version)` коллапсировали в общий bucket. (i4) `useEditedLyrics=false` сознательно оставлен в `commonParams` (Tidal ignore-unknown-params, staging-канала для smoke-test нет, консервативно оставляем). (i5) `ExplicitBadge` lift сплит'нут: `≤16 → 0.5 px`, `≤18 → 0.75 px`, `>18 → 1 px` — FullscreenPlayer (size=18) больше не lift'ится на 1 px. (i6) Dead `key` field в `preferExplicitTracks` bucket entries удалён. Validation green: root + worker `lint` + `typecheck` + `build` все exit 0. |
-| 2026-05-18 20:00 | `(текущий, v3 review-fixup)` | Семантик-ревью прогнан ещё раз; вернул 3 follow-on issue. Все обработаны в одном fix-up commit. (v2-i1) Misleading copy в «Что важно знать следующему агенту» tail-bullet'е daily-changes (всё ещё писал «читается из cached snapshot») переписан в стиле v2 caveat: recent-strip badge не зажигается в этом PR, нужна 0029-миграция или JOIN на `tracks`. (v2-i2) `preferExplicitAlbums` over-collapse на `search` / `getArtistAlbumsAndSingles` — выбрана опция (a) из двух предложенных ревьюером: JSDoc на helper'е дополнен абзацем, документирующим что без `dedupeAlbums` рядом он сам работает Tier-2 коллапсером (paired standard + deluxe схлопываются, при равных explicit-флагах побеждает first-seen). Опция (b) с secondary disambiguator отложена до конкретной жалобы. (v2-i3) `\bclean` / `\bexplicit` regex word-prefix gap — `\b` cap прикручен ко всей alternation сразу (`\b(?:deluxe\|expanded\|...\|clean\|explicit\|edited)\b`), не только к новым трём токенам, потому что `version` / `edition` тоже имели тот же gap pre-PR. `(Cleaning Up Mix)` / `(Cleaner Cut)` / `(Explicitly Mine)` / `(Versioning Mishap)` / `(Editions)` больше не collapse'ятся. Hazard `(Clean Bandit Remix)` (collab) остался — не fix'абельно на regex-уровне. Validation green: root + worker `lint` + `typecheck` + `build` все exit 0. |
 
 > При следующем перехвате — добавь свою строку в этот лог и обнови `Live status`.

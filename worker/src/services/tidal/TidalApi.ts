@@ -138,94 +138,61 @@ export interface TidalPageRaw {
 export class TidalApi {
   constructor(private auth: TidalAuth) {}
 
-  /**
-   * Shared query-string seed for every Tidal API call. Carries the
-   * region / locale / device hints the upstream server expects, plus
-   * the explicit-content trio (`includeExplicit`, `explicitContent`,
-   * `useEditedLyrics=false`).
-   *
-   * Tidal's transparent clean-swap (where search / artist / album
-   * endpoints quietly substitute the censored variant for an account
-   * that has the Explicit filter ON) is gated on these three hints.
-   * The `TidalExplicitFilter` service tries to flip the per-account
-   * toggle off (best-effort across 13 endpoint variants), but
-   * threading the same hints through every caller is a
-   * defence-in-depth layer for the case where the toggle didn't
-   * take. `useEditedLyrics=false` is the same mechanism applied to
-   * the lyrics fallback chain in `getTrackLyrics`.
-   */
-  private async commonParams(): Promise<URLSearchParams> {
+  async search(query: string, types: string = 'ARTISTS,ALBUMS,TRACKS', limit: number = 25, offset: number = 0): Promise<TidalSearchResponse> {
     const cc = await this.auth.getCountryCode();
-    return new URLSearchParams({
+    const params = new URLSearchParams({
+      query,
+      limit: String(limit),
+      offset: String(offset),
+      types,
+      includeContributors: 'true',
+      includeUserPlaylists: 'false',
+      supportsUserData: 'true',
       countryCode: cc,
       locale: this.auth.getLocale(),
       deviceType: 'BROWSER',
-      includeExplicit: 'true',
-      explicitContent: 'true',
-      useEditedLyrics: 'false',
     });
-  }
-
-  async search(query: string, types: string = 'ARTISTS,ALBUMS,TRACKS', limit: number = 25, offset: number = 0): Promise<TidalSearchResponse> {
-    const params = await this.commonParams();
-    params.set('query', query);
-    params.set('limit', String(limit));
-    params.set('offset', String(offset));
-    params.set('types', types);
-    params.set('includeContributors', 'true');
-    params.set('includeUserPlaylists', 'false');
-    params.set('supportsUserData', 'true');
     return this.get<TidalSearchResponse>(`/v1/search?${params}`);
   }
 
   async getTrack(trackId: string): Promise<TidalTrackRaw> {
-    const params = await this.commonParams();
-    return this.get<TidalTrackRaw>(`/v1/tracks/${trackId}?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<TidalTrackRaw>(`/v1/tracks/${trackId}?countryCode=${cc}`);
   }
 
   async getAlbum(albumId: string): Promise<TidalAlbumRaw> {
-    const params = await this.commonParams();
-    return this.get<TidalAlbumRaw>(`/v1/albums/${albumId}?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<TidalAlbumRaw>(`/v1/albums/${albumId}?countryCode=${cc}`);
   }
 
   async getAlbumTracks(albumId: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
-    return this.get<{ items: TidalTrackRaw[] }>(`/v1/albums/${albumId}/tracks?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<{ items: TidalTrackRaw[] }>(`/v1/albums/${albumId}/tracks?limit=${limit}&offset=0&countryCode=${cc}`);
   }
 
   async getArtist(artistId: string): Promise<TidalArtistRaw> {
-    const params = await this.commonParams();
-    return this.get<TidalArtistRaw>(`/v1/artists/${artistId}?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<TidalArtistRaw>(`/v1/artists/${artistId}?countryCode=${cc}`);
   }
 
   async getArtistTopTracks(artistId: string, limit: number = 10): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
-    return this.get<{ items: TidalTrackRaw[] }>(`/v1/artists/${artistId}/toptracks?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<{ items: TidalTrackRaw[] }>(`/v1/artists/${artistId}/toptracks?limit=${limit}&offset=0&countryCode=${cc}`);
   }
 
   async getArtistAlbums(artistId: string, limit: number = 50, filter: string = 'ALBUMS'): Promise<{ items: TidalAlbumRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
-    params.set('filter', filter);
-    return this.get<{ items: TidalAlbumRaw[] }>(`/v1/artists/${artistId}/albums?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<{ items: TidalAlbumRaw[] }>(`/v1/artists/${artistId}/albums?limit=${limit}&offset=0&filter=${filter}&countryCode=${cc}`);
   }
 
   async getSimilarArtists(artistId: string, limit: number = 10): Promise<{ items: TidalArtistRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    return this.get<{ items: TidalArtistRaw[] }>(`/v1/artists/${artistId}/similar?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<{ items: TidalArtistRaw[] }>(`/v1/artists/${artistId}/similar?limit=${limit}&countryCode=${cc}`);
   }
 
   async getTrackRadio(trackId: string, limit: number = 25): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
-    return this.get<{ items: TidalTrackRaw[] }>(`/v1/tracks/${trackId}/radio?${params}`);
+    const cc = await this.auth.getCountryCode();
+    return this.get<{ items: TidalTrackRaw[] }>(`/v1/tracks/${trackId}/radio?limit=${limit}&offset=0&countryCode=${cc}`);
   }
 
   /**
@@ -246,27 +213,21 @@ export class TidalApi {
    * only when needed.
    */
   async getArtistRadio(artistId: string, limit: number = 50): Promise<{ items: TidalTrackRaw[] }> {
-    const radioParams = await this.commonParams();
-    radioParams.set('limit', String(limit));
-    radioParams.set('offset', '0');
+    const cc = await this.auth.getCountryCode();
     try {
       return await this.get<{ items: TidalTrackRaw[] }>(
-        `/v1/artists/${artistId}/radio?${radioParams}`,
+        `/v1/artists/${artistId}/radio?limit=${limit}&offset=0&countryCode=${cc}`,
       );
     } catch (err) {
       // `/radio` is region-gated; fall back to the mix flow only on
       // not-found / bad-request, mirroring the lyrics fallback above.
       const msg = err instanceof Error ? err.message : '';
       if (!/\b404\b/.test(msg) && !/\b400\b/.test(msg)) throw err;
-      const mixParams = await this.commonParams();
       const mix = await this.get<{ id: string }>(
-        `/v1/artists/${artistId}/mix?${mixParams}`,
+        `/v1/artists/${artistId}/mix?countryCode=${cc}`,
       );
-      const itemsParams = await this.commonParams();
-      itemsParams.set('limit', String(limit));
-      itemsParams.set('offset', '0');
       const res = await this.get<{ items: { item?: TidalTrackRaw; type?: string }[] }>(
-        `/v1/mixes/${mix.id}/items?${itemsParams}`,
+        `/v1/mixes/${mix.id}/items?limit=${limit}&offset=0&countryCode=${cc}`,
       );
       const items = res.items
         .filter((row) => (row.type ?? 'track') === 'track' && row.item)
@@ -281,9 +242,12 @@ export class TidalApi {
    * up to `limit` (Tidal allows up to 100 per request).
    */
   async getPlaylistTracks(uuid: string, limit: number = 100): Promise<{ items: TidalTrackRaw[] }> {
-    const params = await this.commonParams();
-    params.set('limit', String(limit));
-    params.set('offset', '0');
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      limit: String(limit),
+      offset: '0',
+    });
     return this.get<{ items: TidalTrackRaw[] }>(`/v1/playlists/${uuid}/tracks?${params}`);
   }
 
@@ -340,7 +304,12 @@ export class TidalApi {
    * each module type into our Track/Album/Artist/Playlist shapes.
    */
   async getPage<T = TidalPageRaw>(slug: string): Promise<T> {
-    const params = await this.commonParams();
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      locale: this.auth.getLocale(),
+      deviceType: 'BROWSER',
+    });
     return this.get<T>(`/v1/pages/${slug}?${params}`);
   }
 
@@ -355,8 +324,13 @@ export class TidalApi {
    * mix singles into ALBUMS).
    */
   async getArtistPage(artistId: string): Promise<TidalPageRaw> {
-    const params = await this.commonParams();
-    params.set('artistId', artistId);
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      artistId,
+      countryCode: cc,
+      locale: this.auth.getLocale(),
+      deviceType: 'BROWSER',
+    });
     return this.get<TidalPageRaw>(`/v1/pages/artist?${params}`);
   }
 
@@ -370,7 +344,12 @@ export class TidalApi {
     dataApiPath: string,
     opts: { limit?: number; offset?: number } = {},
   ): Promise<T> {
-    const params = await this.commonParams();
+    const cc = await this.auth.getCountryCode();
+    const params = new URLSearchParams({
+      countryCode: cc,
+      locale: this.auth.getLocale(),
+      deviceType: 'BROWSER',
+    });
     if (opts.limit !== undefined) params.set('limit', String(opts.limit));
     if (opts.offset !== undefined) params.set('offset', String(opts.offset));
     const cleaned = dataApiPath.startsWith('/') ? dataApiPath : `/${dataApiPath}`;

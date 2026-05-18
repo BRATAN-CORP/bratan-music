@@ -296,7 +296,7 @@ export function MobileBottomDock() {
                         type="button"
                         onClick={position === 'current' ? openFullscreen : undefined}
                         tabIndex={position === 'current' ? 0 : -1}
-                        className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-hidden text-left text-sm font-medium leading-tight"
+                        className="flex w-full max-w-full min-w-0 items-center gap-1.5 overflow-hidden text-left text-sm font-medium leading-tight"
                         aria-label={t('player.openPlayer')}
                       >
                         <span className="block min-w-0 flex-1">
