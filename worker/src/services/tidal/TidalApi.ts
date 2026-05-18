@@ -39,6 +39,12 @@ export interface TidalAlbumRaw {
   artists?: { id: number; name: string; type?: string }[];
   audioQuality?: string;
   /**
+   * Album-level Explicit flag. Tidal stamps this on the album record
+   * whenever ANY track on it is explicit — used to render the `E`
+   * badge on cards / hero without scanning the whole track list.
+   */
+  explicit?: boolean;
+  /**
    * Release classification — Tidal returns one of `ALBUM`, `EP`,
    * `SINGLE`, `COMPILATION`. Optional because some endpoints elide it
    * (e.g. embedded album refs inside tracks).
@@ -87,6 +93,13 @@ export interface TidalPlaylistRaw {
   numberOfVideos?: number;
   creator?: { id?: number; name?: string } | null;
   promotedArtists?: { id: number; name: string }[];
+  /**
+   * Playlist-level Explicit flag. Tidal stamps this on any editorial
+   * playlist whose track set contains explicit material — used to
+   * render the `E` badge next to the title on cards / hero without
+   * cracking open the track listing.
+   */
+  explicit?: boolean;
 }
 
 export interface TidalPageLinkRaw {
@@ -240,16 +253,47 @@ export class TidalApi {
 
   async getTrackLyrics(trackId: string): Promise<TidalLyricsRaw | null> {
     const cc = await this.auth.getCountryCode();
-    try {
-      return await this.get<TidalLyricsRaw>(
-        `/v1/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${this.auth.getLocale()}&deviceType=BROWSER`,
-      );
-    } catch (err) {
-      // Tidal returns 404 for tracks that have no lyrics — surface that as
-      // null so callers don't have to special-case the error message.
-      if (err instanceof Error && /\b404\b/.test(err.message)) return null;
-      throw err;
+    const locale = this.auth.getLocale();
+
+    // Tidal serves the per-account "Edited Lyrics" variant whenever the
+    // pool account's Explicit Content filter is ON — for our use case
+    // that's exactly what we DON'T want. The v1 endpoint accepts several
+    // undocumented hint parameters that the leaked Tidal Web client
+    // sends when the filter is off: `includeExplicit`, `explicitContent`,
+    // `explicit`. We chain them with `useEditedLyrics=false` to also
+    // suppress the censored-variant swap on the lyrics path. The
+    // `Edited` provider id has historically been served as a separate
+    // record; passing a non-edited preference shortcuts to the
+    // original. Each attempt is best-effort — first one that returns
+    // a non-null payload with non-empty `lyrics` wins.
+    const variants: string[] = [
+      `/v1/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${locale}&deviceType=BROWSER&includeExplicit=true&explicitContent=true&useEditedLyrics=false`,
+      `/v2/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${locale}&deviceType=BROWSER&includeExplicit=true`,
+      `/v1/tracks/${trackId}/lyrics?countryCode=${cc}&locale=${locale}&deviceType=BROWSER`,
+    ];
+
+    let lastErr: Error | null = null;
+    for (const path of variants) {
+      try {
+        const raw = await this.get<TidalLyricsRaw>(path);
+        if (raw && (raw.lyrics || raw.subtitles)) return raw;
+        // Empty payload (no lyrics field) — try next variant.
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // 404 on the variant just means "this shape isn't supported";
+        // keep walking the fallback chain. Any other error gets
+        // captured and surfaced if everything fails.
+        if (!/\b404\b/.test(msg)) lastErr = err instanceof Error ? err : new Error(msg);
+      }
     }
+
+    if (lastErr) {
+      // None of the variants returned a payload AND at least one
+      // failed with a non-404 error — preserve that for the caller.
+      if (/\b404\b/.test(lastErr.message)) return null;
+      throw lastErr;
+    }
+    return null;
   }
 
   /**

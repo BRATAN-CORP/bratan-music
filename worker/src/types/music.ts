@@ -50,6 +50,14 @@ export interface Album {
    * "ALBUM" labelling when missing.
    */
   releaseType?: AlbumReleaseType;
+  /**
+   * Source-provider explicit flag for the release as a whole. Tidal
+   * sets this on the album level whenever ANY track is explicit, which
+   * matches what their own grid shows — the badge sits next to album
+   * art on cards, the hero title, and search results. Defaults to
+   * false when upstream omits it.
+   */
+  explicit?: boolean;
   tracks: Track[];
 }
 
@@ -90,6 +98,13 @@ export interface ExplorePlaylist {
   curator?: string;
   trackCount?: number;
   duration?: number;
+  /**
+   * Whether the playlist as a whole is flagged explicit by Tidal. Mirrors
+   * the album-level flag — Tidal stamps this on any editorial playlist
+   * that contains explicit material. Defaults to false / undefined when
+   * upstream doesn't expose it.
+   */
+  explicit?: boolean;
 }
 
 /**

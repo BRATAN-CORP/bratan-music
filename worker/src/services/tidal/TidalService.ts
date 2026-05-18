@@ -246,6 +246,13 @@ function normaliseReleaseType(raw: string | undefined): Album['releaseType'] {
 function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = [], releaseTypeOverride?: Album['releaseType']): Album {
   const artists = dedupeArtistRefs(raw.artists);
   const mainArtist = raw.artist ?? raw.artists?.[0];
+  // Album-level explicit comes straight from Tidal when present; if
+  // upstream omitted the flag (some embedded album refs do) but we
+  // already fetched the track list, fall back to "any track explicit"
+  // so the UI badge still appears for albums where Tidal forgot to
+  // stamp the parent record.
+  const explicitFromTracks = tracks.length > 0 ? tracks.some((t) => t.explicit) : false;
+  const explicit = raw.explicit === true ? true : explicitFromTracks ? true : raw.explicit === false ? false : undefined;
   return {
     id: String(raw.id),
     source: 'tidal',
@@ -257,6 +264,7 @@ function mapAlbum(raw: TidalAlbumRaw, tracks: Track[] = [], releaseTypeOverride?
     coverVideoUrl: videoCoverUrl(raw.videoCover),
     releaseDate: raw.releaseDate,
     releaseType: normaliseReleaseType(raw.type) ?? releaseTypeOverride,
+    explicit,
     tracks,
   };
 }
@@ -282,6 +290,7 @@ function mapExplorePlaylist(raw: TidalPlaylistRaw): ExplorePlaylist {
     curator: raw.creator?.name ?? undefined,
     trackCount: raw.numberOfTracks,
     duration: raw.duration,
+    explicit: raw.explicit === true ? true : raw.explicit === false ? false : undefined,
   };
 }
 

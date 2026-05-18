@@ -4,6 +4,7 @@ import type { Album } from '@/types';
 import { TiltCard } from '@/components/ui/TiltCard';
 import { AlbumPlayButton } from '@/components/features/AlbumPlayButton';
 import { CardDownloadOverlay } from '@/components/features/CardDownloadOverlay';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { useT } from '@/i18n';
 
@@ -47,7 +48,10 @@ export function AlbumCard({ album }: AlbumCardProps) {
         </div>
       </TiltCard>
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{album.title}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+          <span className="truncate">{album.title}</span>
+          <ExplicitBadge explicit={album.explicit} size={12} />
+        </p>
         <p className="truncate text-xs text-muted-foreground">
           {album.releaseType && album.releaseType !== 'ALBUM' && album.releaseType !== 'SINGLE' ? (
             <span className="mr-1.5 rounded border border-border px-1 py-px text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/90">

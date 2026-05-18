@@ -23,6 +23,7 @@ import type {
 import { AlbumCard } from './AlbumCard';
 import { ArtistCard } from './ArtistCard';
 import { TrackItem } from './TrackItem';
+import { ExplicitBadge } from './ExplicitBadge';
 import { usePlayerStore } from '@/store/player';
 import { api } from '@/lib/api';
 import { tidalImageUrl } from '@/lib/tidal-image';
@@ -985,8 +986,9 @@ function ExplorePlaylistCard({
         </button>
       </div>
       <div className="min-w-0">
-        <p className={'truncate font-medium ' + (variant === 'hero' ? 'text-[15px]' : 'text-sm')}>
-          {playlist.title}
+        <p className={'flex items-center gap-1.5 truncate font-medium ' + (variant === 'hero' ? 'text-[15px]' : 'text-sm')}>
+          <span className="truncate">{playlist.title}</span>
+          <ExplicitBadge explicit={playlist.explicit} size={12} />
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {playlist.curator ?? 'Tidal'}
