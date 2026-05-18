@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play, Pause, SkipBack, SkipForward,
@@ -95,6 +95,70 @@ export function Player() {
   const reduce = useReducedMotion();
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
+
+  // System Now-Playing widget "like" / "star" action — bonus user
+  // request: be able to favourite the current track from the
+  // OS-level media controls (Android lock screen, iOS Now-Playing,
+  // PWA badge), parity with Spotify / Apple Music / Tidal.
+  //
+  // The W3C MediaSession spec doesn't define a `like` action, but
+  // Chromium has been shipping experimental support for several
+  // candidate names over the past few releases. We register a
+  // handler under each known candidate inside try/catch so a
+  // browser that doesn't recognise a name silently no-ops, and a
+  // browser that recognises any one of them surfaces the affordance.
+  // The handler captures the *current* track at click time via the
+  // store (not closure) so a queued click after a track change
+  // toggles the right row.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    // Gate on the id so this effect's dep array tracks the same
+    // value we read here (id-only, the rest of `currentTrack` is
+    // read from the live store inside the handler).
+    if (!currentTrack?.id) return;
+    const ms = navigator.mediaSession as MediaSession & {
+      // The candidate action names below aren't in the standard
+      // `MediaSessionAction` union yet, so cast through here without
+      // losing the rest of the typing on the navigator.mediaSession
+      // surface.
+      setActionHandler(action: string, handler: MediaSessionActionHandler | null): void;
+    };
+    const handler: MediaSessionActionHandler = () => {
+      // Re-read live state — the click can fire after a track change.
+      const live = usePlayerStore.getState().currentTrack;
+      if (!live) return;
+      toggle({
+        id: live.id,
+        title: live.title,
+        artist: live.artist,
+        artistId: live.artistId,
+        coverUrl: live.coverUrl,
+        duration: live.duration ?? 0,
+      });
+    };
+    // Try each candidate action name. Browsers either accept and
+    // surface the affordance, or throw / silently ignore. Either
+    // path is fine.
+    const CANDIDATES = ['togglelike', 'like', 'favorite', 'favourite', 'star'] as const;
+    const registered: string[] = [];
+    for (const action of CANDIDATES) {
+      try {
+        ms.setActionHandler(action, handler);
+        registered.push(action);
+      } catch {
+        // Action name not recognised — silently skip.
+      }
+    }
+    return () => {
+      for (const action of registered) {
+        try { ms.setActionHandler(action, null); } catch { /* ignore */ }
+      }
+    };
+    // Re-register when the track id changes so the user-toggle
+    // callback closes over the right id; `toggle` itself is stable
+    // across React commits via TanStack Query.
+  }, [currentTrack?.id, toggle]);
+
   // Locally-cached cover when the track is saved offline; falls back
   // to the network URL otherwise. Lets the mini-player thumbnail keep
   // rendering its artwork after the device drops the network.

@@ -72,7 +72,8 @@
 | 18 | `devin/1779032563-tidal-explicit-uncensored` (merged → squash `9ae0506`) | **Tidal: uncensored audio+lyrics + Explicit "E" badge across UI.** Root cause: per-account "Explicit Content" filter в Tidal's user-profile transparently swaps explicit search hits for clean variants и сервит cenzured lyrics. У pool-аккаунтов он был включён по дефолту → весь сервис получал клин-версии. (a) Worker: новый `TidalExplicitFilter.ts` — best-effort пытается выключить фильтр через 4 endpoint-варианта (`/users/:id/profile`, `/settings/me`, legacy `/subscription/explicit-content`, v2 `me/explicit-content`), 4-секундный AbortController-timeout per attempt, KV-memo per userId (30-day TTL) чтоб не бить API каждый рефреш, comprehensive warn-логи. Hook'нут из `TidalAuth.refreshWithClient()` через `.catch(() => null)` — fail open, никогда не блокирует auth flow. Audio engine не трогали. (b) Frontend: `Track.explicit?: boolean` сквозной (Track, player Track, RoomTrackSnapshot, BannedTrackDetail, `toPlayerTrack`, `snapshotFromTrack`, RoomService.sanitiseTrack, `/dislikes/details`). Новый `<ExplicitBadge>` — neutral muted bg (`--color-bg-muted`/`--color-text-muted`), `inline-flex shrink-0`, renders ничего если `!== true`, scaled font-size с floor=8px, `aria-label`+`title` через i18n (`common.explicitBadge` RU «Ненормативная лексика» / EN «Explicit»). Интегрирован в: TrackItem, PlaylistTrackItem, QueueDialog, BannedListDialog, mini-Player, MobileBottomDock, FullscreenPlayer, Track page hero, Rooms now-playing, Home preview strip — flex wrapping предотвращает Marquee-overflow. | merged | #452 |
 | 19 | `devin/1779098469-tidal-explicit-ui-fixes` | **Tidal Explicit follow-up: badge на альбомах/плейлистах + lyrics fallback + расширенные endpoint-варианты фильтра.** После PR #452 пользователь сообщил, что (а) бэйдж E кривой/большой отступ + не везде показывается; (б) треки всё ещё с цензурой (в проде все 4 endpoint-варианта из #452 возвращали 404, фильтр на пул-аккаунте никогда не выключался). Фиксы: (1) **ExplicitBadge**: `font-bold` (был semibold), `transform: translateY(-0.5px)` (optical baseline correction — caps-aligned текст сидел чуть выше геом. центра em-box), новый `tone='light'` variant для FullscreenPlayer (белый bg / чёрный fg вне зависимости от темы). (2) **Album/Playlist explicit**: `Album.explicit?` и `ExplorePlaylist.explicit?` теперь сквозные (worker `music.ts`, frontend `types/index.ts`); `TidalService.mapAlbum()` извлекает поле из Tidal API + fallback «explicit если хоть один трек explicit» когда родительская запись забыла флаг; `mapExplorePlaylist` тоже. Бэйдж рендерится на: `AlbumCard`, `AlbumPage` hero, `ExplorePlaylistCard` (hero + grid). (3) **TidalExplicitFilter**: с 4-х до 13-ти endpoint-вариантов (`/v1/users/{uid}/profile/explicitContent` form+JSON, `/v1/users/{uid}/settings/explicit-content/enabled`, `PUT/PATCH /v1/users/{uid}/settings` с batched payload, host-варианты на `desktop.tidal.com` и `listen.tidal.com/api`), новые `Origin: https://listen.tidal.com`+Web `User-Agent`+`Accept-Language`. (4) **Lyrics fallback в `TidalApi.getTrackLyrics`**: цепочка `v1?includeExplicit=true&explicitContent=true&useEditedLyrics=false` → `v2?includeExplicit=true` → legacy v1, первый ответ с непустыми `lyrics`/`subtitles` побеждает — даёт шанс на uncensored-текст даже когда account-toggle упал. | merged | #454 |
 | 20 | `(reverted)` | **PR #456 — реверт.** Пользователь явно попросил откатить #456: реализация в #456 не решала корневую проблему цензуры (search/artist top-tracks всё равно отдавали clean), плюс ввела регрессии в UI бэйджа. Возвращаемся к состоянию после #455 как baseline. Реверт сделан как обратный патч в первом коммите этой же ветки. | reverted | (этот PR) |
-| 21 | `devin/tidal-explicit-revert-and-refix` | **Tidal Explicit — реальный фикс цензуры (active twin lookup) + бэйдж переделан.** Двухчастный фикс. (A) Worker — три слоя защиты против clean-substitution: (1) `TidalApi.commonParams()` пробрасывает `includeExplicit=true&explicitContent=true` через каждый search/album/artist endpoint + UA/headers поза `listen.tidal.com` Web client (`Origin: https://listen.tidal.com`, Chrome UA, Accept-Language en) — Tidal honor'ит request-level explicit overrides только когда запрос выглядит как Web client, mobile UA даёт ignore-overrides+fallback на per-account фильтр; (2) `preferExplicitAlbums` / `preferExplicitTracks` — same-response dedupe в `TidalService.search` / `getArtistTopTracks` / `getArtistAlbumsAndSingles` / `getArtistReleases` / `getArtistAlbums` / `getPlaylistTracks`, группирует по `(artistId, normaliseAlbumTitle(title))` для альбомов и `(artistId, title, durationBucket=round(d/2))` для треков, drop'ает clean twin когда explicit twin есть в том же ответе; (3) **NEW — `swapInExplicitTwins()`**: ключевой missing piece — для каждого clean трека в результате search / artistTopTracks / playlistTracks делает active per-track Tidal-search lookup чтобы найти explicit twin id, hydrate'ит через `getTrack`, substitute'ит на тот же индекс, concurrency=4, KV-memo `tidal-explicit-twin:<cleanId>` → `<explicitId>` или `__none__` 30 days. Это решает кейс «в самом search Tidal вернул только clean variant» — раньше PR #456 deduplicate'ил в пределах одного response, что не помогало когда Tidal вообще не возвращал explicit вариант. Audio engine не тронут (нет вмешательства в `TidalWeb.resolveStream` / `playbackinfopostpaywall`). `getAlbum()` НЕ swap'ит — albumId = контракт пользователя, только warn breadcrumb на clean-suffix titles. `normaliseAlbumTitle` strip'ает `clean|explicit|edited` через `\b(?:...)\b` чтобы false-positive'ы (`Cleaning Up Mix`, `Editions`) не collapse'ились. (B) D1 миграция 0029 + history endpoint: `play_history.explicit INTEGER NOT NULL DEFAULT 0` → `POST /history/play` пишет, `GET /history/recent` отдаёт `MAX(explicit)`, frontend `usePlayHistoryLogger` + `PlayLogPayload` + `home.toTrack(r)` пробрасывают флаг через — recent-strip badge теперь зажигается. (C) **ExplicitBadge переделан**: убран хардкод `translateY(-0.5px)` на внешнем span (он desync'ил бэйдж с baseline'ом текста — был bug), новая геометрия — outer box `padding:0`/`lineHeight:1`/`overflow:hidden` без translate, inner span `display:block`+`translateY(-Xpx)` где X scales 0.5/0.5/0.75/1.0/1.0/1.25 px по бакетам ≤12/≤14/≤16/≤18/≤22/>22, E теперь точно по центру при любом размере. (D) `gap-1.5` → `gap-1` в compact contexts: home `PreviewStripRow`, `AlbumCard`, `BannedListDialog`, `ExploreModules` playlist row, `PlaylistTrackItem`, `QueueDialog`, `TrackItem`, mini-Player, `MobileBottomDock`. Hero контексты сохранили `gap-2`. (E) `src/app/explore/playlist.tsx`: hero h1 теперь `flex flex-wrap items-center gap-2` + `<ExplicitBadge size={20}>`. | open | (этот PR) |
+| 21 | `devin/tidal-explicit-revert-and-refix` | **Tidal Explicit — реальный фикс цензуры (active twin lookup) + бэйдж переделан.** Двухчастный фикс. (A) Worker — три слоя защиты против clean-substitution: (1) `TidalApi.commonParams()` пробрасывает `includeExplicit=true&explicitContent=true` через каждый search/album/artist endpoint + UA/headers поза `listen.tidal.com` Web client (`Origin: https://listen.tidal.com`, Chrome UA, Accept-Language en) — Tidal honor'ит request-level explicit overrides только когда запрос выглядит как Web client, mobile UA даёт ignore-overrides+fallback на per-account фильтр; (2) `preferExplicitAlbums` / `preferExplicitTracks` — same-response dedupe в `TidalService.search` / `getArtistTopTracks` / `getArtistAlbumsAndSingles` / `getArtistReleases` / `getArtistAlbums` / `getPlaylistTracks`, группирует по `(artistId, normaliseAlbumTitle(title))` для альбомов и `(artistId, title, durationBucket=round(d/2))` для треков, drop'ает clean twin когда explicit twin есть в том же ответе; (3) **NEW — `swapInExplicitTwins()`**: ключевой missing piece — для каждого clean трека в результате search / artistTopTracks / playlistTracks делает active per-track Tidal-search lookup чтобы найти explicit twin id, hydrate'ит через `getTrack`, substitute'ит на тот же индекс, concurrency=4, KV-memo `tidal-explicit-twin:<cleanId>` → `<explicitId>` или `__none__` 30 days. Это решает кейс «в самом search Tidal вернул только clean variant» — раньше PR #456 deduplicate'ил в пределах одного response, что не помогало когда Tidal вообще не возвращал explicit вариант. Audio engine не тронут (нет вмешательства в `TidalWeb.resolveStream` / `playbackinfopostpaywall`). `getAlbum()` НЕ swap'ит — albumId = контракт пользователя, только warn breadcrumb на clean-suffix titles. `normaliseAlbumTitle` strip'ает `clean|explicit|edited` через `\b(?:...)\b` чтобы false-positive'ы (`Cleaning Up Mix`, `Editions`) не collapse'ились. (B) D1 миграция 0029 + history endpoint: `play_history.explicit INTEGER NOT NULL DEFAULT 0` → `POST /history/play` пишет, `GET /history/recent` отдаёт `MAX(explicit)`, frontend `usePlayHistoryLogger` + `PlayLogPayload` + `home.toTrack(r)` пробрасывают флаг через — recent-strip badge теперь зажигается. (C) **ExplicitBadge переделан**: убран хардкод `translateY(-0.5px)` на внешнем span (он desync'ил бэйдж с baseline'ом текста — был bug), новая геометрия — outer box `padding:0`/`lineHeight:1`/`overflow:hidden` без translate, inner span `display:block`+`translateY(-Xpx)` где X scales 0.5/0.5/0.75/1.0/1.0/1.25 px по бакетам ≤12/≤14/≤16/≤18/≤22/>22, E теперь точно по центру при любом размере. (D) `gap-1.5` → `gap-1` в compact contexts: home `PreviewStripRow`, `AlbumCard`, `BannedListDialog`, `ExploreModules` playlist row, `PlaylistTrackItem`, `QueueDialog`, `TrackItem`, mini-Player, `MobileBottomDock`. Hero контексты сохранили `gap-2`. (E) `src/app/explore/playlist.tsx`: hero h1 теперь `flex flex-wrap items-center gap-2` + `<ExplicitBadge size={20}>`. | merged | #457 |
+| 22 | `kiro/tidal-explicit-album-twin-and-badge-svg` | **Tidal Explicit — album twin lookup, getAlbum redirect, SVG бэйдж, MediaSession like.** После PR #457 пользователь сообщил: (а) "сама e расположена не по центру квадратика, фикс ваще не сработал, всё равно внутри альбома выдаёт зацензуренные версии" — root cause: PR #457 swap'ил только треки, но search возвращает clean album_id → юзер кликает → `getAlbum(cleanId)` верно отдаёт clean tracklist (по-id retrieval = контракт). Аудитировав путь от search до album page, я добавил album-level twin lookup + transparent redirect. (б) "не везде значок e показывается (как минимум в истории не показывается)" — root cause: 4+ setTrack call sites собирали Track объекты вручную и теряли поле `explicit`, поэтому currentTrack.explicit становился undefined, лоджер плеев писал 0, история отрисовывалась без бэйджа, mini/full player тоже. Что сделано: (1) **Worker — `swapInExplicitAlbumTwins()` + `resolveExplicitAlbumTwin()` + `resolveExplicitAlbumIdRedirect()`**: для каждого clean album'а активный поиск twin'а по `(artistId, normaliseAlbumTitle)` + `explicit===true` matching, KV-memo `tidal-explicit-album-twin:<cleanId>` 30d. Применено в `search()`, `getArtistAlbums()`, `getArtistAlbumsAndSingles()`, `getArtistReleases()`, `getArtistReleasesPage()`, `getExploreList(albums)`, `getExplorePage()`. **`getAlbum()` теперь делает transparent redirect**: если KV-memo говорит "у этого clean'а есть explicit twin" — фетчит albumId twin'а вместо запрошенного. Snapshot этого решения отличается от PR #457: там был breadcrumb, здесь — реальный swap (юзер явно попросил). Audio engine и `playbackinfopostpaywall` не тронуты. (2) **getExplorePage — параллельный swap по модулям**: tracks/albums получают `swapInExplicitTwins`/`swapInExplicitAlbumTwins` поверх preferExplicit dedupe. Concurrency-cap внутри каждого resolver'а уже стоит. (3) **Frontend — фикс пропадания E на player surfaces**: `src/lib/playerTrack.ts :: toPlayerTrack()` уже включал `explicit`; добавил `source` (в логгер). `src/hooks/usePlaybackSync.ts :: toPlayable()` теперь несёт `explicit` + `artists` + `source` (раньше дропались — корневая причина "в плеере E не показывается, в строке трека показывается"). 4 inline setTrack'а перепаяны на `toPlayerTrack`: `ExploreModules.tsx` (×2), `app/explore/list.tsx`, `app/explore/playlist.tsx`. (4) **ExplicitBadge переделан как SVG**: 10×10 viewBox, прямоугольная подложка `rx=1.6`, буква "E" — единый closed path с горизонтальными перекладинами и спайном; геометрически центрируется в `(5, 5)` независимо от шрифта/размера. Убраны все `translateY` хаки (PR #454/#457 их пытались починить — оба раза юзер жаловался что криво). Размеры 12/14/16/18/20/24 px рендерятся одинаково ровно. tone='light' → белая подложка / чёрный текст для FullscreenPlayer. (5) **MediaSession like (bonus)**: `Player.tsx` регистрирует `togglelike` / `like` / `favorite` / `favourite` / `star` action handlers (W3C спек не определяет like, но Chromium / разные платформы пробуют разные имена); каждый wrapped в try/catch — браузер либо подхватывает один из вариантов и показывает звёздочку в lock screen / Now-Playing widget, либо silently no-op. Handler читает live state из `usePlayerStore` и делает `useToggleLike().toggle(...)` — точно тот же путь что и кнопка-сердечко в плеере. iOS Safari Web App / Android Chrome PWA — best-effort. | open | (этот PR) |
 | 3 | `devin/1778363267-batch-fixes` | FullscreenPlayer volume slider, solid skip icons (initial), PWA navbar inset (½), mini-player touch hit area | merged (regression) | #427 |
 | 4 | `devin/1778365680-fix-batch` | revert broken skip icons, drop PWA safe-bottom inset, robust offline toast watcher | merged | #428 |
 
@@ -103,6 +104,119 @@
 ---
 
 ## Live status
+
+- 2026-05-18T23:30Z — **Tidal Explicit follow-up — album twin
+  lookup, getAlbum redirect, SVG бэйдж, MediaSession like.**
+  PR `kiro/tidal-explicit-album-twin-and-badge-svg`. После PR #457
+  пользователь сообщил три регрессии: (а) "сама e расположена не
+  по центру квадратика, фикс ваще не сработал"; (б) "всё равно
+  внутри альбома выдаёт зацензуренные версии"; (в) "не везде
+  значок e показывается (как минимум в истории не показывается).
+  на каких-то треках в плеере есть, на каких-то нет, хотя в
+  строке трека есть". Плюс bonus-задача — кнопка лайка в системном
+  Now-Playing widget (PWA/Android/iOS).
+
+  Root causes найдены тремя путями:
+  (1) PR #457 swap'ил clean→explicit ТОЛЬКО для треков; альбомы
+  получали лишь same-response prefer-explicit dedupe. Search
+  возвращал clean album_id, юзер кликал, `getAlbum(cleanId)`
+  верно отдавал clean tracklist (контракт by-id retrieval).
+  (2) Поле `explicit` дропалось в 4+ setTrack call-сайтах
+  (`hooks/usePlaybackSync.ts :: toPlayable()`, inline объекты в
+  `ExploreModules.tsx` ×2, `app/explore/list.tsx`, `app/explore/
+  playlist.tsx`) → currentTrack.explicit становился undefined →
+  лоджер плеев (`usePlayHistoryLogger`) писал 0 → recent strip
+  отрисовывался без бэйджа, mini/full player тоже.
+  (3) Бэйдж рендерился HTML-текстом ("E" глифом) с
+  `translateY(-Xpx)` хаком для optical centering — зависело
+  от шрифта, шрифт-фоллбеков и DPR; на разных размерах сидел
+  криво.
+
+  Что сделано:
+
+  **(A) Worker — album-level twin lookup + getAlbum redirect.**
+  Новые методы в `TidalService`: `swapInExplicitAlbumTwins()`
+  (concurrency=4, KV-memo `tidal-explicit-album-twin:<cleanId>`
+  30d), `resolveExplicitAlbumTwin()` (search-based lookup по
+  `(artistId, normaliseAlbumTitle, explicit===true)` + hydrate
+  через `getAlbum`+`getAlbumTracks`), `resolveExplicitAlbumIdRedirect()`
+  (быстрый KV path для hot deeplink-навигации). Применено в:
+  `search()`, `getArtistAlbums()`, `getArtistAlbumsAndSingles()`,
+  `getArtistReleases()`, `getArtistReleasesPage()`,
+  `getExploreList(albums)`, `getExplorePage()`. **Главное
+  изменение**: `getAlbum()` теперь делает transparent redirect —
+  если KV/lookup находит explicit twin для запрошенного clean id,
+  фетч идёт по explicit id, и юзер получает uncensored
+  tracklist даже по deep-link сохранённого clean'а. Это
+  отличается от поведения PR #457 (там был только warn
+  breadcrumb), но юзер явно попросил такое поведение
+  ("если беру id explicit-альбома напрямую — uncensored;
+  айдишники различные, вариации с цензурой и без"). Audio engine,
+  `TidalWeb.resolveStream`, `playbackinfopostpaywall` не тронуты.
+
+  **(B) Worker — getExplorePage применяет swap по модулям.**
+  После `mapPageModule` цикла каждый module type='tracks' /
+  'albums' получает `swapInExplicitTwins`/`swapInExplicitAlbumTwins`
+  поверх preferExplicit dedupe. Параллельно через
+  `Promise.all(modules.map(...))`. Per-row resolver уже имеет
+  свой KV-memo, поэтому повторные визиты страницы — в основном
+  cache hits.
+
+  **(C) Frontend — фикс пропадания E на player surfaces.**
+  - `src/lib/playerTrack.ts :: toPlayerTrack()`: добавлен
+    `source` (для логгера плеев — чтоб history-recent
+    группировался корректно).
+  - `src/hooks/usePlaybackSync.ts :: toPlayable()`: расширен
+    `PlayableTrack` тип (был
+    `Pick<Track, 'id'|'title'|'artist'|'duration'> & Partial<…>`
+    без `explicit`/`artists`/`source`), теперь несёт
+    `explicit` + `artists` + `source` через `useTrackPlayback` и
+    `useCollectionPlayback`. Это закрывает основную дыру: эти
+    хуки используются в большинстве TrackItem-кнопок (album,
+    artist, library, downloaded, search, daily, explore) — без
+    фикса все они теряли `explicit` при setTrack.
+  - 4 inline `setTrack({ id, title, artist, … })` объекта в
+    `ExploreModules.tsx` (×2: row-level handlePlay + playlist
+    cover button), `app/explore/list.tsx :: ListView` и
+    `app/explore/playlist.tsx :: handlePlayTrack` перепаяны на
+    канонический `toPlayerTrack(track)` — все player-relevant
+    поля идут разом.
+
+  **(D) ExplicitBadge — SVG-rewrite.** 10×10 viewBox,
+  прямоугольная подложка `rx=1.6` `ry=1.6`, буква "E" — единый
+  closed path с горизонтальными перекладинами (top y=2→3.4,
+  middle y=4.5→5.5, bottom y=6.6→8) + спайн (x=2.4→3.4).
+  Геометрически центрируется в `(5, 5)`: top+bottom-перекладины
+  равноудалены от центральной линии, middle — точно на ней,
+  спайн равен по толщине перекладинам. Никаких translateY
+  хаков, никакой font-метрики, никакой DPR-зависимости. Размеры
+  12 / 14 / 16 / 18 / 20 / 24 px рендерятся одинаково ровно.
+  `tone='light'` сохранён (белая `rgba(255,255,255,0.92)` подложка
+  + чёрный `rgba(0,0,0,0.85)` foreground для FullscreenPlayer).
+  CSS-custom-properties (`var(--color-text-muted)`,
+  `var(--color-bg)`) применяются через inline `style.fill` (не
+  через SVG presentation attribute) — кросс-браузерная
+  стабильность.
+
+  **(E) MediaSession like (bonus).** В `Player.tsx` новый
+  `useEffect` регистрирует action handlers под кандидатными
+  именами `togglelike`/`like`/`favorite`/`favourite`/`star`
+  (W3C MediaSession-спека `like` не определяет, но Chromium и
+  разные платформы пробуют разные имена; на iOS PWA Safari/Web
+  App это best-effort). Каждый `setActionHandler` обёрнут в
+  try/catch — браузер либо подхватывает один из вариантов и
+  показывает звёздочку в lock screen / Now-Playing widget /
+  Android Auto / CarPlay (где интеграция доступна), либо
+  silently no-op. Handler читает live state из
+  `usePlayerStore.getState()` и вызывает `useToggleLike().toggle(...)`
+  — точно тот же путь что и кнопка-сердечко в мини-плеере, так
+  что состояние "лайкнуто/не лайкнуто" остаётся в синхроне с
+  библиотекой пользователя. Audio engine не тронут (новый
+  effect живёт в `Player.tsx`, не в `useAudioPlayer`).
+
+  Не тронуто (по hard constraints): audio engine, security
+  layer, JWT/HMAC проверки, CORS, RLS, существующие D1
+  миграции, fullscreen-плеер дизайн.
 
 - 2026-05-18T21:00Z — **Tidal Explicit реальный фикс** (PR
   `devin/tidal-explicit-revert-and-refix`). По прямому запросу
