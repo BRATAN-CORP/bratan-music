@@ -51,6 +51,13 @@ export interface Album {
   coverUrl?: string;
   coverVideoUrl?: string;
   releaseDate?: string;
+  /**
+   * Source-provider Explicit flag for the release as a whole. Tidal
+   * stamps this on albums that contain any explicit track, which is
+   * exactly what tidal.com renders next to the cover. Defaults to
+   * undefined when upstream omits it (legacy snapshots etc.).
+   */
+  explicit?: boolean;
   tracks?: Track[];
 }
 
@@ -114,6 +121,13 @@ export interface ExplorePlaylist {
   curator?: string;
   trackCount?: number;
   duration?: number;
+  /**
+   * Whether the editorial playlist contains explicit material. Mirrors
+   * Album.explicit — Tidal sets this when the curated track list has
+   * any uncensored song. Used to render the `E` badge next to the
+   * title on cards and hero.
+   */
+  explicit?: boolean;
 }
 
 export interface ExplorePageLink {

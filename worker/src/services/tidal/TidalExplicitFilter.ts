@@ -37,9 +37,19 @@ const KV_TTL_S = 30 * 24 * 60 * 60; // 30 days
 // the auth-refresh path.
 const REQUEST_TIMEOUT_MS = 4000;
 
+/**
+ * `Origin` / `Referer` mimic the production Tidal Web app — some of the
+ * v2 settings endpoints reject requests from a missing / mismatched
+ * origin with a generic 403 even when the bearer token is valid.
+ */
 const COMMON_HEADERS = (clientVersion: string) => ({
   Accept: 'application/json',
-  'User-Agent': 'TIDAL/2026.4.23 CFNetwork/1494.0.7 Darwin/23.4.0',
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Origin: 'https://listen.tidal.com',
+  Referer: 'https://listen.tidal.com/',
   'x-tidal-client-version': clientVersion,
 });
 
@@ -89,15 +99,20 @@ async function attemptAllowExplicit(
   // The mobile / TV OAuth clients each get registered with their own
   // clientSettings bucket. We default to the clientId associated with
   // the refresh token; when that's missing (legacy session) we still
-  // try `com.aspiro.tidal` which is the canonical web-app bucket.
-  const settingsBuckets = [clientId, 'com.aspiro.tidal', 'android.aspiro.tidal']
-    .filter((b, i, arr): b is string => Boolean(b) && arr.indexOf(b) === i);
+  // try the web bucket identifiers Tidal has used historically.
+  const settingsBuckets = [
+    clientId,
+    'CLIENT_WEB',
+    'com.aspiro.tidal',
+    'android.aspiro.tidal',
+    'TIDAL_APP_WEB',
+  ].filter((b, i, arr): b is string => Boolean(b) && arr.indexOf(b) === i);
 
   const attempts: { endpoint: string; init: RequestInit }[] = [];
 
   // 1. v2 user-profile playback settings (newer Tidal Web client).
   attempts.push({
-    endpoint: `PUT /v2/profiles/${userId}/playbackSettings`,
+    endpoint: `PUT https://api.tidal.com/v2/profiles/${userId}/playbackSettings`,
     init: {
       method: 'PUT',
       headers: jsonHeaders,
@@ -108,7 +123,7 @@ async function attemptAllowExplicit(
   // 2. v1 client-settings items PATCH (per-client bucket).
   for (const bucket of settingsBuckets) {
     attempts.push({
-      endpoint: `PATCH /v1/users/${userId}/clientSettings/${bucket}`,
+      endpoint: `PATCH https://api.tidal.com/v1/users/${userId}/clientSettings/${bucket}`,
       init: {
         method: 'PATCH',
         headers: jsonHeaders,
@@ -116,6 +131,7 @@ async function attemptAllowExplicit(
           items: [
             { name: 'PLAYBACK_EXPLICIT_CONTENT', value: 'true' },
             { name: 'EXPLICIT_CONTENT_ENABLED', value: 'true' },
+            { name: 'EXPLICIT_CONTENT_ALLOWED', value: 'true' },
           ],
         }),
       },
@@ -124,20 +140,17 @@ async function attemptAllowExplicit(
 
   // 3. v1 form-encoded subscription endpoint (legacy mobile client).
   attempts.push({
-    endpoint: `POST /v1/users/${userId}/subscription/explicit-content`,
+    endpoint: `POST https://api.tidal.com/v1/users/${userId}/subscription/explicit-content`,
     init: {
       method: 'POST',
       headers: formHeaders,
-      body: new URLSearchParams({
-        enabled: 'true',
-        countryCode,
-      }).toString(),
+      body: new URLSearchParams({ enabled: 'true', countryCode }).toString(),
     },
   });
 
   // 4. v2 me-scoped explicit-content toggle.
   attempts.push({
-    endpoint: 'PUT /v2/users/me/explicit-content',
+    endpoint: 'PUT https://api.tidal.com/v2/users/me/explicit-content',
     init: {
       method: 'PUT',
       headers: jsonHeaders,
@@ -145,10 +158,91 @@ async function attemptAllowExplicit(
     },
   });
 
+  // 5. v1 user-profile explicit-content (listen.tidal.com's current
+  // Settings → Streaming → "Explicit content" toggle path). Try both
+  // form-encoded and JSON shapes since we don't know which one the
+  // current Web build ships with.
+  attempts.push({
+    endpoint: `PUT https://api.tidal.com/v1/users/${userId}/profile/explicitContent`,
+    init: {
+      method: 'PUT',
+      headers: formHeaders,
+      body: new URLSearchParams({ enabled: 'true' }).toString(),
+    },
+  });
+  attempts.push({
+    endpoint: `PUT https://api.tidal.com/v1/users/${userId}/profile/explicitContent`,
+    init: {
+      method: 'PUT',
+      headers: jsonHeaders,
+      body: JSON.stringify({ enabled: true }),
+    },
+  });
+
+  // 6. v1 settings/explicit-content/enabled (legacy form-encoded path).
+  attempts.push({
+    endpoint: `PUT https://api.tidal.com/v1/users/${userId}/settings/explicit-content/enabled`,
+    init: {
+      method: 'PUT',
+      headers: formHeaders,
+      body: new URLSearchParams({ enabled: 'true', countryCode }).toString(),
+    },
+  });
+
+  // 7. v1 batched settings PUT/PATCH — older Web Settings page wrote the
+  // entire settings object back atomically.
+  attempts.push({
+    endpoint: `PUT https://api.tidal.com/v1/users/${userId}/settings`,
+    init: {
+      method: 'PUT',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        explicitContent: true,
+        explicitContentEnabled: true,
+        playbackExplicitContent: true,
+      }),
+    },
+  });
+  attempts.push({
+    endpoint: `PATCH https://api.tidal.com/v1/users/${userId}/settings`,
+    init: {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        explicitContent: true,
+        explicitContentEnabled: true,
+      }),
+    },
+  });
+
+  // 8. desktop.tidal.com host variant — some account-flag mutations are
+  // gated to the desktop.tidal.com routing tier even though they share
+  // the same path with api.tidal.com.
+  attempts.push({
+    endpoint: `PUT https://desktop.tidal.com/v1/users/${userId}/profile/explicitContent`,
+    init: {
+      method: 'PUT',
+      headers: formHeaders,
+      body: new URLSearchParams({ enabled: 'true' }).toString(),
+    },
+  });
+
+  // 9. listen.tidal.com `/api` shim — the SPA proxies through its own
+  // origin when the bearer token is short-lived. Cheap to try last.
+  attempts.push({
+    endpoint: `PUT https://listen.tidal.com/api/users/${userId}/profile/explicitContent`,
+    init: {
+      method: 'PUT',
+      headers: formHeaders,
+      body: new URLSearchParams({ enabled: 'true' }).toString(),
+    },
+  });
+
   const results: AttemptResult[] = [];
   for (const { endpoint, init } of attempts) {
-    const [method, path] = endpoint.split(' ');
-    const url = `https://api.tidal.com${path}`;
+    const space = endpoint.indexOf(' ');
+    const method = endpoint.slice(0, space);
+    const url = endpoint.slice(space + 1);
     const res = await timedFetch(url, { ...init, method }, REQUEST_TIMEOUT_MS);
     if (!res) {
       results.push({ ok: false, status: null, endpoint });

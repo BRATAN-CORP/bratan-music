@@ -1231,7 +1231,7 @@ export function FullscreenPlayer() {
                     <span className="block min-w-0 flex-1">
                       <Marquee text={currentTrack.title} />
                     </span>
-                    <ExplicitBadge explicit={currentTrack.explicit} size={18} />
+                    <ExplicitBadge explicit={currentTrack.explicit} size={18} tone="light" />
                   </h1>
                 </motion.div>
                 {/* Always render the artist line inside a `block w-full

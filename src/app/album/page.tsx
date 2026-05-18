@@ -9,6 +9,7 @@ import { HeroActionsKebab } from '@/components/features/HeroActionsKebab';
 import { MenuItem } from '@/components/ui/PopoverMenu';
 import { shareLink } from '@/lib/share';
 import { useToggleAlbumLike } from '@/hooks/useLibrary';
+import { ExplicitBadge } from '@/components/features/ExplicitBadge';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { usePlayerStore } from '@/store/player';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
@@ -101,7 +102,12 @@ export function AlbumPage() {
                 </div>
               )}
               eyebrow={t('albumPage.eyebrow')}
-              title={album.title}
+              title={(
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <span>{album.title}</span>
+                  <ExplicitBadge explicit={album.explicit} size={20} />
+                </span>
+              )}
               subtitle={album.artists && album.artists.length > 1 ? (
                 <>
                   {album.artists.map((a, i) => (
