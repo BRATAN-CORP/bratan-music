@@ -249,7 +249,7 @@ function RoomPageInner() {
                 {isLive ? t('rooms.page.statusLive') : t('rooms.page.statusReconnect')}
               </span>
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xl font-semibold tracking-tight sm:text-2xl">
+            <div className="mt-2 flex items-center gap-1 text-xl font-semibold tracking-tight sm:text-2xl">
               <span className="truncate">{track?.title || t('rooms.page.placeholderTrack')}</span>
               <ExplicitBadge explicit={track?.explicit} size={16} />
             </div>

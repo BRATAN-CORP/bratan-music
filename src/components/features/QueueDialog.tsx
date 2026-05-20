@@ -245,7 +245,7 @@ function QueueRow({
         )}
         <div className="min-w-0">
           <p
-            className={`flex items-center gap-1 truncate text-sm ${active ? 'font-semibold text-[var(--color-accent)]' : 'font-medium'}`}
+            className={`flex items-center gap-0.5 truncate text-sm ${active ? 'font-semibold text-[var(--color-accent)]' : 'font-medium'}`}
           >
             {banned && (
               <span

@@ -166,7 +166,7 @@ export function TidalPlaylistPage() {
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <Eyebrow>{t('explorePlaylist.subtitleTidal')}</Eyebrow>
-                <h1 className="flex flex-wrap items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                <h1 className="flex flex-wrap items-center gap-1 text-3xl font-semibold tracking-tight sm:text-4xl">
                   <span>{meta?.title ?? t('explorePlaylist.fallbackTitle')}</span>
                   <ExplicitBadge explicit={meta?.explicit} size={20} />
                 </h1>

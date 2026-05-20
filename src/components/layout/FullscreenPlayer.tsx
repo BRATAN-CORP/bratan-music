@@ -1227,7 +1227,7 @@ export function FullscreenPlayer() {
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   className="block w-full min-w-0 text-center"
                 >
-                  <h1 className="flex w-full min-w-0 items-center justify-center gap-2 text-xl font-semibold tracking-tight sm:text-3xl">
+                  <h1 className="flex w-full min-w-0 items-center justify-center gap-1 text-xl font-semibold tracking-tight sm:text-3xl">
                     <span className="block min-w-0 flex-1">
                       <Marquee text={currentTrack.title} />
                     </span>
