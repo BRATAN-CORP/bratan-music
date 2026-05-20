@@ -235,7 +235,7 @@ function TrackRow({
           to={unavailable ? '#' : `/track/${track.id}`}
           onClick={unavailable ? undefined : onNavigate}
           className={[
-            'flex items-center gap-1 truncate text-sm font-medium',
+            'flex items-center gap-0.5 truncate text-sm font-medium',
             unavailable ? 'pointer-events-none text-muted-foreground' : 'hover:underline',
           ]
             .filter(Boolean)

@@ -103,7 +103,7 @@ export function AlbumPage() {
               )}
               eyebrow={t('albumPage.eyebrow')}
               title={(
-                <span className="inline-flex flex-wrap items-center gap-2">
+                <span className="inline-flex flex-wrap items-center gap-1">
                   <span>{album.title}</span>
                   <ExplicitBadge explicit={album.explicit} size={20} />
                 </span>

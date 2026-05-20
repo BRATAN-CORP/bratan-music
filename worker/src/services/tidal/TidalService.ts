@@ -265,7 +265,7 @@ function preferExplicitAlbums(items: Album[]): Album[] {
  *
  * Like {@link preferExplicitAlbums} but groups by
  * `(artistId, normalisedTitle, durationBucket)` — the duration bucket
- * is `Math.round(duration / 2)` so a 3:14 vs 3:15 variant collapses
+ * is `Math.round(duration / 5)` so variants within ±2.5s collapse
  * (the audio is identical, only the metadata changed) but obviously
  * different mixes don't accidentally merge.
  *
@@ -276,7 +276,7 @@ function preferExplicitTracks(items: Track[]): Track[] {
   let sentinel = 0;
   const fingerprint = (t: Track): string => {
     if (!t.artistId || !t.duration) return `__unique_${sentinel++}`;
-    const bucket = Math.round(t.duration / 2);
+    const bucket = Math.round(t.duration / 5);
     return `${t.artistId}::${normaliseAlbumTitle(t.title)}::${bucket}`;
   };
   const keyByTrack = new Map<Track, string>();
@@ -484,8 +484,8 @@ export class TidalService implements MusicService {
       this.swapInExplicitTwins(tracks),
       this.swapInExplicitAlbumTwins(albums),
     ]);
-    tracks = tracksSwapped;
-    albums = albumsSwapped;
+    tracks = dedupeById(tracksSwapped);
+    albums = dedupeById(albumsSwapped);
 
     return {
       tracks,
