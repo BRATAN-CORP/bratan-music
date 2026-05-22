@@ -813,7 +813,7 @@ function PreviewStripRow({ track, index, tracks }: { track: Track; index: number
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <div className={cn('flex items-center gap-1 truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
+        <div className={cn('flex items-center gap-1.5 truncate text-sm font-medium', isActive && 'text-[var(--color-accent)]')}>
           <span className="truncate">{track.title}</span>
           <ExplicitBadge explicit={track.explicit} size={12} />
         </div>
