@@ -972,7 +972,7 @@ function ExplorePlaylistCard({
         </button>
       </div>
       <div className="min-w-0">
-        <p className={'flex items-center gap-1 truncate font-medium ' + (variant === 'hero' ? 'text-[15px]' : 'text-sm')}>
+        <p className={'flex items-center gap-1.5 truncate font-medium ' + (variant === 'hero' ? 'text-[15px]' : 'text-sm')}>
           <span className="truncate">{playlist.title}</span>
           <ExplicitBadge explicit={playlist.explicit} size={12} />
         </p>

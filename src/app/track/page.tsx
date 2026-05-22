@@ -77,7 +77,7 @@ export function TrackPage() {
               )}
               <div className="flex flex-col justify-end gap-3">
                 <Eyebrow>{t('track.pageEyebrow')}</Eyebrow>
-                <h1 className="flex flex-wrap items-center gap-1 text-3xl font-semibold tracking-tight sm:text-5xl">
+                <h1 className="flex flex-wrap items-center gap-1.5 text-3xl font-semibold tracking-tight sm:text-5xl">
                   <span>{track.title}</span>
                   <ExplicitBadge explicit={track.explicit} size={24} />
                 </h1>
