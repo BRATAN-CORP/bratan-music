@@ -120,7 +120,7 @@ export function TrackItem({ track, index, onPlay, playlistId, hideRemoveMenu }: 
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-0.5 truncate text-sm font-medium">
+        <p className="flex items-center gap-1 truncate text-sm font-medium">
           {banned && (
             <span
               className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/70"

@@ -1228,7 +1228,7 @@ export function FullscreenPlayer() {
                   className="block w-full min-w-0 text-center"
                 >
                   <h1 className="flex w-full min-w-0 items-center justify-center gap-1 text-xl font-semibold tracking-tight sm:text-3xl">
-                    <span className="block min-w-0 flex-1">
+                    <span className="block min-w-0">
                       <Marquee text={currentTrack.title} />
                     </span>
                     <ExplicitBadge explicit={currentTrack.explicit} size={18} tone="light" />

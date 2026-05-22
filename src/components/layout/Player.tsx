@@ -452,7 +452,7 @@ export function Player() {
                 <button
                   type="button"
                   onClick={openFullscreen}
-                  className="flex w-full items-center gap-0.5 text-left text-sm font-medium transition-opacity hover:opacity-90"
+                  className="flex w-full items-center gap-1 text-left text-sm font-medium transition-opacity hover:opacity-90"
                   aria-label={t('player.openPlayer')}
                 >
                   <span className="block min-w-0">
