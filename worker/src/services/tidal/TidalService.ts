@@ -485,7 +485,7 @@ export class TidalService implements MusicService {
       this.swapInExplicitAlbumTwins(albums),
     ]);
     tracks = dedupeById(tracksSwapped);
-    albums = dedupeById(albumsSwapped);
+    albums = dedupeAlbums(albumsSwapped);
 
     return {
       tracks,

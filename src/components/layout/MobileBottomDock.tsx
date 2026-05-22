@@ -299,7 +299,7 @@ export function MobileBottomDock() {
                         className="flex w-full max-w-full min-w-0 items-center gap-0.5 overflow-hidden text-left text-sm font-medium leading-tight"
                         aria-label={t('player.openPlayer')}
                       >
-                        <span className="block min-w-0 flex-1">
+                        <span className="block min-w-0">
                           <Marquee text={track.title} />
                         </span>
                         <ExplicitBadge explicit={track.explicit} size={12} />
