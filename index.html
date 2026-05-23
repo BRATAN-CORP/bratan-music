@@ -25,7 +25,7 @@
           honoured everywhere SVG actually works, with this single
           targeted concession to Safari's bug.
         - <link rel="apple-touch-icon"> — PNG. iOS rejects SVG for
-          the home-screen mask. With `base: '/bratan-music/'` the
+          the home-screen mask. With the configured vite `base` the
           auto-discovery at `bratan-corp.github.io/apple-touch-icon.png`
           misses the file living under the project subpath, so we
           declare it explicitly.
@@ -33,10 +33,10 @@
           `vite.config.ts`. Used by the Android launcher / Chromium
           desktop install / iOS PWA splash generation.
     -->
-    <link rel="icon" type="image/svg+xml" href="/bratan-music/favicon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/bratan-music/favicon-32x32.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/bratan-music/apple-touch-icon.png" />
-    <link rel="manifest" href="/bratan-music/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <!--
       `maximum-scale=1, user-scalable=no` is intentional. Mobile Safari
       ignores it in normal browser tabs (so users can still pinch-zoom
