@@ -268,6 +268,7 @@ admin.get('/users/:id', async (c) => {
     id: string;
     tg_username: string | null;
     tg_name: string | null;
+    email: string | null;
     is_admin: number;
     is_banned: number;
     banned_at: number | null;
@@ -279,7 +280,7 @@ admin.get('/users/:id', async (c) => {
   }
   const user = await c.env.DB
     .prepare(
-      `SELECT id, tg_username, tg_name, is_admin, is_banned, banned_at,
+      `SELECT id, tg_username, tg_name, email, is_admin, is_banned, banned_at,
               banned_by, banned_reason, tour_completed_at, created_at, updated_at
          FROM users WHERE id = ? LIMIT 1`,
     )
@@ -426,6 +427,7 @@ admin.get('/users/:id', async (c) => {
       id: user.id,
       username: user.tg_username,
       name: user.tg_name,
+      email: user.email ?? null,
       isAdmin: user.is_admin === 1,
       isBanned: user.is_banned === 1,
       bannedAt: user.banned_at,

@@ -24,6 +24,8 @@ interface TrackSnapshot {
    *  retain the animated cover after a refresh. */
   coverVideoUrl?: string;
   duration?: number;
+  /** Source-provider Explicit flag. */
+  explicit?: boolean;
 }
 
 function safeJson<T = unknown>(s: string | null | undefined): T | null {
@@ -73,6 +75,7 @@ function rowToTrack(r: DbRow) {
     coverUrl: snap?.coverUrl ?? '',
     coverVideoUrl: snap?.coverVideoUrl ?? undefined,
     duration: snap?.duration ?? 0,
+    explicit: snap?.explicit,
   };
 }
 

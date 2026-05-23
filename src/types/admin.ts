@@ -49,6 +49,7 @@ export interface AdminUserStats {
     id: string;
     username: string | null;
     name: string | null;
+    email: string | null;
     isAdmin: boolean;
     isBanned: boolean;
     bannedAt: number | null;

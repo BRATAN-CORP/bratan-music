@@ -267,6 +267,30 @@ export class DailyPlaylistService {
           );
           tracks = mergeUnique(tracks, tasteFill, PLAYLIST_LENGTH);
         }
+
+        // Phase 4 (Bug 5): global genre sweep — cycle through ALL known
+        // genre slugs as a last resort. Cold-start users with no seeds /
+        // heavy dislike lists still need 50 tracks.
+        if (tracks.length < PLAYLIST_LENGTH) {
+          const ALL_GENRES = [
+            'genre_pop', 'genre_rap', 'genre_rnb', 'genre_rock',
+            'genre_indie', 'genre_electronic', 'genre_latin',
+            'genre_kpop', 'genre_metal', 'genre_jazz',
+            'mood_chill', 'mood_workout', 'mood_focus',
+            'mood_party', 'mood_throwback',
+          ];
+          const triedSlugs = new Set([...genreSeeds, ...spec.fallbackGenres]);
+          for (const slug of ALL_GENRES) {
+            if (tracks.length >= PLAYLIST_LENGTH) break;
+            if (triedSlugs.has(slug)) continue;
+            triedSlugs.add(slug);
+            const extra = filterTracksByDislikes(
+              await this.tracksFromGenre(slug),
+              dislikes,
+            ).filter((t) => !claimed.has(trackKey(t)));
+            tracks = mergeUnique(tracks, extra, PLAYLIST_LENGTH);
+          }
+        }
       }
 
       // Hard cap so a backfill that overshoots can't ship more than

@@ -52,7 +52,7 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
       // identity / actions / storage / library / listening / sub /
       // sessions sections were all stacked. 960 keeps it modal on
       // desktop while still leaving the page readable behind it.
-      panelClassName="flex w-[min(960px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
+      panelClassName="flex w-[min(1120px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <DetailHeader
         title={t('admin.detail.title')}
@@ -185,7 +185,7 @@ function DetailBody({
               </span>
             )}
           </div>
-          <div className="mt-1 grid grid-cols-1 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
+          <div className="mt-1 grid grid-cols-1 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
             <KV
               k={t('admin.detail.id')}
               v={
@@ -204,6 +204,8 @@ function DetailBody({
               }
             />
             <KV k={t('admin.detail.username')} v={u.username ? '@' + u.username : '—'} />
+            <KV k="Email" v={u.email || '—'} />
+            <KV k="Telegram" v={u.username ? `@${u.username}` : u.name || '—'} />
             <KV k={t('admin.detail.joined')} v={formatAbsolute(u.createdAt, intl)} />
             <KV k={t('admin.detail.updated')} v={formatAbsolute(u.updatedAt, intl)} />
             <KV
