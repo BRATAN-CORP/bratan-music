@@ -7,28 +7,28 @@ CREATE TABLE IF NOT EXISTS users (
     tg_username TEXT,
     tg_name     TEXT,
     is_admin    INTEGER NOT NULL DEFAULT 0,
-    created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL,
-    tour_completed_at INTEGER,
+    created_at  BIGINT NOT NULL,
+    updated_at  BIGINT NOT NULL,
+    tour_completed_at BIGINT,
     is_banned     INTEGER NOT NULL DEFAULT 0,
-    banned_at     INTEGER,
+    banned_at     BIGINT,
     banned_by     TEXT,
     banned_reason TEXT,
-    recommendations_reset_at INTEGER NOT NULL DEFAULT 0,
+    recommendations_reset_at BIGINT NOT NULL DEFAULT 0,
     email TEXT,
     tg_id TEXT,
-    min_token_iat INTEGER NOT NULL DEFAULT 0
+    min_token_iat BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id              TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status          TEXT NOT NULL CHECK(status IN ('active','expired','manual')),
-    expires_at      INTEGER NOT NULL,
+    expires_at      BIGINT NOT NULL,
     payment_method  TEXT,
     stars_tx_id     TEXT,
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
+    created_at      BIGINT NOT NULL,
+    updated_at      BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS daily_listens (
@@ -50,12 +50,12 @@ CREATE TABLE IF NOT EXISTS playlists (
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
     is_liked    INTEGER NOT NULL DEFAULT 0,
-    created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL,
+    created_at  BIGINT NOT NULL,
+    updated_at  BIGINT NOT NULL,
     cover_r2_key TEXT,
-    cover_updated_at INTEGER,
+    cover_updated_at BIGINT,
     cover_url TEXT,
-    pinned_at INTEGER,
+    pinned_at BIGINT,
     is_public INTEGER NOT NULL DEFAULT 0,
     share_token TEXT,
     source_kind TEXT,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     track_id    TEXT NOT NULL,
     source      TEXT NOT NULL DEFAULT 'tidal',
     position    INTEGER NOT NULL,
-    added_at    INTEGER NOT NULL,
+    added_at    BIGINT NOT NULL,
     snapshot    TEXT,
     PRIMARY KEY (playlist_id, track_id)
 );
@@ -81,8 +81,8 @@ CREATE TABLE IF NOT EXISTS track_overrides (
     source      TEXT NOT NULL DEFAULT 'tidal',
     r2_key      TEXT NOT NULL,
     mime_type   TEXT NOT NULL,
-    size_bytes  INTEGER NOT NULL,
-    created_at  INTEGER NOT NULL,
+    size_bytes  BIGINT NOT NULL,
+    created_at  BIGINT NOT NULL,
     PRIMARY KEY (user_id, track_id, source)
 );
 
@@ -90,9 +90,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     id          TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash  TEXT NOT NULL,
-    expires_at  INTEGER NOT NULL,
-    created_at  INTEGER NOT NULL,
-    last_used_at INTEGER NOT NULL DEFAULT 0,
+    expires_at  BIGINT NOT NULL,
+    created_at  BIGINT NOT NULL,
+    last_used_at BIGINT NOT NULL DEFAULT 0,
     user_agent   TEXT    NOT NULL DEFAULT '',
     ip_hash      TEXT    NOT NULL DEFAULT '',
     client_label TEXT    NOT NULL DEFAULT ''
@@ -104,32 +104,32 @@ CREATE TABLE IF NOT EXISTS service_accounts (
     label       TEXT NOT NULL,
     credentials TEXT NOT NULL,
     is_active   INTEGER NOT NULL DEFAULT 1,
-    created_at  INTEGER NOT NULL
+    created_at  BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS auth_nonces (
     nonce      TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
+    expires_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tidal_session (
     id              INTEGER PRIMARY KEY,
     access_token    TEXT NOT NULL,
     refresh_token   TEXT NOT NULL,
-    expires_at      INTEGER NOT NULL,
+    expires_at      BIGINT NOT NULL,
     user_id         INTEGER NOT NULL,
     country_code    TEXT NOT NULL,
     client_id       TEXT,
     client_secret   TEXT,
-    updated_at      INTEGER NOT NULL
+    updated_at      BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tidal_device_codes (
     device_code   TEXT PRIMARY KEY,
     client_id     TEXT NOT NULL,
     client_secret TEXT NOT NULL,
-    expires_at    INTEGER NOT NULL
+    expires_at    BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_tracks (
@@ -142,9 +142,9 @@ CREATE TABLE IF NOT EXISTS user_tracks (
     duration    INTEGER NOT NULL DEFAULT 0,
     r2_key      TEXT NOT NULL,
     mime_type   TEXT NOT NULL,
-    size_bytes  INTEGER NOT NULL DEFAULT 0,
-    created_at  INTEGER NOT NULL,
-    updated_at  INTEGER NOT NULL
+    size_bytes  BIGINT NOT NULL DEFAULT 0,
+    created_at  BIGINT NOT NULL,
+    updated_at  BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS library_items (
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS library_items (
     item_id     TEXT NOT NULL,
     type        TEXT NOT NULL CHECK(type IN ('album','artist')),
     snapshot    TEXT,
-    added_at    INTEGER NOT NULL,
+    added_at    BIGINT NOT NULL,
     PRIMARY KEY (user_id, item_id, type)
 );
 
@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS play_history (
     duration         INTEGER NOT NULL DEFAULT 0,
     listened_seconds INTEGER NOT NULL DEFAULT 0,
     completed        INTEGER NOT NULL DEFAULT 0,
-    played_at        INTEGER NOT NULL,
+    played_at        BIGINT NOT NULL,
     artists_json     TEXT,
     explicit         INTEGER NOT NULL DEFAULT 0
 );
@@ -179,8 +179,8 @@ CREATE TABLE IF NOT EXISTS user_taste_profile (
     user_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     profile      TEXT NOT NULL,
     genre_seeds  TEXT NOT NULL DEFAULT '[]',
-    computed_at  INTEGER NOT NULL,
-    updated_at   INTEGER NOT NULL,
+    computed_at  BIGINT NOT NULL,
+    updated_at   BIGINT NOT NULL,
     seed_artist_ids TEXT NOT NULL DEFAULT '[]'
 );
 
@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS user_dislikes (
     item_id    TEXT NOT NULL,
     kind       TEXT NOT NULL CHECK(kind IN ('track','artist')),
     source     TEXT NOT NULL DEFAULT 'tidal',
-    created_at INTEGER NOT NULL,
+    created_at BIGINT NOT NULL,
     PRIMARY KEY (user_id, item_id, kind)
 );
 
@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS daily_playlists (
     description  TEXT NOT NULL DEFAULT '',
     cover_url    TEXT,
     tracks       TEXT NOT NULL,
-    generated_at INTEGER NOT NULL,
+    generated_at BIGINT NOT NULL,
     saved_to_playlist_id TEXT
 );
 
@@ -210,14 +210,14 @@ CREATE TABLE IF NOT EXISTS recommendation_seen (
     user_id      TEXT NOT NULL,
     track_id     TEXT NOT NULL,
     source       TEXT NOT NULL DEFAULT 'tidal',
-    last_seen_at INTEGER NOT NULL,
+    last_seen_at BIGINT NOT NULL,
     PRIMARY KEY (user_id, track_id, source)
 );
 
 CREATE TABLE IF NOT EXISTS user_preferences (
     user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     prefs      TEXT NOT NULL DEFAULT '{}',
-    updated_at INTEGER NOT NULL
+    updated_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS listening_rooms (
@@ -226,9 +226,9 @@ CREATE TABLE IF NOT EXISTS listening_rooms (
     host_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name            TEXT NOT NULL DEFAULT 'Комната',
     status          TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','closed')),
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL,
-    last_activity_at INTEGER NOT NULL,
+    created_at      BIGINT NOT NULL,
+    updated_at      BIGINT NOT NULL,
+    last_activity_at BIGINT NOT NULL,
     host_only_control INTEGER NOT NULL DEFAULT 0
 );
 
@@ -236,8 +236,8 @@ CREATE TABLE IF NOT EXISTS listening_room_members (
     room_id      TEXT NOT NULL REFERENCES listening_rooms(id) ON DELETE CASCADE,
     user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role         TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('host','member')),
-    joined_at    INTEGER NOT NULL,
-    last_seen_ms INTEGER NOT NULL,
+    joined_at    BIGINT NOT NULL,
+    last_seen_ms BIGINT NOT NULL,
     PRIMARY KEY (room_id, user_id)
 );
 
@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS listening_room_messages (
     room_id     TEXT NOT NULL REFERENCES listening_rooms(id) ON DELETE CASCADE,
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     body        TEXT NOT NULL,
-    created_at_ms INTEGER NOT NULL
+    created_at_ms BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS listening_room_state (
@@ -254,12 +254,12 @@ CREATE TABLE IF NOT EXISTS listening_room_state (
     track_json       TEXT,
     track_id         TEXT,
     track_source     TEXT,
-    started_at_ms    INTEGER NOT NULL DEFAULT 0,
-    position_ms      INTEGER NOT NULL DEFAULT 0,
+    started_at_ms    BIGINT NOT NULL DEFAULT 0,
+    position_ms      BIGINT NOT NULL DEFAULT 0,
     is_paused        INTEGER NOT NULL DEFAULT 1,
     controller_id    TEXT,
     version          INTEGER NOT NULL DEFAULT 0,
-    updated_at_ms    INTEGER NOT NULL DEFAULT 0
+    updated_at_ms    BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS email_otps (
@@ -268,8 +268,8 @@ CREATE TABLE IF NOT EXISTS email_otps (
     purpose    TEXT NOT NULL DEFAULT 'login' CHECK(purpose IN ('login','link')),
     user_id    TEXT,
     attempts   INTEGER NOT NULL DEFAULT 0,
-    expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS signup_log (
@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS signup_log (
     user_id     TEXT NOT NULL,
     ip          TEXT NOT NULL,
     source      TEXT NOT NULL CHECK(source IN ('email','telegram')),
-    created_at  INTEGER NOT NULL
+    created_at  BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tg_link_requests (
@@ -286,8 +286,8 @@ CREATE TABLE IF NOT EXISTS tg_link_requests (
     tg_id        TEXT,
     tg_username  TEXT,
     tg_name      TEXT,
-    expires_at   INTEGER NOT NULL,
-    created_at   INTEGER NOT NULL
+    expires_at   BIGINT NOT NULL,
+    created_at   BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tidal_accounts (
@@ -295,7 +295,7 @@ CREATE TABLE IF NOT EXISTS tidal_accounts (
     label           TEXT,
     access_token    TEXT NOT NULL,
     refresh_token   TEXT NOT NULL,
-    expires_at      INTEGER NOT NULL,
+    expires_at      BIGINT NOT NULL,
     user_id         INTEGER NOT NULL UNIQUE,
     country_code    TEXT NOT NULL,
     client_id       TEXT,
@@ -303,20 +303,20 @@ CREATE TABLE IF NOT EXISTS tidal_accounts (
     subscription_type TEXT,
     subscription_valid_until INTEGER,
     enabled         INTEGER NOT NULL DEFAULT 1,
-    last_used_at    INTEGER NOT NULL DEFAULT 0,
+    last_used_at    BIGINT NOT NULL DEFAULT 0,
     usage_count     INTEGER NOT NULL DEFAULT 0,
     last_error      TEXT,
-    last_error_at   INTEGER,
+    last_error_at   BIGINT,
     consecutive_errors INTEGER NOT NULL DEFAULT 0,
-    created_at      INTEGER NOT NULL,
-    updated_at      INTEGER NOT NULL
+    created_at      BIGINT NOT NULL,
+    updated_at      BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS cron_runs (
     id              SERIAL PRIMARY KEY,
     name            TEXT NOT NULL,
-    started_at      INTEGER NOT NULL,
-    finished_at     INTEGER,
+    started_at      BIGINT NOT NULL,
+    finished_at     BIGINT,
     ok              INTEGER NOT NULL DEFAULT 0,
     processed_count INTEGER NOT NULL DEFAULT 0,
     error_count     INTEGER NOT NULL DEFAULT 0,
@@ -336,7 +336,7 @@ CREATE TABLE IF NOT EXISTS service_logs (
     message         TEXT NOT NULL,
     context         TEXT,
     user_id         TEXT,
-    created_at      INTEGER NOT NULL
+    created_at      BIGINT NOT NULL
 );
 
 -- Indexes
