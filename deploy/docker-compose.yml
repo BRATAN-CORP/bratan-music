@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # ── PostgreSQL (replaces D1) ──────────────────────────
   postgres:
@@ -46,9 +44,7 @@ services:
 
   # ── API (bratan-music worker on Node.js) ──────────────
   api:
-    build:
-      context: ../worker
-      dockerfile: Dockerfile
+    image: ghcr.io/bratan-corp/bratan-music-api:latest
     restart: unless-stopped
     depends_on:
       postgres:
@@ -85,10 +81,12 @@ services:
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
       YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
       NODE_ENV: production
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   # ── nginx (reverse proxy + static frontend) ───────────
   nginx:
-    image: nginx:alpine
+    image: ghcr.io/bratan-corp/bratan-music-web:latest
     restart: unless-stopped
     depends_on:
       - api
@@ -97,10 +95,11 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/html:/usr/share/nginx/html:ro
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-var:/var/lib/letsencrypt
       - ./nginx/certbot-webroot:/var/www/certbot:ro
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   # ── Certbot (Let's Encrypt SSL) ──────────────────────
   certbot:
@@ -110,6 +109,20 @@ services:
       - certbot-var:/var/lib/letsencrypt
       - ./nginx/certbot-webroot:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h; certbot renew --quiet; done'"
+
+  # ── Watchtower (auto-pull new images from GHCR) ──────
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "30"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_ROLLING_RESTART: "true"
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json:ro
 
 volumes:
   pgdata:
