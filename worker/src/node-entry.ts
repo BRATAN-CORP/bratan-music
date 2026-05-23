@@ -108,21 +108,25 @@ app.use('*', async (c, next) => {
   Object.assign(c.env, env);
 
   // Polyfill executionCtx.waitUntil — just run the promise in the background.
-  // In Hono v4, c.executionCtx is a getter that THROWS outside CF Workers,
-  // so we must use try-catch instead of a simple if-check.
+  // In Hono v4, c.executionCtx is a getter-only property that THROWS outside
+  // CF Workers. We can't read it (throws) or write it (no setter).
+  // Use Object.defineProperty to replace the getter with our polyfill.
   try {
-    // Test if executionCtx is accessible (throws in Node.js)
     const _ctx = c.executionCtx;
     if (typeof _ctx?.waitUntil !== 'function') throw new Error('no waitUntil');
   } catch {
-    (c as any).executionCtx = {
-      waitUntil(promise: Promise<unknown>) {
-        promise.catch((err) =>
-          console.error('[waitUntil] background task failed:', err),
-        );
+    Object.defineProperty(c, 'executionCtx', {
+      value: {
+        waitUntil(promise: Promise<unknown>) {
+          promise.catch((err) =>
+            console.error('[waitUntil] background task failed:', err),
+          );
+        },
+        passThroughOnException() { /* no-op in Node */ },
       },
-      passThroughOnException() { /* no-op in Node */ },
-    };
+      writable: true,
+      configurable: true,
+    });
   }
 
   await next();
