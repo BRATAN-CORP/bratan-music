@@ -205,7 +205,7 @@ const router = createBrowserRouter(
       ],
     },
   ],
-  { basename: '/bratan-music' }
+  { basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/' }
 );
 
 export function AppRouter() {
