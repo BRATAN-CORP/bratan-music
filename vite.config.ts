@@ -118,8 +118,8 @@ export default defineConfig({
         theme_color: '#5E6AD2',
         background_color: '#0a0a0c',
         display: 'standalone',
-        scope: '/bratan-music/',
-        start_url: '/bratan-music/',
+        scope: process.env.VITE_BASE || '/',
+        start_url: process.env.VITE_BASE || '/',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
