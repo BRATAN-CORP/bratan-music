@@ -107,8 +107,14 @@ app.use('*', async (c, next) => {
   // Hono on Node.js doesn't automatically populate c.env — we do it manually
   Object.assign(c.env, env);
 
-  // Polyfill executionCtx.waitUntil — just run the promise in the background
-  if (!c.executionCtx || typeof c.executionCtx.waitUntil !== 'function') {
+  // Polyfill executionCtx.waitUntil — just run the promise in the background.
+  // In Hono v4, c.executionCtx is a getter that THROWS outside CF Workers,
+  // so we must use try-catch instead of a simple if-check.
+  try {
+    // Test if executionCtx is accessible (throws in Node.js)
+    const _ctx = c.executionCtx;
+    if (typeof _ctx?.waitUntil !== 'function') throw new Error('no waitUntil');
+  } catch {
     (c as any).executionCtx = {
       waitUntil(promise: Promise<unknown>) {
         promise.catch((err) =>
