@@ -99,10 +99,26 @@ const env: Env = {
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// Inject env into every request context so c.env.DB / c.env.SESSIONS etc work
+// Inject env into every request context so c.env.DB / c.env.SESSIONS etc work.
+// Also polyfill `c.executionCtx.waitUntil` which exists in CF Workers but not
+// in the Node.js runtime — several routes (webhook, recommendations, rooms)
+// use it to fire-and-forget background work without blocking the response.
 app.use('*', async (c, next) => {
   // Hono on Node.js doesn't automatically populate c.env — we do it manually
   Object.assign(c.env, env);
+
+  // Polyfill executionCtx.waitUntil — just run the promise in the background
+  if (!c.executionCtx || typeof c.executionCtx.waitUntil !== 'function') {
+    (c as any).executionCtx = {
+      waitUntil(promise: Promise<unknown>) {
+        promise.catch((err) =>
+          console.error('[waitUntil] background task failed:', err),
+        );
+      },
+      passThroughOnException() { /* no-op in Node */ },
+    };
+  }
+
   await next();
 });
 
