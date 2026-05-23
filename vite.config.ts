@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
-  base: '/bratan-music/',
+  base: process.env.VITE_BASE || '/',
   plugins: [
     react(),
     VitePWA({

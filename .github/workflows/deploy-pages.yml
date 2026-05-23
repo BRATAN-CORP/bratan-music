@@ -27,6 +27,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_BASE: /bratan-music/
 
       - uses: actions/upload-pages-artifact@v3
         with:
