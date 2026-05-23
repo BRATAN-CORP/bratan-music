@@ -1,0 +1,119 @@
+version: "3.8"
+
+services:
+  # ── PostgreSQL (replaces D1) ──────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bratan_music
+      POSTGRES_USER: bratan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../worker/init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bratan -d bratan_music"]
+      interval: 5s
+      retries: 10
+
+  # ── Redis (replaces KV) ───────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # ── MinIO (replaces R2) ───────────────────────────────
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 10
+
+  # ── API (bratan-music worker on Node.js) ──────────────
+  api:
+    build:
+      context: ../worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      DATABASE_URL: "postgresql://bratan:${POSTGRES_PASSWORD}@postgres:5432/bratan_music"
+      REDIS_URL: "redis://redis:6379"
+      MINIO_ENDPOINT: "minio"
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: "tracks"
+      DOMAIN: ${DOMAIN}
+      APP_URL: "https://${DOMAIN}"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY}
+      TIDAL_CLIENT_ID: ${TIDAL_CLIENT_ID}
+      TIDAL_CLIENT_SECRET: ${TIDAL_CLIENT_SECRET}
+      TIDAL_SESSION_TOKEN: ${TIDAL_SESSION_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-noreply.bratanmusic@gmail.com}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-BRATAN MUSIC}
+      YANDEX_API_TOKEN: ${YANDEX_API_TOKEN:-}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
+      YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
+      NODE_ENV: production
+
+  # ── nginx (reverse proxy + static frontend) ───────────
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-var:/var/lib/letsencrypt
+      - ./nginx/certbot-webroot:/var/www/certbot:ro
+
+  # ── Certbot (Let's Encrypt SSL) ──────────────────────
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - ./nginx/certbot-webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h; certbot renew --quiet; done'"
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  certbot-etc:
+  certbot-var:
