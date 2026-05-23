@@ -57,11 +57,15 @@ export interface LikeableTrack {
    *  so liked / playlist tracks keep the animated cover in fullscreen. */
   coverVideoUrl?: string;
   duration: number;
+  /** Source-provider Explicit flag. Persisted into the snapshot so the
+   *  mini-player / mobile dock ExplicitBadge renders for liked and
+   *  playlist tracks, not just freshly-fetched ones. */
+  explicit?: boolean;
 }
 
 type TrackSnapshot = Pick<
   LikeableTrack,
-  'title' | 'artist' | 'artistId' | 'artists' | 'album' | 'coverUrl' | 'coverVideoUrl' | 'duration'
+  'title' | 'artist' | 'artistId' | 'artists' | 'album' | 'coverUrl' | 'coverVideoUrl' | 'duration' | 'explicit'
 >;
 
 function snapshotOf(t: LikeableTrack): TrackSnapshot {
@@ -74,6 +78,7 @@ function snapshotOf(t: LikeableTrack): TrackSnapshot {
     coverUrl: t.coverUrl,
     coverVideoUrl: t.coverVideoUrl,
     duration: t.duration,
+    explicit: t.explicit,
   };
 }
 

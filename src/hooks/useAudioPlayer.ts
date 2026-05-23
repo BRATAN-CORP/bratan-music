@@ -1298,6 +1298,13 @@ export function useAudioPlayer() {
       b.crossfadingInto = null;
       b.crossfadeKind = null;
       b.crossfadeAttemptedTrackId = null;
+      // Sync loadingRef so the `trackChanged` guard below recognises
+      // the promoted track on subsequent currentTrack updates. Without
+      // this, pressing "previous" after a preload-promoted advance
+      // found `loadingRef.current === previousTrack.id` and evaluated
+      // `trackChanged` as false — the UI flipped to the old track but
+      // the audio stayed on the new one.
+      loadingRef.current = currentTrack.id;
       // Update mediaSession metadata.
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -1368,6 +1375,8 @@ export function useAudioPlayer() {
         b.lastSeekAt[incoming] = 0;
         // Slot consumed.
         preloadedIncoming = null;
+        // Sync loadingRef — same rationale as promotion path A above.
+        loadingRef.current = currentTrack.id;
         // Re-publish duration into the store now that the incoming
         // slot owns the track id (durationchange already fired during
         // the preload, but the owner-slot guard suppressed it).
@@ -1549,9 +1558,20 @@ export function useAudioPlayer() {
     if (crossfadingRef.current) return;
     if (!currentTrack) return;
     if (b.crossfadeAttemptedTrackId === currentTrack.id) return;
+    // Bug 3 fix: never auto-crossfade when repeat-one is active — the
+    // track should loop in place, not fade into the next queue item.
+    // Read from the store to get the LIVE value; the closure-captured
+    // `repeat` may be stale when startCrossfade is called from a
+    // scheduled timer.
+    const liveRepeat = usePlayerStore.getState().repeat;
+    if (liveRepeat === 'one') return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
-    const nextTrack = queue[idx + 1];
+    // Bug 4 fix: when repeat='all' and we're at the last track,
+    // wrap to queue[0] so the crossfade transitions smoothly into
+    // the first track instead of falling through to the hard-cut
+    // onEnded → next() path.
+    const nextTrack = queue[idx + 1] ?? (liveRepeat === 'all' ? queue[0] : undefined);
     if (!nextTrack) return;
 
     b.crossfadeAttemptedTrackId = currentTrack.id;
@@ -1860,9 +1880,13 @@ export function useAudioPlayer() {
     if (!isPlaying) return;
     if (!currentTrack) return;
     if (crossfadingRef.current) return;
+    // Bug 3: skip scheduling when repeat-one — the track loops, no
+    // crossfade needed.
+    if (repeat === 'one') return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
-    const nextTrack = queue[idx + 1];
+    // Bug 4: wrap to first track when repeat='all' and at end of queue.
+    const nextTrack = queue[idx + 1] ?? (repeat === 'all' ? queue[0] : undefined);
     if (!nextTrack) return;
 
     const b = getBundle();
@@ -1918,6 +1942,7 @@ export function useAudioPlayer() {
     currentTrack,
     isPlaying,
     queue,
+    repeat,
     startCrossfade,
   ]);
 
@@ -2163,6 +2188,7 @@ export function useAudioPlayer() {
         const sinceSeek = performance.now() - b.lastSeekAt[slot];
         if (
           crossfade
+          && repeat !== 'one'
           && !crossfadingRef.current
           && !audio.seeking
           && sinceSeek > AUTO_CROSSFADE_SEEK_GUARD_MS

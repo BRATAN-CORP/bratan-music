@@ -255,6 +255,10 @@ function GenreTile({
   // — so a missing image doesn't read as a layout bug.
   const isDecade = /\b(19|20)\d0s?\b/i.test(item.title) || item.slug.toLowerCase().includes('decade');
   const FallbackIcon = isDecade ? CalendarRange : Sparkles;
+  // When the Tidal CDN returns a 404 for the imageId, fall back to the
+  // icon+label card so the tile doesn't render as a broken badge.
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImg = img && !imgFailed;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -281,12 +285,13 @@ function GenreTile({
               'radial-gradient(circle, var(--color-accent-glow) 0%, transparent 70%)',
           }}
         />
-        {img ? (
+        {showImg ? (
           <>
             <img
               src={img}
               alt={item.title}
               loading="lazy"
+              onError={() => setImgFailed(true)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
             />
             <div
