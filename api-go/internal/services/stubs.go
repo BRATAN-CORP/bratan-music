@@ -1,8 +1,6 @@
 package services
 
 import (
-	"context"
-
 	"github.com/bratan-corp/bratan-music/api-go/internal/app"
 	"github.com/bratan-corp/bratan-music/api-go/internal/tidal"
 )
@@ -96,18 +94,6 @@ func NewTidalService(a *app.App) *TidalService {
 		Auth: auth,
 		API:  tidal.NewAPI(auth),
 	}
-}
-
-// ---- DailyPlaylistService ---------------------------------------------
-type DailyPlaylistService struct{ A *app.App }
-
-func NewDailyPlaylistService(a *app.App) *DailyPlaylistService { return &DailyPlaylistService{A: a} }
-
-// RegenerateForActive walks the active users set and regenerates the
-// three variants per user. Stub for now; ported from TS in a follow-up.
-func (s *DailyPlaylistService) RegenerateForActive(ctx context.Context) {
-	_ = ctx
-	s.A.Logger.Info("daily.RegenerateForActive: stub, skipping")
 }
 
 // ---- AIPlaylistService ------------------------------------------------

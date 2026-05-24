@@ -19,8 +19,7 @@ func adminHealth(a *app.App) http.HandlerFunc        { _ = a; return notImplemen
 func adminBan(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
 func adminUnban(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
 func adminGrant(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
-func adminResetDaily(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func listDaily(a *app.App) http.HandlerFunc          { _ = a; return notImplemented }
-func getDaily(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
-func markDailySeen(a *app.App) http.HandlerFunc      { _ = a; return notImplemented }
+// adminResetDaily delegates to internal/routes/admin_daily.go.
+func adminResetDaily(a *app.App) http.HandlerFunc { return adminResetDailyImpl(a) }
+// dailyToday / dailySave implemented in internal/routes/daily.go.
 func aiGenerate(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }

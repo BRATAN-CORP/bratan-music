@@ -121,7 +121,7 @@ func (s *RecommendationService) Wave(ctx context.Context, userID string, opt Wav
 	if err != nil {
 		return nil, err
 	}
-	dislikes, err := s.loadDislikes(ctx, userID)
+	dislikes, err := s.LoadDislikes(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (s *RecommendationService) ContinueFromTrack(ctx context.Context, userID, s
 	if err != nil {
 		return nil, err
 	}
-	dislikes, err := s.loadDislikes(ctx, userID)
+	dislikes, err := s.LoadDislikes(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +389,7 @@ func (s *RecommendationService) cachePut(ctx context.Context, key string, v []ti
 func (s *RecommendationService) rerank(
 	candidates []tidal.Track,
 	profile TasteProfile,
-	dislikes dislikeSet,
+	dislikes DislikeSet,
 	seen map[string]int64,
 	limit int,
 	moodIDs map[string]bool,
@@ -420,15 +420,15 @@ func (s *RecommendationService) rerank(
 	out := make([]scored, 0, len(candidates))
 
 	for _, t := range candidates {
-		if dislikes.tracks[t.ID] {
+		if dislikes.Tracks[t.ID] {
 			continue
 		}
-		if t.ArtistID != "" && dislikes.artists[t.ArtistID] {
+		if t.ArtistID != "" && dislikes.Artists[t.ArtistID] {
 			continue
 		}
 		multiArtistDislike := false
 		for _, a := range t.Artists {
-			if a.ID != "" && dislikes.artists[a.ID] {
+			if a.ID != "" && dislikes.Artists[a.ID] {
 				multiArtistDislike = true
 				break
 			}
@@ -521,13 +521,20 @@ func (s *RecommendationService) rerank(
 
 // ---- Helpers ----
 
-type dislikeSet struct {
-	tracks  map[string]bool
-	artists map[string]bool
+// DislikeSet is the per-user dislike index returned by LoadDislikes:
+// track IDs the user has hidden, plus artist IDs whose entire output
+// they want filtered out. Exported so the daily-playlist /
+// ai-playlist services can run a final cross-pool filter pass after
+// they've assembled their own candidate set (the wave rerank already
+// applies it, but downstream pools — explore pages, taste-seed radio
+// backfill — wouldn't otherwise honour the dislike list).
+type DislikeSet struct {
+	Tracks  map[string]bool
+	Artists map[string]bool
 }
 
-func (s *RecommendationService) loadDislikes(ctx context.Context, userID string) (dislikeSet, error) {
-	d := dislikeSet{tracks: map[string]bool{}, artists: map[string]bool{}}
+func (s *RecommendationService) LoadDislikes(ctx context.Context, userID string) (DislikeSet, error) {
+	d := DislikeSet{Tracks: map[string]bool{}, Artists: map[string]bool{}}
 	rows, err := s.app.DB.Query(ctx,
 		`SELECT item_id, kind FROM user_dislikes WHERE user_id = $1`, userID)
 	if err != nil {
@@ -540,9 +547,9 @@ func (s *RecommendationService) loadDislikes(ctx context.Context, userID string)
 			return d, err
 		}
 		if kind == "artist" {
-			d.artists[id] = true
+			d.Artists[id] = true
 		} else {
-			d.tracks[id] = true
+			d.Tracks[id] = true
 		}
 	}
 	return d, rows.Err()
@@ -658,4 +665,90 @@ func (s *RecommendationService) GCStale(ctx context.Context) {
 	); err != nil {
 		s.app.Logger.Error("recs gc stale", "err", err)
 	}
+}
+
+// ---- Exports used by DailyPlaylist / AI services -------------------------
+//
+// These thin shims expose internal helpers under stable, exported
+// names so peer services in the same package don't have to reach
+// into unexported state. They're intentionally not adding behaviour
+// — just renaming for callers outside the wave/continue surface.
+
+// CandidatesFromGenres returns the deduped TRACK_LIST pool for one or
+// more explore page slugs (genre_*, mood_*, top_popular). Falls back
+// to the underlying Tidal page when the Redis pool cache is cold.
+// Exported so DailyPlaylistService can fill the "Под настроение"
+// variant + run its multi-phase genre backfill without re-pluming
+// the cache layer.
+func (s *RecommendationService) CandidatesFromGenres(ctx context.Context, slugs []string) []tidal.Track {
+	return s.candidatesFromGenres(ctx, slugs)
+}
+
+// CachedTrackRadio returns the seeded track-radio pool, Redis-cached
+// under the same key prefix the worker uses. Exported so the daily-
+// playlist taste-seed radio backfill can fan out across the user's
+// strongest liked / completed seeds.
+func (s *RecommendationService) CachedTrackRadio(ctx context.Context, trackID string) ([]tidal.Track, error) {
+	return s.cachedTrackRadio(ctx, trackID)
+}
+
+// TrackKey is the canonical "<source>:<id>" key used by every cross-
+// pool dedup / claim set inside this package. Exported so peer
+// services (DailyPlaylistService cross-variant claiming, AI playlist
+// dedup) stay aligned with the rerank's notion of identity.
+func TrackKey(t tidal.Track) string { return trackKey(t) }
+
+// MergeUnique returns the union of two pools, deduped by TrackKey
+// and capped at `cap`. Mirrors the TS mergeUnique helper used by the
+// daily-playlist backfill phases.
+func MergeUnique(a, b []tidal.Track, cap int) []tidal.Track {
+	if cap <= 0 {
+		return nil
+	}
+	out := make([]tidal.Track, 0, cap)
+	seen := map[string]bool{}
+	for _, src := range [][]tidal.Track{a, b} {
+		for _, t := range src {
+			k := TrackKey(t)
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, t)
+			if len(out) >= cap {
+				return out
+			}
+		}
+	}
+	return out
+}
+
+// FilterByDislikes drops any track that matches the user's dislike
+// set (track id, primary artist id, or any credited artist id).
+// Exported so the daily-playlist backfill phases can apply the
+// final filter after pulling tracks from sources that don't already
+// honour the dislike list (genre explore pages, raw taste-seed
+// radio fan-out).
+func FilterByDislikes(in []tidal.Track, d DislikeSet) []tidal.Track {
+	out := in[:0:0]
+	for _, t := range in {
+		if d.Tracks[t.ID] {
+			continue
+		}
+		if t.ArtistID != "" && d.Artists[t.ArtistID] {
+			continue
+		}
+		drop := false
+		for _, a := range t.Artists {
+			if a.ID != "" && d.Artists[a.ID] {
+				drop = true
+				break
+			}
+		}
+		if drop {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }

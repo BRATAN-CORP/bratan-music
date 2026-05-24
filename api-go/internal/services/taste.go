@@ -208,6 +208,54 @@ func (s *TasteService) GetOrCompute(ctx context.Context, userID string) (TasteSn
 	return snap, nil
 }
 
+// Recompute forces a fresh taste profile rebuild for one user,
+// bypassing the 24h freshness window GetOrCompute observes. Used by
+// the cron and the admin "force-refresh" endpoint so manual
+// regenerations always start from the freshest play_history snapshot.
+func (s *TasteService) Recompute(ctx context.Context, userID string) error {
+	// Pull current seeds so the recompute carries them through. A
+	// missing user_taste_profile row is fine — recompute then runs
+	// against empty seed sets, same as cold-start.
+	var (
+		seedsJSON    string
+		seedArtsJSON string
+	)
+	err := s.app.DB.QueryRow(ctx,
+		`SELECT genre_seeds, seed_artist_ids FROM user_taste_profile WHERE user_id = $1`,
+		userID,
+	).Scan(&seedsJSON, &seedArtsJSON)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	var (
+		genreSeeds   []string
+		seedArtists  []string
+	)
+	_ = json.Unmarshal([]byte(seedsJSON), &genreSeeds)
+	_ = json.Unmarshal([]byte(seedArtsJSON), &seedArtists)
+
+	prof, err := s.computeProfile(ctx, userID, seedArtists, genreSeeds)
+	if err != nil {
+		return err
+	}
+	js, _ := json.Marshal(prof)
+	now := time.Now().UnixMilli()
+	_, err = s.app.DB.Exec(ctx,
+		`INSERT INTO user_taste_profile
+		   (user_id, profile, genre_seeds, computed_at, updated_at, seed_artist_ids)
+		   VALUES ($1, $2, $3, $4, $4, $5)
+		 ON CONFLICT (user_id) DO UPDATE
+		   SET profile = EXCLUDED.profile,
+		       computed_at = EXCLUDED.computed_at,
+		       updated_at  = EXCLUDED.updated_at`,
+		userID, string(js),
+		mustJSON(genreSeeds),
+		now,
+		mustJSON(seedArtists),
+	)
+	return err
+}
+
 // computeProfile is the worker's TasteService.compute() ported with
 // the simplifications documented at the top of this file.
 func (s *TasteService) computeProfile(

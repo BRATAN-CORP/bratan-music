@@ -131,9 +131,8 @@ func mountRecommendations(a *app.App) func(chi.Router) {
 func mountDailyPlaylists(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
-		r.Get("/", listDaily(a))
-		r.Get("/{variant}", getDaily(a))
-		r.Post("/{variant}/seen", markDailySeen(a))
+		r.Get("/today", dailyToday(a))
+		r.Post("/save/{id}", dailySave(a))
 	}
 }
 
