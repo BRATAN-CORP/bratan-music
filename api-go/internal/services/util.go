@@ -7,5 +7,7 @@ import "time"
 // pass plain int64 around at the SQL boundary.
 func timeNowMs() int64 { return time.Now().UnixMilli() }
 
-// timeNowSec returns unix seconds.
-func timeNowSec() int64 { return time.Now().Unix() } //nolint:unused
+// timeNowSec returns unix seconds. The legacy worker stored
+// subscription expiries as seconds (not ms) so a couple of services
+// still need this resolution to interop with existing rows.
+func timeNowSec() int64 { return time.Now().Unix() }

@@ -30,8 +30,13 @@ func mountTracks(a *app.App) func(chi.Router) {
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
+			// PUT is the canonical verb (worker shape); POST is
+			// kept for legacy client builds that haven't switched.
+			r.Put("/{id}/override", uploadOverride(a))
 			r.Post("/{id}/override", uploadOverride(a))
 			r.Delete("/{id}/override", deleteOverride(a))
+			r.Get("/{id}/override", getOverride(a))
+			r.Get("/{id}/override/stream", streamOverride(a))
 		})
 	}
 }
