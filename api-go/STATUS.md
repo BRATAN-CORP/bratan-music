@@ -37,7 +37,7 @@ until parity is reached.
 | `/artists/*`      | ✅      | GET artist + top-tracks + albums + singles + releases (concatenated).                      |
 | `/uploads/*`      | ✅      | list/get/create(multipart)/updateMeta/replaceFile/delete/stream; 50 MiB cap, MIME allowlist. |
 | `/webhook/*`      | ✅      | POST /telegram (constant-time HMAC, async BotService dispatch: /start auth_/link_ deeplinks, /login, /app, /subscribe Stars invoice, /status, /help, /admin_*, pre_checkout validation, idempotent successful_payment). |
-| `/admin/*`        | ⚠️     | Tidal device-flow + daily-playlists/reset ported. Health, ban/unban, grant still 501.       |
+| `/admin/*`        | ✅     | Tidal device-flow, daily-playlists/reset, /grant, /users/{id}/ban, /users/{id}/unban, /health (parallel tidal/db/r2/cron probes). |
 | `/explore/*`      | ✅      | Home/page/list/playlists ported via Tidal pages API; explicit-twin swap deferred until recs. |
 | `/recommendations`| ⚠️     | wave / continue / dislikes (CRUD + details) / seed-artists / genre-seeds / artists search+suggested ported. TasteService + RecommendationService recreated in Go with the same JSON shape — endpoint contracts 1:1 with worker. Rerank simplified: language-script penalty + character-bias multipliers deferred (degrade gracefully — only ever subtract score). |
 | `/daily-playlists`| ✅      | GET /today (lazy generate) + POST /save/{id}. 3 variants, cross-variant claim, 4-phase backfill, mood-quadrant pick. Cron RegenerateForActive wired. |

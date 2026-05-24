@@ -16,10 +16,12 @@ import (
 // telegramWebhook is implemented in internal/routes/webhook.go.
 func telegramWebhook(a *app.App) http.HandlerFunc { return telegramWebhookImpl(a) }
 // adminTidal* implemented in tidal_routes.go.
-func adminHealth(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
-func adminBan(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
-func adminUnban(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
-func adminGrant(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
+// Admin moderation handlers implemented in internal/routes/admin_users.go
+// + internal/routes/admin_health.go.
+func adminHealth(a *app.App) http.HandlerFunc { return adminHealthImpl(a) }
+func adminBan(a *app.App) http.HandlerFunc    { return adminBanImpl(a) }
+func adminUnban(a *app.App) http.HandlerFunc  { return adminUnbanImpl(a) }
+func adminGrant(a *app.App) http.HandlerFunc  { return adminGrantImpl(a) }
 // adminResetDaily delegates to internal/routes/admin_daily.go.
 func adminResetDaily(a *app.App) http.HandlerFunc { return adminResetDailyImpl(a) }
 // dailyToday / dailySave implemented in internal/routes/daily.go.

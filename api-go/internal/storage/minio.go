@@ -68,6 +68,12 @@ func IsSafeKey(key string) bool { return safeKey.MatchString(key) }
 // Bucket returns the configured bucket name (handy for logs and URLs).
 func (s *Store) Bucket() string { return s.bucket }
 
+// Client returns the underlying MinIO client. Used by the admin
+// health probe to list a bounded set of objects without re-wiring the
+// credentials. Keep usage tight — most code paths should reach for
+// Put/Get/Delete instead.
+func (s *Store) Client() *minio.Client { return s.cli }
+
 // Put writes an object. Caller is responsible for choosing a safe key.
 func (s *Store) Put(ctx context.Context, key string, body io.Reader, size int64, contentType string) error {
 	_, err := s.cli.PutObject(ctx, s.bucket, key, body, size, minio.PutObjectOptions{ContentType: contentType})

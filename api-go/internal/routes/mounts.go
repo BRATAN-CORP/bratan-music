@@ -95,7 +95,7 @@ func mountAdmin(a *app.App) func(chi.Router) {
 		r.Get("/health", adminHealth(a))
 		r.Post("/users/{id}/ban", adminBan(a))
 		r.Post("/users/{id}/unban", adminUnban(a))
-		r.Post("/users/{id}/grant", adminGrant(a))
+		r.Post("/grant", adminGrant(a))
 		r.Post("/daily-playlists/reset", adminResetDaily(a))
 	}
 }
