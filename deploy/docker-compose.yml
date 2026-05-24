@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # ── PostgreSQL (replaces D1) ──────────────────────────
   postgres:
@@ -14,18 +20,47 @@ services:
       test: ["CMD-SHELL", "pg_isready -U bratan -d bratan_music"]
       interval: 5s
       retries: 10
+    logging: *default-logging
+
+  # ── Postgres backups (daily, retained 14 days) ────────
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:16
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: bratan_music
+      POSTGRES_USER: bratan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_EXTRA_OPTS: "-Z9 --clean --if-exists --no-owner --no-privileges"
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: "14"
+      BACKUP_KEEP_WEEKS: "4"
+      BACKUP_KEEP_MONTHS: "6"
+      HEALTHCHECK_PORT: "8080"
+    volumes:
+      - pgbackups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/sh /healthcheck.sh"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    logging: *default-logging
 
   # ── Redis (replaces KV) ───────────────────────────────
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes
     volumes:
       - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 10
+    logging: *default-logging
 
   # ── MinIO (replaces R2) ───────────────────────────────
   minio:
@@ -41,6 +76,7 @@ services:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       retries: 10
+    logging: *default-logging
 
   # ── API (bratan-music worker on Node.js) ──────────────
   api:
@@ -81,19 +117,35 @@ services:
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
       YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
       NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
 
   # ── nginx (reverse proxy + static frontend) ───────────
   nginx:
     image: ghcr.io/bratan-corp/bratan-music-web:latest
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_started
     ports:
       - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
+  pgbackups:
