@@ -132,6 +132,21 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// Behind Cloudflare Tunnel (or any TLS-terminating reverse proxy), the Node
+// server only sees plain HTTP.  Hono builds `c.req.url` from the raw socket,
+// so every `new URL(c.req.url).origin` resolves to `http://…` — which makes
+// the audio-proxy URLs mixed-content when the browser loaded the page over
+// HTTPS.  This middleware rewrites the request URL's protocol to match the
+// `X-Forwarded-Proto` header that nginx / CF injects, fixing origin everywhere.
+app.use('*', async (c, next) => {
+  const proto = c.req.header('x-forwarded-proto');
+  if (proto === 'https' && c.req.url.startsWith('http://')) {
+    const fixed = 'https://' + c.req.url.slice('http://'.length);
+    Object.defineProperty(c.req.raw, 'url', { value: fixed, writable: true, configurable: true });
+  }
+  await next();
+});
+
 // Middlewares
 app.use('*', corsMiddleware);
 app.use('*', rateLimit);
