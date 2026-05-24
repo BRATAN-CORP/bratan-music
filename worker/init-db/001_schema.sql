@@ -356,6 +356,7 @@ CREATE INDEX IF NOT EXISTS idx_play_history_user_played ON play_history(user_id,
 CREATE INDEX IF NOT EXISTS idx_play_history_user_artist ON play_history(user_id, artist_id);
 CREATE INDEX IF NOT EXISTS idx_user_dislikes_user ON user_dislikes(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_daily_playlists_user_date ON daily_playlists(user_id, date);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_daily_playlists_user_date_variant ON daily_playlists(user_id, date, variant);
 CREATE INDEX IF NOT EXISTS idx_recommendation_seen_user ON recommendation_seen(user_id, last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_listening_rooms_code ON listening_rooms(code);
 CREATE INDEX IF NOT EXISTS idx_listening_room_messages_room ON listening_room_messages(room_id, id);
