@@ -2463,6 +2463,18 @@ export function useAudioPlayer() {
     for (const action of ['seekbackward', 'seekforward', 'seekto'] as const) {
       try { ms.setActionHandler(action, null); } catch { /* ignore */ }
     }
+    // Companion revoke on iOS: a previous build may have published
+    // `setPositionState({ duration, … })` and iOS WebKit caches that
+    // last position state across reloads and PWA relaunches inside
+    // the page's MediaSession. Even after we stop calling
+    // setPositionState (see the progress effect below), the cached
+    // state can keep the lock screen in podcast layout (⏪10s/⏩10s)
+    // until the page is killed. Calling it with no args / undefined
+    // is the spec-defined "clear" operation. Guarded on iOS so we
+    // don't wipe the (desired) scrubber on Chromium.
+    if (isIOS() && 'setPositionState' in ms) {
+      try { (ms as MediaSession & { setPositionState: (state?: MediaPositionState) => void }).setPositionState(); } catch { /* ignore */ }
+    }
   }, []);
 
   useEffect(() => {
@@ -2572,15 +2584,27 @@ export function useAudioPlayer() {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     if (!('setPositionState' in navigator.mediaSession)) return;
+    // iOS Safari / iOS PWA: never publish position state. WebKit
+    // uses the *presence* of `setPositionState` with a finite
+    // `duration` as the dominant signal that the page is playing
+    // long-form / podcast media and surfaces the ⏪10s/⏩10s skip
+    // transport buttons on the lock screen + Control Center instead
+    // of ⏮/⏭ (the buttons the user actually wants for music). We
+    // tried defusing the heuristic with `playbackRate: 1` previously
+    // — empirically that's not enough on iOS 17/18, the only
+    // reliable fix is to *not call* setPositionState at all on iOS.
+    // We pay for that with no scrubber + no elapsed/remaining time
+    // on the iOS Now-Playing widget, but `previoustrack` /
+    // `nexttrack` register correctly and that's the higher-value
+    // affordance for a music player. Android Chrome (Chromium) does
+    // not have this conflict — there setPositionState gives us the
+    // scrubber AND prev/next happily coexist, so the call stays.
+    if (isIOS()) return;
     const b = getBundle();
     const audio = b.audios[b.active];
     const dur = audio.duration;
     if (!dur || !isFinite(dur)) return;
     try {
-      // Pin playbackRate to 1 — variable playbackRate combined with
-      // a finite duration is one of the signals iOS Safari uses to
-      // classify the stream as "podcast-shaped" and surface the
-      // 10-second skip transport buttons.
       navigator.mediaSession.setPositionState({
         duration: dur,
         position: Math.min(progress, dur),
