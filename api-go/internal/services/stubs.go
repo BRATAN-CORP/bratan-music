@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/bratan-corp/bratan-music/api-go/internal/app"
+	"github.com/bratan-corp/bratan-music/api-go/internal/tidal"
 )
 
 // ---- AuthService ------------------------------------------------------
@@ -72,9 +73,30 @@ type HealthService struct{ A *app.App }
 func NewHealthService(a *app.App) *HealthService { return &HealthService{A: a} }
 
 // ---- TidalService -----------------------------------------------------
-type TidalService struct{ A *app.App }
+//
+// Thin facade around internal/tidal. Held on App so handlers can reach
+// the catalogue / stream / device-flow surfaces without re-plumbing
+// constructors. Mirrors worker/TidalService.ts' role.
+type TidalService struct {
+	A    *app.App
+	Auth *tidal.Auth
+	API  *tidal.API
+}
 
-func NewTidalService(a *app.App) *TidalService { return &TidalService{A: a} }
+func NewTidalService(a *app.App) *TidalService {
+	auth := tidal.NewAuth(a.DB, tidal.AuthConfig{
+		SessionEncryptionKey: a.Cfg.SessionEncryptionKey,
+		RefreshTokenFallback: a.Cfg.TidalRefreshToken,
+		CountryCodeFallback:  a.Cfg.TidalCountryCode,
+		ConfiguredClientID:   a.Cfg.TidalClientID,
+		ConfiguredSecret:     a.Cfg.TidalClientSecret,
+	})
+	return &TidalService{
+		A:    a,
+		Auth: auth,
+		API:  tidal.NewAPI(auth),
+	}
+}
 
 // ---- TasteService -----------------------------------------------------
 type TasteService struct{ A *app.App }

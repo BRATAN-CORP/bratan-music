@@ -11,31 +11,17 @@ import (
 // worker remains the source of truth for these endpoints in the
 // meantime.
 
-func searchAny(a *app.App) http.HandlerFunc          { _ = a; return notImplemented }
-func searchTracks(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
-func searchAlbums(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
-func searchArtists(a *app.App) http.HandlerFunc      { _ = a; return notImplemented }
+// search* / getTrack / streamTrack / trackLyrics / getAlbum* /
+// getArtist* are implemented in tidal_routes.go.
 func searchPlaylists(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func getTrack(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
-func streamTrack(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
-func trackLyrics(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
 func uploadOverride(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
 func deleteOverride(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
 func proxyCover(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
-func getAlbum(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
-func getAlbumTracks(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
-func getArtist(a *app.App) http.HandlerFunc          { _ = a; return notImplemented }
-func getArtistTopTracks(a *app.App) http.HandlerFunc { _ = a; return notImplemented }
-func getArtistAlbums(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func getArtistSingles(a *app.App) http.HandlerFunc   { _ = a; return notImplemented }
-func getArtistReleases(a *app.App) http.HandlerFunc  { _ = a; return notImplemented }
 func createUpload(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
 func listUploads(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
 func deleteUpload(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
 func telegramWebhook(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func adminTidalAccounts(a *app.App) http.HandlerFunc { _ = a; return notImplemented }
-func adminTidalStart(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func adminTidalPoll(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
+// adminTidal* implemented in tidal_routes.go.
 func adminHealth(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
 func adminBan(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
 func adminUnban(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }

@@ -30,14 +30,14 @@ until parity is reached.
 | `/history/*`      | ✅      | Play, recent (DISTINCT ON), clear.                                                         |
 | `/playlists/*`    | ✅      | Full CRUD + reorder + pin + share-token.                                                   |
 | `/library/*`      | ✅      | Likes for tracks (via liked playlist) / albums / artists (via `library_items`).            |
-| `/search/*`       | ❌      | Needs Tidal client.                                                                        |
-| `/tracks/*`       | ❌      | Stream proxy, overrides, lyrics — all pending.                                             |
+| `/search/*`       | ⚠️     | tracks/albums/artists ported via Tidal client; `/search/playlists` still 501.              |
+| `/tracks/*`       | ⚠️     | GET track, stream (302), lyrics ported. Overrides upload/delete still 501.                 |
 | `/covers/*`       | ❌      |                                                                                            |
-| `/albums/*`       | ❌      |                                                                                            |
-| `/artists/*`      | ❌      |                                                                                            |
+| `/albums/*`       | ✅      | GET album (with tracks) + GET album tracks.                                                |
+| `/artists/*`      | ✅      | GET artist + top-tracks + albums + singles + releases (concatenated).                      |
 | `/uploads/*`      | ❌      |                                                                                            |
 | `/webhook/*`      | ❌      | Telegram bot.                                                                              |
-| `/admin/*`        | ❌      |                                                                                            |
+| `/admin/*`        | ⚠️     | Tidal device-flow (accounts/start/poll) ported. Health, ban/unban, grant, reset still 501. |
 | `/explore/*`      | ❌      |                                                                                            |
 | `/recommendations`| ❌      |                                                                                            |
 | `/daily-playlists`| ❌      |                                                                                            |
