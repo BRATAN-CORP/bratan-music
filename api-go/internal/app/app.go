@@ -32,6 +32,10 @@ type App struct {
 	Subs      any
 	Sessions  any
 	Rooms     any
+	// RoomHub is the in-process WebSocket broadcast hub for
+	// listening-room chat. Stored as `any` for the same reason
+	// `Rooms` is — avoids the routes→services→app import cycle.
+	RoomHub any
 	Email     any
 	Taste     any
 	Recs      any

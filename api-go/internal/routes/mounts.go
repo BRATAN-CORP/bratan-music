@@ -129,14 +129,25 @@ func mountHistory(a *app.App) func(chi.Router) {
 
 func mountRooms(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
-		r.Get("/ws/{id}", roomWS(a))
+		// WS upgrade does its own ?token=-based auth — must stay
+		// outside the JWTAuth group because the browser cannot
+		// attach an Authorization header to `new WebSocket(...)`.
+		r.Get("/{id}/chat/ws", roomChatWS(a))
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
+			r.Get("/", listRooms(a))
 			r.Post("/", createRoom(a))
+			r.Post("/join", joinRoom(a)) // matches worker shape: POST /rooms/join with {code}
 			r.Get("/{id}", getRoom(a))
-			r.Post("/{id}/join", joinRoom(a))
-			r.Post("/{id}/leave", leaveRoom(a))
+			r.Get("/{id}/state", getRoomState(a))
+			r.Post("/{id}/heartbeat", roomHeartbeat(a))
+			r.Get("/{id}/chat", getRoomChat(a))
+			r.Post("/{id}/chat", postRoomChat(a))
 			r.Post("/{id}/control", roomControl(a))
+			r.Post("/{id}/leave", leaveRoom(a))
+			r.Patch("/{id}/settings", patchRoomSettings(a))
+			r.Delete("/{id}", deleteRoom(a))
+			r.Get("/{id}/stream/{source}/{rawId}", roomStream(a))
 		})
 	}
 }

@@ -38,6 +38,7 @@ func Wire(a *app.App) {
 	a.Daily = services.NewDailyPlaylistService(a)
 	a.AI = services.NewAIPlaylistService(a)
 	a.Rooms = services.NewRoomService(a)
+	a.RoomHub = services.NewRoomHub()
 	a.Bot = services.NewBotService(a)
 }
 

@@ -94,6 +94,29 @@ func (s *Store) Get(ctx context.Context, key string) (io.ReadCloser, *minio.Obje
 	return obj, &info, nil
 }
 
+// GetWithOptions exposes a Get that lets the caller forward minio
+// options like a byte-range. Used by the room-stream proxy which
+// needs Range support for audio scrubbing.
+//
+// Caller must Close() the returned object. We deliberately don't
+// pre-Stat() inside this helper — for ranged requests the caller
+// usually wants to inspect headers/size on the returned object
+// itself, and a redundant HEAD would double the per-request RTT.
+func (s *Store) GetWithOptions(ctx context.Context, key string, opts minio.GetObjectOptions) (*minio.Object, error) {
+	return s.cli.GetObject(ctx, s.bucket, key, opts)
+}
+
+// StatSize returns the canonical size of an object via a stat call.
+// Used by the room-stream proxy to synthesise a `Content-Range`
+// header against the full object size when serving partial content.
+func (s *Store) StatSize(ctx context.Context, key string) (int64, error) {
+	info, err := s.cli.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		return 0, err
+	}
+	return info.Size, nil
+}
+
 // Delete removes an object. Missing objects are not an error.
 func (s *Store) Delete(ctx context.Context, key string) error {
 	return s.cli.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})

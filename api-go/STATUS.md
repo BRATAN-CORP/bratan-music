@@ -41,7 +41,7 @@ until parity is reached.
 | `/explore/*`      | ❌      |                                                                                            |
 | `/recommendations`| ❌      |                                                                                            |
 | `/daily-playlists`| ❌      |                                                                                            |
-| `/rooms/*`        | ❌      | WS hub + REST.                                                                             |
+| `/rooms/*`        | ✅      | REST + WS chat hub; stream proxy gated to currently-playing track.                         |
 | `/ai/playlists`   | ❌      | Yandex GPT.                                                                                |
 | Cron orchestrator | ⚠️     | Loop runs at 04:30 UTC; task bodies are stubs until taste/daily/recs services are ported.  |
 
