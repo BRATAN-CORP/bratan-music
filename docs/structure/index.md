@@ -8,9 +8,13 @@
 - [[frontend/index|frontend]] (`/src`) — React-приложение, PWA, GitHub
   Pages. Маршрутизация, страницы, layout, компоненты, хуки, store,
   i18n, дизайн-токены.
-- [[worker/index|worker]] (`/worker/src`) — Cloudflare Worker на Hono.
-  Auth, REST-роуты, сервисы (Tidal pool, AI playlists, rooms, ...),
-  middleware, Durable Objects, cron.
+- [[worker/index|worker]] (`/worker/src`) — **legacy**, Cloudflare
+  Worker на Hono. Auth, REST-роуты, сервисы (Tidal pool, AI playlists,
+  rooms, ...), middleware, Durable Objects, cron. Замещается Go-портом
+  (см. ниже).
+- [[api-go/index|api-go]] (`/api-go`) — Go-порт бекенда (chi + pgx +
+  go-redis + minio-go + coder/websocket). Запускается рядом с worker'ом
+  на отдельном порту до завершения миграции.
 - [[telegram-bot/index|telegram-bot]] (`/worker/src/bot`, `/bot`) —
   Telegram Bot webhook handler внутри worker'а: команды, payments,
   deep-link login.

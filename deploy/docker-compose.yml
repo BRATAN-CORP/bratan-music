@@ -82,6 +82,56 @@ services:
       YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
       NODE_ENV: production
 
+  # ── API (Go rewrite, in progress) ─────────────────────
+  # Runs alongside the legacy TS `api` container on port 3001 so the
+  # Go binary can be verified end-to-end without flipping production
+  # over to it. Once feature parity is reached the `api` service above
+  # will be deleted, nginx will switch to `api-go:3000`, and the
+  # worker/ directory will be dropped (see feat/go-backend-rewrite).
+  api-go:
+    image: ghcr.io/bratan-corp/bratan-music-api-go:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      DATABASE_URL: "postgresql://bratan:${POSTGRES_PASSWORD}@postgres:5432/bratan_music"
+      REDIS_URL: "redis://redis:6379"
+      MINIO_ENDPOINT: "minio"
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: "tracks"
+      DOMAIN: ${DOMAIN}
+      APP_URL: "https://${DOMAIN}"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY}
+      TIDAL_CLIENT_ID: ${TIDAL_CLIENT_ID:-}
+      TIDAL_CLIENT_SECRET: ${TIDAL_CLIENT_SECRET:-}
+      TIDAL_SESSION_TOKEN: ${TIDAL_SESSION_TOKEN:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
+      TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-noreply.bratanmusic@gmail.com}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-BRATAN MUSIC}
+      YANDEX_API_TOKEN: ${YANDEX_API_TOKEN:-}
+      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
+      YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
+      NODE_ENV: production
+    ports:
+      # Exposed on the host for direct probing during the cutover.
+      # Will be removed (and nginx pointed at api-go:3000) when this
+      # service replaces `api` permanently.
+      - "3001:3000"
+
   # ── nginx (reverse proxy + static frontend) ───────────
   nginx:
     image: ghcr.io/bratan-corp/bratan-music-web:latest

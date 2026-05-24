@@ -93,7 +93,8 @@ npm run deploy       # вручную (по умолчанию деплой че
 
 - Глобальное описание продукта и стека: [`docs/context/index.md`](docs/context/index.md)
 - Карта frontend: [`docs/structure/frontend/index.md`](docs/structure/frontend/index.md)
-- Карта worker: [`docs/structure/worker/index.md`](docs/structure/worker/index.md)
+- Карта worker (legacy TS): [`docs/structure/worker/index.md`](docs/structure/worker/index.md)
+- Карта api-go (Go-порт, в процессе замены worker): [`docs/structure/api-go/index.md`](docs/structure/api-go/index.md)
 - Карта Telegram-бота: [`docs/structure/telegram-bot/index.md`](docs/structure/telegram-bot/index.md)
 - Данные (D1 / KV / R2 / DO): [`docs/structure/data/index.md`](docs/structure/data/index.md)
 - Journal/tracker: [`docs/daily-changes/index.md`](docs/daily-changes/index.md)

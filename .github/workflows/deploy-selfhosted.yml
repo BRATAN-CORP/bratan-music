@@ -18,6 +18,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/bratan-corp/bratan-music-api
+  API_GO_IMAGE: ghcr.io/bratan-corp/bratan-music-api-go
   WEB_IMAGE: ghcr.io/bratan-corp/bratan-music-web
 
 permissions:
@@ -53,6 +54,22 @@ jobs:
             ${{ env.API_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Go rewrite — builds the api-go binary as a parallel image.
+      # While the rewrite is in progress the legacy TS image at
+      # `API_IMAGE` is still the live `api` container; api-go runs on
+      # a separate port (3001) for verification.
+      - name: Build & push API (Go) image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./api-go/Dockerfile
+          push: true
+          tags: |
+            ${{ env.API_GO_IMAGE }}:latest
+            ${{ env.API_GO_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=api-go
+          cache-to: type=gha,mode=max,scope=api-go
 
       - name: Build & push Web image
         uses: docker/build-push-action@v6
@@ -113,7 +130,7 @@ jobs:
             # Log in to GHCR and pull new images
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>/dev/null
             cd deploy
-            docker compose pull api nginx
+            docker compose pull api api-go nginx
 
             # Restart services
             docker compose up -d --remove-orphans

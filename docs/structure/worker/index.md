@@ -1,4 +1,10 @@
-# Worker (`/worker/src`)
+# Worker (`/worker/src`) — **legacy, переписывается на Go**
+
+> С 2026-05-24 этот сервис заменяется Go-портом в [`/api-go/`](../../../api-go/).
+> Прогресс — `feat/go-backend-rewrite` (draft PR) + `api-go/STATUS.md`.
+> Этот документ описывает текущее состояние TS-бекенда и остаётся
+> актуальным до тех пор, пока он работает как fallback. После cut-over
+> весь раздел `worker/` будет удалён.
 
 Cloudflare Worker на Hono 4. Edge-backend: REST API + Telegram webhook +
 Durable Objects (per-room WS) + cron (recommendation jobs).
