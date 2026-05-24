@@ -13,7 +13,8 @@ import (
 
 // search* / getTrack / streamTrack / trackLyrics / getAlbum* /
 // getArtist* are implemented in tidal_routes.go.
-func telegramWebhook(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
+// telegramWebhook is implemented in internal/routes/webhook.go.
+func telegramWebhook(a *app.App) http.HandlerFunc { return telegramWebhookImpl(a) }
 // adminTidal* implemented in tidal_routes.go.
 func adminHealth(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
 func adminBan(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }

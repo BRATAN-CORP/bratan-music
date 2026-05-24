@@ -103,7 +103,4 @@ type RoomService struct{ A *app.App }
 
 func NewRoomService(a *app.App) *RoomService { return &RoomService{A: a} }
 
-// ---- BotService -------------------------------------------------------
-type BotService struct{ A *app.App }
-
-func NewBotService(a *app.App) *BotService { return &BotService{A: a} }
+// BotService is implemented in internal/services/bot.go.

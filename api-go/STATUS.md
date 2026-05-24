@@ -36,7 +36,7 @@ until parity is reached.
 | `/albums/*`       | ✅      | GET album (with tracks) + GET album tracks.                                                |
 | `/artists/*`      | ✅      | GET artist + top-tracks + albums + singles + releases (concatenated).                      |
 | `/uploads/*`      | ✅      | list/get/create(multipart)/updateMeta/replaceFile/delete/stream; 50 MiB cap, MIME allowlist. |
-| `/webhook/*`      | ❌      | Telegram bot.                                                                              |
+| `/webhook/*`      | ✅      | POST /telegram (constant-time HMAC, async BotService dispatch: /start auth_/link_ deeplinks, /login, /app, /subscribe Stars invoice, /status, /help, /admin_*, pre_checkout validation, idempotent successful_payment). |
 | `/admin/*`        | ⚠️     | Tidal device-flow + daily-playlists/reset ported. Health, ban/unban, grant still 501.       |
 | `/explore/*`      | ✅      | Home/page/list/playlists ported via Tidal pages API; explicit-twin swap deferred until recs. |
 | `/recommendations`| ⚠️     | wave / continue / dislikes (CRUD + details) / seed-artists / genre-seeds / artists search+suggested ported. TasteService + RecommendationService recreated in Go with the same JSON shape — endpoint contracts 1:1 with worker. Rerank simplified: language-script penalty + character-bias multipliers deferred (degrade gracefully — only ever subtract score). |
