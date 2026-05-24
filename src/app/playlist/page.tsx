@@ -11,6 +11,7 @@ import { PlaylistOfflineButton } from '@/components/features/OfflineActionButton
 import { usePlaylist, useReorderPlaylistTracks, usePinPlaylist } from '@/hooks/useLibrary';
 import { useOfflineCoverUrl } from '@/hooks/useOfflineCoverUrl';
 import { usePlayerStore } from '@/store/player';
+import { toPlayerTrack } from '@/lib/playerTrack';
 import type { Track } from '@/types';
 import { IconButton } from '@/components/ui/IconButton';
 import { PageHero } from '@/components/ui/PageHero';
@@ -83,27 +84,12 @@ export function PlaylistPage() {
   };
 
   const handlePlayTrack = (track: Track) => {
-    setTrack({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl,
-      duration: track.duration,
-    });
-    setQueue(
-      localTracks.map((tr) => ({
-        id: tr.id,
-        title: tr.title,
-        artist: tr.artist,
-        artistId: tr.artistId,
-        artists: tr.artists,
-        coverUrl: tr.coverUrl,
-        coverVideoUrl: tr.coverVideoUrl,
-        duration: tr.duration,
-      }))
-    );
+    // Centralised `toPlayerTrack` carries `explicit` so the mini /
+    // fullscreen player keeps the badge visible. Inline objects here
+    // used to silently strip the flag for tracks played from playlist
+    // pages.
+    setTrack(toPlayerTrack(track));
+    setQueue(localTracks.map(toPlayerTrack));
   };
 
   const handleReorderEnd = () => {

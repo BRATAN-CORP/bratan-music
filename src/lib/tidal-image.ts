@@ -14,9 +14,24 @@
  * that's been pre-rendered; if you ask for an unknown size the CDN
  * returns 404, so stick to documented values.
  */
+/**
+ * Internal: wrap a tidal-CDN URL with our `/covers/proxy?url=...`
+ * endpoint. See worker/src/services/tidal/TidalService.ts for the
+ * full rationale — short version: hitting `resources.tidal.com`
+ * directly from the browser produces 403s for many clients, while
+ * the same URL works server-side from the API container, so we
+ * route through the worker proxy.
+ */
+function proxied(raw: string): string {
+  // Use a relative path so the browser resolves against the current
+  // origin (works for both `bratan-music.eu.cc` and any future
+  // hostnames without a rebuild).
+  return `/api/covers/proxy?url=${encodeURIComponent(raw)}`;
+}
+
 export function tidalImageUrl(imageId: string | undefined | null, size: 320 | 480 | 640 | 1080 = 480): string | undefined {
   if (!imageId) return undefined;
-  return `https://resources.tidal.com/images/${imageId.replace(/-/g, '/')}/${size}x${size}.jpg`;
+  return proxied(`https://resources.tidal.com/images/${imageId.replace(/-/g, '/')}/${size}x${size}.jpg`);
 }
 
 /**
@@ -29,5 +44,5 @@ export function tidalImageUrlWide(imageId: string | undefined | null, width: 320
   if (!imageId) return undefined;
   // 1.6:1 keeps the focal point centred for portraits/album art.
   const height = Math.round(width / 1.6);
-  return `https://resources.tidal.com/images/${imageId.replace(/-/g, '/')}/${width}x${height}.jpg`;
+  return proxied(`https://resources.tidal.com/images/${imageId.replace(/-/g, '/')}/${width}x${height}.jpg`);
 }
