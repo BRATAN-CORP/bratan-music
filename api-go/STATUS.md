@@ -22,7 +22,7 @@ until parity is reached.
 | `/auth/refresh`   | ✅      | In-place session rotation (same sid), bumps last_used_at.                                   |
 | `/auth/logout`    | ✅      | Drops session row by token_hash.                                                            |
 | `/auth/nonce/:n`  | ✅      | GET, polled by deeplink-login flow.                                                         |
-| `/auth/email/*`   | ❌      | Brevo client + OTP service pending — worker:3000 still serves these.                        |
+| `/auth/email/*`   | ✅      | Brevo transactional + OTP service ported. RU/EN body, disposable blocklist, per-IP signup cap. |
 | `/user/me`        | ✅      |                                                                                            |
 | `/user/settings`  | ✅      | GET + PUT.                                                                                 |
 | `/user/quota`     | ✅      |                                                                                            |
