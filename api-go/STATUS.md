@@ -43,7 +43,7 @@ until parity is reached.
 | `/daily-playlists`| ✅      | GET /today (lazy generate) + POST /save/{id}. 3 variants, cross-variant claim, 4-phase backfill, mood-quadrant pick. Cron RegenerateForActive wired. |
 | `/rooms/*`        | ✅      | REST + WS chat hub; stream proxy gated to currently-playing track.                         |
 | `/ai/playlists`   | ✅      | POST /generate (Yandex gpt-oss-120b plan → parallel tidal.Search → round-robin merge + dislike filter) + POST /save. |
-| Cron orchestrator | ⚠️     | Loop runs at 04:30 UTC; task bodies are stubs until taste/daily/recs services are ported.  |
+| Cron orchestrator | ✅     | Loop runs at 04:30 UTC: Taste.RecomputeActive → Daily.RegenerateForActive → Recs.GCStale. |
 
 ## Cut-over plan
 
