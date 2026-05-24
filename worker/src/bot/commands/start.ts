@@ -3,7 +3,7 @@ import type { TelegramMessage } from '../types';
 import { TelegramClient } from '../telegram';
 import { UserService } from '../../services/UserService';
 
-const DEFAULT_APP_URL = 'https://bratan-corp.github.io/bratan-music/';
+const DEFAULT_APP_URL = 'https://bratan-music.eu.cc';
 
 /** TTL for the bot-minted login nonces, in seconds. The same value is used
  *  by the /auth/nonce/:nonce polling endpoint when filtering expired rows. */
