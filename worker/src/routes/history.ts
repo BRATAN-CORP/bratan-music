@@ -120,9 +120,14 @@ history.get('/recent', async (c) => {
   // not per-play, so it should be stable across rows).
   const res = await c.env.DB
     .prepare(
-      `SELECT track_id, source, artist_id, artist_name,
+      `SELECT track_id, source,
+              MAX(artist_id) AS artist_id,
+              MAX(artist_name) AS artist_name,
               MAX(artists_json) AS artists_json,
-              title, album_id, cover_url, duration,
+              MAX(title) AS title,
+              MAX(album_id) AS album_id,
+              MAX(cover_url) AS cover_url,
+              MAX(duration) AS duration,
               MAX(explicit) AS explicit,
               MAX(played_at) AS played_at
          FROM play_history
