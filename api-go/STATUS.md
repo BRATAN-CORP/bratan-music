@@ -42,7 +42,7 @@ until parity is reached.
 | `/recommendations`| ⚠️     | wave / continue / dislikes (CRUD + details) / seed-artists / genre-seeds / artists search+suggested ported. TasteService + RecommendationService recreated in Go with the same JSON shape — endpoint contracts 1:1 with worker. Rerank simplified: language-script penalty + character-bias multipliers deferred (degrade gracefully — only ever subtract score). |
 | `/daily-playlists`| ✅      | GET /today (lazy generate) + POST /save/{id}. 3 variants, cross-variant claim, 4-phase backfill, mood-quadrant pick. Cron RegenerateForActive wired. |
 | `/rooms/*`        | ✅      | REST + WS chat hub; stream proxy gated to currently-playing track.                         |
-| `/ai/playlists`   | ❌      | Yandex GPT.                                                                                |
+| `/ai/playlists`   | ✅      | POST /generate (Yandex gpt-oss-120b plan → parallel tidal.Search → round-robin merge + dislike filter) + POST /save. |
 | Cron orchestrator | ⚠️     | Loop runs at 04:30 UTC; task bodies are stubs until taste/daily/recs services are ported.  |
 
 ## Cut-over plan

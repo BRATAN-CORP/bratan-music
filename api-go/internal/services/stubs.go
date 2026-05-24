@@ -96,10 +96,7 @@ func NewTidalService(a *app.App) *TidalService {
 	}
 }
 
-// ---- AIPlaylistService ------------------------------------------------
-type AIPlaylistService struct{ A *app.App }
-
-func NewAIPlaylistService(a *app.App) *AIPlaylistService { return &AIPlaylistService{A: a} }
+// AIPlaylistService is implemented in internal/services/ai_playlist.go.
 
 // ---- RoomService ------------------------------------------------------
 type RoomService struct{ A *app.App }

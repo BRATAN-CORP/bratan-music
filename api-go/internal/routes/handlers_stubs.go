@@ -22,4 +22,5 @@ func adminGrant(a *app.App) http.HandlerFunc         { _ = a; return notImplemen
 // adminResetDaily delegates to internal/routes/admin_daily.go.
 func adminResetDaily(a *app.App) http.HandlerFunc { return adminResetDailyImpl(a) }
 // dailyToday / dailySave implemented in internal/routes/daily.go.
-func aiGenerate(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
+// aiGenerate / aiSave implemented in internal/routes/ai_playlists.go.
+func aiGenerate(a *app.App) http.HandlerFunc { return aiGenerateImpl(a) }

@@ -173,6 +173,7 @@ func mountRooms(a *app.App) func(chi.Router) {
 func mountAIPlaylists(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
-		r.Post("/", aiGenerate(a))
+		r.Post("/generate", aiGenerate(a))
+		r.Post("/save", aiSave(a))
 	}
 }
