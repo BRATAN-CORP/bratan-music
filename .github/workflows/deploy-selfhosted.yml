@@ -109,6 +109,7 @@ jobs:
             # Sync deploy configs from repo
             cp app/deploy/docker-compose.yml deploy/docker-compose.yml
             cp -r app/deploy/nginx deploy/
+            cp -r app/deploy/backup-tg deploy/
 
             # Log in to GHCR and pull new images
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>/dev/null
