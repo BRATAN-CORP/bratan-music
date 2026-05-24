@@ -69,9 +69,13 @@ func mountArtists(a *app.App) func(chi.Router) {
 func mountUploads(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
-		r.Post("/", createUpload(a))
 		r.Get("/", listUploads(a))
+		r.Post("/", createUpload(a))
+		r.Get("/{id}", getUpload(a))
+		r.Put("/{id}", updateUploadMeta(a))
+		r.Put("/{id}/file", replaceUploadFile(a))
 		r.Delete("/{id}", deleteUpload(a))
+		r.Get("/{id}/stream", streamUpload(a))
 	}
 }
 
@@ -101,7 +105,8 @@ func mountExplore(a *app.App) func(chi.Router) {
 		r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
 		r.Get("/", exploreHome(a))
 		r.Get("/page/{slug}", explorePage(a))
-		r.Get("/playlist/{id}", explorePlaylist(a))
+		r.Get("/list", exploreList(a))
+		r.Get("/playlists/{uuid}/tracks", explorePlaylist(a))
 	}
 }
 

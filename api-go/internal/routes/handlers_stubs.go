@@ -13,10 +13,6 @@ import (
 
 // search* / getTrack / streamTrack / trackLyrics / getAlbum* /
 // getArtist* are implemented in tidal_routes.go.
-func searchPlaylists(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func createUpload(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
-func listUploads(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
-func deleteUpload(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
 func telegramWebhook(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
 // adminTidal* implemented in tidal_routes.go.
 func adminHealth(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
@@ -24,9 +20,6 @@ func adminBan(a *app.App) http.HandlerFunc           { _ = a; return notImplemen
 func adminUnban(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
 func adminGrant(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
 func adminResetDaily(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
-func exploreHome(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
-func explorePage(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
-func explorePlaylist(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
 func recsWave(a *app.App) http.HandlerFunc           { _ = a; return notImplemented }
 func recsTrackRadio(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
 func recsDislikesDetails(a *app.App) http.HandlerFunc { _ = a; return notImplemented }

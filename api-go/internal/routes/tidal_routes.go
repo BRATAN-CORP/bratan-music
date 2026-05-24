@@ -137,7 +137,38 @@ func buildSearchResult(raw *tidal.SearchResponse) *tidal.SearchResult {
 		tt := raw.Artists.TotalNumberOfItems
 		out.TotalArtists = &tt
 	}
+	if raw.Playlists != nil {
+		items := tidal.UnwrapBucket[tidal.PlaylistRaw](raw.Playlists)
+		for i := range items {
+			out.Playlists = append(out.Playlists, tidal.MapPlaylist(&items[i]))
+		}
+		tt := raw.Playlists.TotalNumberOfItems
+		out.TotalPlaylists = &tt
+	}
 	return out
+}
+
+// searchPlaylists handles GET /search/playlists. The worker only
+// exposed playlist search through `/search?filter=playlists` — the
+// Go side splits the bucket out as a dedicated endpoint so the
+// per-type pagination defaults can be richer (50 by default, same
+// as tracks/albums/artists).
+func searchPlaylists(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" {
+			httpx.Err(w, http.StatusBadRequest, "q is required")
+			return
+		}
+		limit := queryInt(r, "limit", 50)
+		offset := queryInt(r, "offset", 0)
+		raw, err := tidalSvc(a).API.Search(r.Context(), q, "PLAYLISTS", limit, offset)
+		if err != nil {
+			httpx.Internal(w, err)
+			return
+		}
+		httpx.JSON(w, 200, buildSearchResult(raw))
+	}
 }
 
 // ---- tracks -----------------------------------------------------------

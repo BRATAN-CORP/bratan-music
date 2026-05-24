@@ -30,15 +30,15 @@ until parity is reached.
 | `/history/*`      | ✅      | Play, recent (DISTINCT ON), clear.                                                         |
 | `/playlists/*`    | ✅      | Full CRUD + reorder + pin + share-token.                                                   |
 | `/library/*`      | ✅      | Likes for tracks (via liked playlist) / albums / artists (via `library_items`).            |
-| `/search/*`       | ⚠️     | tracks/albums/artists ported via Tidal client; `/search/playlists` still 501.              |
+| `/search/*`       | ✅      | tracks/albums/artists/playlists ported via Tidal client (PLAYLISTS bucket on /v1/search).  |
 | `/tracks/*`       | ✅      | GET track, stream (302), lyrics + PUT/DELETE/GET/stream override (50 MiB cap, MIME allowlist, sub-gated). |
 | `/covers/*`       | ✅      | `GET /covers/proxy?url=…` host-allowlisted Tidal image proxy with edge-cache headers.       |
 | `/albums/*`       | ✅      | GET album (with tracks) + GET album tracks.                                                |
 | `/artists/*`      | ✅      | GET artist + top-tracks + albums + singles + releases (concatenated).                      |
-| `/uploads/*`      | ❌      |                                                                                            |
+| `/uploads/*`      | ✅      | list/get/create(multipart)/updateMeta/replaceFile/delete/stream; 50 MiB cap, MIME allowlist. |
 | `/webhook/*`      | ❌      | Telegram bot.                                                                              |
 | `/admin/*`        | ⚠️     | Tidal device-flow (accounts/start/poll) ported. Health, ban/unban, grant, reset still 501. |
-| `/explore/*`      | ❌      |                                                                                            |
+| `/explore/*`      | ✅      | Home/page/list/playlists ported via Tidal pages API; explicit-twin swap deferred until recs. |
 | `/recommendations`| ❌      |                                                                                            |
 | `/daily-playlists`| ❌      |                                                                                            |
 | `/rooms/*`        | ✅      | REST + WS chat hub; stream proxy gated to currently-playing track.                         |

@@ -96,9 +96,32 @@ type LyricsRaw struct {
 // SearchResponse is the upstream /v1/search shape — each bucket
 // optionally wraps every item as `{item: ...}` or `{value: ...}`.
 type SearchResponse struct {
-	Artists *SearchBucket `json:"artists,omitempty"`
-	Albums  *SearchBucket `json:"albums,omitempty"`
-	Tracks  *SearchBucket `json:"tracks,omitempty"`
+	Artists   *SearchBucket `json:"artists,omitempty"`
+	Albums    *SearchBucket `json:"albums,omitempty"`
+	Tracks    *SearchBucket `json:"tracks,omitempty"`
+	Playlists *SearchBucket `json:"playlists,omitempty"`
+}
+
+// PlaylistRaw is the upstream Tidal editorial playlist shape, ported
+// from worker/src/services/tidal/TidalApi.ts:TidalPlaylistRaw. Only
+// the fields the frontend renders are listed.
+type PlaylistRaw struct {
+	UUID            string  `json:"uuid"`
+	Title           string  `json:"title"`
+	Description     *string `json:"description,omitempty"`
+	Type            string  `json:"type,omitempty"`
+	URL             string  `json:"url,omitempty"`
+	Image           *string `json:"image,omitempty"`
+	SquareImage     *string `json:"squareImage,omitempty"`
+	Duration        int     `json:"duration,omitempty"`
+	NumberOfTracks  int     `json:"numberOfTracks,omitempty"`
+	NumberOfVideos  int     `json:"numberOfVideos,omitempty"`
+	Creator         *struct {
+		ID   int64  `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"creator,omitempty"`
+	PromotedArtists []ArtistMin `json:"promotedArtists,omitempty"`
+	Explicit        *bool       `json:"explicit,omitempty"`
 }
 
 // SearchBucket holds a paginated bucket of raw items + total count.
@@ -147,4 +170,53 @@ type ResolvedStream struct {
 	Quality  string
 	Codec    string
 	MimeType string
+}
+
+// ---- Tidal page (explore) ---------------------------------------------
+
+// PageLinkRaw is the upstream "page link" tile shape used by
+// PAGE_LINKS / PAGE_LINKS_CLOUD modules (mood, genre, decade pills).
+type PageLinkRaw struct {
+	Title   string `json:"title"`
+	APIPath string `json:"apiPath,omitempty"`
+	Icon    string `json:"icon,omitempty"`
+	ImageID string `json:"imageId,omitempty"`
+}
+
+// PagedListRaw is the upstream `pagedList` wrapper inside each
+// page module. Items are kept as raw JSON since Tidal also wraps
+// them as `{item: …}` / `{value: …}` depending on the bucket.
+type PagedListRaw struct {
+	DataAPIPath        string            `json:"dataApiPath,omitempty"`
+	Limit              int               `json:"limit,omitempty"`
+	Offset             int               `json:"offset,omitempty"`
+	TotalNumberOfItems int               `json:"totalNumberOfItems,omitempty"`
+	Items              []json.RawMessage `json:"items,omitempty"`
+}
+
+// PageModuleRaw is the upstream module shape inside a page row.
+type PageModuleRaw struct {
+	ID          string        `json:"id"`
+	Type        string        `json:"type"`
+	Title       string        `json:"title,omitempty"`
+	Description string        `json:"description,omitempty"`
+	Width       int           `json:"width,omitempty"`
+	PagedList   *PagedListRaw `json:"pagedList,omitempty"`
+	ShowMore    *struct {
+		Title   string `json:"title,omitempty"`
+		APIPath string `json:"apiPath,omitempty"`
+	} `json:"showMore,omitempty"`
+}
+
+// PageRowRaw groups modules on a page.
+type PageRowRaw struct {
+	Modules []PageModuleRaw `json:"modules,omitempty"`
+}
+
+// PageRaw is the top-level shape returned by /v1/pages/<slug>.
+type PageRaw struct {
+	SelfLink *string      `json:"selfLink,omitempty"`
+	ID       string       `json:"id"`
+	Title    string       `json:"title"`
+	Rows     []PageRowRaw `json:"rows,omitempty"`
 }

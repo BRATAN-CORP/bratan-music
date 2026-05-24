@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -304,4 +305,38 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// GetPage fetches a Tidal "page" — the structured tree of modules
+// (PLAYLIST_LIST, TRACK_LIST, PAGE_LINKS_CLOUD, …) the Tidal web/desktop
+// apps render for Explore, Genre, Mood, Decade etc. screens.
+func (a *API) GetPage(ctx context.Context, slug string) (*PageRaw, error) {
+	params := a.commonParams(ctx, nil)
+	var p PageRaw
+	if err := a.get(ctx, "/v1/pages/"+slug+"?"+params.Encode(), &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// GetPageData paginates a single module's `dataApiPath`. Tidal accepts
+// limit/offset windows up to 50 items.
+func (a *API) GetPageData(ctx context.Context, dataAPIPath string, limit, offset int) (*PagedListRaw, error) {
+	extra := url.Values{}
+	if limit > 0 {
+		extra.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		extra.Set("offset", strconv.Itoa(offset))
+	}
+	params := a.commonParams(ctx, extra)
+	clean := dataAPIPath
+	if !strings.HasPrefix(clean, "/") {
+		clean = "/" + clean
+	}
+	var p PagedListRaw
+	if err := a.get(ctx, "/v1"+clean+"?"+params.Encode(), &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
 }

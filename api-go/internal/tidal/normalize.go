@@ -88,12 +88,60 @@ type Artist struct {
 
 // SearchResult is the app-level search response.
 type SearchResult struct {
-	Tracks       []Track  `json:"tracks"`
-	Albums       []Album  `json:"albums"`
-	Artists      []Artist `json:"artists"`
-	TotalTracks  *int     `json:"totalTracks,omitempty"`
-	TotalAlbums  *int     `json:"totalAlbums,omitempty"`
-	TotalArtists *int     `json:"totalArtists,omitempty"`
+	Tracks         []Track    `json:"tracks"`
+	Albums         []Album    `json:"albums"`
+	Artists        []Artist   `json:"artists"`
+	Playlists      []Playlist `json:"playlists,omitempty"`
+	TotalTracks    *int       `json:"totalTracks,omitempty"`
+	TotalAlbums    *int       `json:"totalAlbums,omitempty"`
+	TotalArtists   *int       `json:"totalArtists,omitempty"`
+	TotalPlaylists *int       `json:"totalPlaylists,omitempty"`
+}
+
+// Playlist is the app-level editorial-playlist shape (matches the
+// worker's ExplorePlaylist + search result shape).
+type Playlist struct {
+	ID          string `json:"id"`
+	Source      string `json:"source"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	CoverURL    string `json:"coverUrl,omitempty"`
+	Curator     string `json:"curator,omitempty"`
+	TrackCount  int    `json:"trackCount,omitempty"`
+	Duration    int    `json:"duration,omitempty"`
+	Explicit    *bool  `json:"explicit,omitempty"`
+}
+
+// MapPlaylist converts a raw editorial-playlist record to the
+// app-level Playlist shape. Square cover is preferred for grids,
+// wide image is used as a fallback.
+func MapPlaylist(raw *PlaylistRaw) Playlist {
+	if raw == nil {
+		return Playlist{}
+	}
+	cover := raw.SquareImage
+	if cover == nil || *cover == "" {
+		cover = raw.Image
+	}
+	curator := ""
+	if raw.Creator != nil {
+		curator = raw.Creator.Name
+	}
+	desc := ""
+	if raw.Description != nil {
+		desc = *raw.Description
+	}
+	return Playlist{
+		ID:          raw.UUID,
+		Source:      "tidal",
+		Title:       raw.Title,
+		Description: desc,
+		CoverURL:    CoverURL(cover, 480),
+		Curator:     curator,
+		TrackCount:  raw.NumberOfTracks,
+		Duration:    raw.Duration,
+		Explicit:    raw.Explicit,
+	}
 }
 
 // dedupeArtistRefs ports worker/TidalService.ts:dedupeArtistRefs.
@@ -230,10 +278,10 @@ func MapArtist(raw *ArtistRaw) Artist {
 	}
 }
 
-// unwrapItem handles Tidal's flat-or-wrapped item shape. Tidal
+// UnwrapItem handles Tidal's flat-or-wrapped item shape. Tidal
 // occasionally returns `{item: ...}` or `{value: ...}` instead of the
 // raw object directly.
-func unwrapItem[T any](msg json.RawMessage) (*T, error) {
+func UnwrapItem[T any](msg json.RawMessage) (*T, error) {
 	var wrap struct {
 		Item  json.RawMessage `json:"item"`
 		Value json.RawMessage `json:"value"`
@@ -268,7 +316,7 @@ func UnwrapBucket[T any](b *SearchBucket) []T {
 	}
 	out := make([]T, 0, len(b.Items))
 	for _, msg := range b.Items {
-		v, err := unwrapItem[T](msg)
+		v, err := UnwrapItem[T](msg)
 		if err != nil || v == nil {
 			continue
 		}
