@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_setup:
+        description: 'Run full server setup (first deploy)'
+        required: false
+        default: 'false'
+        type: boolean
 
 concurrency:
   group: deploy-selfhosted
@@ -22,9 +28,6 @@ jobs:
   build-and-push:
     name: Build & Push Images
     runs-on: ubuntu-latest
-    outputs:
-      api_digest: ${{ steps.api.outputs.digest }}
-      web_digest: ${{ steps.web.outputs.digest }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,9 +42,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── API image ──
       - name: Build & push API image
-        id: api
         uses: docker/build-push-action@v6
         with:
           context: ./worker
@@ -53,9 +54,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── Frontend (nginx + built SPA) ──
       - name: Build & push Web image
-        id: web
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -78,13 +77,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Install cloudflared for SSH access via CF Tunnel ──
       - name: Install cloudflared
         run: |
           curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
           sudo dpkg -i /tmp/cloudflared.deb
 
-      # ── Set up SSH with cloudflared proxy ──
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
@@ -100,45 +97,49 @@ jobs:
             ProxyCommand cloudflared access ssh --hostname %h
           EOF
 
-      # ── Deploy: pull new images & restart ──
-      - name: Deploy to server
+      - name: Deploy
         run: |
           ssh deploy-server << 'DEPLOY'
             set -e
             cd /opt/bratan-music
 
-            # Update repo (for config changes)
+            # Update repo
             cd app && git fetch origin && git reset --hard origin/main && cd ..
 
             # Sync deploy configs from repo
             cp app/deploy/docker-compose.yml deploy/docker-compose.yml
             cp -r app/deploy/nginx deploy/
 
-            # Pull new images and restart
+            # Log in to GHCR and pull new images
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin 2>/dev/null
             cd deploy
             docker compose pull api nginx
+
+            # Restart services
             docker compose up -d --remove-orphans
 
             # Clean up old images
             docker image prune -f
 
-            # Health check
-            sleep 10
-            STATUS=$(curl -sf http://localhost/api/health | grep -c '"ok"' || true)
-            if [ "$STATUS" -eq 1 ]; then
-              echo "✅ Deploy successful — API healthy"
-            else
-              echo "❌ API health check failed!"
-              docker compose logs api --tail 20
-              exit 1
-            fi
+            # Health check (wait for API)
+            echo "Waiting for API..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost/api/health | grep -q '"ok"'; then
+                echo "✅ Deploy successful — API healthy"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "❌ API health check failed!"
+            docker compose logs api --tail 30
+            exit 1
           DEPLOY
 
   # ── First-time server setup (manual trigger only) ──
   setup:
     name: Initial Server Setup
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.full_setup == 'true'
 
     steps:
       - uses: actions/checkout@v4
@@ -182,7 +183,7 @@ jobs:
             echo "Docker: $(docker --version)"
             echo "Compose: $(docker compose version)"
 
-            # Clone repo if not present
+            # Clone repo
             mkdir -p /opt/bratan-music
             if [ ! -d /opt/bratan-music/app/.git ]; then
               git clone --depth 1 -b main https://github.com/BRATAN-CORP/bratan-music.git /opt/bratan-music/app
@@ -195,9 +196,9 @@ jobs:
             cp /opt/bratan-music/app/deploy/docker-compose.yml /opt/bratan-music/deploy/docker-compose.yml
             cp -r /opt/bratan-music/app/deploy/nginx/conf.d /opt/bratan-music/deploy/nginx/conf.d
 
-            # Generate .env if not present
+            # Check .env exists
             if [ ! -f /opt/bratan-music/deploy/.env ]; then
-              echo "⚠️  No .env file found! Create /opt/bratan-music/deploy/.env with required secrets."
+              echo "⚠️  No .env file! Copy deploy/.env.example to /opt/bratan-music/deploy/.env and fill in secrets."
               exit 1
             fi
 
@@ -209,5 +210,22 @@ jobs:
             docker compose pull
             docker compose up -d
 
-            echo "✅ Initial setup complete!"
+            # Wait for services
+            echo "Waiting for services..."
+            sleep 15
+
+            # Create MinIO bucket if needed
+            docker compose exec -T minio mc alias set local http://localhost:9000 \
+              $(grep MINIO_ACCESS_KEY /opt/bratan-music/deploy/.env | cut -d= -f2) \
+              $(grep MINIO_SECRET_KEY /opt/bratan-music/deploy/.env | cut -d= -f2) 2>/dev/null
+            docker compose exec -T minio mc mb --ignore-existing local/tracks
+
+            # Health check
+            if curl -sf http://localhost/api/health | grep -q '"ok"'; then
+              echo "✅ Initial setup complete — API healthy"
+            else
+              echo "❌ API health check failed"
+              docker compose logs api --tail 20
+              exit 1
+            fi
           SETUP

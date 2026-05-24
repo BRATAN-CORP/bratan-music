@@ -37,3 +37,6 @@ coverage/
 .cache/
 *.tsbuildinfo
 vite.config.d.ts
+
+# Deploy secrets (never commit!)
+deploy/.env
