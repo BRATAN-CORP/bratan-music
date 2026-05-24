@@ -25,13 +25,33 @@ import { TidalWeb } from './TidalWeb';
 import { kvGetText, kvPutText } from '../streamCache';
 
 const IMG_BASE = 'https://resources.tidal.com/images';
+const VIDEO_BASE = 'https://resources.tidal.com/videos';
+
+/**
+ * Wrap a tidal-CDN URL with our `/covers/proxy?url=...` endpoint so the
+ * browser fetches the image through nginx/api instead of hitting
+ * `resources.tidal.com` directly. The CDN regularly returns 403 for
+ * direct cross-origin requests from random client IPs (geo / hot-link
+ * defence), even though the same URL works server-side from the API
+ * container. Routing through the proxy fixes the rash of `Failed to
+ * load resource: 403` errors on cover art and genre tiles reported by
+ * the user. The path is relative — the browser resolves it against
+ * the page origin, so this works for both `bratan-music.eu.cc` and
+ * any future custom domains without rebuilding.
+ *
+ * Video covers (.mp4) are NOT proxied here: the `/covers/proxy`
+ * endpoint is image-only by design (long-cache, no Range support),
+ * and the video element handles `resources.tidal.com` fine on its
+ * own because it doesn't need a CORS round-trip to play.
+ */
+function proxiedImage(raw: string): string {
+  return `/api/covers/proxy?url=${encodeURIComponent(raw)}`;
+}
 
 function coverUrl(coverId: string | null | undefined, size: number = 640): string | undefined {
   if (!coverId) return undefined;
-  return `${IMG_BASE}/${coverId.replace(/-/g, '/')}/${size}x${size}.jpg`;
+  return proxiedImage(`${IMG_BASE}/${coverId.replace(/-/g, '/')}/${size}x${size}.jpg`);
 }
-
-const VIDEO_BASE = 'https://resources.tidal.com/videos';
 
 /**
  * Construct the URL for an animated cover (mp4) at the given size. Only some
@@ -45,7 +65,7 @@ function videoCoverUrl(videoId: string | null | undefined, size: number = 1280):
 
 function artistImageUrl(pictureId: string | null | undefined, size: number = 480): string | undefined {
   if (!pictureId) return undefined;
-  return `${IMG_BASE}/${pictureId.replace(/-/g, '/')}/${size}x${size}.jpg`;
+  return proxiedImage(`${IMG_BASE}/${pictureId.replace(/-/g, '/')}/${size}x${size}.jpg`);
 }
 
 /**

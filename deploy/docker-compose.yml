@@ -22,9 +22,21 @@ services:
       retries: 10
     logging: *default-logging
 
-  # ── Postgres backups (daily, retained 14 days) ────────
-  postgres-backup:
-    image: prodrigestivill/postgres-backup-local:16
+  # ── Telegram-only Postgres backups (daily) ────────────
+  # Replaces `prodrigestivill/postgres-backup-local`: dumps the
+  # database with pg_dump, gzips, and ships the result to the
+  # bot's admin chat via Telegram's Bot API. Nothing persists on
+  # disk — the dump lives in /tmp inside the container for the
+  # upload window only. See `deploy/backup-tg/backup.sh` for the
+  # full rationale, chunk-splitting logic and exit codes.
+  #
+  # When `telegram-bot-api` is running (TELEGRAM_API_ID / HASH
+  # configured), set `TELEGRAM_BOT_API_URL=http://telegram-bot-api:8081`
+  # to lift the 50 MB per-document cloud limit to ~2 GB.
+  postgres-backup-tg:
+    build:
+      context: ./backup-tg
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
@@ -34,19 +46,56 @@ services:
       POSTGRES_DB: bratan_music
       POSTGRES_USER: bratan
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_EXTRA_OPTS: "-Z9 --clean --if-exists --no-owner --no-privileges"
-      SCHEDULE: "@daily"
-      BACKUP_KEEP_DAYS: "14"
-      BACKUP_KEEP_WEEKS: "4"
-      BACKUP_KEEP_MONTHS: "6"
-      HEALTHCHECK_PORT: "8080"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Hard-coded by Miroslav's request — backup recipient is the
+      # admin's personal Telegram (422896004). If we ever need more
+      # than one recipient, switch this to a comma-separated list
+      # and update backup.sh to loop over the IDs.
+      TELEGRAM_BACKUP_CHAT_ID: "422896004"
+      # Empty by default → script falls back to https://api.telegram.org
+      # (50 MB / file). Override with `http://telegram-bot-api:8081`
+      # once the local server has API_ID / HASH in `.env` to lift the
+      # cap to ~2 GB / file.
+      TELEGRAM_BOT_API_URL: ${TELEGRAM_BOT_API_URL:-}
+      BACKUP_INTERVAL_SECONDS: "86400"
+    logging: *default-logging
+
+  # ── Local Telegram Bot API server (2 GB / file uploads) ──
+  # The cloud `api.telegram.org` Bot API caps file uploads at
+  # 50 MB per document — fine for today's tiny dump (~15 KB) but
+  # a foot-gun as the catalogue grows. Running a local Bot API
+  # server lifts the cap to 2 GB per file and lets us keep all
+  # backup traffic on the LAN between containers.
+  #
+  # Requires `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from
+  # https://my.telegram.org/apps (these are *user* credentials,
+  # NOT the bot token — any TG account can generate a pair). The
+  # service starts in profile `local-tg` so it stays off by default
+  # until those env vars are populated:
+  #
+  #   docker compose --profile local-tg up -d telegram-bot-api
+  #
+  # …then set `TELEGRAM_BOT_API_URL=http://telegram-bot-api:8081`
+  # on the `postgres-backup-tg` service (or in `.env`) and re-up
+  # that container.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    profiles: ["local-tg"]
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      # Cloud-equivalent defaults; tweak if needed.
+      TELEGRAM_LOCAL: 1
+      TELEGRAM_VERBOSITY: 2
     volumes:
-      - pgbackups:/backups
+      - tgbotapi:/var/lib/telegram-bot-api
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null 2>&1 || pg_isready -h postgres -U bratan"]
-      interval: 1m
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging: *default-logging
 
   # ── Redis (replaces KV) ───────────────────────────────
@@ -148,4 +197,6 @@ volumes:
   pgdata:
   redisdata:
   miniodata:
-  pgbackups:
+  # `pgbackups:` removed — backups now ship to Telegram instead of
+  # accumulating on a local volume. See `postgres-backup-tg`.
+  tgbotapi:

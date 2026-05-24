@@ -8,6 +8,7 @@ import { Eyebrow } from '@/components/ui/SectionHeading';
 import { TrackItem } from '@/components/features/TrackItem';
 import { useSharedPlaylist, useSavePlaylistFromShare } from '@/hooks/useShare';
 import { usePlayerStore } from '@/store/player';
+import { toPlayerTrack } from '@/lib/playerTrack';
 import type { Track } from '@/types';
 import { useT } from '@/i18n';
 
@@ -34,28 +35,10 @@ export function SharedPlaylistPage() {
   const showLoading = !token || isLoading || (isFetching && !data);
 
   const handlePlay = (track: Track) => {
-    setTrack({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl,
-      coverVideoUrl: track.coverVideoUrl,
-      duration: track.duration,
-    });
-    setQueue(
-      tracks.map((tr) => ({
-        id: tr.id,
-        title: tr.title,
-        artist: tr.artist,
-        artistId: tr.artistId,
-        artists: tr.artists,
-        coverUrl: tr.coverUrl,
-        coverVideoUrl: tr.coverVideoUrl,
-        duration: tr.duration,
-      })),
-    );
+    // `toPlayerTrack` carries `explicit` so the badge stays visible
+    // when playback starts from a shared-link landing.
+    setTrack(toPlayerTrack(track));
+    setQueue(tracks.map(toPlayerTrack));
   };
 
   const handleSave = async () => {
