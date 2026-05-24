@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ../worker/init-db:/docker-entrypoint-initdb.d:ro
+      - /opt/bratan-music/app/worker/init-db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U bratan -d bratan_music"]
       interval: 5s
@@ -67,9 +67,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY}
-      TIDAL_CLIENT_ID: ${TIDAL_CLIENT_ID}
-      TIDAL_CLIENT_SECRET: ${TIDAL_CLIENT_SECRET}
-      TIDAL_SESSION_TOKEN: ${TIDAL_SESSION_TOKEN}
+      TIDAL_CLIENT_ID: ${TIDAL_CLIENT_ID:-}
+      TIDAL_CLIENT_SECRET: ${TIDAL_CLIENT_SECRET:-}
+      TIDAL_SESSION_TOKEN: ${TIDAL_SESSION_TOKEN:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
       TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS}
@@ -81,8 +81,6 @@ services:
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
       YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
       NODE_ENV: production
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
 
   # ── nginx (reverse proxy + static frontend) ───────────
   nginx:
@@ -94,22 +92,6 @@ services:
       - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
-
-  # ── Watchtower (auto-pull new images from GHCR) ──────
-  watchtower:
-    image: containrrr/watchtower
-    restart: unless-stopped
-    environment:
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_POLL_INTERVAL: "30"
-      WATCHTOWER_LABEL_ENABLE: "true"
-      WATCHTOWER_ROLLING_RESTART: "true"
-      WATCHTOWER_INCLUDE_RESTARTING: "true"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.docker/config.json:/config.json:ro
 
 volumes:
   pgdata:
