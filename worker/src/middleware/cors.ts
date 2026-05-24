@@ -8,8 +8,13 @@ export const corsMiddleware = cors({
     'http://localhost:3000',
   ],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  exposeHeaders: ['Content-Length'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Range'],
+  exposeHeaders: [
+    'Content-Length',
+    'Content-Type',
+    'Content-Range',
+    'Accept-Ranges',
+  ],
   maxAge: 86400,
   credentials: true,
 });
