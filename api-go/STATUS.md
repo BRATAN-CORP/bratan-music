@@ -39,7 +39,7 @@ until parity is reached.
 | `/webhook/*`      | ❌      | Telegram bot.                                                                              |
 | `/admin/*`        | ⚠️     | Tidal device-flow (accounts/start/poll) ported. Health, ban/unban, grant, reset still 501. |
 | `/explore/*`      | ✅      | Home/page/list/playlists ported via Tidal pages API; explicit-twin swap deferred until recs. |
-| `/recommendations`| ❌      |                                                                                            |
+| `/recommendations`| ⚠️     | wave / continue / dislikes (CRUD + details) / seed-artists / genre-seeds / artists search+suggested ported. TasteService + RecommendationService recreated in Go with the same JSON shape — endpoint contracts 1:1 with worker. Rerank simplified: language-script penalty + character-bias multipliers deferred (degrade gracefully — only ever subtract score). |
 | `/daily-playlists`| ❌      |                                                                                            |
 | `/rooms/*`        | ✅      | REST + WS chat hub; stream proxy gated to currently-playing track.                         |
 | `/ai/playlists`   | ❌      | Yandex GPT.                                                                                |

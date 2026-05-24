@@ -114,10 +114,17 @@ func mountRecommendations(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
 		r.Get("/wave", recsWave(a))
-		r.Get("/radio/track/{id}", recsTrackRadio(a))
+		r.Post("/continue", recsContinue(a))
+		r.Get("/genre-seeds", recsGetGenreSeeds(a))
+		r.Post("/genre-seeds", recsSetGenreSeeds(a))
+		r.Get("/seed-artists", recsGetSeedArtists(a))
+		r.Post("/seed-artists", recsSetSeedArtists(a))
+		r.Get("/dislikes", recsDislikesList(a))
+		r.Post("/dislikes", recsDislikePost(a))
 		r.Get("/dislikes/details", recsDislikesDetails(a))
-		r.Post("/dislike/{kind}/{id}", recsDislike(a))
-		r.Delete("/dislike/{kind}/{id}", recsUndislike(a))
+		r.Delete("/dislikes/{kind}/{itemId}", recsDislikeDelete(a))
+		r.Get("/artists/search", recsArtistsSearch(a))
+		r.Get("/artists/suggested", recsArtistsSuggested(a))
 	}
 }
 

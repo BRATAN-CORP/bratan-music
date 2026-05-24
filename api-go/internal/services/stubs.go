@@ -98,35 +98,6 @@ func NewTidalService(a *app.App) *TidalService {
 	}
 }
 
-// ---- TasteService -----------------------------------------------------
-type TasteService struct{ A *app.App }
-
-func NewTasteService(a *app.App) *TasteService { return &TasteService{A: a} }
-
-// RecomputeActive walks active users and refreshes their taste vector.
-// Stub during the first PR — to be ported from the TS service in a
-// follow-up commit. Idempotent and safe to call on schedule.
-func (s *TasteService) RecomputeActive(ctx context.Context) {
-	_ = ctx
-	s.A.Logger.Info("taste.RecomputeActive: stub, skipping")
-}
-
-// ---- RecommendationService --------------------------------------------
-type RecommendationService struct{ A *app.App }
-
-func NewRecommendationService(a *app.App) *RecommendationService { return &RecommendationService{A: a} }
-
-// GCStale removes recommendation_seen rows older than 30 days.
-func (s *RecommendationService) GCStale(ctx context.Context) {
-	_, err := s.A.DB.Exec(ctx,
-		`DELETE FROM recommendation_seen WHERE last_seen_at < $1`,
-		(timeNowMs() - 30*24*60*60*1000),
-	)
-	if err != nil {
-		s.A.Logger.Error("gc stale", "err", err)
-	}
-}
-
 // ---- DailyPlaylistService ---------------------------------------------
 type DailyPlaylistService struct{ A *app.App }
 
