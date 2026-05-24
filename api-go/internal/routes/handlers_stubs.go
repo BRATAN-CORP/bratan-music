@@ -16,7 +16,6 @@ import (
 func searchPlaylists(a *app.App) http.HandlerFunc    { _ = a; return notImplemented }
 func uploadOverride(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
 func deleteOverride(a *app.App) http.HandlerFunc     { _ = a; return notImplemented }
-func proxyCover(a *app.App) http.HandlerFunc         { _ = a; return notImplemented }
 func createUpload(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }
 func listUploads(a *app.App) http.HandlerFunc        { _ = a; return notImplemented }
 func deleteUpload(a *app.App) http.HandlerFunc       { _ = a; return notImplemented }

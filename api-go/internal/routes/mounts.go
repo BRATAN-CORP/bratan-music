@@ -38,7 +38,9 @@ func mountTracks(a *app.App) func(chi.Router) {
 
 func mountCovers(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
-		r.Get("/{id}", proxyCover(a))
+		// `/covers/proxy?url=<upstream>` mirrors the worker shape.
+		// The frontend hits this from `src/lib/offline/streamResolver.ts`.
+		r.Get("/proxy", proxyCover(a))
 	}
 }
 

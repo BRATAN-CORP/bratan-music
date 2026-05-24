@@ -32,7 +32,7 @@ until parity is reached.
 | `/library/*`      | ✅      | Likes for tracks (via liked playlist) / albums / artists (via `library_items`).            |
 | `/search/*`       | ⚠️     | tracks/albums/artists ported via Tidal client; `/search/playlists` still 501.              |
 | `/tracks/*`       | ⚠️     | GET track, stream (302), lyrics ported. Overrides upload/delete still 501.                 |
-| `/covers/*`       | ❌      |                                                                                            |
+| `/covers/*`       | ✅      | `GET /covers/proxy?url=…` host-allowlisted Tidal image proxy with edge-cache headers.       |
 | `/albums/*`       | ✅      | GET album (with tracks) + GET album tracks.                                                |
 | `/artists/*`      | ✅      | GET artist + top-tracks + albums + singles + releases (concatenated).                      |
 | `/uploads/*`      | ❌      |                                                                                            |
