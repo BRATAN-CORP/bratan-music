@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, Variables } from '../types/env';
+import type { Track } from '../types/music';
 import { jwtAuth } from '../middleware/auth';
 import { TidalService } from '../services/tidal/TidalService';
 import { StreamUrlMemoCache } from '../services/streamCache';
@@ -318,24 +319,95 @@ tracks.get('/:id/file', async (c) => {
 });
 
 /**
- * Track radio. Returned as a flat track list ready to drop straight
- * into the player queue. Errors are surfaced to the frontend as an
- * empty list — Tidal returns 404 `subStatus 2001` for niche/new
- * tracks where no seeded mix exists (e.g. small artists, freshly
- * ingested releases). That's not a server error; the "Similar"
- * section on /track/:id is purely additive and shouldn't break the
- * page or spam the console with 500s if upstream has no data.
+ * Track radio — recommendations anchored to a specific track. Tidal's
+ * `/v1/tracks/:id/radio` is the canonical seed mix, but it 404s with
+ * `subStatus 2001 "Track radio cannot be generated"` for niche or
+ * freshly-ingested tracks (small Russian rap, new releases, etc.) —
+ * AND it can come back 200 but empty for artists Tidal has no mix for
+ * (e.g. ROCKET / 39469657). Returning an empty list there is bad UX:
+ * the "Similar" section on /track/:id silently disappears for a
+ * meaningful slice of the catalogue.
+ *
+ * Fallback chain so the user always gets *something* musically
+ * relevant on the track page:
+ *   1. Tidal track radio (the real thing).
+ *   2. Artist radio for the seed track's primary artist.
+ *   3. Artist's top tracks (almost always populated for any
+ *      Tidal-known artist, even when both radio endpoints are gated).
+ *   4. Sibling tracks from the same album, only if we still have
+ *      < 5 items — cheap final padding so the section never looks
+ *      embarrassingly thin.
+ *
+ * Dedupes across all sources and excludes the seed track itself.
+ * Each layer is wrapped individually so one upstream failure
+ * doesn't take down the rest of the chain.
  */
 tracks.get('/:id/radio', async (c) => {
   const id = c.req.param('id');
   const tidal = new TidalService(c.env);
+  const TARGET = 25;
+
+  const collected: Track[] = [];
+  const seen = new Set<string>([id]);
+  const pushUnique = (items: Track[]): void => {
+    for (const t of items) {
+      if (collected.length >= TARGET) return;
+      if (!seen.has(t.id)) {
+        seen.add(t.id);
+        collected.push(t);
+      }
+    }
+  };
+
+  // 1. Tidal track radio. Short-circuit if it returns a full mix.
   try {
-    const items = await tidal.getTrackRadio(id);
-    return c.json({ items });
+    pushUnique(await tidal.getTrackRadio(id));
+    if (collected.length >= TARGET) return c.json({ items: collected });
   } catch (err) {
-    console.error('[track-radio]', id, err);
-    return c.json({ items: [] satisfies unknown[] }, 200);
+    console.error('[track-radio] tidal seed failed for', id, err);
   }
+
+  // Need the seed track's artist/album for the fallback layers.
+  // Cheap if it's cached, single Tidal hit otherwise.
+  let artistId: string | undefined;
+  let albumId: string | undefined;
+  try {
+    const seedTrack = await tidal.getTrack(id);
+    artistId = seedTrack.artistId;
+    albumId = seedTrack.albumId;
+  } catch (err) {
+    console.error('[track-radio] seed metadata failed for', id, err);
+  }
+
+  // 2. Artist radio — broader anchor.
+  if (artistId && collected.length < TARGET) {
+    try {
+      pushUnique(await tidal.getArtistRadio(artistId, TARGET));
+    } catch (err) {
+      console.error('[track-radio] artist radio failed for', artistId, err);
+    }
+  }
+
+  // 3. Artist top tracks — last-ditch but reliable.
+  if (artistId && collected.length < TARGET) {
+    try {
+      pushUnique(await tidal.getArtistTopTracks(artistId));
+    } catch (err) {
+      console.error('[track-radio] top tracks failed for', artistId, err);
+    }
+  }
+
+  // 4. Album siblings — only if the section would otherwise look bare.
+  if (albumId && collected.length < 5) {
+    try {
+      const album = await tidal.getAlbum(albumId);
+      pushUnique(album.tracks);
+    } catch (err) {
+      console.error('[track-radio] album fallback failed for', albumId, err);
+    }
+  }
+
+  return c.json({ items: collected });
 });
 
 export { tracks };
