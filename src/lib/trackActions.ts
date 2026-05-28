@@ -64,8 +64,12 @@ export async function downloadTrack(track: DownloadableTrack): Promise<void> {
 /**
  * Build a public share URL for a track. Strips any in-app sub-route that
  * happens to be open at the time (so sharing while you're inside
- * `/playlist/:id` doesn't leak the playlist) and points at
- * `/track/:id?autoplay=1` instead.
+ * `/playlist/:id` doesn't leak the playlist) and points at a clean
+ * `/track/:id`.
+ *
+ * No `?autoplay=1` query — Мирослав asked for clean shareable URLs. The
+ * `/track/:id?autoplay=1` form is still honoured by `TrackPage` for old
+ * links that are already in the wild, but we no longer mint new ones.
  */
 export function buildTrackShareUrl(trackId: string): string {
   const url = new URL(window.location.href);
@@ -73,7 +77,7 @@ export function buildTrackShareUrl(trackId: string): string {
     /\/?(track|search|playlist|album|artist|profile|admin|library|shared|explore)\/.*$/,
     '',
   )}`.replace(/\/$/, '');
-  return `${base}/track/${trackId}?autoplay=1`;
+  return `${base}/track/${trackId}`;
 }
 
 /** Copy any URL to the user's clipboard with a textarea fallback for
