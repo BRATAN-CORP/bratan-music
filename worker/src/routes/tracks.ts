@@ -317,11 +317,25 @@ tracks.get('/:id/file', async (c) => {
   return new Response(upstream.body, { status: 200, headers });
 });
 
+/**
+ * Track radio. Returned as a flat track list ready to drop straight
+ * into the player queue. Errors are surfaced to the frontend as an
+ * empty list — Tidal returns 404 `subStatus 2001` for niche/new
+ * tracks where no seeded mix exists (e.g. small artists, freshly
+ * ingested releases). That's not a server error; the "Similar"
+ * section on /track/:id is purely additive and shouldn't break the
+ * page or spam the console with 500s if upstream has no data.
+ */
 tracks.get('/:id/radio', async (c) => {
   const id = c.req.param('id');
   const tidal = new TidalService(c.env);
-  const tracks = await tidal.getTrackRadio(id);
-  return c.json({ items: tracks });
+  try {
+    const items = await tidal.getTrackRadio(id);
+    return c.json({ items });
+  } catch (err) {
+    console.error('[track-radio]', id, err);
+    return c.json({ items: [] satisfies unknown[] }, 200);
+  }
 });
 
 export { tracks };
