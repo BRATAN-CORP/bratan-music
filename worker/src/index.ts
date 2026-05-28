@@ -86,6 +86,32 @@ app.onError((err, c) => {
   // schema details that map the worker's internals for an attacker.
   const message = err instanceof Error ? err.message : String(err);
   console.error('Unhandled error:', message, err instanceof Error ? err.stack : '');
+
+  // Classify Tidal upstream failures (and the pool "no active session"
+  // state) as 503 instead of 500. Reasons:
+  //   1. They are transient by definition — the right user action is a
+  //      retry, not a "report a bug" flow.
+  //   2. Cloudflare swaps the response body for its branded HTML page
+  //      on origin 502 specifically, but lets 503 through. By picking
+  //      503 we keep the JSON body intact for client-side toast UI.
+  //   3. Routes that don't have their own try/catch (albums/:id,
+  //      artists/:id, tracks/:id, …) now get the same friendly
+  //      treatment as the search route without per-handler boilerplate.
+  // The match is intentionally narrow: the explicit string we throw in
+  // `TidalApi.get` and the pool-no-session message from `TidalAuth`.
+  // SQLite/runtime errors stay as 500.
+  const isUpstreamTidal =
+    message.startsWith('Tidal API ') ||
+    message.includes('Нет активной сессии Tidal') ||
+    message.includes('TIDAL_REFRESH_TOKEN');
+  if (isUpstreamTidal) {
+    c.header('Retry-After', '2');
+    return c.json(
+      { error: 'Каталог временно недоступен, попробуйте ещё раз' },
+      503,
+    );
+  }
+
   return c.json({ error: 'Внутренняя ошибка сервера' }, 500);
 });
 
