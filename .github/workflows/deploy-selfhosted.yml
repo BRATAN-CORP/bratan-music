@@ -77,12 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cloudflared
-        run: |
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
-          sudo dpkg -i /tmp/cloudflared.deb
-
-      - name: Configure SSH
+      - name: Configure SSH (direct, no tunnel)
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
@@ -94,7 +89,7 @@ jobs:
             IdentityFile ~/.ssh/deploy_key
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
-            ProxyCommand cloudflared access ssh --hostname %h
+            ServerAliveInterval 30
           EOF
 
       - name: Deploy
@@ -108,6 +103,7 @@ jobs:
 
             # Sync deploy configs from repo
             cp app/deploy/docker-compose.yml deploy/docker-compose.yml
+            rm -rf deploy/nginx deploy/backup-tg
             cp -r app/deploy/nginx deploy/
             cp -r app/deploy/backup-tg deploy/
 
@@ -145,12 +141,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cloudflared
-        run: |
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
-          sudo dpkg -i /tmp/cloudflared.deb
-
-      - name: Configure SSH
+      - name: Configure SSH (direct, no tunnel)
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
@@ -162,7 +153,7 @@ jobs:
             IdentityFile ~/.ssh/deploy_key
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
-            ProxyCommand cloudflared access ssh --hostname %h
+            ServerAliveInterval 30
           EOF
 
       - name: Setup server
@@ -193,9 +184,11 @@ jobs:
             fi
 
             # Copy deploy configs
-            mkdir -p /opt/bratan-music/deploy/nginx
+            mkdir -p /opt/bratan-music/deploy
             cp /opt/bratan-music/app/deploy/docker-compose.yml /opt/bratan-music/deploy/docker-compose.yml
-            cp -r /opt/bratan-music/app/deploy/nginx/conf.d /opt/bratan-music/deploy/nginx/conf.d
+            rm -rf /opt/bratan-music/deploy/nginx /opt/bratan-music/deploy/backup-tg
+            cp -r /opt/bratan-music/app/deploy/nginx /opt/bratan-music/deploy/
+            cp -r /opt/bratan-music/app/deploy/backup-tg /opt/bratan-music/deploy/
 
             # Check .env exists
             if [ ! -f /opt/bratan-music/deploy/.env ]; then
