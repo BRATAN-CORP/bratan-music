@@ -249,7 +249,8 @@ export function FullscreenPlayer() {
     if (!currentTrack) return;
     const u = new URL(window.location.href);
     const base = `${u.origin}${u.pathname.replace(/\/?(track|search|playlist|album|artist|profile|admin)\/.*$/, '')}`.replace(/\/$/, '');
-    const url = `${base}/track/${currentTrack.id}?autoplay=1`;
+    // Clean URL — no `?autoplay=1`. See `buildTrackShareUrl` for the rationale.
+    const url = `${base}/track/${currentTrack.id}`;
     try {
       await navigator.clipboard.writeText(url);
     } catch {
