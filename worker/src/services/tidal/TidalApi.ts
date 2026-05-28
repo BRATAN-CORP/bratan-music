@@ -398,11 +398,58 @@ export class TidalApi {
       },
     });
 
+    // Light retry policy for transient Tidal upstream errors.
+    //
+    // Tidal's catalogue API occasionally returns 5xx / 429 for a single
+    // request even when the surrounding burst is fine (the bratan-music
+    // search?filter=artists 502 incident on 2026-05-28 was exactly this:
+    // ARTISTS bucket failed twice in two seconds while the same client's
+    // ALL/TRACKS/ALBUMS requests succeeded in the same window). Without
+    // a retry, every such blip surfaces to the user as a hard error.
+    //
+    // Strategy:
+    //   • 401  → force a token refresh, single retry (existing behaviour).
+    //   • 5xx / 429 / network throw → up to 2 retries with backoff
+    //                                 (150ms, 400ms + small jitter).
+    // We deliberately do NOT retry 4xx other than 429 — those are deterministic
+    // (404 missing track, 400 bad params) and a retry would just waste time.
+    const MAX_TRANSIENT_RETRIES = 2;
+    const isTransientStatus = (s: number) => s === 429 || (s >= 500 && s <= 599);
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
     let token = await this.auth.getAccessToken();
-    let res = await doFetch(token);
-    if (res.status === 401) {
-      token = await this.auth.getAccessToken({ force: true });
-      res = await doFetch(token);
+    let res: Response | null = null;
+    let lastError: unknown = null;
+    let attempt = 0;
+    while (attempt <= MAX_TRANSIENT_RETRIES) {
+      try {
+        res = await doFetch(token);
+        if (res.status === 401) {
+          token = await this.auth.getAccessToken({ force: true });
+          res = await doFetch(token);
+        }
+        if (!res.ok && isTransientStatus(res.status) && attempt < MAX_TRANSIENT_RETRIES) {
+          // Drain body so the connection can be reused, then back off.
+          try { await res.text(); } catch { /* ignore */ }
+          const backoff = (attempt === 0 ? 150 : 400) + Math.floor(Math.random() * 100);
+          await sleep(backoff);
+          attempt++;
+          continue;
+        }
+        break;
+      } catch (err) {
+        // Network-level failure (DNS, TCP reset, abort). Treat as transient.
+        lastError = err;
+        if (attempt >= MAX_TRANSIENT_RETRIES) throw err;
+        const backoff = (attempt === 0 ? 150 : 400) + Math.floor(Math.random() * 100);
+        await sleep(backoff);
+        attempt++;
+      }
+    }
+
+    if (!res) {
+      // Should be unreachable — the loop either sets res or throws above.
+      throw lastError instanceof Error ? lastError : new Error('Tidal API: no response');
     }
 
     if (!res.ok) {

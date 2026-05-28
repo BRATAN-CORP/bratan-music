@@ -34,8 +34,27 @@ search.get('/', async (c) => {
     const results = await tidal.search(query.trim(), filter, { limit, offset });
     return c.json(results);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Ошибка Tidal API';
-    return c.json({ error: message }, 502);
+    // Map upstream Tidal failures to 503 instead of 502.
+    //
+    // Why 503 not 502:
+    //   • Cloudflare substitutes its own branded HTML page for an origin
+    //     502 response (the user-reported "Bad Gateway" screenshot from
+    //     2026-05-28). 503 is passed through cleanly so the client gets
+    //     our JSON body and can render a friendly retry UI.
+    //   • Semantically 503 ("upstream temporarily unavailable, please
+    //     retry") matches the actual condition better than 502 ("upstream
+    //     returned an invalid response"). Tidal's API blip is transient.
+    //
+    // The Tidal-API client (`TidalApi.get`) already retries twice with
+    // backoff before throwing, so reaching this catch means at least
+    // three upstream attempts failed within ~600ms — a real outage from
+    // the user's perspective.
+    console.error('[search] upstream failed:', error instanceof Error ? error.message : error);
+    c.header('Retry-After', '2');
+    return c.json(
+      { error: 'Поиск временно недоступен, попробуйте ещё раз' },
+      503,
+    );
   }
 });
 
