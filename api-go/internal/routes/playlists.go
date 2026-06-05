@@ -19,14 +19,21 @@ func mountPlaylists(a *app.App) func(chi.Router) {
 			r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
 			r.Get("/", listPlaylists(a))
 			r.Post("/", createPlaylist(a))
+			// Share/import routes (static segments outrank /{id}).
+			r.Get("/shared/{token}", playlistSharedByToken(a))
+			r.Post("/shared/{token}/save", playlistSharedSave(a))
+			r.Post("/external/tidal", playlistExternalTidal(a))
 			r.Get("/{id}", getPlaylist(a))
 			r.Put("/{id}", updatePlaylist(a))
 			r.Delete("/{id}", deletePlaylist(a))
 			r.Post("/{id}/tracks", addPlaylistTrack(a))
 			r.Delete("/{id}/tracks/{trackId}", removePlaylistTrack(a))
 			r.Put("/{id}/order", reorderPlaylistTracks(a))
-			r.Post("/{id}/pin", pinPlaylist(a))
-			r.Post("/{id}/share", sharePlaylist(a))
+			r.Put("/{id}/reorder", reorderPlaylistTracks(a)) // frontend path
+			r.Put("/{id}/cover", playlistCoverPut(a))
+			r.Delete("/{id}/cover", playlistCoverDelete(a))
+			r.Put("/{id}/pin", pinPlaylist(a))     // frontend uses PUT
+			r.Put("/{id}/share", sharePlaylist(a)) // frontend uses PUT
 		}) //nolint:wsl
 	}
 }
@@ -302,11 +309,15 @@ func reorderPlaylistTracks(a *app.App) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		uid := httpx.UserID(r)
 		var body struct {
-			Order []string `json:"order"`
+			Order    []string `json:"order"`
+			TrackIDs []string `json:"trackIds"`
 		}
 		if err := httpx.BindJSON(r, &body, 256*1024); err != nil {
 			httpx.Err(w, http.StatusBadRequest, "Некорректное тело")
 			return
+		}
+		if len(body.Order) == 0 {
+			body.Order = body.TrackIDs // frontend sends `trackIds`
 		}
 		var owner string
 		if err := a.DB.QueryRow(r.Context(),
@@ -349,22 +360,29 @@ func pinPlaylist(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		uid := httpx.UserID(r)
-		var body struct {
+		body := struct {
 			Pinned bool `json:"pinned"`
-		}
+		}{Pinned: true}
 		_ = httpx.BindJSON(r, &body, 1024)
-		val := any(nil)
-		if body.Pinned {
-			val = nowMs()
+
+		var exists string
+		if err := a.DB.QueryRow(r.Context(),
+			`SELECT id FROM playlists WHERE id = $1 AND user_id = $2`, id, uid).Scan(&exists); err != nil {
+			httpx.Err(w, http.StatusNotFound, "Плейлист не найден")
+			return
 		}
-		_, err := a.DB.Exec(r.Context(),
-			`UPDATE playlists SET pinned_at = $1 WHERE id = $2 AND user_id = $3`,
-			val, id, uid)
-		if err != nil {
+		now := nowSec()
+		var pinnedAt any
+		if body.Pinned {
+			pinnedAt = now
+		}
+		if _, err := a.DB.Exec(r.Context(),
+			`UPDATE playlists SET pinned_at = $1, updated_at = $2 WHERE id = $3`,
+			pinnedAt, now, id); err != nil {
 			httpx.Internal(w, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
+		httpx.JSON(w, http.StatusOK, map[string]any{"ok": true, "pinnedAt": pinnedAt})
 	}
 }
 
@@ -372,16 +390,56 @@ func sharePlaylist(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		uid := httpx.UserID(r)
-		token := uuid.NewString()
-		_, err := a.DB.Exec(r.Context(),
-			`UPDATE playlists SET share_token = $1, is_public = 1, updated_at = $2
-			   WHERE id = $3 AND user_id = $4`,
-			token, nowMs(), id, uid)
-		if err != nil {
+		var body struct {
+			Public bool `json:"public"`
+		}
+		_ = httpx.BindJSON(r, &body, 1024)
+
+		var (
+			rid, share string
+			isLiked    int
+			sourceKind *string
+		)
+		if err := a.DB.QueryRow(r.Context(),
+			`SELECT id, is_liked, COALESCE(share_token,''), source_kind
+			   FROM playlists WHERE id = $1 AND user_id = $2`, id, uid,
+		).Scan(&rid, &isLiked, &share, &sourceKind); err != nil {
+			httpx.Err(w, http.StatusNotFound, "Плейлист не найден")
+			return
+		}
+		if isLiked == 1 {
+			httpx.Err(w, http.StatusBadRequest, "Системный плейлист нельзя сделать публичным")
+			return
+		}
+		if sourceKind != nil && *sourceKind != "" {
+			httpx.Err(w, http.StatusBadRequest, "Сохранённый плейлист нельзя поделить — поделитесь оригиналом")
+			return
+		}
+		token := share
+		if body.Public && token == "" {
+			token = generateShareToken()
+		}
+		var tokenArg any
+		if token != "" {
+			tokenArg = token
+		}
+		pub := 0
+		if body.Public {
+			pub = 1
+		}
+		if _, err := a.DB.Exec(r.Context(),
+			`UPDATE playlists SET is_public = $1, share_token = $2, updated_at = $3 WHERE id = $4`,
+			pub, tokenArg, nowSec(), id); err != nil {
 			httpx.Internal(w, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"share_token": token})
+		var shareOut any
+		if token != "" {
+			shareOut = token
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{
+			"ok": true, "isPublic": body.Public, "shareToken": shareOut,
+		})
 	}
 }
 
