@@ -2463,6 +2463,18 @@ export function useAudioPlayer() {
     for (const action of ['seekbackward', 'seekforward', 'seekto'] as const) {
       try { ms.setActionHandler(action, null); } catch { /* ignore */ }
     }
+    // Companion revoke on iOS: a previous build may have published
+    // `setPositionState({ duration, … })` and iOS WebKit caches that
+    // last position state across reloads and PWA relaunches inside
+    // the page's MediaSession. Even after we stop calling
+    // setPositionState (see the progress effect below), the cached
+    // state can keep the lock screen in podcast layout (⏪10s/⏩10s)
+    // until the page is killed. Calling it with no args / undefined
+    // is the spec-defined "clear" operation. Guarded on iOS so we
+    // don't wipe the (desired) scrubber on Chromium.
+    if (isIOS() && 'setPositionState' in ms) {
+      try { (ms as MediaSession & { setPositionState: (state?: MediaPositionState) => void }).setPositionState(); } catch { /* ignore */ }
+    }
   }, []);
 
   useEffect(() => {
@@ -2479,21 +2491,72 @@ export function useAudioPlayer() {
     // boundary always rebuilds the correct set. Seek* handlers are
     // intentionally never set here — only the dedicated mount-time
     // null-revoke effect above touches them.
+    //
+    // Lock-screen `play` reliability on iOS PWAs. Going through the
+    // store's `play()` setter routes the resume through
+    // setState → re-render → the `[isPlaying, currentTrack?.id]`
+    // effect → `safePlay`. On a phone that's been locked for a
+    // while iOS has already deeply suspended the page; by the time
+    // React schedules the effect the "user gesture" credit iOS
+    // grants to a media-key event has expired and the resulting
+    // `audio.play()` is rejected with NotAllowedError — the
+    // user-visible "lock-screen play does nothing, has to re-open
+    // the app" bug Arseniy reported. Touching the <audio> element
+    // *synchronously* inside the action handler consumes that
+    // gesture credit before iOS revokes it; the store sync still
+    // happens for the rest of the UI to follow. Mirroring the
+    // pattern for `pause` keeps the two paths symmetric and avoids
+    // a momentary play/pause flicker on the lock-screen icon.
+    const onPlay = () => {
+      const b = getBundle();
+      // Wake any suspended AudioContext (Chromium PWA path). On iOS
+      // we don't build a context — this no-ops there.
+      if (b.ctx && b.ctx.state === 'suspended') {
+        b.ctx.resume().catch(() => {});
+      }
+      const slot = b.active;
+      const audio = b.audios[slot];
+      if (audio.src) {
+        // Synchronous play() preserves the iOS media-key gesture.
+        // We don't await — the store sync below is what flips
+        // `isPlaying` and the `[isPlaying]` effect will reconcile
+        // any edge case (load-in-flight, fallback retry).
+        audio.play().catch(() => { /* gesture stale / load racing — store sync below recovers */ });
+      }
+      store().play();
+    };
+    const onPause = () => {
+      const b = getBundle();
+      const slot = b.active;
+      const audio = b.audios[slot];
+      if (audio.src && !audio.paused) {
+        audio.pause();
+      }
+      store().pause();
+    };
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
-      ['play', () => store().play()],
-      ['pause', () => store().pause()],
+      ['play', onPlay],
+      ['pause', onPause],
       ['previoustrack', () => store().previous()],
       ['nexttrack', () => store().nextManual()],
-      ['stop', () => { store().pause(); }],
+      ['stop', onPause],
     ];
     for (const [action, handler] of handlers) {
       try { ms.setActionHandler(action, handler); } catch { /* not supported */ }
     }
-    return () => {
-      for (const [action] of handlers) {
-        try { ms.setActionHandler(action, null); } catch { /* ignore */ }
-      }
-    };
+    // Deliberately NO cleanup that nulls these handlers. The
+    // previous version nulled `play/pause/previoustrack/nexttrack/
+    // stop` in the effect teardown that runs on every track
+    // change — leaving a brief window between cleanup and re-set
+    // during which iOS sees an empty transport action map and
+    // can fall back to its default ±10s seek layout (the exact
+    // symptom Arseniy reported). Action handlers are inherently
+    // overwrite-on-set: the next track-boundary re-run of this
+    // effect replaces each handler with a fresh closure, so
+    // there's no leak. Component unmount is handled by the page
+    // being torn down entirely, which clears the MediaSession on
+    // its own.
+    return undefined;
   }, [currentTrack?.id]);
 
   // The track-load effect already wires `navigator.mediaSession.metadata`
@@ -2521,15 +2584,27 @@ export function useAudioPlayer() {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     if (!('setPositionState' in navigator.mediaSession)) return;
+    // iOS Safari / iOS PWA: never publish position state. WebKit
+    // uses the *presence* of `setPositionState` with a finite
+    // `duration` as the dominant signal that the page is playing
+    // long-form / podcast media and surfaces the ⏪10s/⏩10s skip
+    // transport buttons on the lock screen + Control Center instead
+    // of ⏮/⏭ (the buttons the user actually wants for music). We
+    // tried defusing the heuristic with `playbackRate: 1` previously
+    // — empirically that's not enough on iOS 17/18, the only
+    // reliable fix is to *not call* setPositionState at all on iOS.
+    // We pay for that with no scrubber + no elapsed/remaining time
+    // on the iOS Now-Playing widget, but `previoustrack` /
+    // `nexttrack` register correctly and that's the higher-value
+    // affordance for a music player. Android Chrome (Chromium) does
+    // not have this conflict — there setPositionState gives us the
+    // scrubber AND prev/next happily coexist, so the call stays.
+    if (isIOS()) return;
     const b = getBundle();
     const audio = b.audios[b.active];
     const dur = audio.duration;
     if (!dur || !isFinite(dur)) return;
     try {
-      // Pin playbackRate to 1 — variable playbackRate combined with
-      // a finite duration is one of the signals iOS Safari uses to
-      // classify the stream as "podcast-shaped" and surface the
-      // 10-second skip transport buttons.
       navigator.mediaSession.setPositionState({
         duration: dur,
         position: Math.min(progress, dur),

@@ -40,3 +40,4 @@ vite.config.d.ts
 
 # Deploy secrets (never commit!)
 deploy/.env
+worker/bun.lock

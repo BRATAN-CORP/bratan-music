@@ -45,7 +45,8 @@ function buildShareUrl(trackId: string): string {
   const url = new URL(window.location.href);
   // Strip any hash-router prefix if present.
   const base = `${url.origin}${url.pathname.replace(/\/?(track|search|playlist|album|artist|profile|admin)\/.*$/, '')}`.replace(/\/$/, '');
-  return `${base}/track/${trackId}?autoplay=1`;
+  // Clean URL — no `?autoplay=1`. See `buildTrackShareUrl` for the rationale.
+  return `${base}/track/${trackId}`;
 }
 
 /**

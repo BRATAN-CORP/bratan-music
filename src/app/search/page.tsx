@@ -10,6 +10,7 @@ import { Eyebrow } from '@/components/ui/SectionHeading';
 import { useSearch, useSearchInfinite } from '@/hooks/useSearch';
 import { useRecentSearches } from '@/hooks/useRecentSearches';
 import { usePlayerStore } from '@/store/player';
+import { toPlayerTrack } from '@/lib/playerTrack';
 import type { SearchResult, Track } from '@/types';
 import { useT } from '@/i18n';
 
@@ -105,28 +106,14 @@ export function SearchPage() {
   }, [data, query, recent]);
 
   const handlePlayTrack = (track: Track) => {
-    setTrack({
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      artistId: track.artistId,
-      artists: track.artists,
-      coverUrl: track.coverUrl, coverVideoUrl: track.coverVideoUrl,
-      duration: track.duration,
-    });
+    // Use `toPlayerTrack` so the player carries `explicit` (and other
+    // optional fields like `source` / `albumId`). Inline objects here
+    // used to silently drop the explicit flag for tracks played from
+    // search, so the badge in the mini-player / fullscreen vanished
+    // even though the search row showed it correctly.
+    setTrack(toPlayerTrack(track));
     if (data?.tracks) {
-      setQueue(
-        data.tracks.map((t) => ({
-          id: t.id,
-          title: t.title,
-          artist: t.artist,
-          artistId: t.artistId,
-          artists: t.artists,
-          coverUrl: t.coverUrl,
-          coverVideoUrl: t.coverVideoUrl,
-          duration: t.duration,
-        }))
-      );
+      setQueue(data.tracks.map(toPlayerTrack));
     }
   };
 

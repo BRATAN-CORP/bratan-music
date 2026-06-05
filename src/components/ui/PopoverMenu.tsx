@@ -131,6 +131,28 @@ export function PopoverMenu({
             zIndex: 1000,
           }}
           className={'liquid-glass overflow-hidden rounded-[var(--radius-md)] ' + className}
+          /*
+           * React portals propagate events through the *React* tree, not the
+           * DOM tree — so a click on a `MenuItem` inside this body-portaled
+           * menu bubbles up to whatever component hosts the kebab trigger
+           * (e.g. a `TrackRow` with an onClick that starts playback, or a
+           * `PlaylistCard` that navigates on click). Without these guards
+           * users tap "Add to queue" and the underlying row *also* plays.
+           *
+           * Stopping propagation at the menu root catches every pointer
+           * surface (mouse, touch, synthesized click) before it leaves the
+           * portal. The popover's own outside-click handler is on `window`
+           * with an explicit "is target inside the menu?" early-return, so
+           * stopping bubbling here doesn't break the close-on-outside-click
+           * behaviour.
+           */
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
         >
           {children}
         </motion.div>

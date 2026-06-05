@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # ── PostgreSQL (replaces D1) ──────────────────────────
   postgres:
@@ -14,18 +20,96 @@ services:
       test: ["CMD-SHELL", "pg_isready -U bratan -d bratan_music"]
       interval: 5s
       retries: 10
+    logging: *default-logging
+
+  # ── Telegram-only Postgres backups (daily) ────────────
+  # Replaces `prodrigestivill/postgres-backup-local`: dumps the
+  # database with pg_dump, gzips, and ships the result to the
+  # bot's admin chat via Telegram's Bot API. Nothing persists on
+  # disk — the dump lives in /tmp inside the container for the
+  # upload window only. See `deploy/backup-tg/backup.sh` for the
+  # full rationale, chunk-splitting logic and exit codes.
+  #
+  # When `telegram-bot-api` is running (TELEGRAM_API_ID / HASH
+  # configured), set `TELEGRAM_BOT_API_URL=http://telegram-bot-api:8081`
+  # to lift the 50 MB per-document cloud limit to ~2 GB.
+  postgres-backup-tg:
+    build:
+      context: ./backup-tg
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: bratan_music
+      POSTGRES_USER: bratan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Hard-coded by Miroslav's request — backup recipient is the
+      # admin's personal Telegram (422896004). If we ever need more
+      # than one recipient, switch this to a comma-separated list
+      # and update backup.sh to loop over the IDs.
+      TELEGRAM_BACKUP_CHAT_ID: "422896004"
+      # Empty by default → script falls back to https://api.telegram.org
+      # (50 MB / file). Override with `http://telegram-bot-api:8081`
+      # once the local server has API_ID / HASH in `.env` to lift the
+      # cap to ~2 GB / file.
+      TELEGRAM_BOT_API_URL: ${TELEGRAM_BOT_API_URL:-}
+      BACKUP_INTERVAL_SECONDS: "86400"
+    logging: *default-logging
+
+  # ── Local Telegram Bot API server (2 GB / file uploads) ──
+  # The cloud `api.telegram.org` Bot API caps file uploads at
+  # 50 MB per document — fine for today's tiny dump (~15 KB) but
+  # a foot-gun as the catalogue grows. Running a local Bot API
+  # server lifts the cap to 2 GB per file and lets us keep all
+  # backup traffic on the LAN between containers.
+  #
+  # Requires `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from
+  # https://my.telegram.org/apps (these are *user* credentials,
+  # NOT the bot token — any TG account can generate a pair). The
+  # service starts in profile `local-tg` so it stays off by default
+  # until those env vars are populated:
+  #
+  #   docker compose --profile local-tg up -d telegram-bot-api
+  #
+  # …then set `TELEGRAM_BOT_API_URL=http://telegram-bot-api:8081`
+  # on the `postgres-backup-tg` service (or in `.env`) and re-up
+  # that container.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    profiles: ["local-tg"]
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      # Cloud-equivalent defaults; tweak if needed.
+      TELEGRAM_LOCAL: 1
+      TELEGRAM_VERBOSITY: 2
+    volumes:
+      - tgbotapi:/var/lib/telegram-bot-api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
 
   # ── Redis (replaces KV) ───────────────────────────────
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --appendonly yes
     volumes:
       - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 10
+    logging: *default-logging
 
   # ── MinIO (replaces R2) ───────────────────────────────
   minio:
@@ -41,6 +125,7 @@ services:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       retries: 10
+    logging: *default-logging
 
   # ── API (bratan-music worker on Node.js) ──────────────
   api:
@@ -81,6 +166,13 @@ services:
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
       YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
       NODE_ENV: production
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
 
   # ── API (Go rewrite, in progress) ─────────────────────
   # Runs alongside the legacy TS `api` container on port 3001 so the
@@ -137,13 +229,24 @@ services:
     image: ghcr.io/bratan-corp/bratan-music-web:latest
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_started
     ports:
       - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
+  # `pgbackups:` removed — backups now ship to Telegram instead of
+  # accumulating on a local volume. See `postgres-backup-tg`.
+  tgbotapi:

@@ -85,13 +85,33 @@ const QUALITY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 const QUALITY_CACHE_PREFIX = 'tidal-track-quality:';
 const DISCOVERY_CACHE_TTL_S = 60 * 60 * 24 * 30; // 30 days
 // Empty discovery results (DRM-locked tracks, openapi.tidal.com auth
-// failures, malformed responses) are cached for 24h rather than 30d.
-// That keeps the silent-fallback path cheap on cold tracks without
-// permanently poisoning the cache for tracks where Tidal transiently
-// returned an error. Bumped from 1h up so a problematic track that
-// gets played multiple times in a day doesn't burn one negative-cache
-// KV write per hour against the 1000-writes/day free-tier cap.
-const DISCOVERY_NEGATIVE_CACHE_TTL_S = 24 * 60 * 60; // 24 hours
+// failures, malformed responses) are cached briefly so the cache
+// self-heals quickly once openapi.tidal.com starts cooperating again.
+//
+// Why 10 minutes (was 24h, was 1h before that):
+// We hit the same incident twice in one day (28.05.2026 — see
+// skills/projects/bratan-music/SKILL.md). A transient Tidal upstream
+// blip caused `trackManifests/:id` to return malformed/empty bodies
+// for ~30 tracks. With a 24h negative TTL, every one of those tracks
+// stayed unplayable in the discovery-pinned + legacy-fallback path
+// for the next 24 hours, surfacing as
+// `PIPELINE_ERROR_READ: FFmpegDemuxer: demuxer seek failed` on the
+// user side. The only fix was a manual `redis-cli DEL` against the
+// `tidal-track-formats:*` and `tidal-track-quality:*` keyspaces.
+//
+// 10 minutes is short enough that any transient upstream blip
+// self-clears within one normal coffee break, but long enough that
+// repeated cold listens of a genuinely-broken track (DRM-only,
+// catalogue-pruned) don't fan out an openapi.tidal.com round trip
+// on every play — at most 6/hr per track per worker isolate.
+//
+// KV write budget check: free-tier cap is 1000 writes / namespace /
+// day. With 10 min TTL, a single hot DRM-only track refreshes at
+// most ~144 times/day across all isolates (caps lower in practice
+// thanks to KV's edge caching). Genuinely-broken tracks are a
+// small minority of plays, so total negative-cache writes stay
+// well under 100/day in practice.
+const DISCOVERY_NEGATIVE_CACHE_TTL_S = 10 * 60; // 10 minutes
 const DISCOVERY_CACHE_PREFIX = 'tidal-track-formats:';
 // When the discovery endpoint returns a global-auth failure (401 /
 // 403 from openapi.tidal.com — bearer revoked, region-block, etc.),
@@ -189,29 +209,51 @@ export class TidalWeb {
       }
     }
 
+    // If discovery returned no usable qualities, we're either looking
+    // at a transient openapi.tidal.com blip (cached as `{qualities:[]}`
+    // for DISCOVERY_NEGATIVE_CACHE_TTL_S) or a legitimately DRM-only
+    // track. Either way, downstream legacy ladder resolution might
+    // pick a quality whose stream URL passes our static manifest
+    // checks (urls.length > 0, encryption=NONE) but still produces
+    // an unplayable byte stream on the browser side (we've seen
+    // `PIPELINE_ERROR_READ: FFmpegDemuxer: demuxer seek failed`
+    // during these blips — see SKILL.md, 28.05.2026 incident).
+    //
+    // We can't reliably distinguish "blip" from "DRM-only" inside the
+    // worker, so we pessimistically write the legacy-discovered
+    // quality with the SAME short TTL as the empty-discovery negative
+    // cache. That way, if it really was a blip, both the discovery
+    // cache and the quality cache self-heal at the same cadence; if
+    // it really is DRM-only, we just pay a few extra ladder walks
+    // per hour for that one track instead of pinning a possibly-wrong
+    // quality for 30 days. The quality cache only ever feeds back
+    // into legacyResolveStream as a starting ladder index, so the
+    // worst case here is "walk one extra ladder rung on cold play".
+    const discoveryEmpty = qualities.length === 0;
+
     if (!target) {
-      return this.legacyResolveStream(trackId, requestedQuality);
+      return this.legacyResolveStream(trackId, requestedQuality, { shortQualityTtl: discoveryEmpty });
     }
 
     let info: PlaybackInfo;
     try {
       info = await this.getPlaybackInfo(trackId, target);
     } catch {
-      return this.legacyResolveStream(trackId, requestedQuality);
+      return this.legacyResolveStream(trackId, requestedQuality, { shortQualityTtl: discoveryEmpty });
     }
 
     let manifest: BtsManifest;
     try {
       manifest = this.decodeManifest(info.manifest, info.manifestMimeType);
     } catch {
-      return this.legacyResolveStream(trackId, requestedQuality);
+      return this.legacyResolveStream(trackId, requestedQuality, { shortQualityTtl: discoveryEmpty });
     }
 
     if (!manifest.urls.length) {
-      return this.legacyResolveStream(trackId, requestedQuality);
+      return this.legacyResolveStream(trackId, requestedQuality, { shortQualityTtl: discoveryEmpty });
     }
     if (manifest.encryptionType && manifest.encryptionType.toUpperCase() !== 'NONE') {
-      return this.legacyResolveStream(trackId, requestedQuality);
+      return this.legacyResolveStream(trackId, requestedQuality, { shortQualityTtl: discoveryEmpty });
     }
 
     // Memoise the resolved quality in the existing
@@ -242,6 +284,7 @@ export class TidalWeb {
   private async legacyResolveStream(
     trackId: string,
     requestedQuality: string = 'HIGH',
+    opts: { shortQualityTtl?: boolean } = {},
   ): Promise<ResolvedStream> {
     const requestedIdx = QUALITY_LADDER.indexOf(requestedQuality.toUpperCase());
     const cap = requestedIdx >= 0 ? requestedIdx : QUALITY_LADDER.indexOf('HIGH');
@@ -272,9 +315,16 @@ export class TidalWeb {
         }
         // Memoise the working quality so the next call to this track
         // skips the upper rungs of the ladder. Suppressed on download
-        // requests (see {@link skipCacheWrites}).
+        // requests (see {@link skipCacheWrites}). If we got here via
+        // a discovery miss (caller passed `shortQualityTtl: true`),
+        // pin the quality only for DISCOVERY_NEGATIVE_CACHE_TTL_S so
+        // it self-heals at the same cadence as the discovery cache.
         if (!this.skipCacheWrites) {
-          await this.writeCachedQuality(trackId, quality);
+          await this.writeCachedQuality(
+            trackId,
+            quality,
+            opts.shortQualityTtl ? DISCOVERY_NEGATIVE_CACHE_TTL_S : undefined,
+          );
         }
         return {
           url: manifest.urls[0],
@@ -481,12 +531,16 @@ export class TidalWeb {
     return QUALITY_LADDER.includes(upper) ? upper : null;
   }
 
-  private async writeCachedQuality(trackId: string, quality: string): Promise<void> {
+  private async writeCachedQuality(
+    trackId: string,
+    quality: string,
+    ttlSeconds: number = QUALITY_CACHE_TTL_S,
+  ): Promise<void> {
     await kvPutText(
       this.env.SESSIONS,
       `${QUALITY_CACHE_PREFIX}${trackId}`,
       quality.toUpperCase(),
-      QUALITY_CACHE_TTL_S,
+      ttlSeconds,
     );
   }
 
