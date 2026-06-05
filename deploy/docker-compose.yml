@@ -229,14 +229,11 @@ services:
     image: ghcr.io/bratan-corp/bratan-music-web:latest
     restart: unless-stopped
     depends_on:
-      # CUT OVER to Go (api-go:3000). nginx resolves the upstream host at
-      # startup, so it must wait until api-go is HEALTHY (image-level
-      # HEALTHCHECK on /health) — otherwise a not-yet-ready upstream makes
-      # nginx fail to start and the origin returns 521. TS `api` stays
-      # running (compose starts all services) as a one-line rollback:
-      # revert these proxy_pass lines back to api:3000 if Go misbehaves.
-      api-go:
-        condition: service_healthy
+      # ROLLED BACK to TS api:3000 — the api-go cut-over caused origin 521
+      # (api-go crash-loop made nginx fail to resolve the upstream). Go
+      # cut-over to be re-attempted after the startup failure is fixed.
+      api:
+        condition: service_started
     ports:
       - "80:80"
     volumes:
