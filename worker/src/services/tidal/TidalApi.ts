@@ -409,11 +409,17 @@ export class TidalApi {
     //
     // Strategy:
     //   • 401  → force a token refresh, single retry (existing behaviour).
-    //   • 5xx / 429 / network throw → up to 2 retries with backoff
-    //                                 (150ms, 400ms + small jitter).
+    //   • 5xx / 429 / network throw → up to 3 retries with backoff
+    //                                 (150ms, 400ms, 800ms + small jitter).
     // We deliberately do NOT retry 4xx other than 429 — those are deterministic
     // (404 missing track, 400 bad params) and a retry would just waste time.
-    const MAX_TRANSIENT_RETRIES = 2;
+    //
+    // Bumped 2→3 after users reported whole albums failing to play during
+    // Tidal throttling spikes: stream-URL resolution goes through this same
+    // wrapper, so one extra retry tier meaningfully cuts the rate of a
+    // transient upstream 5xx surfacing as a hard "Ошибка" on playback.
+    const MAX_TRANSIENT_RETRIES = 3;
+    const backoffMs = (n: number) => (n === 0 ? 150 : n === 1 ? 400 : 800) + Math.floor(Math.random() * 100);
     const isTransientStatus = (s: number) => s === 429 || (s >= 500 && s <= 599);
     const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -431,7 +437,7 @@ export class TidalApi {
         if (!res.ok && isTransientStatus(res.status) && attempt < MAX_TRANSIENT_RETRIES) {
           // Drain body so the connection can be reused, then back off.
           try { await res.text(); } catch { /* ignore */ }
-          const backoff = (attempt === 0 ? 150 : 400) + Math.floor(Math.random() * 100);
+          const backoff = backoffMs(attempt);
           await sleep(backoff);
           attempt++;
           continue;
@@ -441,7 +447,7 @@ export class TidalApi {
         // Network-level failure (DNS, TCP reset, abort). Treat as transient.
         lastError = err;
         if (attempt >= MAX_TRANSIENT_RETRIES) throw err;
-        const backoff = (attempt === 0 ? 150 : 400) + Math.floor(Math.random() * 100);
+        const backoff = backoffMs(attempt);
         await sleep(backoff);
         attempt++;
       }
