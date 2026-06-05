@@ -229,7 +229,10 @@ services:
     image: ghcr.io/bratan-corp/bratan-music-web:latest
     restart: unless-stopped
     depends_on:
-      api:
+      # nginx now proxies all traffic to the Go backend (api-go). The
+      # legacy TS `api` service is kept running side-by-side as a fast
+      # rollback target (flip nginx upstreams back to api:3000).
+      api-go:
         condition: service_started
     ports:
       - "80:80"
