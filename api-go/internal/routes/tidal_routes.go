@@ -185,10 +185,21 @@ func getTrack(a *app.App) http.HandlerFunc {
 	}
 }
 
-// streamTrack resolves the playable stream URL for a track and 302's
-// to it. The legacy `worker/` did the same; some clients (mobile audio
-// engines) prefer the redirect over the JSON payload because it lets
-// them use the browser's Range-request handling unmodified.
+// streamTrack resolves the playable stream URL for a track and returns
+// the worker-compatible JSON payload `{ url, direct, source, quality }`.
+//
+// Parity note (was a first-pass divergence): the worker's
+// `/tracks/:id/stream` ALWAYS returns JSON and the frontend
+// (src/hooks/useAudioPlayer.ts) reads `res.url`. The earlier Go
+// implementation defaulted to a 302 redirect to the raw CDN URL, which
+// (a) broke the frontend's `api.get(...).json()` parse and (b) handed
+// the client an IP-locked CDN URL that 403s off-server. We now:
+//   - wrap the resolved CDN URL in the same-origin `/tracks/audio`
+//     proxy so the client gets a stable, CORS-friendly, Range-capable
+//     URL (see audio.go),
+//   - expose the raw CDN URL as `direct` for diagnostics/parity only,
+//   - keep `?redirect=1` as an explicit opt-in for native clients that
+//     want a 302 to the proxied URL.
 func streamTrack(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -198,12 +209,108 @@ func streamTrack(a *app.App) http.HandlerFunc {
 			httpx.Err(w, http.StatusBadGateway, "resolve stream: "+err.Error())
 			return
 		}
-		// Respect ?json=1 for clients that want the raw URL.
-		if r.URL.Query().Get("json") == "1" {
-			httpx.JSON(w, 200, resolved)
+		proxied := proxiedAudioURL(r, resolved.URL)
+		if r.URL.Query().Get("redirect") == "1" {
+			http.Redirect(w, r, proxied, http.StatusFound)
 			return
 		}
-		http.Redirect(w, r, resolved.URL, http.StatusFound)
+		httpx.JSON(w, 200, map[string]any{
+			"url":     proxied,
+			"direct":  resolved.URL,
+			"source":  "tidal",
+			"quality": resolved.Quality,
+		})
+	}
+}
+
+// proxiedAudioURL wraps a raw Tidal CDN URL in this server's
+// same-origin `/tracks/audio` proxy. Mirrors the room-stream builder
+// in rooms.go so both playback paths hand out identical, stable URLs.
+func proxiedAudioURL(r *http.Request, cdnURL string) string {
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") == "" {
+		scheme = "http"
+	}
+	if xf := r.Header.Get("X-Forwarded-Proto"); xf != "" {
+		scheme = xf
+	}
+	host := r.Host
+	if forwarded := r.Header.Get("X-Forwarded-Host"); forwarded != "" {
+		host = forwarded
+	}
+	return scheme + "://" + host + "/tracks/audio?url=" + encodeQuery(cdnURL)
+}
+
+// trackRadio returns the "Similar" feed for a track. Ported from
+// worker PR #485 + #487: a real fallback chain so the section is never
+// empty for niche/new tracks (Tidal often 404s track-radio with
+// subStatus 2001 — "Track radio cannot be generated").
+//
+// Chain (each layer wrapped, results deduped + seed removed):
+//  1. Tidal /v1/tracks/:id/radio   — canonical seed mix
+//  2. Tidal /v1/artists/:id/radio  — broader artist anchor
+//  3. /v1/artists/:id/toptracks    — last-ditch, almost always works
+//  4. Same-album sibling tracks    — only if still < 5 items
+//
+// Returns `{ items: [...] }` to match the worker shape.
+func trackRadio(a *app.App) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		ctx := r.Context()
+		svc := tidalSvc(a)
+
+		const target = 5
+		seen := map[string]bool{id: true}
+		out := make([]tidal.Track, 0, 25)
+		add := func(items []tidal.Track) {
+			for _, t := range items {
+				if t.ID == "" || seen[t.ID] {
+					continue
+				}
+				seen[t.ID] = true
+				out = append(out, t)
+			}
+		}
+
+		// 1. Track radio (canonical). Swallow 404/empty — niche tracks
+		//    legitimately have no seed mix.
+		if res, err := svc.API.GetTrackRadio(ctx, id, 25); err == nil && res != nil {
+			add(mapTracks(res.Items))
+		}
+
+		// Resolve the seed track's primary artist for the artist-anchored
+		// fallbacks below.
+		var artistID string
+		if t, err := svc.API.GetTrack(ctx, id); err == nil && t != nil {
+			artistID = primaryArtistID(t)
+		}
+
+		// 2. Artist radio.
+		if len(out) < target && artistID != "" {
+			if res, err := svc.API.GetArtistRadio(ctx, artistID, 50); err == nil && res != nil {
+				add(mapTracks(res.Items))
+			}
+		}
+
+		// 3. Artist top tracks (last-ditch — almost always returns).
+		if len(out) < target && artistID != "" {
+			if res, err := svc.API.GetArtistTopTracks(ctx, artistID, 50); err == nil && res != nil {
+				add(mapTracks(res.Items))
+			}
+		}
+
+		// 4. Same-album siblings (only if we're still short).
+		if len(out) < target {
+			if t, err := svc.API.GetTrack(ctx, id); err == nil && t != nil {
+				if albumID := albumIDOf(t); albumID != "" {
+					if res, err := svc.API.GetAlbumTracks(ctx, albumID, 50); err == nil && res != nil {
+						add(mapTracks(res.Items))
+					}
+				}
+			}
+		}
+
+		httpx.JSON(w, 200, map[string]any{"items": out})
 	}
 }
 
@@ -434,4 +541,38 @@ func adminTidalPoll(a *app.App) http.HandlerFunc {
 			"expiresIn": res.ExpiresIn,
 		})
 	}
+}
+
+// ---- radio helpers ----------------------------------------------------
+
+// mapTracks normalises a slice of upstream TrackRaw into API Tracks.
+func mapTracks(items []tidal.TrackRaw) []tidal.Track {
+	out := make([]tidal.Track, 0, len(items))
+	for i := range items {
+		out = append(out, tidal.MapTrack(&items[i]))
+	}
+	return out
+}
+
+// primaryArtistID returns the seed track's main artist id (string),
+// preferring the explicit `artist` field then the first `artists[]`.
+func primaryArtistID(t *tidal.TrackRaw) string {
+	if t == nil {
+		return ""
+	}
+	if t.Artist != nil && t.Artist.ID != 0 {
+		return strconv.FormatInt(t.Artist.ID, 10)
+	}
+	if len(t.Artists) > 0 && t.Artists[0].ID != 0 {
+		return strconv.FormatInt(t.Artists[0].ID, 10)
+	}
+	return ""
+}
+
+// albumIDOf returns the seed track's album id (string) or "".
+func albumIDOf(t *tidal.TrackRaw) string {
+	if t == nil || t.Album == nil || t.Album.ID == 0 {
+		return ""
+	}
+	return strconv.FormatInt(t.Album.ID, 10)
 }

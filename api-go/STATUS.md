@@ -31,7 +31,7 @@ until parity is reached.
 | `/playlists/*`    | ✅      | Full CRUD + reorder + pin + share-token.                                                   |
 | `/library/*`      | ✅      | Likes for tracks (via liked playlist) / albums / artists (via `library_items`).            |
 | `/search/*`       | ✅      | tracks/albums/artists/playlists ported via Tidal client (PLAYLISTS bucket on /v1/search).  |
-| `/tracks/*`       | ✅      | GET track, stream (302), lyrics + PUT/DELETE/GET/stream override (50 MiB cap, MIME allowlist, sub-gated). |
+| `/tracks/*`       | ⚠️     | GET track, lyrics, override (50 MiB cap, MIME allowlist, sub-gated), **`/audio` CDN proxy (ported #478)**, **`/{id}/radio` fallback chain (ported #485+#487)**, stream now returns worker-shape JSON `{url(proxied),direct,source,quality}`. **BUT `ResolveStream` is still first-pass — see "Streaming parity gaps" below. NOT safe to cut nginx over yet.** |
 | `/covers/*`       | ✅      | `GET /covers/proxy?url=…` host-allowlisted Tidal image proxy with edge-cache headers.       |
 | `/albums/*`       | ✅      | GET album (with tracks) + GET album tracks.                                                |
 | `/artists/*`      | ✅      | GET artist + top-tracks + albums + singles + releases (concatenated).                      |
@@ -45,10 +45,41 @@ until parity is reached.
 | `/ai/playlists`   | ✅      | POST /generate (Yandex gpt-oss-120b plan → parallel tidal.Search → round-robin merge + dislike filter) + POST /save. |
 | Cron orchestrator | ✅     | Loop runs at 04:30 UTC: Taste.RecomputeActive → Daily.RegenerateForActive → Recs.GCStale. |
 
+## Streaming parity gaps (BLOCKS cut-over)
+
+The Go `tidal.ResolveStream` (`internal/tidal/stream.go`) is a first-pass
+implementation. The TS worker's `TidalWeb.ts` (~600 lines) does a lot more,
+and these pieces are NOT yet ported. Cutting nginx over to Go before they
+land will break playback for real users (especially HI_RES tracks and any
+track during a Tidal upstream blip):
+
+1. **DASH / HI_RES manifest decoding** — Go only decodes
+   `application/vnd.tidal.bts` (LOSSLESS/HIGH/LOW). HI_RES_LOSSLESS returns
+   a DASH manifest → Go errors out. Worker decodes both.
+2. **Discovery quality-cache + self-heal (#488)** — worker probes
+   `trackManifests/:id`, caches the working quality, and (critically)
+   negative-caches empty/blip results for only 10 min so a transient
+   openapi.tidal.com failure self-heals instead of poisoning the cache for
+   24h (the `PIPELINE_ERROR_READ: FFmpegDemuxer: demuxer seek failed`
+   incident). Go has none of this discovery layer.
+3. **Legacy quality-ladder fallback + `tidal-track-quality:` memo** —
+   worker walks the ladder (HI_RES→LOSSLESS→HIGH→LOW) and memoises the
+   first rung that yields a clean stream. Go only does a single one-rung
+   soft-retry.
+4. **Resolved-URL proxying** — DONE in this pass: stream + room-stream now
+   wrap the CDN URL in `/tracks/audio`, and the `/tracks/audio` route now
+   exists (was referenced by rooms.go but never implemented).
+
+Until 1–3 land and are validated side-by-side against the worker, keep
+nginx pointed at `api:3000` and use `api-go:3001` for shadow testing only.
+
 ## Cut-over plan
 
-1. Land all ❌ rows as `✅` in follow-up commits on this same branch.
-2. Drop `worker/` directory + worker-specific CI bits.
-3. Point nginx upstream from `api:3000` → `api-go:3000`, delete the
+1. Land all ❌/⚠️ rows as `✅` in follow-up commits on this same branch —
+   **streaming parity gaps above are the critical blocker.**
+2. Validate `api-go:3001` side-by-side against prod traffic (especially
+   stream resolution across BTS + DASH tracks and during a Tidal blip).
+3. Drop `worker/` directory + worker-specific CI bits.
+4. Point nginx upstream from `api:3000` → `api-go:3000`, delete the
    side-by-side `api-go:3001` port mapping.
-4. Unset draft on this PR and merge.
+5. Unset draft on this PR and merge.

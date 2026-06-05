@@ -24,8 +24,13 @@ func mountSearch(a *app.App) func(chi.Router) {
 
 func mountTracks(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
+		// `/tracks/audio` is the unauthenticated CDN proxy (see audio.go).
+		// Registered before `/{id}` style routes so "audio" is never
+		// mistaken for a track id.
+		r.Get("/audio", proxyAudio(a))
 		r.Get("/{id}", getTrack(a))
 		r.Get("/{id}/stream", streamTrack(a))
+		r.Get("/{id}/radio", trackRadio(a))
 		r.Get("/{id}/lyrics", trackLyrics(a))
 
 		r.Group(func(r chi.Router) {

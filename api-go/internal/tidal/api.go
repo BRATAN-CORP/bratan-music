@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -70,25 +71,96 @@ func (a *API) get(ctx context.Context, path string, out any) error {
 		return a.http.Do(req)
 	}
 
+	// Light retry policy for transient Tidal upstream errors (ported from
+	// the TS worker's TidalApi wrapper — PR #484). Tidal's catalogue API
+	// occasionally returns 5xx / 429 for a single request even when the
+	// surrounding burst is fine; without a retry every such blip surfaces
+	// to the user as a hard error (the search?filter=artists 502 incident
+	// on 2026-05-28 was exactly this). Strategy:
+	//   • 401  → force a token refresh, single retry (existing behaviour).
+	//   • 5xx / 429 / network throw → up to 3 retries with backoff
+	//                                 (150ms, 400ms, 800ms + small jitter).
+	// We deliberately do NOT retry 4xx other than 429 — those are
+	// deterministic (404 missing track, 400 bad params) and a retry would
+	// just waste time. Stream-URL resolution goes through this same path,
+	// so the extra retry tier directly cuts transient playback failures.
+	const maxTransientRetries = 3
+	isTransient := func(s int) bool { return s == 429 || (s >= 500 && s <= 599) }
+	backoff := func(n int) time.Duration {
+		base := 150 * time.Millisecond
+		switch n {
+		case 0:
+			base = 150 * time.Millisecond
+		case 1:
+			base = 400 * time.Millisecond
+		default:
+			base = 800 * time.Millisecond
+		}
+		return base + time.Duration(rand.Intn(100))*time.Millisecond
+	}
+
 	token, err := a.auth.GetAccessToken(ctx, false)
 	if err != nil {
 		return err
 	}
-	res, err := doFetch(token)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode == 401 {
-		res.Body.Close()
-		token, err = a.auth.GetAccessToken(ctx, true)
-		if err != nil {
-			return err
-		}
+
+	var res *http.Response
+	var lastErr error
+	for attempt := 0; attempt <= maxTransientRetries; attempt++ {
 		res, err = doFetch(token)
 		if err != nil {
-			return err
+			// Network-level failure (DNS, TCP reset, abort). Treat as transient.
+			lastErr = err
+			if attempt >= maxTransientRetries {
+				return err
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff(attempt)):
+			}
+			continue
 		}
+		if res.StatusCode == 401 {
+			res.Body.Close()
+			token, err = a.auth.GetAccessToken(ctx, true)
+			if err != nil {
+				return err
+			}
+			res, err = doFetch(token)
+			if err != nil {
+				lastErr = err
+				if attempt >= maxTransientRetries {
+					return err
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(backoff(attempt)):
+				}
+				continue
+			}
+		}
+		if isTransient(res.StatusCode) && attempt < maxTransientRetries {
+			// Drain + close so the connection can be reused, then back off.
+			io.Copy(io.Discard, io.LimitReader(res.Body, 1<<14))
+			res.Body.Close()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff(attempt)):
+			}
+			continue
+		}
+		break
 	}
+	if res == nil {
+		if lastErr != nil {
+			return lastErr
+		}
+		return fmt.Errorf("tidal %s: no response", path)
+	}
+
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<14))
