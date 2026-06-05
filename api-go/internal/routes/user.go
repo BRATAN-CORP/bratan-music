@@ -24,6 +24,11 @@ func mountUser(a *app.App) func(chi.Router) {
 		r.Post("/reset-recommendations", userResetRecommendations(a))
 		r.Post("/me/tour/complete", userTourComplete(a))
 		r.Post("/me/tour/reset", userTourReset(a))
+		// Account-linking (email + telegram) for the settings panel.
+		r.Post("/me/email/request", userEmailLinkRequest(a))
+		r.Post("/me/email/verify", userEmailLinkVerify(a))
+		r.Post("/me/telegram/link/start", userTelegramLinkStart(a))
+		r.Get("/me/telegram/link/status/{nonce}", userTelegramLinkStatus(a))
 		r.Get("/quota", userQuota(a))
 		r.Get("/sessions", userListSessions(a))
 		r.Delete("/sessions/{id}", userRevokeSession(a))
