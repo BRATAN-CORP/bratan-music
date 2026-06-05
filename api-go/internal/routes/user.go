@@ -16,6 +16,14 @@ func mountUser(a *app.App) func(chi.Router) {
 		r.Get("/me", userMe(a))
 		r.Put("/settings", userUpdateSettings(a))
 		r.Get("/settings", userGetSettings(a))
+		// Frontend (useSettingsSync / page.tsx / OnboardingTour) calls these
+		// TS-contract paths — see user_prefs.go.
+		r.Get("/preferences", userGetPreferences(a))
+		r.Put("/preferences", userPutPreferences(a))
+		r.Get("/limits", userLimits(a))
+		r.Post("/reset-recommendations", userResetRecommendations(a))
+		r.Post("/me/tour/complete", userTourComplete(a))
+		r.Post("/me/tour/reset", userTourReset(a))
 		r.Get("/quota", userQuota(a))
 		r.Get("/sessions", userListSessions(a))
 		r.Delete("/sessions/{id}", userRevokeSession(a))
