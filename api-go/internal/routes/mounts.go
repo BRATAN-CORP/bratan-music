@@ -42,6 +42,8 @@ func mountTracks(a *app.App) func(chi.Router) {
 			r.Delete("/{id}/override", deleteOverride(a))
 			r.Get("/{id}/override", getOverride(a))
 			r.Get("/{id}/override/stream", streamOverride(a))
+			// Full-file download (premium): proxied with attachment headers.
+			r.Get("/{id}/file", trackFile(a))
 		})
 	}
 }
@@ -68,6 +70,7 @@ func mountArtists(a *app.App) func(chi.Router) {
 		r.Get("/{id}/albums", getArtistAlbums(a))
 		r.Get("/{id}/singles", getArtistSingles(a))
 		r.Get("/{id}/releases", getArtistReleases(a))
+		r.Get("/{id}/radio", artistRadio(a))
 	}
 }
 
