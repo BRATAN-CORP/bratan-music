@@ -74,10 +74,20 @@ func run() error {
 	}
 	logger.Info("minio ready", "bucket", store.Bucket())
 
-	// Apply schema + legacy migrations. The disk path lets us pick up
-	// new files committed under worker/src/db/migrations/ without
-	// rebuilding the binary.
-	if err := migrations.Apply(ctx, database.Pool, "worker/src/db/migrations"); err != nil {
+	// Apply the embedded consolidated schema only. The embedded
+	// `001_schema.sql` is the full current schema and is fully
+	// idempotent (every statement uses IF NOT EXISTS), so it safely:
+	//   - creates everything on a fresh DB, and
+	//   - is a no-op against the existing prod DB already migrated by
+	//     the TS worker.
+	//
+	// We deliberately DO NOT re-apply the legacy worker D1 migrations
+	// (worker/src/db/migrations/*.sql): those are NOT idempotent
+	// (`CREATE TABLE users` / `ADD COLUMN` with no IF NOT EXISTS) and
+	// the TS worker tracks them under different names in d1_migrations,
+	// so Go would re-run them and crash on "already exists" — which is
+	// exactly what took prod down during the first cut-over attempt.
+	if err := migrations.Apply(ctx, database.Pool, ""); err != nil {
 		return fmt.Errorf("migrations: %w", err)
 	}
 	logger.Info("migrations applied")
