@@ -2,7 +2,7 @@
 #
 # Statically-linked Go binary, multi-stage so the final image is a
 # scratch + ca-certs ~25 MB instead of dragging in a 300 MB base.
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
 
