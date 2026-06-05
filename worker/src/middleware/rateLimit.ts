@@ -75,6 +75,19 @@ export const rateLimit = createMiddleware<{ Bindings: Env; Variables: Variables 
     return;
   }
 
+  // Cover-art proxy (`/covers/proxy?url=...`) is an unauthenticated image
+  // passthrough to Tidal's resources CDN. A single album or playlist view
+  // fans out one request per track-cover the moment it renders — opening
+  // a 50-track "playlist of the day" plus the now-playing art easily
+  // crosses the default 100/min IP bucket in one navigation, which then
+  // 429s a chunk of the covers and leaves the grid full of broken images.
+  // The endpoint exposes no user data and writes nothing, so (like
+  // `/tracks/audio`) it doesn't belong behind the IP rate limiter.
+  if (path === '/covers/proxy') {
+    await next();
+    return;
+  }
+
   // Room media proxies (`/rooms/:id/stream/upload/...`,
   // `/rooms/:id/stream/override/...`, `/rooms/:id/stream/tidal/...`)
   // exist purely to fan an audio source out to all participants. The
