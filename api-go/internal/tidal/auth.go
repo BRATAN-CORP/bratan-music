@@ -70,7 +70,8 @@ type Auth struct {
 
 	mu      sync.Mutex
 	cached  *Tokens
-	loaded  bool // distinguish "not loaded yet" from "loaded and nil"
+	loaded  bool  // distinguish "not loaded yet" from "loaded and nil"
+	boundID int64 // tidal_accounts.id pinned on first pool read (0 = none / legacy)
 }
 
 // NewAuth wires a single-account Tidal auth backed by the
@@ -171,28 +172,61 @@ func (a *Auth) InvalidateCache() {
 	a.mu.Lock()
 	a.cached = nil
 	a.loaded = false
+	a.boundID = 0
 	a.mu.Unlock()
 }
 
-// loadSession reads the legacy singleton `tidal_session` row (id=1)
-// and decrypts the access/refresh tokens with SESSION_ENCRYPTION_KEY.
-// Returns (nil, nil) when no row exists — callers fall back to the
-// env-configured refresh token.
+// loadSession resolves the active Tidal session. It mirrors the worker
+// (TidalAuth.loadSessionFromStorage): the PRIMARY source is the
+// `tidal_accounts` pool (the worker writes live creds there); the
+// singleton `tidal_session` row is only a legacy fallback for fresh
+// deploys with an empty pool. Returns (nil, nil) when neither exists —
+// callers then fall back to the env-configured refresh token.
 func (a *Auth) loadSession(ctx context.Context) (*Tokens, error) {
+	if t, err := a.loadFromPool(ctx); err != nil {
+		return nil, err
+	} else if t != nil {
+		return t, nil
+	}
+	return a.loadLegacySession(ctx)
+}
+
+// loadFromPool picks one enabled account (LRU round-robin), decrypts
+// its tokens, pins it as the bound account for write-back, and bumps
+// last_used_at. Returns (nil, nil) when the pool is empty.
+func (a *Auth) loadFromPool(ctx context.Context) (*Tokens, error) {
 	row := a.db.QueryRow(ctx, `
-		SELECT access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret
-		FROM tidal_session WHERE id = 1
+		SELECT id, access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret
+		FROM tidal_accounts
+		WHERE enabled = 1
+		ORDER BY last_used_at ASC, id ASC
+		LIMIT 1
 	`)
+	var id, expiresAt, userID int64
 	var accessEnc, refreshEnc sql.NullString
-	var expiresAt, userID int64
-	var countryCode sql.NullString
-	var clientID, clientSecretEnc sql.NullString
-	if err := row.Scan(&accessEnc, &refreshEnc, &expiresAt, &userID, &countryCode, &clientID, &clientSecretEnc); err != nil {
+	var countryCode, clientID, clientSecretEnc sql.NullString
+	if err := row.Scan(&id, &accessEnc, &refreshEnc, &expiresAt, &userID, &countryCode, &clientID, &clientSecretEnc); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
+	tokens, err := a.decodeTokens(accessEnc, refreshEnc, expiresAt, userID, countryCode, clientID, clientSecretEnc)
+	if err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	a.boundID = id
+	a.mu.Unlock()
+	// Bump the LRU pointer so the next process/request picks a different
+	// account. Non-fatal on error.
+	_, _ = a.db.Exec(ctx, `UPDATE tidal_accounts SET last_used_at = $1 WHERE id = $2`, nowSec(), id)
+	return tokens, nil
+}
+
+// decodeTokens decrypts the shared (access/refresh/client_secret)
+// columns used by both tidal_accounts and tidal_session.
+func (a *Auth) decodeTokens(accessEnc, refreshEnc sql.NullString, expiresAt, userID int64, countryCode, clientID, clientSecretEnc sql.NullString) (*Tokens, error) {
 	if !accessEnc.Valid || !refreshEnc.Valid {
 		return nil, nil
 	}
@@ -211,12 +245,9 @@ func (a *Auth) loadSession(ctx context.Context) (*Tokens, error) {
 			return nil, fmt.Errorf("decrypt client_secret: %w", err)
 		}
 	}
-	cc := ""
-	if countryCode.Valid {
+	cc := defaultCountryCode
+	if countryCode.Valid && countryCode.String != "" {
 		cc = countryCode.String
-	}
-	if cc == "" {
-		cc = defaultCountryCode
 	}
 	cid := ""
 	if clientID.Valid {
@@ -233,8 +264,30 @@ func (a *Auth) loadSession(ctx context.Context) (*Tokens, error) {
 	}, nil
 }
 
-// cacheSession persists fresh tokens back to `tidal_session` (id=1),
-// encrypting access/refresh/client_secret with SESSION_ENCRYPTION_KEY.
+// loadLegacySession reads the legacy singleton `tidal_session` row
+// (id=1) and decrypts its tokens. Returns (nil, nil) when no row.
+func (a *Auth) loadLegacySession(ctx context.Context) (*Tokens, error) {
+	row := a.db.QueryRow(ctx, `
+		SELECT access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret
+		FROM tidal_session WHERE id = 1
+	`)
+	var accessEnc, refreshEnc sql.NullString
+	var expiresAt, userID int64
+	var countryCode sql.NullString
+	var clientID, clientSecretEnc sql.NullString
+	if err := row.Scan(&accessEnc, &refreshEnc, &expiresAt, &userID, &countryCode, &clientID, &clientSecretEnc); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return a.decodeTokens(accessEnc, refreshEnc, expiresAt, userID, countryCode, clientID, clientSecretEnc)
+}
+
+// cacheSession persists fresh tokens. When a pool account is bound
+// (the common case in prod), it writes back to that `tidal_accounts`
+// row (mirrors TidalPool.updateTokens); otherwise it updates the
+// legacy singleton `tidal_session` row.
 func (a *Auth) cacheSession(ctx context.Context, t *Tokens) error {
 	access, err := authz.EncryptSession(a.cfg.SessionEncryptionKey, t.AccessToken)
 	if err != nil {
@@ -257,6 +310,26 @@ func (a *Auth) cacheSession(ctx context.Context, t *Tokens) error {
 		clientIDPtr = &t.ClientID
 	}
 	now := nowSec()
+
+	a.mu.Lock()
+	boundID := a.boundID
+	a.mu.Unlock()
+	if boundID != 0 {
+		_, err = a.db.Exec(ctx, `
+			UPDATE tidal_accounts SET
+				access_token  = $1,
+				refresh_token = $2,
+				expires_at    = $3,
+				user_id       = $4,
+				country_code  = $5,
+				client_id     = $6,
+				client_secret = $7,
+				updated_at    = $8
+			WHERE id = $9
+		`, access, refresh, t.ExpiresAt, t.UserID, t.CountryCode, clientIDPtr, clientSecretEnc, now, boundID)
+		return err
+	}
+
 	_, err = a.db.Exec(ctx, `
 		INSERT INTO tidal_session (id, access_token, refresh_token, expires_at, user_id, country_code, client_id, client_secret, updated_at)
 		VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
