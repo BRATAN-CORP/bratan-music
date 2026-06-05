@@ -94,13 +94,28 @@ func mountAdmin(a *app.App) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Use(middleware.JWTAuth(a.Cfg.JWTSecret, a.DB))
 		r.Use(middleware.AdminOnly)
-		r.Get("/tidal/accounts", adminTidalAccounts(a))
-		r.Post("/tidal/accounts/start", adminTidalStart(a))
-		r.Post("/tidal/accounts/poll", adminTidalPoll(a))
-		r.Get("/health", adminHealth(a))
+		// User management.
+		r.Get("/users", adminUsersList(a))
+		r.Get("/users/search", adminUsersSearch(a))
+		r.Get("/users/{id}", adminUserDetail(a))
+		r.Delete("/users/{id}/data", adminUserPurge(a))
 		r.Post("/users/{id}/ban", adminBan(a))
 		r.Post("/users/{id}/unban", adminUnban(a))
+		r.Post("/admin-flag", adminAdminFlag(a))
 		r.Post("/grant", adminGrant(a))
+		// Tidal pool management.
+		r.Get("/tidal/accounts", adminTidalAccountsList(a))
+		r.Post("/tidal/accounts", adminTidalAccountAdd(a))
+		r.Patch("/tidal/accounts/{id}", adminTidalAccountPatch(a))
+		r.Delete("/tidal/accounts/{id}", adminTidalAccountDelete(a))
+		r.Post("/tidal/accounts/{id}/refresh", adminTidalAccountRefresh(a))
+		r.Post("/tidal/accounts/start", adminTidalStart(a))
+		r.Post("/tidal/accounts/poll", adminTidalPoll(a))
+		r.Post("/tidal/device/start", adminTidalStart(a))
+		r.Post("/tidal/device/poll", adminTidalPoll(a))
+		// Health + logs.
+		r.Get("/health", adminHealth(a))
+		r.Get("/logs", adminLogs(a))
 		r.Post("/daily-playlists/reset", adminResetDaily(a))
 	}
 }
