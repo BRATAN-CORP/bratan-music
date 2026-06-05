@@ -135,6 +135,16 @@ jobs:
             # Clean up old images
             docker image prune -f
 
+            # Diagnostic: dump api-go startup logs (nginx points to TS,
+            # so this is non-disruptive). Helps debug the Go cut-over
+            # crash-loop without SSH/port access. Safe to remove later.
+            sleep 6
+            echo "=== api-go status ==="
+            docker compose ps api-go || true
+            echo "=== api-go logs (tail 80) ==="
+            docker compose logs api-go --tail 80 || true
+            echo "=== end api-go logs ==="
+
             # Health check (wait for API)
             echo "Waiting for API..."
             for i in $(seq 1 30); do
