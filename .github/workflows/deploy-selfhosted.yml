@@ -138,11 +138,19 @@ jobs:
             # Diagnostic: dump api-go startup logs (nginx points to TS,
             # so this is non-disruptive). Helps debug the Go cut-over
             # crash-loop without SSH/port access. Safe to remove later.
-            sleep 6
+            sleep 8
             echo "=== api-go status ==="
             docker compose ps api-go || true
             echo "=== api-go logs (tail 80) ==="
             docker compose logs api-go --tail 80 || true
+            echo "=== api-go direct probes (host :3001) ==="
+            echo "-- /health --";        curl -s -m 8 http://localhost:3001/health; echo
+            echo "-- /health/tidal --";  curl -s -m 12 http://localhost:3001/health/tidal; echo
+            echo "-- route status codes (401/200 = OK, 404/000 = BAD) --"
+            for p in /search?q=test /explore /daily-playlists /tracks/audio; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" -m 8 "http://localhost:3001$p")
+              echo "  $p -> $code"
+            done
             echo "=== end api-go logs ==="
 
             # Health check (wait for API)
