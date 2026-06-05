@@ -486,6 +486,21 @@ func DetectScript(s string) string {
 	return "other"
 }
 
+// scriptShare returns the normalized share (0..1) of a given script
+// bucket within a ScriptMix. Used by the rec rerank's language penalty.
+func scriptShare(m ScriptMix, script string) float64 {
+	switch script {
+	case "cyrillic":
+		return m.Cyrillic
+	case "latin":
+		return m.Latin
+	case "cjk":
+		return m.CJK
+	default:
+		return m.Other
+	}
+}
+
 func mapMax(m map[string]float64) float64 {
 	max := 0.0
 	for _, v := range m {

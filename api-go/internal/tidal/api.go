@@ -15,19 +15,37 @@ import (
 
 const apiBase = "https://api.tidal.com"
 
+// openapiBase exposes the full quality matrix for a track in one shot
+// via `/v2/trackManifests/:id` (see discovery.go). Port of the same
+// constant in worker/TidalWeb.ts.
+const openapiBase = "https://openapi.tidal.com/v2"
+
+// KV is the minimal key/value contract the streaming discovery layer
+// needs (Redis in prod). It mirrors the Cloudflare-KV surface the
+// worker used (`tidal-track-formats:`, `tidal-track-quality:`,
+// `tidal-discovery-breaker`). *redisx.Client satisfies it. All cache
+// access is nil-safe: a nil KV simply means "always a cache miss, never
+// write", so the resolver still works (just without self-heal memo).
+type KV interface {
+	KVGet(ctx context.Context, key string) (string, bool, error)
+	KVSet(ctx context.Context, key, value string, ttl time.Duration) error
+}
+
 // API is the catalogue client (port of worker/TidalApi.ts).
 //
 // Authentication: every request injects the current access token via
 // Auth.GetAccessToken; on 401 the token is force-refreshed and the
 // request is retried exactly once.
 type API struct {
-	auth *Auth
-	http *http.Client
+	auth  *Auth
+	http  *http.Client
+	cache KV // optional; nil-safe (see KV doc)
 }
 
-// NewAPI wires an API backed by the given Auth.
-func NewAPI(a *Auth) *API {
-	return &API{auth: a, http: &http.Client{Timeout: 25 * time.Second}}
+// NewAPI wires an API backed by the given Auth. cache may be nil (the
+// streaming discovery/quality memo degrades to no-cache in that case).
+func NewAPI(a *Auth, cache KV) *API {
+	return &API{auth: a, http: &http.Client{Timeout: 25 * time.Second}, cache: cache}
 }
 
 // commonParams threads through the parameters Tidal Web sets on every

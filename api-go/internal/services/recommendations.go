@@ -68,6 +68,17 @@ const (
 	wMoodBonus        = 0.30
 	familiarBias      = 2.0
 	discoverBias      = -1.5
+
+	// Language-script penalty (port of worker W_LANG_MISMATCH et al).
+	// Penalise candidates whose artist name is in a script the user
+	// demonstrably doesn't listen to. Gated to users with enough
+	// history (langMinHistoryPlays) so cold-start users aren't locked
+	// into one region, and scaled by how far below langMinShare the
+	// candidate's script sits — a truly 50/50 RU/EN listener gets no
+	// penalty on either side.
+	wLangMismatch       = -0.40
+	langMinShare        = 0.10
+	langMinHistoryPlays = 50
 )
 
 // WaveMoods + WaveCharacters mirror the TS exports — kept exported
@@ -413,6 +424,11 @@ func (s *RecommendationService) rerank(
 		familiarWeight = wFamiliarBonus * discoverBias
 	}
 
+	// Language penalty pre-flight: only meaningful with enough history
+	// to trust the distribution. Cold-start / thin-listening users get
+	// a no-op penalty (matches worker semantics).
+	languageActive := profile.TotalPlays >= langMinHistoryPlays
+
 	type scored struct {
 		track tidal.Track
 		score float64
@@ -466,12 +482,26 @@ func (s *RecommendationService) rerank(
 		if slug, ok := genreProvenance[key]; ok {
 			genreSig = profile.GenreWeights[slug]
 		}
+
+		// Language mismatch penalty: scales linearly with how far below
+		// langMinShare the candidate artist's script sits in the user's
+		// listening. Only ever subtracts, so it degrades gracefully.
+		languagePenalty := 0.0
+		if languageActive {
+			candShare := scriptShare(profile.ScriptMix, DetectScript(t.Artist))
+			if candShare < langMinShare {
+				deficit := langMinShare - candShare
+				languagePenalty = wLangMismatch * (deficit / langMinShare)
+			}
+		}
+
 		score := wTaste*tasteSig +
 			wNovelty*novelty +
 			wRecentSeen*seenPenalty +
 			familiarWeight*familiarFlag +
 			wMoodBonus*moodMatch +
-			wGenreMatch*genreSig
+			wGenreMatch*genreSig +
+			languagePenalty
 		out = append(out, scored{track: t, score: score})
 	}
 

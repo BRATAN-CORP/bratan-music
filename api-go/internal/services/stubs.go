@@ -92,7 +92,7 @@ func NewTidalService(a *app.App) *TidalService {
 	return &TidalService{
 		A:    a,
 		Auth: auth,
-		API:  tidal.NewAPI(auth),
+		API:  tidal.NewAPI(auth, a.Redis),
 	}
 }
 

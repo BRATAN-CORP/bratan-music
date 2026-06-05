@@ -30,14 +30,18 @@ func Health(a *app.App) http.HandlerFunc {
 func HealthTidal(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		_ = ctx
-		// Tidal service is currently a stub — return ok-ish payload
-		// while we wire the full client in a follow-up commit.
+		// Port of worker node-entry.ts `/health/tidal`: confirm we can
+		// mint a Tidal access token and report the resolved country.
+		auth := tidalSvc(a).Auth
+		token, err := auth.GetAccessToken(ctx, false)
+		if err != nil {
+			httpx.JSON(w, http.StatusServiceUnavailable, map[string]any{"status": "error"})
+			return
+		}
 		httpx.JSON(w, http.StatusOK, map[string]any{
 			"status":      "ok",
-			"hasToken":    false,
-			"countryCode": "",
+			"hasToken":    token != "",
+			"countryCode": auth.GetCountryCode(ctx),
 		})
-		_ = a
 	}
 }
