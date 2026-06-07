@@ -96,6 +96,16 @@ func proxyAudio(a *app.App) http.HandlerFunc {
 		if ir := r.Header.Get("If-Range"); ir != "" {
 			req.Header.Set("If-Range", ir)
 		}
+		// Force identity encoding. Go's http.Transport otherwise injects
+		// `Accept-Encoding: gzip` on any request WITHOUT a Range header
+		// (i.e. the very first probe iOS Safari sends for an <audio> src)
+		// and then transparently decompresses — which STRIPS Content-Length
+		// from the response. iOS reads Content-Length/Content-Range to learn
+		// the media duration; without it the scrubber goes inert ("таймлайн
+		// неактивен"). Cloudflare Workers `fetch()` never did this, so this
+		// only regressed after the Go cut-over. identity keeps the byte
+		// count (and Range semantics) intact.
+		req.Header.Set("Accept-Encoding", "identity")
 
 		resp, err := audioHTTPClient.Do(req)
 		if err != nil {
@@ -117,6 +127,18 @@ func proxyAudio(a *app.App) http.HandlerFunc {
 			if v := resp.Header.Get(k); v != "" {
 				out.Set(k, v)
 			}
+		}
+		// Always advertise byte-range support on a successful body. Tidal's
+		// object CDN frequently omits `Accept-Ranges` on the initial
+		// non-range 200, and a <audio crossOrigin="anonymous"> element on
+		// iOS Safari uses this header to decide whether the timeline is
+		// seekable at all. Since this proxy faithfully forwards Range to a
+		// range-capable upstream, declaring `bytes` is correct and is what
+		// re-enables the scrubber. (On a 206 the upstream already sent it,
+		// so this is a no-op there.)
+		if (resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent) &&
+			out.Get("Accept-Ranges") == "" {
+			out.Set("Accept-Ranges", "bytes")
 		}
 		// The <audio> element reads these for seek/progress. The global
 		// CORS middleware already sets Access-Control-Allow-Origin.

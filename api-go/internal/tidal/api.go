@@ -203,13 +203,13 @@ func (a *API) Search(ctx context.Context, query, types string, limit, offset int
 		limit = 25
 	}
 	params := a.commonParams(ctx, url.Values{
-		"query":               {query},
-		"limit":               {strconv.Itoa(limit)},
-		"offset":              {strconv.Itoa(offset)},
-		"types":               {types},
-		"includeContributors": {"true"},
+		"query":                {query},
+		"limit":                {strconv.Itoa(limit)},
+		"offset":               {strconv.Itoa(offset)},
+		"types":                {types},
+		"includeContributors":  {"true"},
 		"includeUserPlaylists": {"false"},
-		"supportsUserData":    {"true"},
+		"supportsUserData":     {"true"},
 	})
 	var resp SearchResponse
 	if err := a.get(ctx, "/v1/search?"+params.Encode(), &resp); err != nil {
@@ -283,15 +283,25 @@ func (a *API) GetArtistTopTracks(ctx context.Context, artistID string, limit int
 // GetArtistAlbums returns albums for the artist filtered by `ALBUMS`,
 // `EPSANDSINGLES`, or `COMPILATIONS`.
 func (a *API) GetArtistAlbums(ctx context.Context, artistID string, limit int, filter string) (*ListItems[AlbumRaw], error) {
+	return a.GetArtistAlbumsPaged(ctx, artistID, limit, 0, filter)
+}
+
+// GetArtistAlbumsPaged is GetArtistAlbums with an explicit offset so the
+// "view all albums / singles" feed can paginate (the frontend falls back
+// to offset-based paging when no opaque morePath is available).
+func (a *API) GetArtistAlbumsPaged(ctx context.Context, artistID string, limit, offset int, filter string) (*ListItems[AlbumRaw], error) {
 	if limit <= 0 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	if filter == "" {
 		filter = "ALBUMS"
 	}
 	params := a.commonParams(ctx, url.Values{
 		"limit":  {strconv.Itoa(limit)},
-		"offset": {"0"},
+		"offset": {strconv.Itoa(offset)},
 		"filter": {filter},
 	})
 	var t ListItems[AlbumRaw]

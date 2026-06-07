@@ -376,15 +376,101 @@ func getAlbumTracks(a *app.App) http.HandlerFunc {
 
 // ---- artists ----------------------------------------------------------
 
+// getArtist returns the rich artist-page composite, mirroring the worker's
+// GET /artists/:id (worker/src/routes/artists.ts). The frontend artist page
+// (src/app/artist/page.tsx) reads `topTracks`, `albums`, `singles`,
+// `similarArtists` and the `*MoreTotal` counts straight off this response;
+// the old Go handler returned only the bare {id,name,imageUrl}, so every
+// section came back undefined and the page rendered empty ("карточки
+// артистов пустые"). Each Tidal sub-call is independent and tolerated
+// per-bucket (allSettled semantics): a single 451/5xx must not blank the
+// whole page.
 func getArtist(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		raw, err := tidalSvc(a).API.GetArtist(r.Context(), id)
-		if err != nil {
-			httpx.Internal(w, err)
-			return
+		api := tidalSvc(a).API
+		ctx := r.Context()
+
+		artistRaw, artErr := api.GetArtist(ctx, id)
+
+		topTracks := []tidal.Track{}
+		if tt, err := api.GetArtistTopTracks(ctx, id, 10); err == nil && tt != nil {
+			for i := range tt.Items {
+				topTracks = append(topTracks, tidal.MapTrack(&tt.Items[i]))
+			}
 		}
-		httpx.JSON(w, 200, tidal.MapArtist(raw))
+
+		albums := []tidal.Album{}
+		var albumsTotal int
+		if al, err := api.GetArtistAlbums(ctx, id, 50, "ALBUMS"); err == nil && al != nil {
+			for i := range al.Items {
+				albums = append(albums, tidal.MapAlbum(&al.Items[i], nil))
+			}
+			albumsTotal = al.TotalNumberOfItems
+		}
+
+		singles := []tidal.Album{}
+		var singlesTotal int
+		if sg, err := api.GetArtistAlbums(ctx, id, 50, "EPSANDSINGLES"); err == nil && sg != nil {
+			for i := range sg.Items {
+				singles = append(singles, tidal.MapAlbum(&sg.Items[i], nil))
+			}
+			singlesTotal = sg.TotalNumberOfItems
+		}
+
+		similar := []tidal.Artist{}
+		if sm, err := api.GetSimilarArtists(ctx, id, 20); err == nil && sm != nil {
+			for i := range sm.Items {
+				similar = append(similar, tidal.MapArtist(&sm.Items[i]))
+			}
+		}
+
+		// Resolve the artist header. If the dedicated record is unavailable,
+		// synthesise {id,name} from a release that credits this artist —
+		// enough for the page header to render (image is lost, same as TS).
+		var artist tidal.Artist
+		if artErr == nil && artistRaw != nil {
+			artist = tidal.MapArtist(artistRaw)
+		} else {
+			artist = tidal.Artist{ID: id, Source: "tidal"}
+			for _, rel := range append(append([]tidal.Album{}, albums...), singles...) {
+				for _, ar := range rel.Artists {
+					if ar.ID == id {
+						artist.Name = ar.Name
+						break
+					}
+				}
+				if artist.Name != "" {
+					break
+				}
+			}
+			if artist.Name == "" {
+				httpx.Err(w, http.StatusNotFound, "Artist not found")
+				return
+			}
+		}
+
+		out := map[string]any{
+			"id":             artist.ID,
+			"source":         artist.Source,
+			"name":           artist.Name,
+			"topTracks":      topTracks,
+			"albums":         albums,
+			"singles":        singles,
+			"similarArtists": similar,
+		}
+		if artist.ImageURL != "" {
+			out["imageUrl"] = artist.ImageURL
+		}
+		// Expose the catalogue totals so the page can decide whether to show
+		// a "view all" affordance (FE: `(albumsMoreTotal ?? albums.length) > 10`).
+		if albumsTotal > len(albums) {
+			out["albumsMoreTotal"] = albumsTotal
+		}
+		if singlesTotal > len(singles) {
+			out["singlesMoreTotal"] = singlesTotal
+		}
+		httpx.JSON(w, 200, out)
 	}
 }
 
@@ -404,36 +490,39 @@ func getArtistTopTracks(a *app.App) http.HandlerFunc {
 	}
 }
 
-func getArtistAlbums(a *app.App) http.HandlerFunc {
+// getArtistAlbums / getArtistSingles back the paginated "view all" feeds on
+// the artist page. The frontend (useArtistAlbumsInfinite) expects
+// `{ items, totalItems }` and pages with offset/limit — the old handlers
+// returned a bare array, so `lastPage.items` was undefined and the feed
+// broke. Offset is honoured so subsequent pages actually advance.
+func getArtistReleasesFeed(a *app.App, filter string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		raw, err := tidalSvc(a).API.GetArtistAlbums(r.Context(), id, queryInt(r, "limit", 50), "ALBUMS")
+		limit := queryInt(r, "limit", 50)
+		offset := queryInt(r, "offset", 0)
+		raw, err := tidalSvc(a).API.GetArtistAlbumsPaged(r.Context(), id, limit, offset, filter)
 		if err != nil {
 			httpx.Internal(w, err)
 			return
 		}
-		out := make([]tidal.Album, 0, len(raw.Items))
+		items := make([]tidal.Album, 0, len(raw.Items))
 		for i := range raw.Items {
-			out = append(out, tidal.MapAlbum(&raw.Items[i], nil))
+			items = append(items, tidal.MapAlbum(&raw.Items[i], nil))
+		}
+		out := map[string]any{"items": items}
+		if raw.TotalNumberOfItems > 0 {
+			out["totalItems"] = raw.TotalNumberOfItems
 		}
 		httpx.JSON(w, 200, out)
 	}
 }
 
+func getArtistAlbums(a *app.App) http.HandlerFunc {
+	return getArtistReleasesFeed(a, "ALBUMS")
+}
+
 func getArtistSingles(a *app.App) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		raw, err := tidalSvc(a).API.GetArtistAlbums(r.Context(), id, queryInt(r, "limit", 50), "EPSANDSINGLES")
-		if err != nil {
-			httpx.Internal(w, err)
-			return
-		}
-		out := make([]tidal.Album, 0, len(raw.Items))
-		for i := range raw.Items {
-			out = append(out, tidal.MapAlbum(&raw.Items[i], nil))
-		}
-		httpx.JSON(w, 200, out)
-	}
+	return getArtistReleasesFeed(a, "EPSANDSINGLES")
 }
 
 // getArtistReleases concatenates albums + EPs/singles + compilations.

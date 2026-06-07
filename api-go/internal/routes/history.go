@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,18 +17,18 @@ import (
 func historyPlay(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			TrackID         string  `json:"track_id"`
-			Source          string  `json:"source"`
-			ArtistID        string  `json:"artist_id"`
-			ArtistName      string  `json:"artist_name"`
-			Title           string  `json:"title"`
-			AlbumID         string  `json:"album_id"`
-			CoverURL        string  `json:"cover_url"`
-			Duration        int     `json:"duration"`
-			ListenedSeconds int     `json:"listened_seconds"`
-			Completed       bool    `json:"completed"`
-			ArtistsJSON     string  `json:"artists_json"`
-			Explicit        bool    `json:"explicit"`
+			TrackID         string `json:"track_id"`
+			Source          string `json:"source"`
+			ArtistID        string `json:"artist_id"`
+			ArtistName      string `json:"artist_name"`
+			Title           string `json:"title"`
+			AlbumID         string `json:"album_id"`
+			CoverURL        string `json:"cover_url"`
+			Duration        int    `json:"duration"`
+			ListenedSeconds int    `json:"listened_seconds"`
+			Completed       bool   `json:"completed"`
+			ArtistsJSON     string `json:"artists_json"`
+			Explicit        bool   `json:"explicit"`
 		}
 		if err := httpx.BindJSON(r, &body, 8*1024); err != nil {
 			httpx.Err(w, http.StatusBadRequest, "Некорректное тело")
@@ -82,7 +83,8 @@ func historyRecent(a *app.App) http.HandlerFunc {
 			`SELECT DISTINCT ON (track_id)
 			        track_id, source, COALESCE(artist_id,''), COALESCE(artist_name,''),
 			        title, COALESCE(album_id,''), COALESCE(cover_url,''), duration,
-			        played_at, MAX(explicit) OVER (PARTITION BY track_id) AS exp
+			        played_at, COALESCE(artists_json,''),
+			        MAX(explicit) OVER (PARTITION BY track_id) AS exp
 			   FROM play_history
 			  WHERE user_id = $1
 			  ORDER BY track_id, played_at DESC
@@ -94,30 +96,59 @@ func historyRecent(a *app.App) http.HandlerFunc {
 		}
 		defer rows.Close()
 
+		// Each item is a Track-shaped camelCase object, mirroring the
+		// worker's GET /history/recent. The previous body emitted DB
+		// snake_case (track_id, artist_name, cover_url, played_at, …) so
+		// the recently-played strip rendered blank cards — id/title/coverUrl
+		// were all undefined on the client.
 		out := []map[string]any{}
 		for rows.Next() {
 			var (
 				trackID, source, artistID, artistName, title, albumID, coverURL string
+				artistsJSON                                                     string
 				duration                                                        int
 				playedAt                                                        int64
 				explicit                                                        int
 			)
 			if err := rows.Scan(&trackID, &source, &artistID, &artistName,
-				&title, &albumID, &coverURL, &duration, &playedAt, &explicit); err != nil {
+				&title, &albumID, &coverURL, &duration, &playedAt, &artistsJSON, &explicit); err != nil {
 				continue
 			}
-			out = append(out, map[string]any{
-				"track_id":    trackID,
-				"source":      source,
-				"artist_id":   artistID,
-				"artist_name": artistName,
-				"title":       title,
-				"album_id":    albumID,
-				"cover_url":   coverURL,
-				"duration":    duration,
-				"played_at":   playedAt,
-				"explicit":    explicit == 1,
-			})
+			item := map[string]any{
+				"id":       trackID,
+				"source":   source,
+				"title":    title,
+				"artist":   artistName,
+				"duration": duration,
+				"explicit": explicit == 1,
+				"playedAt": playedAt,
+			}
+			if artistID != "" {
+				item["artistId"] = artistID
+			}
+			if albumID != "" {
+				item["albumId"] = albumID
+			}
+			if coverURL != "" {
+				item["coverUrl"] = coverURL
+			}
+			if artistsJSON != "" {
+				var parsed []map[string]any
+				if json.Unmarshal([]byte(artistsJSON), &parsed) == nil {
+					artists := make([]map[string]any, 0, len(parsed))
+					for _, ar := range parsed {
+						idStr, _ := ar["id"].(string)
+						nameStr, _ := ar["name"].(string)
+						if idStr != "" && nameStr != "" {
+							artists = append(artists, map[string]any{"id": idStr, "name": nameStr})
+						}
+					}
+					if len(artists) > 0 {
+						item["artists"] = artists
+					}
+				}
+			}
+			out = append(out, item)
 		}
 		if len(out) > limit {
 			out = out[:limit]

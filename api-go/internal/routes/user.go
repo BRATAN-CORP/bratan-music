@@ -7,6 +7,7 @@ import (
 	"github.com/bratan-corp/bratan-music/api-go/internal/app"
 	"github.com/bratan-corp/bratan-music/api-go/internal/httpx"
 	"github.com/bratan-corp/bratan-music/api-go/internal/middleware"
+	"github.com/bratan-corp/bratan-music/api-go/internal/services"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -56,25 +57,41 @@ func userMe(a *app.App) http.HandlerFunc {
 			httpx.Err(w, http.StatusNotFound, "Пользователь не найден")
 			return
 		}
-		// Has-active-subscription rollup.
-		var hasSub int
-		_ = a.DB.QueryRow(r.Context(),
-			`SELECT COUNT(*) FROM subscriptions
-			  WHERE user_id = $1 AND status IN ('active','manual') AND expires_at > $2`,
-			uid, nowMs(),
-		).Scan(&hasSub)
+		_ = isBannedInt
+		_ = tgID
+		_ = createdAt
 
+		// Active subscription, mirroring worker SubscriptionService.getActive:
+		// status='active' (NOT 'manual') and expires_at (stored in SECONDS)
+		// still in the future. The frontend renders subscription.expiresAt as
+		// unix-seconds, so the comparison MUST use nowSec() — the old nowMs()
+		// rollup compared seconds against milliseconds and was always false.
+		var subExpiresAt int64
+		var subObj any // null unless an active sub exists
+		if err := a.DB.QueryRow(r.Context(),
+			`SELECT expires_at FROM subscriptions
+			  WHERE user_id = $1 AND status = 'active' AND expires_at > $2
+			  ORDER BY expires_at DESC LIMIT 1`,
+			uid, nowSec(),
+		).Scan(&subExpiresAt); err == nil {
+			subObj = map[string]any{"status": "active", "expiresAt": subExpiresAt}
+		}
+
+		// camelCase contract expected by src/store/auth.ts + profile/admin
+		// pages. The previous snake_case body broke `isAdmin` (admin panel
+		// never rendered), `username`/`name`/`email` and the subscription card.
+		var tourCompleted any
+		if tourCompletedAt > 0 {
+			tourCompleted = tourCompletedAt
+		}
 		httpx.JSON(w, http.StatusOK, map[string]any{
-			"id":                id,
-			"tg_name":           tgName,
-			"tg_username":       tgUsername,
-			"is_admin":          isAdminInt == 1,
-			"is_banned":         isBannedInt == 1,
-			"email":             email,
-			"tg_id":             tgID,
-			"created_at":        createdAt,
-			"tour_completed_at": tourCompletedAt,
-			"has_subscription":  hasSub > 0,
+			"id":              id,
+			"username":        nilIfEmpty(tgUsername),
+			"name":            nilIfEmpty(tgName),
+			"email":           nilIfEmpty(email),
+			"isAdmin":         isAdminInt == 1,
+			"tourCompletedAt": tourCompleted,
+			"subscription":    subObj,
 		})
 	}
 }
@@ -142,7 +159,7 @@ func userListSessions(a *app.App) http.HandlerFunc {
 		uid := httpx.UserID(r)
 		curSid := httpx.SessionID(r)
 		rows, err := a.DB.Query(r.Context(),
-			`SELECT id, created_at, last_used_at, COALESCE(client_label,''), COALESCE(user_agent,''), COALESCE(ip_hash,'')
+			`SELECT id, created_at, last_used_at, expires_at, COALESCE(client_label,''), COALESCE(user_agent,'')
 			   FROM sessions WHERE user_id = $1
 			   ORDER BY last_used_at DESC, created_at DESC`, uid)
 		if err != nil {
@@ -150,26 +167,37 @@ func userListSessions(a *app.App) http.HandlerFunc {
 			return
 		}
 		defer rows.Close()
+		// camelCase SessionListItem to match SessionsPanel.tsx
+		// ({id, createdAt, lastUsedAt, expiresAt, label, current}) and the
+		// `{sessions, currentSessionId}` envelope. The old body shipped
+		// snake_case keys, leaked user_agent/ip_hash, and omitted both
+		// expiresAt and currentSessionId — the Сессии tab rendered blank rows.
 		out := []map[string]any{}
 		for rows.Next() {
 			var (
-				id, label, ua, ipHash string
-				created, lastUsed     int64
+				id, label, ua             string
+				created, lastUsed, expire int64
 			)
-			if err := rows.Scan(&id, &created, &lastUsed, &label, &ua, &ipHash); err != nil {
+			if err := rows.Scan(&id, &created, &lastUsed, &expire, &label, &ua); err != nil {
 				continue
 			}
+			if label == "" {
+				label = services.ClientLabelFromUA(ua)
+			}
 			out = append(out, map[string]any{
-				"id":           id,
-				"created_at":   created,
-				"last_used_at": lastUsed,
-				"client_label": label,
-				"user_agent":   ua,
-				"ip_hash":      ipHash,
-				"current":      id == curSid,
+				"id":         id,
+				"createdAt":  created,
+				"lastUsedAt": lastUsed,
+				"expiresAt":  expire,
+				"label":      label,
+				"current":    id == curSid,
 			})
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"sessions": out})
+		var curOut any
+		if curSid != "" {
+			curOut = curSid
+		}
+		httpx.JSON(w, http.StatusOK, map[string]any{"sessions": out, "currentSessionId": curOut})
 	}
 }
 

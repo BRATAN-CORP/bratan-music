@@ -42,9 +42,10 @@ func listPlaylists(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		uid := httpx.UserID(r)
 		rows, err := a.DB.Query(r.Context(),
-			`SELECT id, name, is_liked, created_at, updated_at,
-			        COALESCE(cover_url,''), COALESCE(pinned_at, 0),
-			        is_public, COALESCE(share_token,''), COALESCE(description,'')
+			`SELECT id, name, COALESCE(cover_url,''), COALESCE(share_token,''),
+			        is_liked, is_public, pinned_at, updated_at, created_at,
+			        source_kind, source_playlist_id, source_user_id,
+			        (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = playlists.id)
 			   FROM playlists
 			  WHERE user_id = $1
 			  ORDER BY is_liked DESC, pinned_at DESC NULLS LAST, updated_at DESC`, uid)
@@ -53,30 +54,27 @@ func listPlaylists(a *app.App) http.HandlerFunc {
 			return
 		}
 		defer rows.Close()
+		// `items` + camelCase to mirror the worker's `GET /playlists/`
+		// (c.json({ items: rows.map(rowToPlaylist) })). The previous body
+		// returned `{playlists: [...snake_case]}` so isLiked/coverUrl/etc.
+		// arrived undefined on the client.
 		out := []map[string]any{}
 		for rows.Next() {
 			var (
-				id, name, cover, share, desc string
-				isLiked, isPublic            int
-				created, updated, pinned     int64
+				id, name, cover, share              string
+				isLiked, isPublic                   int
+				pinned                              *int64
+				updated, created, trackCount        int64
+				sourceKind, sourcePID, sourceUserID *string
 			)
-			if err := rows.Scan(&id, &name, &isLiked, &created, &updated, &cover, &pinned, &isPublic, &share, &desc); err != nil {
+			if err := rows.Scan(&id, &name, &cover, &share, &isLiked, &isPublic, &pinned,
+				&updated, &created, &sourceKind, &sourcePID, &sourceUserID, &trackCount); err != nil {
 				continue
 			}
-			out = append(out, map[string]any{
-				"id":          id,
-				"name":        name,
-				"is_liked":    isLiked == 1,
-				"created_at":  created,
-				"updated_at":  updated,
-				"cover_url":   cover,
-				"pinned_at":   pinned,
-				"is_public":   isPublic == 1,
-				"share_token": share,
-				"description": desc,
-			})
+			out = append(out, playlistRowToMap(id, name, cover, share, isLiked, isPublic,
+				pinned, updated, created, trackCount, sourceKind, sourcePID, sourceUserID))
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{"playlists": out})
+		httpx.JSON(w, http.StatusOK, map[string]any{"items": out})
 	}
 }
 
@@ -95,7 +93,11 @@ func createPlaylist(a *app.App) http.HandlerFunc {
 			return
 		}
 		id := uuid.NewString()
-		now := nowMs()
+		// Seconds, not millis: the playlists table is shared with rows the
+		// TS worker created in seconds, and the frontend renders these
+		// timestamps assuming the worker's unit. nowMs() here produced
+		// year-50000 dates for Go-created playlists.
+		now := nowSec()
 		_, err := a.DB.Exec(r.Context(),
 			`INSERT INTO playlists(id, user_id, name, is_liked, created_at, updated_at, is_public, description)
 			 VALUES ($1, $2, $3, 0, $4, $4, 0, $5)`,
@@ -105,12 +107,17 @@ func createPlaylist(a *app.App) http.HandlerFunc {
 			httpx.Internal(w, err)
 			return
 		}
-		httpx.JSON(w, http.StatusOK, map[string]any{
-			"id":          id,
-			"name":        body.Name,
-			"description": body.Description,
-			"created_at":  now,
-		})
+		// Return the full rowToPlaylist (camelCase) with 201, mirroring the
+		// worker. The old body returned a 4-field snake_case stub, so the
+		// client's optimistic insert had no isLiked/coverUrl/trackCount.
+		pl, ok := fetchPlaylistMap(r.Context(), a.DB, id)
+		if !ok {
+			pl = map[string]any{
+				"id": id, "name": body.Name, "isLiked": false,
+				"trackCount": 0, "updatedAt": now, "createdAt": now,
+			}
+		}
+		httpx.JSON(w, http.StatusCreated, pl)
 	}
 }
 
@@ -118,18 +125,26 @@ func getPlaylist(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		uid := httpx.UserID(r)
-		var (
-			name, cover, share, desc string
-			isLiked, isPublic        int
-			created, updated, pinned int64
-		)
-		err := a.DB.QueryRow(r.Context(),
-			`SELECT name, is_liked, created_at, updated_at, COALESCE(cover_url,''),
-			        COALESCE(pinned_at,0), is_public, COALESCE(share_token,''),
-			        COALESCE(description,'')
-			   FROM playlists WHERE id = $1 AND user_id = $2`, id, uid,
-		).Scan(&name, &isLiked, &created, &updated, &cover, &pinned, &isPublic, &share, &desc)
-		if err != nil {
+		// Load the playlist as the camelCase rowToPlaylist map (with live
+		// trackCount). The previous body returned snake_case keys AND left
+		// each track as the raw {track_id, snapshot:"<json string>"} row —
+		// the snapshot was never parsed, so every track had no title /
+		// artist / cover on the client. fetchPlaylistMap + rowToPlaylistTrack
+		// reproduce the worker's `{ ...rowToPlaylist, tracks: rows.map(rowToTrack) }`.
+		pl, ok := fetchPlaylistMap(r.Context(), a.DB, id)
+		if !ok {
+			httpx.Err(w, http.StatusNotFound, "Плейлист не найден")
+			return
+		}
+		var ownerID string
+		if v, isStr := pl["sourceUserId"].(string); isStr {
+			ownerID = v
+		}
+		// Ownership: the detail route is owner-scoped (worker checks
+		// user_id = requester). Reject other users' private playlists.
+		var rowUser string
+		if err := a.DB.QueryRow(r.Context(),
+			`SELECT user_id FROM playlists WHERE id = $1`, id).Scan(&rowUser); err != nil || rowUser != uid {
 			httpx.Err(w, http.StatusNotFound, "Плейлист не найден")
 			return
 		}
@@ -147,34 +162,20 @@ func getPlaylist(a *app.App) http.HandlerFunc {
 		for trows.Next() {
 			var (
 				tid, source, snapshot string
-				position              int
-				addedAt               int64
+				position, addedAt     int64
 			)
 			if err := trows.Scan(&tid, &source, &position, &addedAt, &snapshot); err != nil {
 				continue
 			}
-			tracks = append(tracks, map[string]any{
-				"track_id": tid,
-				"source":   source,
-				"position": position,
-				"added_at": addedAt,
-				"snapshot": snapshot,
-			})
+			tracks = append(tracks, rowToPlaylistTrack(tid, source, snapshot, addedAt, position))
 		}
 
-		httpx.JSON(w, http.StatusOK, map[string]any{
-			"id":          id,
-			"name":        name,
-			"is_liked":    isLiked == 1,
-			"created_at":  created,
-			"updated_at":  updated,
-			"cover_url":   cover,
-			"pinned_at":   pinned,
-			"is_public":   isPublic == 1,
-			"share_token": share,
-			"description": desc,
-			"tracks":      tracks,
-		})
+		pl["tracks"] = tracks
+		pl["trackCount"] = len(tracks)
+		// source_kind set ⇒ read-only; otherwise the requester is the owner.
+		sk, hasSK := pl["sourceKind"].(string)
+		pl["readOnly"] = (hasSK && sk != "") || (ownerID != "" && ownerID != uid)
+		httpx.JSON(w, http.StatusOK, pl)
 	}
 }
 
