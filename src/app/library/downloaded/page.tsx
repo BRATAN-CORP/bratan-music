@@ -70,11 +70,14 @@ export function DownloadedPlaylistPage() {
   );
 
   const trackIds = tracks.map((tr) => tr.id);
-  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
+  const downloadedCtx = { type: 'downloaded' as const };
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds, downloadedCtx);
 
   const handlePlayTrack = (track: Track) => {
     setTrack(toPlayerTrack(track));
     setQueue(tracks.map(toPlayerTrack));
+    setPlaybackContext(downloadedCtx);
   };
 
   const handlePlayAll = () => {

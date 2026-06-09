@@ -34,6 +34,7 @@ export function PlaylistPage() {
   const isPinned = playlist ? (playlist.pinnedAt != null || playlist.isLiked) : false;
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   // For the special "Liked" playlist the backend returns tracks in
   // insertion order (oldest first). The user expects newest-first both
@@ -90,6 +91,7 @@ export function PlaylistPage() {
     // pages.
     setTrack(toPlayerTrack(track));
     setQueue(localTracks.map(toPlayerTrack));
+    if (id) setPlaybackContext({ type: 'playlist', id });
   };
 
   const handleReorderEnd = () => {

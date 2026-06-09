@@ -26,6 +26,7 @@ export function TrackPage() {
   const liked = track ? isLiked(track.id) : false;
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const autoplayedRef = useRef<string | null>(null);
   // Hero "Play" button mirrors the global player state for this track.
@@ -41,6 +42,7 @@ export function TrackPage() {
     if (radio?.items) {
       setQueue([toPlayerTrack(track), ...radio.items.map(toPlayerTrack)]);
     }
+    setPlaybackContext({ type: 'track-radio', id: track.id });
   };
 
   const handlePlayRadioTrack = (radioTrack: Track) => {

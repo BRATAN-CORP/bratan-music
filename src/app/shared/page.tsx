@@ -30,6 +30,7 @@ export function SharedPlaylistPage() {
   const save = useSavePlaylistFromShare();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   const tracks = useMemo(() => data?.tracks ?? [], [data?.tracks]);
   const showLoading = !token || isLoading || (isFetching && !data);
@@ -39,6 +40,7 @@ export function SharedPlaylistPage() {
     // when playback starts from a shared-link landing.
     setTrack(toPlayerTrack(track));
     setQueue(tracks.map(toPlayerTrack));
+    setPlaybackContext({ type: 'shared' });
   };
 
   const handleSave = async () => {

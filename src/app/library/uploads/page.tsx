@@ -28,6 +28,7 @@ export function UploadsPage() {
   const remove = useDeleteUpload();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +63,7 @@ export function UploadsPage() {
     const idx = all.findIndex((u) => u.id === upload.id);
     setQueue(idx >= 0 ? all.slice(idx + 1) : []);
     setTrack(upload);
+    setPlaybackContext({ type: 'upload' });
   };
 
   return (

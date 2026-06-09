@@ -94,6 +94,7 @@ export function SearchPage() {
 
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const recent = useRecentSearches();
 
   // Persist a recent query once the search yields any usable result, so we
@@ -115,6 +116,7 @@ export function SearchPage() {
     if (data?.tracks) {
       setQueue(data.tracks.map(toPlayerTrack));
     }
+    setPlaybackContext({ type: 'search' });
   };
 
   const showEmptyState = !query.trim();

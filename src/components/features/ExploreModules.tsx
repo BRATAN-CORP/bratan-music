@@ -456,6 +456,7 @@ function TrackListRow({
 }) {
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   // Reuse the standard TrackItem so play/pause sync, like and the
   // overflow menu behave identically to other lists. Tapping any
   // row queues the entire module so prev/next continues through the
@@ -466,6 +467,7 @@ function TrackListRow({
     // relevant fields) through `toPlayerTrack` so the mini-player
     // and fullscreen badge match what the row showed.
     setTrack(toPlayerTrack(track));
+    setPlaybackContext({ type: 'home' });
   };
   return (
     <section className="flex flex-col gap-3">
@@ -908,6 +910,7 @@ function ExplorePlaylistCard({
   const t = useT();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 
@@ -929,6 +932,7 @@ function ExplorePlaylistCard({
       if (!items || !first) return;
       setQueue(items);
       setTrack(toPlayerTrack(first));
+      setPlaybackContext({ type: 'explore-playlist', id: playlist.id });
     } finally {
       setLoading(false);
     }

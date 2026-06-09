@@ -58,9 +58,11 @@ export function DailyPlaylistPreviewPage() {
 
   const tracks: Track[] = useMemo(() => playlist?.tracks ?? [], [playlist?.tracks]);
   const trackIds = useMemo(() => tracks.map((tr) => tr.id), [tracks]);
-  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+  const dailyCtx = id ? { type: 'daily' as const, id } : undefined;
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds, dailyCtx);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   const [saving, setSaving] = useState(false);
   const [savedJustNow, setSavedJustNow] = useState(false);
@@ -79,6 +81,7 @@ export function DailyPlaylistPreviewPage() {
     setQueue(next);
     const first = next[0];
     if (first) setTrack(first);
+    if (dailyCtx) setPlaybackContext(dailyCtx);
   };
 
   const save = async () => {

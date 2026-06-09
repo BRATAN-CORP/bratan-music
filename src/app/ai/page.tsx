@@ -50,6 +50,7 @@ function Inner() {
   const navigate = useNavigate();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   // Reset save state when user mutates the preview by re-generating.
   useEffect(() => { setSavedId(null); }, [preview]);
@@ -94,6 +95,7 @@ function Inner() {
     if (!preview) return;
     setTrack(track);
     setQueue(preview.tracks);
+    setPlaybackContext({ type: 'ai-playlist' });
   };
 
   return (
