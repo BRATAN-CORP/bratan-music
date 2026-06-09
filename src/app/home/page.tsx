@@ -892,7 +892,8 @@ function DailyPlaylistCard({ playlist }: { playlist: DailyPlaylist }) {
   const isSaved = !!playlist.savedToPlaylistId || savedJustNow;
 
   const trackIds = useMemo(() => playlist.tracks.map((tr) => tr.id), [playlist.tracks]);
-  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+  const dailyCtx = useMemo(() => ({ type: 'daily' as const, id: playlist.id }), [playlist.id]);
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds, dailyCtx);
 
   const play = (e?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
     e?.preventDefault?.();
@@ -1021,6 +1022,7 @@ function RecentSection() {
   // empty-state early return.
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   const items = recentQ.data ?? [];
   if (!recentQ.isLoading && items.length === 0) return null;
@@ -1033,6 +1035,7 @@ function RecentSection() {
     setQueue(queue);
     const first = queue[0];
     if (first) setTrack(first);
+    setPlaybackContext({ type: 'history' });
   };
 
   return (

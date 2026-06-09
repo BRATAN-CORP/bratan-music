@@ -63,6 +63,38 @@ interface Track {
 
 type RepeatMode = 'off' | 'one' | 'all';
 
+/**
+ * Tracks where the current queue originated from so collection-level play
+ * buttons (album, playlist, daily, etc.) only show the "active/pause" state
+ * when the user actually started playback from that surface — not just because
+ * the currently-playing track *happens* to belong to the collection.
+ *
+ * Without this, playing track X from history would light up the play button
+ * on every album / playlist / wave that contains X.
+ */
+export interface PlaybackContext {
+  /** Source surface that initiated playback. */
+  type:
+    | 'album'
+    | 'playlist'
+    | 'artist'
+    | 'daily'
+    | 'explore-playlist'
+    | 'search'
+    | 'track-radio'
+    | 'wave'
+    | 'history'
+    | 'upload'
+    | 'downloaded'
+    | 'shared'
+    | 'room'
+    | 'queue'
+    | 'ai-playlist'
+    | 'home';
+  /** Disambiguator within the type — album id, playlist id, etc. */
+  id?: string;
+}
+
 interface PlayerState {
   currentTrack: Track | null;
   queue: Track[];
@@ -75,6 +107,8 @@ interface PlayerState {
   duration: number;
   error: string | null;
   fullscreen: boolean;
+  /** Tracks where the current queue originated from. See PlaybackContext. */
+  playbackContext: PlaybackContext | null;
   /** Bumped to force the audio hook to re-fetch the stream URL for the
    * current track (used after replacing or deleting an override). */
   streamVersion: number;
@@ -168,6 +202,7 @@ interface PlayerState {
    * Decouples recommendations from the zustand graph. */
   endHandler: (() => boolean) | null;
   setEndHandler: (handler: (() => boolean) | null) => void;
+  setPlaybackContext: (ctx: PlaybackContext | null) => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
@@ -182,12 +217,14 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
   duration: 0,
   error: null,
   fullscreen: false,
+  playbackContext: null,
   streamVersion: 0,
   _seekToZero: 0,
   playHistory: [],
   endHandler: null,
 
   setEndHandler: (handler) => set({ endHandler: handler }),
+  setPlaybackContext: (ctx) => set({ playbackContext: ctx }),
 
   bumpStream: () => set((s) => ({ streamVersion: s.streamVersion + 1, progress: 0 })),
 
@@ -526,6 +563,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     error: null,
     fullscreen: false,
     playHistory: [],
+    playbackContext: null,
   }),
 }), {
   name: 'bratan-player',
@@ -544,6 +582,9 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     // П8 — persist the back-stack so a reload doesn't strand the
     // user with no way back to a previous track.
     playHistory: s.playHistory,
+    // Playback context survives reload so collection play buttons
+    // stay in sync after a page refresh.
+    playbackContext: s.playbackContext,
   }),
   // П2 — never auto-resume after reload. `isPlaying` is NOT
   // persisted: even with autoplay allowed, starting a track the user

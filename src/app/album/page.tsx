@@ -29,6 +29,7 @@ export function AlbumPage() {
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const albumLike = useToggleAlbumLike();
   const liked = album ? albumLike.isLiked(album.id) : false;
   // Resolve the hero cover from the offline cache when the album is
@@ -42,13 +43,15 @@ export function AlbumPage() {
   // Hero "Play" button: shows Pause when any track from this album is the
   // current player track, and clicking toggles instead of restarting.
   const trackIds = album?.tracks?.map((tr) => tr.id) ?? [];
-  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+  const albumCtx = id ? { type: 'album' as const, id } : undefined;
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds, albumCtx);
 
   const handlePlayTrack = (track: Track) => {
     setTrack(toPlayerTrack(track));
     if (album?.tracks) {
       setQueue(album.tracks.map(toPlayerTrack));
     }
+    if (albumCtx) setPlaybackContext(albumCtx);
   };
 
   const handlePlayAll = () => {

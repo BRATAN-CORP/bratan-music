@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { usePlayerStore } from '@/store/player';
+import { usePlayerStore, type PlaybackContext } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
 import { primeAudioForPlay, prefetchStreamUrl } from '@/hooks/useAudioPlayer';
 import type { Track } from '@/types';
@@ -53,12 +53,13 @@ export function useTrackPlayback(trackId: string) {
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   const isActive = currentId === trackId;
   const isActivePlaying = isActive && isPlaying;
 
   const playOrToggle = useCallback(
-    (track: PlayableTrack, queue?: PlayableTrack[]) => {
+    (track: PlayableTrack, queue?: PlayableTrack[], context?: PlaybackContext) => {
       if (currentId === track.id) {
         togglePlay();
         return;
@@ -85,28 +86,41 @@ export function useTrackPlayback(trackId: string) {
       );
       setTrack(toPlayable(track));
       if (queue) setQueue(queue.map(toPlayable));
+      if (context) setPlaybackContext(context);
     },
-    [currentId, togglePlay, setTrack, setQueue],
+    [currentId, togglePlay, setTrack, setQueue, setPlaybackContext],
   );
 
   return { isActive, isActivePlaying, playOrToggle };
 }
 
 /** Collection-level playback sync. Album / playlist / artist hero "Play"
- * buttons should show Pause when any of their tracks is the current one,
- * and clicking should toggle play instead of restarting from the top.
+ * buttons should show Pause when the user started playback *from this
+ * collection* and the current track still belongs to it. Without
+ * `context`, a track that exists in multiple collections (album Y,
+ * playlist Z, wave W) would light up ALL of their play buttons even when
+ * the user actually started playing from history or a search hit.
+ *
  * `playCollection()` either toggles (when the collection owns the
- * current track) or starts at `tracks[0]` and seeds the queue. */
-export function useCollectionPlayback(trackIds: string[]) {
+ * current track AND the context matches) or starts at `tracks[0]` and
+ * seeds the queue + context. */
+export function useCollectionPlayback(trackIds: string[], context?: PlaybackContext) {
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const currentContext = usePlayerStore((s) => s.playbackContext);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
-  const isCollectionActive = Boolean(
-    currentId && trackIds.includes(currentId),
-  );
+  const trackInCollection = Boolean(currentId && trackIds.includes(currentId));
+
+  // The button is "active" only when the track is in this collection AND
+  // playback was started from this exact collection (type + id match).
+  const contextMatches = context
+    ? currentContext?.type === context.type && currentContext?.id === context.id
+    : trackInCollection; // backwards compat: no context → legacy behaviour
+  const isCollectionActive = trackInCollection && contextMatches;
   const isCollectionPlaying = isCollectionActive && isPlaying;
 
   const playCollection = useCallback(
@@ -125,8 +139,9 @@ export function useCollectionPlayback(trackIds: string[]) {
       );
       setTrack(toPlayable(first));
       setQueue(tracks.map(toPlayable));
+      if (context) setPlaybackContext(context);
     },
-    [isCollectionActive, togglePlay, setTrack, setQueue],
+    [isCollectionActive, togglePlay, setTrack, setQueue, setPlaybackContext, context],
   );
 
   return { isCollectionActive, isCollectionPlaying, playCollection };

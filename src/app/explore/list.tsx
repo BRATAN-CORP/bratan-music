@@ -229,6 +229,7 @@ function ListView({
   const t = useT();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   if (type === 'tracks') {
     const tracks = items as Track[];
@@ -238,6 +239,7 @@ function ListView({
       // canonical `toPlayerTrack` mapper so the mini-player E badge
       // matches the row badge.
       setTrack(toPlayerTrack(track));
+      setPlaybackContext({ type: 'home' });
     };
     return (
       <div className="rounded-[var(--radius-md)] border border-border bg-background">

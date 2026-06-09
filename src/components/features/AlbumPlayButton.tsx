@@ -50,15 +50,19 @@ interface AlbumDetail extends Album {
 export function AlbumPlayButton({ albumId, albumTitle, className }: AlbumPlayButtonProps) {
   const t = useT();
   const queryClient = useQueryClient();
-  // Active when the player is currently on a track that belongs to
-  // this album. We rely on `albumId` rather than queue identity so
-  // even tracks reached via "Add to queue → Play next" still light
-  // up the album they came from.
-  const isAlbumActive = usePlayerStore((s) => s.currentTrack?.albumId === albumId);
+  // Active only when the player is currently playing FROM this album
+  // (playbackContext matches). This prevents every album card that
+  // happens to contain the current track from lighting up.
+  const isAlbumActive = usePlayerStore((s) =>
+    s.currentTrack?.albumId === albumId
+    && s.playbackContext?.type === 'album'
+    && s.playbackContext?.id === albumId,
+  );
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const [loading, setLoading] = useState(false);
 
   const showPause = isAlbumActive && isPlaying;
@@ -98,6 +102,7 @@ export function AlbumPlayButton({ albumId, albumTitle, className }: AlbumPlayBut
       const tracks = album.tracks.map(toPlayerTrack);
       setQueue(tracks);
       setTrack(toPlayerTrack(first));
+      setPlaybackContext({ type: 'album', id: albumId });
     } finally {
       setLoading(false);
     }

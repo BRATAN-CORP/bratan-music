@@ -31,6 +31,7 @@ export function TidalPlaylistPage() {
   const qc = useQueryClient();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
 
   const { data, isLoading, isError, refetch } = useExplorePlaylistTracks(uuid);
   const { data: ownPlaylists } = usePlaylistsList();
@@ -71,7 +72,8 @@ export function TidalPlaylistPage() {
   };
 
   const trackIds = useMemo(() => tracks.map((tr) => tr.id), [tracks]);
-  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds);
+  const exploreCtx = uuid ? { type: 'explore-playlist' as const, id: uuid } : undefined;
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(trackIds, exploreCtx);
 
   const handlePlayAll = () => {
     if (tracks.length === 0) return;
@@ -83,6 +85,7 @@ export function TidalPlaylistPage() {
     // Forward `explicit` (and the other player fields) through the
     // canonical mapper so the mini-player E badge matches the row.
     setTrack(toPlayerTrack(track));
+    if (exploreCtx) setPlaybackContext(exploreCtx);
   };
 
   const handleSave = () => {

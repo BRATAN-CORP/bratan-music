@@ -32,6 +32,7 @@ export function ArtistPage() {
   const { data: radio } = useArtistRadio(id ?? '');
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const setPlaybackContext = usePlayerStore((s) => s.setPlaybackContext);
   const artistLike = useToggleArtistLike();
   const liked = artist ? artistLike.isLiked(artist.id) : false;
   const artistDisliked = useDislikesStore((s) => Boolean(artist?.id && s.artists.has(artist.id)));
@@ -47,13 +48,15 @@ export function ArtistPage() {
   // queue — if anything in that list is the active player track, the
   // button mirrors play state and toggles instead of restarting.
   const topTrackIds = artist?.topTracks?.map((tr) => tr.id) ?? [];
-  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(topTrackIds);
+  const artistCtx = id ? { type: 'artist' as const, id } : undefined;
+  const { isCollectionActive, isCollectionPlaying, playCollection } = useCollectionPlayback(topTrackIds, artistCtx);
 
   const handlePlayTrack = (track: Track) => {
     setTrack(toPlayerTrack(track));
     if (artist?.topTracks) {
       setQueue(artist.topTracks.map(toPlayerTrack));
     }
+    if (artistCtx) setPlaybackContext(artistCtx);
   };
 
   const handlePlayAll = () => {
@@ -68,6 +71,7 @@ export function ArtistPage() {
     if (!items?.length || !first) return;
     setTrack(toPlayerTrack(first));
     setQueue(items.map(toPlayerTrack));
+    if (id) setPlaybackContext({ type: 'artist', id: `${id}-radio` });
   };
 
   // Hoisted out of the inline `actions={…}` block so the inline icon
