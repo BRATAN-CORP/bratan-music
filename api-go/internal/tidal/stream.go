@@ -193,9 +193,10 @@ func (a *API) getPlaybackInfo(ctx context.Context, trackID, quality string) (*Pl
 }
 
 var (
-	dashBaseURLRe = regexp.MustCompile(`(?s)<BaseURL[^>]*>([^<]+)</BaseURL>`)
-	dashInitRe    = regexp.MustCompile(`initialization="([^"]+)"`)
-	dashCodecsRe  = regexp.MustCompile(`codecs="([^"]+)"`)
+	dashBaseURLRe         = regexp.MustCompile(`(?s)<BaseURL[^>]*>([^<]+)</BaseURL>`)
+	dashInitRe            = regexp.MustCompile(`initialization="([^"]+)"`)
+	dashCodecsRe          = regexp.MustCompile(`codecs="([^"]+)"`)
+	dashContentProtectRe  = regexp.MustCompile(`(?i)<ContentProtection\b`)
 )
 
 // decodeManifest mirrors worker/TidalWeb.ts decodeManifest. Handles both
@@ -217,6 +218,18 @@ func decodeManifest(manifestB64, mimeType string) (*BtsManifest, error) {
 
 	if strings.EqualFold(mimeType, "application/dash+xml") {
 		xml := string(decoded)
+
+		// Detect Widevine / PlayReady / any DRM in the DASH manifest.
+		// Previously we hardcoded EncryptionType:"NONE" — if Tidal
+		// serves a ContentProtection element (common for HI_RES_LOSSLESS
+		// on non-HiFi-Plus subscriptions), the browser's bare <audio>
+		// can't decode the stream and the caller must fall to the next
+		// quality rung.
+		encType := "NONE"
+		if dashContentProtectRe.MatchString(xml) {
+			encType = "DRM"
+		}
+
 		codec := "mp4a.40.2"
 		if m := dashCodecsRe.FindStringSubmatch(xml); m != nil {
 			codec = m[1]
@@ -226,7 +239,7 @@ func decodeManifest(manifestB64, mimeType string) (*BtsManifest, error) {
 				URLs:           []string{strings.TrimSpace(m[1])},
 				Codecs:         codec,
 				MimeType:       "audio/mp4",
-				EncryptionType: "NONE",
+				EncryptionType: encType,
 			}, nil
 		}
 		if m := dashInitRe.FindStringSubmatch(xml); m != nil {
@@ -235,7 +248,7 @@ func decodeManifest(manifestB64, mimeType string) (*BtsManifest, error) {
 				URLs:           []string{initURL},
 				Codecs:         codec,
 				MimeType:       "audio/mp4",
-				EncryptionType: "NONE",
+				EncryptionType: encType,
 			}, nil
 		}
 		return nil, fmt.Errorf("dash manifest: no BaseURL/initialization found")
