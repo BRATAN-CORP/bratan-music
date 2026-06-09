@@ -105,6 +105,18 @@
 
 ## Live status
 
+- 2026-06-09T15:15Z — **Three bug fixes: quality fallback timeout +
+  copy link path + artist album dedup.** (1) `tryLoadSrc` in
+  `useAudioPlayer.ts` had no timeout — if the CDN hung or the
+  audio proxy stalled, the quality-fallback loop never advanced
+  and the user saw a permanent "Сетевая ошибка". Added 15s safety
+  timeout. (2) `buildTrackShareUrl` and FullscreenPlayer's inline
+  share used regex-strip on the current URL which broke on
+  top-level routes like `/profile` → produced `/profile/track/…`
+  links. Replaced with `import.meta.env.BASE_URL`. (3) Artist
+  card page rendered raw Tidal album lists with duplicates; ported
+  the normalised-title fingerprint dedup from `releases.tsx`.
+
 - 2026-06-09T14:45Z — **Playback context sync.** Added
   `PlaybackContext` to player store so collection-level play
   buttons (album hero, playlist hero, daily, explore, artist
