@@ -1182,6 +1182,29 @@ export function useAudioPlayer() {
       return;
     }
 
+    // Last resort: the entire quality ladder failed, which may be due to
+    // a poisoned Redis quality cache on the backend. Hit the /stream/fresh
+    // endpoint that flushes the cache before resolving — one extra round
+    // trip that can self-heal without a manual admin flush.
+    if (!loaded && !track.streamUrl && !paywall) {
+      try {
+        const freshRes = await api.get<{ url: string; quality: string }>(
+          `/tracks/${track.id}/stream/fresh?quality=${encodeURIComponent(effectiveQuality)}`,
+        );
+        if (freshRes.url && loadingRef.current === trackId) {
+          corsRetried[slot] = false;
+          audio.crossOrigin = 'anonymous';
+          const ok = await tryLoadSrc(audio, freshRes.url);
+          if (ok) {
+            loaded = true;
+            currentQualityRef.current = freshRes.quality ?? effectiveQuality;
+          }
+        }
+      } catch {
+        // fresh endpoint also failed — fall through to error below
+      }
+    }
+
     if (!loaded) {
       setError(t('player.loadFailed'));
       pause();

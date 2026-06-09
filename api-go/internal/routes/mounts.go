@@ -30,6 +30,7 @@ func mountTracks(a *app.App) func(chi.Router) {
 		r.Get("/audio", proxyAudio(a))
 		r.Get("/{id}", getTrack(a))
 		r.Get("/{id}/stream", streamTrack(a))
+		r.Get("/{id}/stream/fresh", streamTrackFresh(a))
 		r.Get("/{id}/radio", trackRadio(a))
 		r.Get("/{id}/lyrics", trackLyrics(a))
 
@@ -120,6 +121,8 @@ func mountAdmin(a *app.App) func(chi.Router) {
 		r.Get("/health", adminHealth(a))
 		r.Get("/logs", adminLogs(a))
 		r.Post("/daily-playlists/reset", adminResetDaily(a))
+		// Cache management.
+		r.Post("/cache/flush", adminFlushQualityCache(a))
 	}
 }
 

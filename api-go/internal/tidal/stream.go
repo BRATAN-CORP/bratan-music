@@ -112,26 +112,38 @@ func (a *API) legacyResolveStream(ctx context.Context, trackID, requestedQuality
 	}
 
 	var lastErr string
+	degraded := false // true when any rung was skipped (error / DRM)
 	for _, q := range QualityLadder[startIdx:] {
 		info, err := a.getPlaybackInfo(ctx, trackID, q)
 		if err != nil {
 			lastErr = fmt.Sprintf("%s: %v", q, err)
+			degraded = true
 			continue
 		}
 		manifest, err := decodeManifest(info.Manifest, info.ManifestMimeType)
 		if err != nil {
 			lastErr = fmt.Sprintf("%s: %v", q, err)
+			degraded = true
 			continue
 		}
 		if len(manifest.URLs) == 0 {
 			lastErr = q + ": empty urls"
+			degraded = true
 			continue
 		}
 		if manifest.EncryptionType != "" && !strings.EqualFold(manifest.EncryptionType, "NONE") {
 			lastErr = q + ": encrypted"
+			degraded = true
 			continue
 		}
-		a.writeCachedQuality(ctx, trackID, q, qualityTTL)
+		// If we had to skip higher rungs (DRM / transient error), use a
+		// short TTL so the cache self-heals quickly instead of locking
+		// the track to a low quality for the full cache window.
+		ttl := qualityTTL
+		if degraded {
+			ttl = discoveryNegativeCacheTTL
+		}
+		a.writeCachedQuality(ctx, trackID, q, ttl)
 		return &ResolvedStream{
 			URL:      manifest.URLs[0],
 			Quality:  q,

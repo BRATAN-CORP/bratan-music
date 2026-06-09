@@ -37,6 +37,14 @@ func (k *fakeKV) KVSet(_ context.Context, key, value string, ttl time.Duration) 
 	return nil
 }
 
+func (k *fakeKV) KVDel(_ context.Context, key string) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.data, key)
+	delete(k.ttls, key)
+	return nil
+}
+
 func b64(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
 
 func TestDecodeManifestBTS(t *testing.T) {
