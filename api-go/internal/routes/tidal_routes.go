@@ -319,19 +319,27 @@ func trackLyrics(a *app.App) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		lyrics, err := tidalSvc(a).API.GetTrackLyrics(r.Context(), id)
 		if err != nil {
-			httpx.Internal(w, err)
-			return
-		}
-		if lyrics == nil {
-			httpx.JSON(w, 200, map[string]any{
-				"trackId":       id,
-				"lyrics":        nil,
-				"subtitles":     nil,
-				"isRightToLeft": false,
+			httpx.JSON(w, 502, map[string]any{
+				"available": false,
+				"error":     err.Error(),
 			})
 			return
 		}
-		httpx.JSON(w, 200, lyrics)
+		if lyrics == nil || (lyrics.Lyrics == "" && lyrics.Subtitles == "") {
+			httpx.JSON(w, 200, map[string]any{
+				"available": false,
+			})
+			return
+		}
+		// Match TS worker response shape: frontend reads `available`,
+		// `provider`, `isRightToLeft`, `lyrics`, `subtitles`.
+		httpx.JSON(w, 200, map[string]any{
+			"available":     true,
+			"provider":      nilIfEmpty(lyrics.LyricsProvider),
+			"isRightToLeft": lyrics.IsRightToLeft,
+			"lyrics":        nilIfEmpty(lyrics.Lyrics),
+			"subtitles":     nilIfEmpty(lyrics.Subtitles),
+		})
 	}
 }
 

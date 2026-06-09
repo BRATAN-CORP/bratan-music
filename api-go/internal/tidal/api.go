@@ -374,20 +374,59 @@ func (a *API) GetPlaylistTracks(ctx context.Context, uuid string, limit int) (*L
 }
 
 // GetTrackLyrics returns the lyrics record for a track or nil when
-// Tidal has no lyrics (404 — surfaced as nil, not error).
+// Tidal has no lyrics.
+//
+// Port of worker/TidalApi.ts:getTrackLyrics — three-variant fallback
+// chain so we get uncensored lyrics even when the pool account's
+// "Explicit Content" filter is ON:
+//
+//  1. v1 + includeExplicit + explicitContent + useEditedLyrics=false
+//  2. v2 + includeExplicit (v2 endpoint sometimes returns lyrics when
+//     v1 refuses)
+//  3. v1 plain (legacy fallback)
+//
+// First response with non-empty Lyrics or Subtitles wins. 404s are
+// silently skipped; any other error is captured and surfaced only if
+// every variant fails.
 func (a *API) GetTrackLyrics(ctx context.Context, trackID string) (*LyricsRaw, error) {
-	params := a.commonParams(ctx, nil)
-	var t LyricsRaw
-	err := a.get(ctx, "/v1/tracks/"+trackID+"/lyrics?"+params.Encode(), &t)
-	if err != nil {
-		// Map 404s to nil so callers can show "no lyrics" without
-		// surfacing it as an error.
-		if isNotFound(err) {
+	cc := a.auth.GetCountryCode(ctx)
+	locale := a.auth.GetLocale()
+
+	variants := []string{
+		fmt.Sprintf("/v1/tracks/%s/lyrics?countryCode=%s&locale=%s&deviceType=BROWSER&includeExplicit=true&explicitContent=true&useEditedLyrics=false",
+			trackID, url.QueryEscape(cc), url.QueryEscape(locale)),
+		fmt.Sprintf("/v2/tracks/%s/lyrics?countryCode=%s&locale=%s&deviceType=BROWSER&includeExplicit=true",
+			trackID, url.QueryEscape(cc), url.QueryEscape(locale)),
+		fmt.Sprintf("/v1/tracks/%s/lyrics?countryCode=%s&locale=%s&deviceType=BROWSER",
+			trackID, url.QueryEscape(cc), url.QueryEscape(locale)),
+	}
+
+	var lastErr error
+	for _, path := range variants {
+		var t LyricsRaw
+		err := a.get(ctx, path, &t)
+		if err != nil {
+			if isNotFound(err) {
+				continue // this variant just isn't supported, try next
+			}
+			lastErr = err
+			continue
+		}
+		if t.Lyrics != "" || t.Subtitles != "" {
+			return &t, nil
+		}
+		// Empty payload — try next variant.
+	}
+
+	if lastErr != nil {
+		// None of the variants returned a payload AND at least one
+		// failed with a non-404 error — surface it.
+		if isNotFound(lastErr) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, lastErr
 	}
-	return &t, nil
+	return nil, nil
 }
 
 func isNotFound(err error) bool {
