@@ -2259,6 +2259,21 @@ export function useAudioPlayer() {
           reloadWithoutCors(slot);
           return;
         }
+        // Mid-playback quality fallback: if the stream broke AFTER the
+        // initial load succeeded (e.g. the CDN URL was for a DRM/hi-res
+        // format the browser can't fully decode, or the audio proxy
+        // timed out on a large file), try reloading the track at the
+        // next lower quality instead of surfacing an error. This covers
+        // the gap between loadTrack's own fallback loop (which only
+        // catches errors DURING the load phase) and actual playback.
+        const nextQ = getNextFallbackQuality(currentQualityRef.current);
+        const track = currentTrack;
+        if (nextQ && track) {
+          console.warn('[audio] mid-playback fallback', currentQualityRef.current, '→', nextQ);
+          currentQualityRef.current = nextQ;
+          void loadTrack(track, nextQ);
+          return;
+        }
         const messages: Record<number, string> = {
           1: t('player.errors.aborted'),
           2: t('player.errors.network'),
