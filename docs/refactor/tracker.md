@@ -105,6 +105,14 @@
 
 ## Live status
 
+- 2026-06-09T14:45Z — **Playback context sync.** Added
+  `PlaybackContext` to player store so collection-level play
+  buttons (album hero, playlist hero, daily, explore, artist
+  top-tracks, AlbumPlayButton card overlay) only show
+  active/pause when playback was started from that specific
+  surface — not just because the current track happens to exist
+  in the collection. All 17 callsite files updated. PR #xxx.
+
 - 2026-06-09T14:20Z — **Go lyrics parity fix.** Two bugs broke
   lyrics for all tracks served through api-go after the nginx
   cutover: (1) Go handler returned raw `LyricsRaw` without the
