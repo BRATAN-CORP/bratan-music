@@ -72,12 +72,13 @@ export async function downloadTrack(track: DownloadableTrack): Promise<void> {
  * links that are already in the wild, but we no longer mint new ones.
  */
 export function buildTrackShareUrl(trackId: string): string {
-  const url = new URL(window.location.href);
-  const base = `${url.origin}${url.pathname.replace(
-    /\/?(track|search|playlist|album|artist|profile|admin|library|shared|explore)\/.*$/,
-    '',
-  )}`.replace(/\/$/, '');
-  return `${base}/track/${trackId}`;
+  // Use the deploy-time BASE_URL instead of parsing the current
+  // window.location — the old regex-strip approach broke when the
+  // user was on a top-level route like /profile (no trailing `/`)
+  // and produced links like `/profile/track/...`.
+  const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  return `${origin}${base}/track/${trackId}`;
 }
 
 /** Copy any URL to the user's clipboard with a textarea fallback for
