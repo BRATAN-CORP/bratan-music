@@ -105,6 +105,17 @@
 
 ## Live status
 
+- 2026-06-09T14:20Z — **Go lyrics parity fix.** Two bugs broke
+  lyrics for all tracks served through api-go after the nginx
+  cutover: (1) Go handler returned raw `LyricsRaw` without the
+  `available` field the frontend reads → every track showed
+  "Текст не найден"; (2) Go `GetTrackLyrics` used a single
+  Tidal endpoint without `useEditedLyrics=false` and the v2
+  fallback chain → censored/empty lyrics for explicit tracks.
+  Fix: ported the TS worker's 3-variant fallback chain and
+  wrapped the response as `{available, provider, isRightToLeft,
+  lyrics, subtitles}`.
+
 - 2026-05-18T23:30Z — **Tidal Explicit follow-up — album twin
   lookup, getAlbum redirect, SVG бэйдж, MediaSession like.**
   PR `kiro/tidal-explicit-album-twin-and-badge-svg`. После PR #457
