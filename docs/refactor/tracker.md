@@ -105,6 +105,22 @@
 
 ## Live status
 
+- 2026-06-09T17:15Z — **Quality cache poisoning fix.** Root cause:
+  `legacyResolveStream` cached resolved quality with a 30-day TTL
+  (`qualityCacheTTL`). When higher quality rungs failed during
+  transient outages (e.g. Tidal session refresh), LOW was cached and
+  all subsequent requests started at LOW for 30 days. Fix:
+  (1) `qualityCacheTTL` reduced from 30 days to 6 hours;
+  (2) degraded quality (any rung skipped due to DRM/error) now uses
+  `discoveryNegativeCacheTTL` (10 min) instead of the full cache TTL;
+  (3) added `KVDel` to KV interface + `FlushTrackCache()` method;
+  (4) `POST /admin/cache/flush?tracks=...` admin endpoint for bulk
+  cache flush;
+  (5) `GET /tracks/{id}/stream/fresh` — cache-busting stream resolver;
+  (6) frontend: after exhausting quality ladder, tries `/stream/fresh`
+  as last resort before showing error — self-heals poisoned cache
+  without manual intervention.
+
 - 2026-06-09T15:45Z — **Quality fallback v2.** Root cause: Go
   `decodeManifest` for DASH manifests hardcoded `EncryptionType:"NONE"`
   — never checked `<ContentProtection>` in the XML. Tidal's

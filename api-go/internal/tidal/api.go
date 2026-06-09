@@ -29,6 +29,7 @@ const openapiBase = "https://openapi.tidal.com/v2"
 type KV interface {
 	KVGet(ctx context.Context, key string) (string, bool, error)
 	KVSet(ctx context.Context, key, value string, ttl time.Duration) error
+	KVDel(ctx context.Context, key string) error
 }
 
 // API is the catalogue client (port of worker/TidalApi.ts).

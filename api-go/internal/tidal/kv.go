@@ -26,3 +26,10 @@ func (a *API) kvSet(ctx context.Context, key, value string, ttl time.Duration) {
 	}
 	_ = a.cache.KVSet(ctx, key, value, ttl)
 }
+
+func (a *API) kvDel(ctx context.Context, key string) {
+	if a.cache == nil {
+		return
+	}
+	_ = a.cache.KVDel(ctx, key)
+}

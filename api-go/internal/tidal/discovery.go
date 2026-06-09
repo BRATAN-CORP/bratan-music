@@ -20,7 +20,12 @@ import (
 // itself within a coffee break.
 
 const (
-	qualityCacheTTL   = 30 * 24 * time.Hour
+	// Best-known playable quality for a track. Previously 30 days, but
+	// that turned any transient degradation (outage / DRM mis-detect /
+	// session refresh hiccup) into a month-long quality lock. 6 hours
+	// keeps the optimisation (skip the ladder on every play) while
+	// self-healing within the same listening session.
+	qualityCacheTTL   = 6 * time.Hour
 	qualityCacheKey   = "tidal-track-quality:"
 	discoveryCacheTTL = 30 * 24 * time.Hour
 	discoveryCacheKey = "tidal-track-formats:"
@@ -212,6 +217,14 @@ func (a *API) readCachedQuality(ctx context.Context, trackID string) string {
 
 func (a *API) writeCachedQuality(ctx context.Context, trackID, quality string, ttl time.Duration) {
 	a.kvSet(ctx, qualityCacheKey+trackID, quality, ttl)
+}
+
+// FlushTrackCache deletes the quality + discovery cache entries for a
+// single track. Used by the admin "fix playback" endpoint to un-poison
+// entries cached during transient outages or DRM false-positives.
+func (a *API) FlushTrackCache(ctx context.Context, trackID string) {
+	a.kvDel(ctx, qualityCacheKey+trackID)
+	a.kvDel(ctx, discoveryCacheKey+trackID)
 }
 
 func (a *API) isDiscoveryBreakerOpen(ctx context.Context) bool {
