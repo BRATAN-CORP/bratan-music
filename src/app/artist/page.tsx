@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Pause, Play, Heart, Radio, Ban, RotateCcw, Share2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
@@ -17,7 +17,7 @@ import { useDislikesStore } from '@/store/dislikes';
 import { useToggleDislike } from '@/hooks/useDislikes';
 import { toast } from '@/store/toast';
 import { useCollectionPlayback } from '@/hooks/usePlaybackSync';
-import type { Track } from '@/types';
+import type { Album, Track } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PageHero } from '@/components/ui/PageHero';
@@ -107,6 +107,40 @@ export function ArtistPage() {
     });
     if (result.copied) toast.info(t('share.copied'));
   };
+
+  // Deduplicate albums and singles on the artist card. Tidal's API
+  // returns duplicates (same id, or different id but identical title
+  // e.g. "Deluxe" vs plain reissue). The full /artist/:id/albums
+  // page already handles this — port the same normalised-title
+  // fingerprint approach here so the preview grid doesn't show
+  // duplicate cards.
+  const dedupReleases = useMemo(() => {
+    const dedup = (items: Album[] | undefined) => {
+      if (!items?.length) return items ?? [];
+      const seenIds = new Set<string>();
+      const seenFp = new Set<string>();
+      const out: Album[] = [];
+      for (const a of items) {
+        if (seenIds.has(a.id)) continue;
+        const norm = a.title
+          .toLowerCase()
+          .replace(/\s*[([][^()\[\]]*\b(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)[^()\[\]]*[)\]]\s*/gi, ' ')
+          .replace(/\s*[—–\-]\s*(?:deluxe|expanded|remastered|anniversary|extended|special|edition|version|bonus|reissue)\b[^,]*$/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const fp = `${a.artistId ?? ''}::${norm}`;
+        if (seenFp.has(fp)) continue;
+        seenIds.add(a.id);
+        seenFp.add(fp);
+        out.push(a);
+      }
+      return out;
+    };
+    return {
+      albums: dedup(artist?.albums),
+      singles: dedup(artist?.singles),
+    };
+  }, [artist?.albums, artist?.singles]);
 
   return (
     <AuthGuard>
@@ -249,11 +283,11 @@ export function ArtistPage() {
               </section>
             )}
 
-            {artist.albums?.length > 0 && (
+            {dedupReleases.albums.length > 0 && (
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
                   <h2 className="text-base font-semibold tracking-tight">{t('artistPage.albums')}</h2>
-                  {((artist.albumsMoreTotal ?? artist.albums.length) > 10) && (
+                  {((artist.albumsMoreTotal ?? dedupReleases.albums.length) > 10) && (
                     <Link
                       to={`/artist/${artist.id}/albums`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -263,18 +297,18 @@ export function ArtistPage() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                  {artist.albums.slice(0, 10).map((album) => (
+                  {dedupReleases.albums.slice(0, 10).map((album) => (
                     <AlbumCard key={album.id} album={album} />
                   ))}
                 </div>
               </section>
             )}
 
-            {artist.singles?.length > 0 && (
+            {dedupReleases.singles.length > 0 && (
               <section className="mb-12">
                 <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
                   <h2 className="text-base font-semibold tracking-tight">{t('artistPage.singles')}</h2>
-                  {((artist.singlesMoreTotal ?? artist.singles.length) > 10) && (
+                  {((artist.singlesMoreTotal ?? dedupReleases.singles.length) > 10) && (
                     <Link
                       to={`/artist/${artist.id}/singles`}
                       className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -284,7 +318,7 @@ export function ArtistPage() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                  {artist.singles.slice(0, 10).map((album) => (
+                  {dedupReleases.singles.slice(0, 10).map((album) => (
                     <AlbumCard key={album.id} album={album} />
                   ))}
                 </div>

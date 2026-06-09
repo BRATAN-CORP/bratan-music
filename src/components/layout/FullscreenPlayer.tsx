@@ -247,10 +247,11 @@ export function FullscreenPlayer() {
   // showed a picker, desktop Chrome silently failed).
   const handleShare = async () => {
     if (!currentTrack) return;
-    const u = new URL(window.location.href);
-    const base = `${u.origin}${u.pathname.replace(/\/?(track|search|playlist|album|artist|profile|admin)\/.*$/, '')}`.replace(/\/$/, '');
-    // Clean URL — no `?autoplay=1`. See `buildTrackShareUrl` for the rationale.
-    const url = `${base}/track/${currentTrack.id}`;
+    // Use the deploy-time BASE_URL so the link never inherits the
+    // current page path (the old regex-strip broke on top-level routes
+    // like /profile and produced /profile/track/… links).
+    const appBase = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+    const url = `${window.location.origin}${appBase}/track/${currentTrack.id}`;
     try {
       await navigator.clipboard.writeText(url);
     } catch {

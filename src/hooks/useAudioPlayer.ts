@@ -1003,12 +1003,21 @@ export function useAudioPlayer() {
    *  `error` handler still triggers the quality fallback chain. */
   const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<boolean> => {
     return new Promise((resolve) => {
+      let settled = false;
       const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         audio.removeEventListener('loadeddata', onReady);
         audio.removeEventListener('error', onErr);
       };
       const onReady = () => { cleanup(); resolve(true); };
       const onErr = () => { cleanup(); resolve(false); };
+      // Safety timeout: if the CDN streams bytes too slowly or the
+      // audio proxy hangs, neither loadeddata nor error fires. Without
+      // this the quality-fallback loop stalls forever and the user sees
+      // a permanent spinner instead of the track at a lower quality.
+      const timer = setTimeout(() => { cleanup(); resolve(false); }, 15_000);
       audio.addEventListener('loadeddata', onReady, { once: true });
       audio.addEventListener('error', onErr, { once: true });
       audio.src = url;
