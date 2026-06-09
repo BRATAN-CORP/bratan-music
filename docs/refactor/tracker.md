@@ -105,6 +105,18 @@
 
 ## Live status
 
+- 2026-06-09T15:45Z — **Quality fallback v2.** Root cause: Go
+  `decodeManifest` for DASH manifests hardcoded `EncryptionType:"NONE"`
+  — never checked `<ContentProtection>` in the XML. Tidal's
+  HI_RES_LOSSLESS streams are often DRM-protected (Widevine), so the
+  backend returned an unplayable URL and the browser's `<audio>`
+  element errored. Fix: (1) backend now detects `<ContentProtection>`
+  → sets `EncryptionType:"DRM"` → `ResolveStream` skips to LOSSLESS;
+  (2) frontend `onError` handler now attempts mid-playback quality
+  fallback (calls `loadTrack` at the next rung) instead of immediately
+  showing "Сетевая ошибка". Error is only shown when all rungs are
+  exhausted.
+
 - 2026-06-09T15:15Z — **Three bug fixes: quality fallback timeout +
   copy link path + artist album dedup.** (1) `tryLoadSrc` in
   `useAudioPlayer.ts` had no timeout — if the CDN hung or the
