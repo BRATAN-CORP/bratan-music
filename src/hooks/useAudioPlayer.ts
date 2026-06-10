@@ -2578,8 +2578,8 @@ export function useAudioPlayer() {
     };
   }, [scheduleAutoCrossfade]);
 
-  // Mount-time only: aggressively revoke any seek handlers that
-  // earlier builds may have registered. iOS Safari caches the
+  // Mount-time only: aggressively revoke any interval-seek handlers
+  // that earlier builds may have registered. iOS Safari caches the
   // MediaSession action set across reloads and even PWA installs;
   // a stale `seekbackward`/`seekforward` registration from before
   // is what keeps the iOS Now-Playing widget rendering ⏪10s/⏩10s
@@ -2589,23 +2589,18 @@ export function useAudioPlayer() {
   // internal heuristic never sees interleaved set/null calls for
   // seek actions during a track transition (which empirically
   // re-arms the seek layout on iOS 17+).
+  //
+  // NOTE: `seekto` is deliberately NOT in this revoke list anymore.
+  // `seekto` is the lock-screen scrubber drag — it does not occupy a
+  // transport-button slot and does not trigger the podcast layout
+  // (only the interval pair above does). It is registered alongside
+  // prev/next in the handler effect below so the iOS timeline is
+  // actually draggable.
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     const ms = navigator.mediaSession;
-    for (const action of ['seekbackward', 'seekforward', 'seekto'] as const) {
+    for (const action of ['seekbackward', 'seekforward'] as const) {
       try { ms.setActionHandler(action, null); } catch { /* ignore */ }
-    }
-    // Companion revoke on iOS: a previous build may have published
-    // `setPositionState({ duration, … })` and iOS WebKit caches that
-    // last position state across reloads and PWA relaunches inside
-    // the page's MediaSession. Even after we stop calling
-    // setPositionState (see the progress effect below), the cached
-    // state can keep the lock screen in podcast layout (⏪10s/⏩10s)
-    // until the page is killed. Calling it with no args / undefined
-    // is the spec-defined "clear" operation. Guarded on iOS so we
-    // don't wipe the (desired) scrubber on Chromium.
-    if (isIOS() && 'setPositionState' in ms) {
-      try { (ms as MediaSession & { setPositionState: (state?: MediaPositionState) => void }).setPositionState(); } catch { /* ignore */ }
     }
   }, []);
 
@@ -2666,12 +2661,27 @@ export function useAudioPlayer() {
       }
       store().pause();
     };
+    // `seekto` makes the lock-screen / Control-Center timeline
+    // actually draggable. Unlike `seekbackward`/`seekforward` it does
+    // NOT occupy a transport-button slot, so ⏮/⏭ stay intact — the
+    // podcast ±15s layout the user saw before came from the interval
+    // pair (revoked at mount above) plus the empty-action-map window
+    // during track changes (fixed by the no-cleanup policy below),
+    // not from `seekto`/`setPositionState` themselves. Routed through
+    // the hook's `seek()` so all crossfade/spurious-reset guards
+    // apply exactly as for an in-app scrub.
+    const onSeekTo: MediaSessionActionHandler = (details) => {
+      const t = details.seekTime;
+      if (typeof t !== 'number' || !isFinite(t) || t < 0) return;
+      seek(t);
+    };
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', onPlay],
       ['pause', onPause],
       ['previoustrack', () => store().previous()],
       ['nexttrack', () => store().nextManual()],
       ['stop', onPause],
+      ['seekto', onSeekTo],
     ];
     for (const [action, handler] of handlers) {
       try { ms.setActionHandler(action, handler); } catch { /* not supported */ }
@@ -2689,7 +2699,7 @@ export function useAudioPlayer() {
     // being torn down entirely, which clears the MediaSession on
     // its own.
     return undefined;
-  }, [currentTrack?.id]);
+  }, [currentTrack?.id, seek]);
 
   // The track-load effect already wires `navigator.mediaSession.metadata`
   // when a new track starts, but it sees `trackCoverUrl` at the moment
@@ -2716,22 +2726,20 @@ export function useAudioPlayer() {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
     if (!('setPositionState' in navigator.mediaSession)) return;
-    // iOS Safari / iOS PWA: never publish position state. WebKit
-    // uses the *presence* of `setPositionState` with a finite
-    // `duration` as the dominant signal that the page is playing
-    // long-form / podcast media and surfaces the ⏪10s/⏩10s skip
-    // transport buttons on the lock screen + Control Center instead
-    // of ⏮/⏭ (the buttons the user actually wants for music). We
-    // tried defusing the heuristic with `playbackRate: 1` previously
-    // — empirically that's not enough on iOS 17/18, the only
-    // reliable fix is to *not call* setPositionState at all on iOS.
-    // We pay for that with no scrubber + no elapsed/remaining time
-    // on the iOS Now-Playing widget, but `previoustrack` /
-    // `nexttrack` register correctly and that's the higher-value
-    // affordance for a music player. Android Chrome (Chromium) does
-    // not have this conflict — there setPositionState gives us the
-    // scrubber AND prev/next happily coexist, so the call stays.
-    if (isIOS()) return;
+    // Published on ALL platforms, including iOS. An earlier build
+    // skipped iOS entirely because the lock screen was stuck in the
+    // podcast ±10s layout and `setPositionState` was blamed — but the
+    // actual triggers were (a) stale `seekbackward`/`seekforward`
+    // registrations (revoked once at mount above, never re-set) and
+    // (b) the empty-action-map window during track changes while the
+    // old effect cleanup nulled prev/next (fixed by the no-cleanup
+    // policy in the handler effect). With prev/next continuously
+    // registered and no interval-seek handlers, position state +
+    // `seekto` give iOS the draggable timeline and elapsed/duration
+    // readout WITHOUT demoting ⏮/⏭ — same as Android Chrome.
+    // If the podcast layout ever resurfaces on a future iOS, suspect
+    // a new handler-registration gap around track boundaries first,
+    // not this call.
     const b = getBundle();
     const audio = b.audios[b.active];
     const dur = audio.duration;
