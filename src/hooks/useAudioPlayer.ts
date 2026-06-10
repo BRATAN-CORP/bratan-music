@@ -18,6 +18,16 @@ import type { TidalQuality } from '@/store/settings';
 
 const QUALITY_FALLBACK_ORDER: TidalQuality[] = ['HI_RES_LOSSLESS', 'LOSSLESS', 'HIGH', 'LOW'];
 
+/** Hard ceiling for a single load attempt before we assume the CDN /
+ *  proxy hung and move on (see tryLoadSrc). */
+const STREAM_LOAD_TIMEOUT_MS = 15_000;
+/** Extra attempts for TIMEOUTS only. Hard media errors never retry —
+ *  the browser already gave a definitive verdict for that URL. The
+ *  previous shape (2 retries for everything + 300/600 ms backoffs)
+ *  made an unplayable top rung cost up to ~46 s before the ladder
+ *  even tried the next quality — users read that as «трек не играет». */
+const MAX_TIMEOUT_RETRIES = 1;
+
 function getNextFallbackQuality(current: string): TidalQuality | null {
   const idx = QUALITY_FALLBACK_ORDER.indexOf(current as TidalQuality);
   if (idx < 0 || idx >= QUALITY_FALLBACK_ORDER.length - 1) return null;
@@ -1000,7 +1010,7 @@ export function useAudioPlayer() {
    *  while the rest of the load pipeline runs and `audio.play()` is
    *  called below; if the stream actually fails to decode mid-track the
    *  `error` handler still triggers the quality fallback chain. */
-  const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<boolean> => {
+  const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<'ok' | 'error' | 'timeout'> => {
     return new Promise((resolve) => {
       let settled = false;
       const cleanup = () => {
@@ -1010,13 +1020,18 @@ export function useAudioPlayer() {
         audio.removeEventListener('loadeddata', onReady);
         audio.removeEventListener('error', onErr);
       };
-      const onReady = () => { cleanup(); resolve(true); };
-      const onErr = () => { cleanup(); resolve(false); };
+      const onReady = () => { cleanup(); resolve('ok'); };
+      // A media `error` event is DEFINITIVE: the browser has already
+      // fetched (or failed to fetch) the URL and told us it can't play
+      // it. Distinguishing it from a timeout lets the caller fall to
+      // the next quality rung immediately instead of burning retries
+      // on a URL that will never start.
+      const onErr = () => { cleanup(); resolve('error'); };
       // Safety timeout: if the CDN streams bytes too slowly or the
       // audio proxy hangs, neither loadeddata nor error fires. Without
       // this the quality-fallback loop stalls forever and the user sees
       // a permanent spinner instead of the track at a lower quality.
-      const timer = setTimeout(() => { cleanup(); resolve(false); }, 15_000);
+      const timer = setTimeout(() => { cleanup(); resolve('timeout'); }, STREAM_LOAD_TIMEOUT_MS);
       audio.addEventListener('loadeddata', onReady, { once: true });
       audio.addEventListener('error', onErr, { once: true });
       audio.src = url;
@@ -1090,7 +1105,6 @@ export function useAudioPlayer() {
     let url: string | null = null;
     let loaded = false;
     let paywall = false;
-    const MAX_RETRIES = 2;
 
     // Offline-first: if the track has been saved into IndexedDB,
     // play directly from the local Blob via `URL.createObjectURL`
@@ -1106,7 +1120,7 @@ export function useAudioPlayer() {
         const blobUrl = URL.createObjectURL(offline.audioBlob);
         b.slotBlobUrls[slot] = blobUrl;
         audio.crossOrigin = null;
-        const ok = await tryLoadSrc(audio, blobUrl);
+        const ok = (await tryLoadSrc(audio, blobUrl)) === 'ok';
         if (loadingRef.current !== trackId) return;
         if (ok) {
           // LRU bookkeeping for a future eviction policy — and a hint
@@ -1146,13 +1160,15 @@ export function useAudioPlayer() {
       if (url) {
         corsRetried[slot] = false;
         audio.crossOrigin = 'anonymous';
-        // Try loading and auto-retry up to MAX_RETRIES for transient errors.
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        // Try loading. Hard media errors are definitive → fall to the
+        // next rung right away; only timeouts get one more shot.
+        for (let attempt = 0; attempt <= MAX_TIMEOUT_RETRIES; attempt++) {
           if (loadingRef.current !== trackId) return;
-          const ok = await tryLoadSrc(audio, url);
-          if (ok) { loaded = true; break; }
-          if (attempt < MAX_RETRIES) {
-            await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          const res = await tryLoadSrc(audio, url);
+          if (res === 'ok') { loaded = true; break; }
+          if (res === 'error') break;
+          if (attempt < MAX_TIMEOUT_RETRIES) {
+            await new Promise((r) => setTimeout(r, 300));
           }
         }
         if (loaded) break;
@@ -1193,7 +1209,7 @@ export function useAudioPlayer() {
         if (freshRes.url && loadingRef.current === trackId) {
           corsRetried[slot] = false;
           audio.crossOrigin = 'anonymous';
-          const ok = await tryLoadSrc(audio, freshRes.url);
+          const ok = (await tryLoadSrc(audio, freshRes.url)) === 'ok';
           if (ok) {
             loaded = true;
             currentQualityRef.current = freshRes.quality ?? effectiveQuality;
