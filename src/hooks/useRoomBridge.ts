@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, API_BASE } from '@/lib/api';
 import { usePlayerStore } from '@/store/player';
 import { useRoomConnectionStore } from '@/store/roomConnection';
 import { useAuthStore } from '@/store/auth';
@@ -12,7 +12,6 @@ import type {
   RoomTrackSnapshot,
 } from '@/types/rooms';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 /** Poll cadence — short so guests catch play/pause/seek within one
  *  tick; server short-circuits unchanged via `?since=<version>` so

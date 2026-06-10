@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/store/auth';
+import { API_BASE } from '@/lib/api';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 export interface DownloadableTrack {
   id: string;

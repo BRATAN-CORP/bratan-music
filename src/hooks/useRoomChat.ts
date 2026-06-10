@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, API_BASE } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useT } from '@/i18n';
 import type { RoomChatPoll, RoomMessage } from '@/types/rooms';
@@ -23,14 +23,12 @@ const POLL_INTERVAL_WS_BROKEN_MS = 900;
 const MAX_MESSAGES_KEPT = 400;
 
 /**
- * WebSocket upgrade URL. Mirrors `API_BASE` from `@/lib/api` rewritten
- * with `wss:`. Sourced only from `import.meta.env.VITE_API_URL` so a
- * hostile DOM (window.location clobber) can't redirect the upgrade.
+ * WebSocket upgrade URL — `API_BASE` rewritten with `wss:`. `API_BASE`
+ * is sourced only from `import.meta.env.VITE_API_URL` (build-time), so
+ * a hostile DOM (window.location clobber) can't redirect the upgrade.
  */
 function chatWsUrl(roomId: string, token: string): string {
-  const base = (import.meta.env.VITE_API_URL as string | undefined)
-    ?? 'https://bratan-music-api.bratan-corp.workers.dev';
-  const wsBase = base.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+  const wsBase = API_BASE.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
   return `${wsBase}/rooms/${encodeURIComponent(roomId)}/chat/ws?token=${encodeURIComponent(token)}`;
 }
 

@@ -8,7 +8,7 @@
  * resolver receives the override URL automatically.
  */
 
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, API_BASE } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { TidalQuality } from '@/store/settings';
 import type { OfflineLyrics } from './types';
@@ -25,8 +25,6 @@ interface LyricsApiResponse {
   error?: string;
 }
 
-const API_BASE =
-  import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 /** Same ladder as `useAudioPlayer.ts`. Defined locally so this
  *  module stays React-free and can be called from a Service Worker. */

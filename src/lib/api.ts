@@ -1,7 +1,13 @@
 import { useAuthStore } from '@/store/auth';
 import { t } from '@/i18n/runtime';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
+/**
+ * Single source of truth for the backend origin. Every fetch / audio /
+ * WebSocket surface must derive from this constant — previously the
+ * same `VITE_API_URL ?? <prod URL>` expression was copy-pasted in 8
+ * files and risked drifting on the next origin move.
+ */
+export const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 function parseErrorMessage(text: string): string {
   try {

@@ -4,7 +4,7 @@ import { usePlayerStore } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, API_BASE } from '@/lib/api';
 import {
   getCachedStreamUrl,
   getOrStartInFlight,
@@ -15,7 +15,6 @@ import { useT } from '@/i18n';
 
 import type { TidalQuality } from '@/store/settings';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 const QUALITY_FALLBACK_ORDER: TidalQuality[] = ['HI_RES_LOSSLESS', 'LOSSLESS', 'HIGH', 'LOW'];
 
