@@ -601,15 +601,12 @@ export class TidalWeb {
           encryptionType: 'NONE',
         };
       }
-      const initMatch = decoded.match(/initialization="([^"]+)"/);
-      if (initMatch) {
-        const initUrl = initMatch[1].replace(/\$RepresentationID\$/g, 'audio');
-        return {
-          urls: [initUrl],
-          codecs: this.extractCodec(decoded),
-          mimeType: 'audio/mp4',
-          encryptionType: 'NONE',
-        };
+      if (/initialization="/.test(decoded)) {
+        // Segmented DASH (SegmentTemplate, no <BaseURL>): the init URL
+        // alone is just the fMP4 header — a bare <audio> element can't
+        // play it. Treat the rung as unplayable so the resolver falls
+        // one quality down (parity with api-go decodeManifest).
+        throw new Error('dash manifest: segmented (SegmentTemplate) — no direct URL, skip rung');
       }
     }
 
