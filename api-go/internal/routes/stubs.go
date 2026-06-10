@@ -49,6 +49,9 @@ func Library(a *app.App) func(chi.Router) { return mountLibrary(a) }
 // Uploads — user-uploaded custom tracks.
 func Uploads(a *app.App) func(chi.Router) { return mountUploads(a) }
 
+// Import — likes import from other services (CSV export matching).
+func Import(a *app.App) func(chi.Router) { return mountImport(a) }
+
 // Webhook — Telegram bot webhook (HMAC verified).
 func Webhook(a *app.App) func(chi.Router) { return mountWebhook(a) }
 

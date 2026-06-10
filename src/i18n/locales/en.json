@@ -390,7 +390,9 @@
     "downloadedPlaylist": "Downloaded",
     "serviceLabel": "Service playlist",
     "noDownloadsTitle": "Nothing saved offline yet",
-    "noDownloadsHint": "Open a track, album, or playlist and tap \"Listen offline\""
+    "noDownloadsHint": "Open a track, album, or playlist and tap \"Listen offline\"",
+    "importEntry": "Import from other services",
+    "importEntrySubtitle": "Bring your likes over from Yandex Music or Spotify"
   },
   "playlist": {
     "loading": "Loading playlist…",
@@ -1709,5 +1711,30 @@
     "available": "New version available",
     "availableHint": "Your downloaded tracks will be kept",
     "reload": "Reload"
+  },
+  "importLikes": {
+    "back": "Back",
+    "libraryLabel": "Library",
+    "pageTitle": "Import tracks",
+    "pageHint": "Bring your favorite tracks over from Yandex Music, Spotify and other services",
+    "pickFile": "Choose CSV",
+    "howTitle": "How it works",
+    "howStep1": "Export your tracks via TuneMyMusic, Soundiiz or MusConv: pick the source service and choose “Export to file” (CSV).",
+    "howStep2": "Upload the resulting CSV file here.",
+    "howStep3": "We will match every track against the catalogue and add it to your Liked tracks, then show anything we could not find.",
+    "parsedSummary": "Tracks found in file: {count}",
+    "andMore": "…and {count} more",
+    "start": "Import",
+    "starting": "Starting import…",
+    "running": "Matching tracks: {processed} of {total}",
+    "matchedSoFar": "Added so far: {count}",
+    "doneSummary": "Done: added {matched} of {total} tracks",
+    "doneHint": "All matched tracks are now in your Liked tracks",
+    "toLibrary": "To library",
+    "notFoundTitle": "Not found in catalogue ({count})",
+    "errorRows": "Processing errors: {count} — try importing the file again later.",
+    "errorParse": "Could not read the file — expected a CSV export from TuneMyMusic, Soundiiz or MusConv",
+    "errorColumns": "The file has no title/artist columns",
+    "errorStart": "Could not start the import"
   }
 }
