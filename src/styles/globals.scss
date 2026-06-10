@@ -489,6 +489,25 @@ $lg-glow: 0 0 12px rgba(0, 0, 0, 0.18);
     backdrop-filter: blur(22px) saturate(180%);
     -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
+
+  /* Perf (iOS jank): mobile WebKit re-rasterizes a backdrop-filtered
+     surface whenever anything moves above OR behind it, and the cost
+     scales with the blur radius. The bottom dock (`liquid-glass`)
+     hosts the swipe strip and floats over scrolling content, so the
+     desktop 22px radius made every swipe and scroll frame pay for a
+     large re-blur. Touch devices get a lighter radius — on a
+     phone-sized surface the difference is imperceptible, but
+     compositing is dramatically cheaper. Desktop keeps the full look. */
+  @media (hover: none) and (pointer: coarse) {
+    .liquid-glass {
+      backdrop-filter: blur(14px) saturate(180%);
+      -webkit-backdrop-filter: blur(14px) saturate(180%);
+    }
+    .glass {
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
+    }
+  }
 }
 
 /* Floating mini-player on lg+ — width and side offsets are aligned to
