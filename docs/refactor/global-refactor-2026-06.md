@@ -26,7 +26,7 @@ jscpd по `src/`: 38 точных клонов, 1.24% строк.
 - [x] Фаза 1 — мёртвый код: `temp/todo.md`
 - [x] Фаза 2 — дедупликация: API_BASE ×8 → `lib/api`; `toPlayable`→`toPlayerTrack`; factory для album/artist like-хуков
 - [x] Фаза 3 — eslint warnings → 0 (admin-панели, `useCallback`)
-- [x] Фаза 4 — `useAudioPlayer`: чистые хелперы → `src/lib/audio/` (constants / curves / device), публичная поверхность хука сохранена ре-экспортами
+- [~] Фаза 4 — вынос чистых хелперов `useAudioPlayer` в `src/lib/audio/` **осознанно пропущен**: движок защищён AGENTS.md, механический перенос кода без поведенческой пользы не оправдывает риск регрессии в этом PR. Кандидат на отдельный PR. В сам хук вошли только фиксы (fallback, iOS)
 - [x] fix(stream) — сегментированный DASH без `<BaseURL>` непроигрываем в `<audio>` → ступень пропускается (Go + worker-парность + тесты)
 - [x] fix(player) — быстрый фолбек качества: hard media error ≠ timeout, без 3×15s ретраев
 - [x] fix(player,ios) — `navigator.audioSession='playback'`, muted-силенсинг слотов там, где iOS игнорирует `audio.volume`
