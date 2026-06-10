@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
 import {
   AlertCircle, CheckCircle2, Copy, ExternalLink, KeyRound, Loader2, Plus,
@@ -120,7 +120,7 @@ export function AdminTidalPanel() {
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
@@ -131,7 +131,7 @@ export function AdminTidalPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -139,7 +139,7 @@ export function AdminTidalPanel() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
-  }, []);
+  }, [load]);
 
   const stats = useMemo(() => {
     if (!accounts) return null;

@@ -114,7 +114,7 @@ export function AdminHealthPanel() {
     { value: 'info', label: 'info' },
   ];
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -125,7 +125,7 @@ export function AdminHealthPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   const loadLogs = useCallback(async () => {
     setLogsLoading(true);
@@ -144,7 +144,7 @@ export function AdminHealthPanel() {
     }
   }, [logLevel, logSource]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadLogs(); }, [loadLogs]);
 
   // Auto-refresh the overview while the admin keeps the tab visible.
@@ -197,7 +197,7 @@ export function AdminHealthPanel() {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [load]);
 
   // Compute the four "checkbox" severities. Layered thresholds:
   // - Tidal:   no enabled accounts = red; any errors = yellow
