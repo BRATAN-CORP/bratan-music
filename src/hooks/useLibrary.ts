@@ -425,59 +425,92 @@ export function useLikedArtists() {
   });
 }
 
-export function useLikeAlbum() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...snapshot }: { id: string } & LibraryAlbumSnapshot) => {
-      if (isOffline()) {
-        await enqueueSync({ kind: 'like-album', albumId: id, snapshot });
-        return;
-      }
-      await api.post(`/library/items/album/${id}`, snapshot);
-    },
-    onMutate: async ({ id }) => {
-      await qc.cancelQueries({ queryKey: ['library', 'album', 'ids'] });
-      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'album', 'ids']);
-      qc.setQueryData<{ ids: string[] }>(['library', 'album', 'ids'], (old) => ({
-        ids: Array.from(new Set([...(old?.ids ?? []), id])),
-      }));
-      return { prev };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['library', 'album', 'ids'], ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['library', 'album'] });
-    },
-  });
+/**
+ * useLikeAlbum / useUnlikeAlbum / useLikeArtist / useUnlikeArtist were
+ * four copies of the same optimistic-mutation block that differed only
+ * in the entity word ("album" / "artist") and the offline sync-queue
+ * action shape. One factory keeps the cache keys, REST paths and
+ * offline replay payloads in lockstep. The TRACK like hooks above stay
+ * separate on purpose: they use different cache keys (`['liked', …]`),
+ * a wider invalidation set (playlists) and their own sync kinds.
+ */
+function makeLibraryItemLikeHooks<S extends object>(
+  entity: 'album' | 'artist',
+  enqueueLike: (id: string, snapshot: S) => Promise<void>,
+  enqueueUnlike: (id: string) => Promise<void>,
+) {
+  const idsKey = ['library', entity, 'ids'];
+  const listKey = ['library', entity];
+  const itemPath = (id: string) => `/library/items/${entity}/${id}`;
+
+  function useLikeItem() {
+    const qc = useQueryClient();
+    return useMutation({
+      mutationFn: async ({ id, ...snapshot }: { id: string } & S) => {
+        if (isOffline()) {
+          await enqueueLike(id, snapshot as unknown as S);
+          return;
+        }
+        await api.post(itemPath(id), snapshot);
+      },
+      onMutate: async ({ id }) => {
+        await qc.cancelQueries({ queryKey: idsKey });
+        const prev = qc.getQueryData<{ ids: string[] }>(idsKey);
+        qc.setQueryData<{ ids: string[] }>(idsKey, (old) => ({
+          ids: Array.from(new Set([...(old?.ids ?? []), id])),
+        }));
+        return { prev };
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(idsKey, ctx.prev);
+      },
+      onSettled: () => {
+        qc.invalidateQueries({ queryKey: listKey });
+      },
+    });
+  }
+
+  function useUnlikeItem() {
+    const qc = useQueryClient();
+    return useMutation({
+      mutationFn: async (id: string) => {
+        if (isOffline()) {
+          await enqueueUnlike(id);
+          return;
+        }
+        await api.delete(itemPath(id));
+      },
+      onMutate: async (id) => {
+        await qc.cancelQueries({ queryKey: idsKey });
+        const prev = qc.getQueryData<{ ids: string[] }>(idsKey);
+        qc.setQueryData<{ ids: string[] }>(idsKey, (old) => ({
+          ids: (old?.ids ?? []).filter((x) => x !== id),
+        }));
+        return { prev };
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(idsKey, ctx.prev);
+      },
+      onSettled: () => {
+        qc.invalidateQueries({ queryKey: listKey });
+      },
+    });
+  }
+
+  return [useLikeItem, useUnlikeItem] as const;
 }
 
-export function useUnlikeAlbum() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (isOffline()) {
-        await enqueueSync({ kind: 'unlike-album', albumId: id });
-        return;
-      }
-      await api.delete(`/library/items/album/${id}`);
-    },
-    onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ['library', 'album', 'ids'] });
-      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'album', 'ids']);
-      qc.setQueryData<{ ids: string[] }>(['library', 'album', 'ids'], (old) => ({
-        ids: (old?.ids ?? []).filter((x) => x !== id),
-      }));
-      return { prev };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['library', 'album', 'ids'], ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['library', 'album'] });
-    },
-  });
-}
+export const [useLikeAlbum, useUnlikeAlbum] = makeLibraryItemLikeHooks<LibraryAlbumSnapshot>(
+  'album',
+  (id, snapshot) => enqueueSync({ kind: 'like-album', albumId: id, snapshot }),
+  (id) => enqueueSync({ kind: 'unlike-album', albumId: id }),
+);
+
+export const [useLikeArtist, useUnlikeArtist] = makeLibraryItemLikeHooks<LibraryArtistSnapshot>(
+  'artist',
+  (id, snapshot) => enqueueSync({ kind: 'like-artist', artistId: id, snapshot }),
+  (id) => enqueueSync({ kind: 'unlike-artist', artistId: id }),
+);
 
 export function useToggleAlbumLike() {
   const { data } = useLikedAlbumIds();
@@ -492,60 +525,6 @@ export function useToggleAlbumLike() {
     },
     pending: like.isPending || unlike.isPending,
   };
-}
-
-export function useLikeArtist() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, ...snapshot }: { id: string } & LibraryArtistSnapshot) => {
-      if (isOffline()) {
-        await enqueueSync({ kind: 'like-artist', artistId: id, snapshot });
-        return;
-      }
-      await api.post(`/library/items/artist/${id}`, snapshot);
-    },
-    onMutate: async ({ id }) => {
-      await qc.cancelQueries({ queryKey: ['library', 'artist', 'ids'] });
-      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'artist', 'ids']);
-      qc.setQueryData<{ ids: string[] }>(['library', 'artist', 'ids'], (old) => ({
-        ids: Array.from(new Set([...(old?.ids ?? []), id])),
-      }));
-      return { prev };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['library', 'artist', 'ids'], ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['library', 'artist'] });
-    },
-  });
-}
-
-export function useUnlikeArtist() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) => {
-      if (isOffline()) {
-        await enqueueSync({ kind: 'unlike-artist', artistId: id });
-        return;
-      }
-      await api.delete(`/library/items/artist/${id}`);
-    },
-    onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ['library', 'artist', 'ids'] });
-      const prev = qc.getQueryData<{ ids: string[] }>(['library', 'artist', 'ids']);
-      qc.setQueryData<{ ids: string[] }>(['library', 'artist', 'ids'], (old) => ({
-        ids: (old?.ids ?? []).filter((x) => x !== id),
-      }));
-      return { prev };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(['library', 'artist', 'ids'], ctx.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['library', 'artist'] });
-    },
-  });
 }
 
 export function useToggleArtistLike() {
