@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Upload as UploadIcon, Disc3, User, Heart } from 'lucide-react';
+import { Plus, Upload as UploadIcon, Disc3, User, Heart, FileUp } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { AuthGuard } from '@/components/features/AuthGuard';
 import { PlaylistCard } from '@/components/features/PlaylistCard';
@@ -274,6 +274,19 @@ export function LibraryPage() {
                         form: t(tracksFormKey(uploads?.length ?? 0)),
                       })}
                     </p>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/library/import"
+                  className="group flex items-center gap-4 rounded-[var(--radius-md)] border border-border bg-card px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-border-strong hover:bg-secondary hover:shadow-[var(--shadow-sm)]"
+                >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border bg-background text-[var(--color-accent)] transition-colors group-hover:bg-[var(--color-accent-soft)]">
+                    <FileUp size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{t('library.importEntry')}</p>
+                    <p className="text-xs text-muted-foreground">{t('library.importEntrySubtitle')}</p>
                   </div>
                 </Link>
 
