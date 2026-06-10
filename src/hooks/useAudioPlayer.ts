@@ -2879,15 +2879,23 @@ export function useAnalyserAmplitude(active: boolean, band: AmplitudeBand = 'ful
  *     and ~280ms release, so visible kicks look like flashes rather
  *     than a constantly-on glow.
  *
- * Both signals are bass-band only (30–180 Hz). The hook re-renders at
- * the animation frame rate, matching the cost profile of
- * useAnalyserAmplitude.
+ * Both signals are bass-band only (30–180 Hz).
+ *
+ * Perf fix (iOS jank): this hook used to `setState` on every animation
+ * frame, re-rendering the entire FullscreenPlayer tree at 60 fps while
+ * music played — the single biggest source of dropped frames on mobile
+ * WebKit. It now writes into MotionValues instead (same pattern as
+ * `usePlaybackVisuals` below): the rAF loop updates the values directly
+ * and consumers bind them via `useTransform`, so React never re-renders
+ * on the audio signal at all.
  */
-export function useBassPulse(active: boolean): { amp: number; kick: number } {
-  const [state, setState] = useState({ amp: 0, kick: 0 });
+export function useBassPulse(active: boolean): { amp: MotionValue<number>; kick: MotionValue<number> } {
+  const amp = useMotionValue(0);
+  const kick = useMotionValue(0);
   useEffect(() => {
     if (!active) {
-      setState({ amp: 0, kick: 0 });
+      amp.set(0);
+      kick.set(0);
       return;
     }
     const b = ensureAudioGraph();
@@ -2926,13 +2934,14 @@ export function useBassPulse(active: boolean): { amp: number; kick: number } {
       // exponential decay back toward zero.
       if (target > kickEnv) kickEnv = target;
       else kickEnv = kickEnv + (0 - kickEnv) * (1 - Math.exp(-dt / 280));
-      setState({ amp: smoothed, kick: kickEnv });
+      amp.set(smoothed);
+      kick.set(kickEnv);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [active]);
-  return state;
+  }, [active, amp, kick]);
+  return { amp, kick };
 }
 
 /**
