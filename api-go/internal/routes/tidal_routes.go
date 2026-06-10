@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -118,6 +119,11 @@ func buildSearchResult(raw *tidal.SearchResponse) *tidal.SearchResult {
 		for i := range items {
 			out.Tracks = append(out.Tracks, tidal.MapTrack(&items[i]))
 		}
+		// Collapse catalogue twins (same recording under several ids
+		// via album re-issues) so the search list doesn't show the
+		// same song twice. Keeps ranking, prefers the better-quality
+		// edition.
+		out.Tracks = tidal.DedupeTracksByRecording(out.Tracks)
 		tt := raw.Tracks.TotalNumberOfItems
 		out.TotalTracks = &tt
 	}
@@ -317,7 +323,22 @@ func trackRadio(a *app.App) http.HandlerFunc {
 func trackLyrics(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		lyrics, err := tidalSvc(a).API.GetTrackLyrics(r.Context(), id)
+		svc := tidalSvc(a)
+		lyrics, err := svc.API.GetTrackLyrics(r.Context(), id)
+		if err == nil && lyricsUsable(lyrics) {
+			writeLyricsJSON(w, lyrics)
+			return
+		}
+		// Twin fallback: Tidal often carries the same recording under
+		// several catalogue ids (album re-issues), and only ONE of the
+		// twins has a lyrics record — e.g. 81198969 has lyrics while
+		// its LOW re-issue 225824679 doesn't. Before reporting
+		// "no lyrics", look the recording's twins up via search and
+		// serve the first twin that does have lyrics.
+		if twin := lyricsFromTwin(r.Context(), svc, id); twin != nil {
+			writeLyricsJSON(w, twin)
+			return
+		}
 		if err != nil {
 			httpx.JSON(w, 502, map[string]any{
 				"available": false,
@@ -325,22 +346,82 @@ func trackLyrics(a *app.App) http.HandlerFunc {
 			})
 			return
 		}
-		if lyrics == nil || (lyrics.Lyrics == "" && lyrics.Subtitles == "") {
-			httpx.JSON(w, 200, map[string]any{
-				"available": false,
-			})
-			return
-		}
-		// Match TS worker response shape: frontend reads `available`,
-		// `provider`, `isRightToLeft`, `lyrics`, `subtitles`.
 		httpx.JSON(w, 200, map[string]any{
-			"available":     true,
-			"provider":      nilIfEmpty(lyrics.LyricsProvider),
-			"isRightToLeft": lyrics.IsRightToLeft,
-			"lyrics":        nilIfEmpty(lyrics.Lyrics),
-			"subtitles":     nilIfEmpty(lyrics.Subtitles),
+			"available": false,
 		})
 	}
+}
+
+// lyricsUsable reports whether the upstream lyrics payload actually
+// carries text (Tidal returns empty records for some tracks).
+func lyricsUsable(l *tidal.LyricsRaw) bool {
+	return l != nil && (l.Lyrics != "" || l.Subtitles != "")
+}
+
+// writeLyricsJSON matches the TS worker response shape: frontend reads
+// `available`, `provider`, `isRightToLeft`, `lyrics`, `subtitles`.
+func writeLyricsJSON(w http.ResponseWriter, l *tidal.LyricsRaw) {
+	httpx.JSON(w, 200, map[string]any{
+		"available":     true,
+		"provider":      nilIfEmpty(l.LyricsProvider),
+		"isRightToLeft": l.IsRightToLeft,
+		"lyrics":        nilIfEmpty(l.Lyrics),
+		"subtitles":     nilIfEmpty(l.Subtitles),
+	})
+}
+
+// lyricsFromTwin resolves catalogue twins of the given track (same
+// recording, different catalogue id) and returns the first twin's
+// lyrics record that carries text. Best-effort: any upstream error
+// just means "no fallback found".
+func lyricsFromTwin(ctx context.Context, svc *services.TidalService, id string) *tidal.LyricsRaw {
+	if svc == nil {
+		return nil
+	}
+	raw, err := svc.API.GetTrack(ctx, id)
+	if err != nil || raw == nil {
+		return nil
+	}
+	orig := tidal.MapTrack(raw)
+	if orig.Artist == "" || orig.Title == "" {
+		return nil
+	}
+	res, err := svc.API.Search(ctx, orig.Artist+" "+orig.Title, "TRACKS", 15, 0)
+	if err != nil || res == nil || res.Tracks == nil {
+		return nil
+	}
+	origMeta := tidal.NormalizeForMatch(orig.Artist) + "|" + tidal.NormalizeForMatch(orig.Title)
+	items := tidal.UnwrapBucket[tidal.TrackRaw](res.Tracks)
+	attempts := 0
+	for i := range items {
+		cand := tidal.MapTrack(&items[i])
+		if cand.ID == orig.ID {
+			continue
+		}
+		// A twin is either an exact ISRC match (same recording by
+		// definition) or a metadata match — same normalised artist +
+		// title AND near-identical duration (±2 s) so live takes and
+		// remixes don't sneak in.
+		isrcMatch := orig.ISRC != "" && cand.ISRC != "" && strings.EqualFold(orig.ISRC, cand.ISRC)
+		durDiff := orig.Duration - cand.Duration
+		if durDiff < 0 {
+			durDiff = -durDiff
+		}
+		candMeta := tidal.NormalizeForMatch(cand.Artist) + "|" + tidal.NormalizeForMatch(cand.Title)
+		metaMatch := candMeta == origMeta && durDiff <= 2
+		if !isrcMatch && !metaMatch {
+			continue
+		}
+		// Cap upstream lookups so one lyrics request can't fan out
+		// into a long chain of upstream calls.
+		if attempts++; attempts > 3 {
+			return nil
+		}
+		if l, err := svc.API.GetTrackLyrics(ctx, cand.ID); err == nil && lyricsUsable(l) {
+			return l
+		}
+	}
+	return nil
 }
 
 // ---- albums -----------------------------------------------------------

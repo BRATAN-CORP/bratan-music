@@ -1670,6 +1670,14 @@ export function useAudioPlayer() {
     // scheduled timer.
     const liveRepeat = usePlayerStore.getState().repeat;
     if (liveRepeat === 'one') return;
+    // Bug 5 fix: never auto-crossfade when shuffle is on — the fade
+    // target below is always `queue[idx+1]`, but with shuffle active
+    // the store's `next()` picks a RANDOM track, so the crossfade was
+    // silently overriding shuffle and playing the queue in order.
+    // Let the natural onEnded → next() path advance (hard cut) so the
+    // random pick stays authoritative. Live-read like `repeat` above —
+    // the closure value can be stale from a scheduled timer.
+    if (usePlayerStore.getState().shuffle) return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
     // Bug 4 fix: when repeat='all' and we're at the last track,
@@ -1988,6 +1996,10 @@ export function useAudioPlayer() {
     // Bug 3: skip scheduling when repeat-one — the track loops, no
     // crossfade needed.
     if (repeat === 'one') return;
+    // Bug 5: skip scheduling when shuffle is on — the crossfade target
+    // is `queue[idx+1]`, which would override the store's random pick
+    // (see the matching guard inside `startCrossfade`).
+    if (usePlayerStore.getState().shuffle) return;
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     if (idx < 0) return;
     // Bug 4: wrap to first track when repeat='all' and at end of queue.
