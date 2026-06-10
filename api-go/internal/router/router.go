@@ -81,6 +81,7 @@ func Build(a *app.App) http.Handler {
 	r.Route("/playlists", routes.Playlists(a))
 	r.Route("/library", routes.Library(a))
 	r.Route("/uploads", routes.Uploads(a))
+	r.Route("/import", routes.Import(a))
 	r.Route("/webhook", routes.Webhook(a))
 	r.Route("/admin", routes.Admin(a))
 	r.Route("/explore", routes.Explore(a))

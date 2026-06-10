@@ -36,6 +36,7 @@ type TrackRaw struct {
 	AllowStreaming bool        `json:"allowStreaming,omitempty"`
 	AudioQuality   string      `json:"audioQuality,omitempty"`
 	AudioModes     []string    `json:"audioModes,omitempty"`
+	ISRC           string      `json:"isrc,omitempty"`
 	Artist         *ArtistMin  `json:"artist,omitempty"`
 	Artists        []ArtistMin `json:"artists,omitempty"`
 	Album          *AlbumMin   `json:"album,omitempty"`
@@ -106,17 +107,17 @@ type SearchResponse struct {
 // from worker/src/services/tidal/TidalApi.ts:TidalPlaylistRaw. Only
 // the fields the frontend renders are listed.
 type PlaylistRaw struct {
-	UUID            string  `json:"uuid"`
-	Title           string  `json:"title"`
-	Description     *string `json:"description,omitempty"`
-	Type            string  `json:"type,omitempty"`
-	URL             string  `json:"url,omitempty"`
-	Image           *string `json:"image,omitempty"`
-	SquareImage     *string `json:"squareImage,omitempty"`
-	Duration        int     `json:"duration,omitempty"`
-	NumberOfTracks  int     `json:"numberOfTracks,omitempty"`
-	NumberOfVideos  int     `json:"numberOfVideos,omitempty"`
-	Creator         *struct {
+	UUID           string  `json:"uuid"`
+	Title          string  `json:"title"`
+	Description    *string `json:"description,omitempty"`
+	Type           string  `json:"type,omitempty"`
+	URL            string  `json:"url,omitempty"`
+	Image          *string `json:"image,omitempty"`
+	SquareImage    *string `json:"squareImage,omitempty"`
+	Duration       int     `json:"duration,omitempty"`
+	NumberOfTracks int     `json:"numberOfTracks,omitempty"`
+	NumberOfVideos int     `json:"numberOfVideos,omitempty"`
+	Creator        *struct {
 		ID   int64  `json:"id,omitempty"`
 		Name string `json:"name,omitempty"`
 	} `json:"creator,omitempty"`
