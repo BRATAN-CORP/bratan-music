@@ -60,6 +60,10 @@ type Track struct {
 	CoverVideoURL string      `json:"coverVideoUrl,omitempty"`
 	Explicit      bool        `json:"explicit"`
 	Quality       string      `json:"quality,omitempty"`
+	// ISRC identifies the underlying recording across catalogue
+	// twins (album re-issues / region variants of the same track).
+	// Drives recording-level dedupe and the lyrics twin-fallback.
+	ISRC string `json:"isrc,omitempty"`
 }
 
 // Album is the app-level album shape (matches worker/types/music.ts).
@@ -204,6 +208,7 @@ func MapTrack(raw *TrackRaw) Track {
 		Duration: raw.Duration,
 		Explicit: raw.Explicit,
 		Quality:  raw.AudioQuality,
+		ISRC:     raw.ISRC,
 	}
 	if mainArtist != nil {
 		t.ArtistID = strconv.FormatInt(mainArtist.ID, 10)
