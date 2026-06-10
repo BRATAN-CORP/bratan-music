@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, API_BASE } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { Track } from '@/types';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 export interface UploadTrack extends Track {
   rawId: string;

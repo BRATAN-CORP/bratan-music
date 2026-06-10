@@ -2,38 +2,7 @@ import { useCallback } from 'react';
 import { usePlayerStore, type PlaybackContext } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
 import { primeAudioForPlay, prefetchStreamUrl } from '@/hooks/useAudioPlayer';
-import type { Track } from '@/types';
-
-/** Minimal subset the player store accepts via setTrack(). Pages and lists
- * pass richer Track objects; we narrow to the shape the store stores so
- * callers don't have to know which fields the persist middleware keeps. */
-type PlayableTrack = Pick<
-  Track,
-  'id' | 'title' | 'artist' | 'duration'
-> &
-  Partial<Pick<Track, 'artistId' | 'artists' | 'albumId' | 'coverUrl' | 'coverVideoUrl' | 'explicit' | 'source'>>;
-
-function toPlayable(t: PlayableTrack): PlayableTrack {
-  return {
-    id: t.id,
-    title: t.title,
-    artist: t.artist,
-    artistId: t.artistId,
-    artists: t.artists,
-    albumId: t.albumId,
-    coverUrl: t.coverUrl,
-    coverVideoUrl: t.coverVideoUrl,
-    duration: t.duration,
-    // Carry the source-provider Explicit flag through so the player
-    // surfaces (mini-player, mobile dock, fullscreen) render the
-    // `<ExplicitBadge>` consistently with the row the user clicked.
-    // Without this the player track came back with explicit=undefined
-    // even when the source row had it set, and the mini-player E badge
-    // disappeared "on some tracks but not others".
-    explicit: t.explicit,
-    source: t.source,
-  };
-}
+import { toPlayerTrack, type PlayableTrack } from '@/lib/playerTrack';
 
 /** Single-track playback sync. Anywhere we render a "play this track"
  * affordance — track rows, search hits, queue items, fullscreen header —
@@ -84,8 +53,8 @@ export function useTrackPlayback(trackId: string) {
         { id: track.id },
         useSettingsStore.getState().tidalQuality,
       );
-      setTrack(toPlayable(track));
-      if (queue) setQueue(queue.map(toPlayable));
+      setTrack(toPlayerTrack(track));
+      if (queue) setQueue(queue.map(toPlayerTrack));
       if (context) setPlaybackContext(context);
     },
     [currentId, togglePlay, setTrack, setQueue, setPlaybackContext],
@@ -137,8 +106,8 @@ export function useCollectionPlayback(trackIds: string[], context?: PlaybackCont
         { id: first.id },
         useSettingsStore.getState().tidalQuality,
       );
-      setTrack(toPlayable(first));
-      setQueue(tracks.map(toPlayable));
+      setTrack(toPlayerTrack(first));
+      setQueue(tracks.map(toPlayerTrack));
       if (context) setPlaybackContext(context);
     },
     [isCollectionActive, togglePlay, setTrack, setQueue, setPlaybackContext, context],

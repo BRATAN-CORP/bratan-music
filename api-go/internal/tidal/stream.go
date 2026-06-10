@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -204,11 +205,16 @@ func (a *API) getPlaybackInfo(ctx context.Context, trackID, quality string) (*Pl
 	return &p, nil
 }
 
+// errSegmentedDash marks a DASH manifest that only carries a
+// SegmentTemplate (no <BaseURL>) — not playable through a plain
+// <audio> element, so the quality ladder must skip this rung.
+var errSegmentedDash = errors.New("dash manifest: segmented (SegmentTemplate) — нет прямого URL, ступень пропущена")
+
 var (
-	dashBaseURLRe         = regexp.MustCompile(`(?s)<BaseURL[^>]*>([^<]+)</BaseURL>`)
-	dashInitRe            = regexp.MustCompile(`initialization="([^"]+)"`)
-	dashCodecsRe          = regexp.MustCompile(`codecs="([^"]+)"`)
-	dashContentProtectRe  = regexp.MustCompile(`(?i)<ContentProtection\b`)
+	dashBaseURLRe        = regexp.MustCompile(`(?s)<BaseURL[^>]*>([^<]+)</BaseURL>`)
+	dashInitRe           = regexp.MustCompile(`initialization="([^"]+)"`)
+	dashCodecsRe         = regexp.MustCompile(`codecs="([^"]+)"`)
+	dashContentProtectRe = regexp.MustCompile(`(?i)<ContentProtection\b`)
 )
 
 // decodeManifest mirrors worker/TidalWeb.ts decodeManifest. Handles both
@@ -254,14 +260,17 @@ func decodeManifest(manifestB64, mimeType string) (*BtsManifest, error) {
 				EncryptionType: encType,
 			}, nil
 		}
-		if m := dashInitRe.FindStringSubmatch(xml); m != nil {
-			initURL := strings.ReplaceAll(m[1], "$RepresentationID$", "audio")
-			return &BtsManifest{
-				URLs:           []string{initURL},
-				Codecs:         codec,
-				MimeType:       "audio/mp4",
-				EncryptionType: encType,
-			}, nil
+		if dashInitRe.MatchString(xml) {
+			// Segmented DASH (SegmentTemplate / initialization without a
+			// <BaseURL>): the init URL alone is just the fMP4 header.
+			// Feeding it to a bare <audio> element either errors out or
+			// "plays" 0 s of silence — playing the real stream would need
+			// MSE on the client. Until the player grows an MSE path this
+			// rung is UNPLAYABLE: report it as such so the resolver falls
+			// one quality rung down on the server in one round-trip
+			// (previously the broken init-URL leaked to the frontend and
+			// the client-side ladder masked it with ~45 s of retries).
+			return nil, errSegmentedDash
 		}
 		return nil, fmt.Errorf("dash manifest: no BaseURL/initialization found")
 	}

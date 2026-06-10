@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePlayerStore } from '@/store/player';
 import { Button } from '@/components/ui/Button';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
-import { api } from '@/lib/api';
+import { api, API_BASE } from '@/lib/api';
 import { useT } from '@/i18n';
 import { toast } from '@/store/toast';
 
@@ -15,7 +15,6 @@ interface TrackOverrideModalProps {
   trackTitle: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 interface OverrideStatus {
   exists: boolean;

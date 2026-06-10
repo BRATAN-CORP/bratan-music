@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -79,16 +80,16 @@ func TestDecodeManifestDASHBaseURL(t *testing.T) {
 	}
 }
 
-func TestDecodeManifestDASHTemplate(t *testing.T) {
+func TestDecodeManifestDASHTemplateIsUnplayable(t *testing.T) {
+	// Segmented DASH (SegmentTemplate, no <BaseURL>) has no URL a plain
+	// <audio> element can play. decodeManifest must report the rung as
+	// unplayable so the resolver falls to the next quality — returning
+	// the init-segment URL here was the root cause of "макс. качество
+	// не играет" (#492–#494 чинили симптомы поверх).
 	mpd := `<MPD><SegmentTemplate initialization="https://fa.audio.tidal.com/$RepresentationID$/init.mp4" ` +
 		`codecs="flac"/></MPD>`
-	m, err := decodeManifest(b64(mpd), "application/dash+xml")
-	if err != nil {
-		t.Fatalf("dash template decode: %v", err)
-	}
-	want := "https://fa.audio.tidal.com/audio/init.mp4"
-	if len(m.URLs) != 1 || m.URLs[0] != want {
-		t.Fatalf("bad template url: %#v want %q", m.URLs, want)
+	if _, err := decodeManifest(b64(mpd), "application/dash+xml"); !errors.Is(err, errSegmentedDash) {
+		t.Fatalf("want errSegmentedDash, got %v", err)
 	}
 }
 

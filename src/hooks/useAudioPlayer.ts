@@ -4,7 +4,7 @@ import { usePlayerStore } from '@/store/player';
 import { useSettingsStore } from '@/store/settings';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, API_BASE } from '@/lib/api';
 import {
   getCachedStreamUrl,
   getOrStartInFlight,
@@ -15,9 +15,18 @@ import { useT } from '@/i18n';
 
 import type { TidalQuality } from '@/store/settings';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'https://bratan-music-api.bratan-corp.workers.dev';
 
 const QUALITY_FALLBACK_ORDER: TidalQuality[] = ['HI_RES_LOSSLESS', 'LOSSLESS', 'HIGH', 'LOW'];
+
+/** Hard ceiling for a single load attempt before we assume the CDN /
+ *  proxy hung and move on (see tryLoadSrc). */
+const STREAM_LOAD_TIMEOUT_MS = 15_000;
+/** Extra attempts for TIMEOUTS only. Hard media errors never retry —
+ *  the browser already gave a definitive verdict for that URL. The
+ *  previous shape (2 retries for everything + 300/600 ms backoffs)
+ *  made an unplayable top rung cost up to ~46 s before the ladder
+ *  even tried the next quality — users read that as «трек не играет». */
+const MAX_TIMEOUT_RETRIES = 1;
 
 function getNextFallbackQuality(current: string): TidalQuality | null {
   const idx = QUALITY_FALLBACK_ORDER.indexOf(current as TidalQuality);
@@ -275,10 +284,49 @@ function makeAudio(): HTMLAudioElement {
   return a;
 }
 
+/**
+ * Ask iOS for a media-playback audio session (Safari 16.4+, on by
+ * default since iOS 17). Without it WebKit may treat the page as
+ * "ambient" audio: playback can stop on the mute switch and is far
+ * more likely to be killed when the screen locks. A one-line opt-in,
+ * silently ignored everywhere else.
+ */
+function requestPlaybackAudioSession(): void {
+  if (typeof navigator === 'undefined') return;
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  try {
+    if (nav.audioSession) nav.audioSession.type = 'playback';
+  } catch { /* older WebKit throws on unknown session types — fine */ }
+}
+
+/**
+ * iPhone Safari silently IGNORES writes to `HTMLMediaElement.volume`
+ * (it's hardware-button-only by design; reads always return 1). That
+ * turns every volume-based path — user mute, inactive-slot silencing,
+ * graph-less crossfade ramps — into a no-op. Probe once: write a
+ * value, read it back. When writes don't stick, callers degrade to
+ * the boolean `muted` flag (which iOS does honour).
+ */
+let volumeWritable: boolean | null = null;
+function isVolumeWritable(audio: HTMLAudioElement): boolean {
+  if (volumeWritable !== null) return volumeWritable;
+  try {
+    const prev = audio.volume;
+    const probe = prev > 0.5 ? prev - 0.25 : prev + 0.25;
+    audio.volume = probe;
+    volumeWritable = Math.abs(audio.volume - probe) < 0.01;
+    audio.volume = prev;
+  } catch {
+    volumeWritable = false;
+  }
+  return volumeWritable;
+}
+
 function getBundle(): AudioBundle {
   if (!bundle) {
     const audioA = makeAudio();
     const audioB = makeAudio();
+    requestPlaybackAudioSession();
     // Some mobile browsers (notably iOS Safari) are stricter about
     // background playback for detached <audio> elements than for ones
     // attached to the DOM. Mounting them off-screen lets the same
@@ -648,7 +696,16 @@ function setSlotGain(slot: Slot, value: number) {
   }
   // We always also nudge .volume so the inactive slot is silent even when the
   // AudioContext path failed to come up (e.g. CORS retry path with no graph).
-  b.audios[slot].volume = v;
+  const audio = b.audios[slot];
+  audio.volume = v;
+  // iPhone: the volume write above is silently ignored, so a zero gain
+  // (user mute, inactive crossfade slot) used to leave the element at
+  // FULL loudness — both tracks audible at once during transitions and
+  // a mute button that did nothing. Mirror zero/non-zero onto `muted`,
+  // which iOS honours. No-op on platforms where volume writes stick.
+  if (!isVolumeWritable(audio)) {
+    audio.muted = v === 0;
+  }
 }
 
 /** Per-slot active ramp tracking. The previous implementation used a single
@@ -785,6 +842,16 @@ function rampGain(
   // exactly even if a tick is missed at the very end of the window
   // due to throttling.
   if (!ctx || !gainNode) {
+    if (!isVolumeWritable(audio)) {
+      // iPhone: volume writes are ignored, so a timed volume "fade" is
+      // pure theatre — previously BOTH crossfade slots played at full
+      // loudness for the whole fade window («каша» вместо кроссфейда).
+      // Degrade to a clean hard cut: land the END state via `muted`
+      // right away and resolve, so the crossfade orchestration promotes
+      // the incoming slot immediately instead of overlapping audio.
+      audio.muted = toV === 0;
+      return Promise.resolve();
+    }
     audio.volume = fromV;
     return new Promise((resolve) => {
       const start = performance.now();
@@ -1001,7 +1068,7 @@ export function useAudioPlayer() {
    *  while the rest of the load pipeline runs and `audio.play()` is
    *  called below; if the stream actually fails to decode mid-track the
    *  `error` handler still triggers the quality fallback chain. */
-  const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<boolean> => {
+  const tryLoadSrc = (audio: HTMLAudioElement, url: string): Promise<'ok' | 'error' | 'timeout'> => {
     return new Promise((resolve) => {
       let settled = false;
       const cleanup = () => {
@@ -1011,13 +1078,18 @@ export function useAudioPlayer() {
         audio.removeEventListener('loadeddata', onReady);
         audio.removeEventListener('error', onErr);
       };
-      const onReady = () => { cleanup(); resolve(true); };
-      const onErr = () => { cleanup(); resolve(false); };
+      const onReady = () => { cleanup(); resolve('ok'); };
+      // A media `error` event is DEFINITIVE: the browser has already
+      // fetched (or failed to fetch) the URL and told us it can't play
+      // it. Distinguishing it from a timeout lets the caller fall to
+      // the next quality rung immediately instead of burning retries
+      // on a URL that will never start.
+      const onErr = () => { cleanup(); resolve('error'); };
       // Safety timeout: if the CDN streams bytes too slowly or the
       // audio proxy hangs, neither loadeddata nor error fires. Without
       // this the quality-fallback loop stalls forever and the user sees
       // a permanent spinner instead of the track at a lower quality.
-      const timer = setTimeout(() => { cleanup(); resolve(false); }, 15_000);
+      const timer = setTimeout(() => { cleanup(); resolve('timeout'); }, STREAM_LOAD_TIMEOUT_MS);
       audio.addEventListener('loadeddata', onReady, { once: true });
       audio.addEventListener('error', onErr, { once: true });
       audio.src = url;
@@ -1091,7 +1163,6 @@ export function useAudioPlayer() {
     let url: string | null = null;
     let loaded = false;
     let paywall = false;
-    const MAX_RETRIES = 2;
 
     // Offline-first: if the track has been saved into IndexedDB,
     // play directly from the local Blob via `URL.createObjectURL`
@@ -1107,7 +1178,7 @@ export function useAudioPlayer() {
         const blobUrl = URL.createObjectURL(offline.audioBlob);
         b.slotBlobUrls[slot] = blobUrl;
         audio.crossOrigin = null;
-        const ok = await tryLoadSrc(audio, blobUrl);
+        const ok = (await tryLoadSrc(audio, blobUrl)) === 'ok';
         if (loadingRef.current !== trackId) return;
         if (ok) {
           // LRU bookkeeping for a future eviction policy — and a hint
@@ -1147,13 +1218,15 @@ export function useAudioPlayer() {
       if (url) {
         corsRetried[slot] = false;
         audio.crossOrigin = 'anonymous';
-        // Try loading and auto-retry up to MAX_RETRIES for transient errors.
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        // Try loading. Hard media errors are definitive → fall to the
+        // next rung right away; only timeouts get one more shot.
+        for (let attempt = 0; attempt <= MAX_TIMEOUT_RETRIES; attempt++) {
           if (loadingRef.current !== trackId) return;
-          const ok = await tryLoadSrc(audio, url);
-          if (ok) { loaded = true; break; }
-          if (attempt < MAX_RETRIES) {
-            await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+          const res = await tryLoadSrc(audio, url);
+          if (res === 'ok') { loaded = true; break; }
+          if (res === 'error') break;
+          if (attempt < MAX_TIMEOUT_RETRIES) {
+            await new Promise((r) => setTimeout(r, 300));
           }
         }
         if (loaded) break;
@@ -1194,7 +1267,7 @@ export function useAudioPlayer() {
         if (freshRes.url && loadingRef.current === trackId) {
           corsRetried[slot] = false;
           audio.crossOrigin = 'anonymous';
-          const ok = await tryLoadSrc(audio, freshRes.url);
+          const ok = (await tryLoadSrc(audio, freshRes.url)) === 'ok';
           if (ok) {
             loaded = true;
             currentQualityRef.current = freshRes.quality ?? effectiveQuality;

@@ -127,59 +127,11 @@ services:
       retries: 10
     logging: *default-logging
 
-  # ── API (bratan-music worker on Node.js) ──────────────
-  api:
-    image: ghcr.io/bratan-corp/bratan-music-api:latest
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    environment:
-      PORT: "3000"
-      DATABASE_URL: "postgresql://bratan:${POSTGRES_PASSWORD}@postgres:5432/bratan_music"
-      REDIS_URL: "redis://redis:6379"
-      MINIO_ENDPOINT: "minio"
-      MINIO_PORT: "9000"
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      MINIO_BUCKET: "tracks"
-      DOMAIN: ${DOMAIN}
-      APP_URL: "https://${DOMAIN}"
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY}
-      TIDAL_CLIENT_ID: ${TIDAL_CLIENT_ID:-}
-      TIDAL_CLIENT_SECRET: ${TIDAL_CLIENT_SECRET:-}
-      TIDAL_SESSION_TOKEN: ${TIDAL_SESSION_TOKEN:-}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME}
-      TELEGRAM_ADMIN_IDS: ${TELEGRAM_ADMIN_IDS}
-      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET}
-      BREVO_API_KEY: ${BREVO_API_KEY:-}
-      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-noreply.bratanmusic@gmail.com}
-      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-BRATAN MUSIC}
-      YANDEX_API_TOKEN: ${YANDEX_API_TOKEN:-}
-      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}
-      YANDEX_MODEL_URI: ${YANDEX_MODEL_URI:-}
-      NODE_ENV: production
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging: *default-logging
-
-  # ── API (Go rewrite, in progress) ─────────────────────
-  # Runs alongside the legacy TS `api` container on port 3001 so the
-  # Go binary can be verified end-to-end without flipping production
-  # over to it. Once feature parity is reached the `api` service above
-  # will be deleted, nginx will switch to `api-go:3000`, and the
-  # worker/ directory will be dropped (see feat/go-backend-rewrite).
+  # ── API (Go) — единственный бекенд ────────────────────
+  # Порт TS-воркера на Go завершён (см. api-go/STATUS.md): nginx,
+  # cron и Telegram-webhook живут здесь. Legacy TS `api`-контейнер
+  # удалён из эксплуатации; rollback теперь = git revert этого
+  # коммита + redeploy (старые образы остаются в GHCR).
   api-go:
     image: ghcr.io/bratan-corp/bratan-music-api-go:latest
     restart: unless-stopped
@@ -229,12 +181,10 @@ services:
     image: ghcr.io/bratan-corp/bratan-music-web:latest
     restart: unless-stopped
     depends_on:
-      # CUT OVER to Go (api-go:3000). nginx resolves the upstream host at
-      # startup, so it must wait until api-go is HEALTHY (image-level
-      # HEALTHCHECK on /health) — otherwise a not-yet-ready upstream makes
-      # nginx fail to start and the origin returns 521. TS `api` stays
-      # running (compose starts all services) as a one-line rollback:
-      # revert these proxy_pass lines back to api:3000 if Go misbehaves.
+      # nginx resolves the upstream host (api-go:3000) at startup, so it
+      # must wait until api-go is HEALTHY (image-level HEALTHCHECK on
+      # /health) — otherwise a not-yet-ready upstream makes nginx fail
+      # to start and the origin returns 521.
       api-go:
         condition: service_healthy
     ports:
