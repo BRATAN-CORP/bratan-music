@@ -21,6 +21,22 @@ function pushHistory(history: string[], oldId: string | undefined, newId: string
   return next;
 }
 
+/**
+ * Random queue index for shuffle that never lands on `exclude` (the
+ * currently-playing / just-rejected slot). The naive
+ * `Math.floor(Math.random() * length)` could re-pick the CURRENT
+ * track, which the user heard as "shuffle played the same song twice
+ * in a row". Offset trick: draw from `length - 1` slots and shift the
+ * draw up by one when it sits at or past the excluded index — uniform
+ * over all other slots, no re-roll loop.
+ */
+function pickShuffleIndex(length: number, exclude: number): number {
+  if (length <= 1) return 0;
+  if (exclude < 0 || exclude >= length) return Math.floor(Math.random() * length);
+  const idx = Math.floor(Math.random() * (length - 1));
+  return idx >= exclude ? idx + 1 : idx;
+}
+
 interface Track {
   id: string;
   title: string;
@@ -372,7 +388,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     for (let attempts = 0; attempts < queue.length; attempts++) {
       let nextIdx: number;
       if (shuffle) {
-        nextIdx = Math.floor(Math.random() * queue.length);
+        nextIdx = pickShuffleIndex(queue.length, probe);
       } else if (probe < queue.length - 1) {
         nextIdx = probe + 1;
       } else if (repeat === 'all') {
@@ -410,7 +426,7 @@ export const usePlayerStore = create<PlayerState>()(persist((set, get) => ({
     for (let attempts = 0; attempts < queue.length; attempts++) {
       let nextIdx: number;
       if (shuffle) {
-        nextIdx = Math.floor(Math.random() * queue.length);
+        nextIdx = pickShuffleIndex(queue.length, probe);
       } else if (probe < queue.length - 1) {
         nextIdx = probe + 1;
       } else {
