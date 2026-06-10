@@ -284,10 +284,49 @@ function makeAudio(): HTMLAudioElement {
   return a;
 }
 
+/**
+ * Ask iOS for a media-playback audio session (Safari 16.4+, on by
+ * default since iOS 17). Without it WebKit may treat the page as
+ * "ambient" audio: playback can stop on the mute switch and is far
+ * more likely to be killed when the screen locks. A one-line opt-in,
+ * silently ignored everywhere else.
+ */
+function requestPlaybackAudioSession(): void {
+  if (typeof navigator === 'undefined') return;
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  try {
+    if (nav.audioSession) nav.audioSession.type = 'playback';
+  } catch { /* older WebKit throws on unknown session types — fine */ }
+}
+
+/**
+ * iPhone Safari silently IGNORES writes to `HTMLMediaElement.volume`
+ * (it's hardware-button-only by design; reads always return 1). That
+ * turns every volume-based path — user mute, inactive-slot silencing,
+ * graph-less crossfade ramps — into a no-op. Probe once: write a
+ * value, read it back. When writes don't stick, callers degrade to
+ * the boolean `muted` flag (which iOS does honour).
+ */
+let volumeWritable: boolean | null = null;
+function isVolumeWritable(audio: HTMLAudioElement): boolean {
+  if (volumeWritable !== null) return volumeWritable;
+  try {
+    const prev = audio.volume;
+    const probe = prev > 0.5 ? prev - 0.25 : prev + 0.25;
+    audio.volume = probe;
+    volumeWritable = Math.abs(audio.volume - probe) < 0.01;
+    audio.volume = prev;
+  } catch {
+    volumeWritable = false;
+  }
+  return volumeWritable;
+}
+
 function getBundle(): AudioBundle {
   if (!bundle) {
     const audioA = makeAudio();
     const audioB = makeAudio();
+    requestPlaybackAudioSession();
     // Some mobile browsers (notably iOS Safari) are stricter about
     // background playback for detached <audio> elements than for ones
     // attached to the DOM. Mounting them off-screen lets the same
@@ -657,7 +696,16 @@ function setSlotGain(slot: Slot, value: number) {
   }
   // We always also nudge .volume so the inactive slot is silent even when the
   // AudioContext path failed to come up (e.g. CORS retry path with no graph).
-  b.audios[slot].volume = v;
+  const audio = b.audios[slot];
+  audio.volume = v;
+  // iPhone: the volume write above is silently ignored, so a zero gain
+  // (user mute, inactive crossfade slot) used to leave the element at
+  // FULL loudness — both tracks audible at once during transitions and
+  // a mute button that did nothing. Mirror zero/non-zero onto `muted`,
+  // which iOS honours. No-op on platforms where volume writes stick.
+  if (!isVolumeWritable(audio)) {
+    audio.muted = v === 0;
+  }
 }
 
 /** Per-slot active ramp tracking. The previous implementation used a single
@@ -794,6 +842,16 @@ function rampGain(
   // exactly even if a tick is missed at the very end of the window
   // due to throttling.
   if (!ctx || !gainNode) {
+    if (!isVolumeWritable(audio)) {
+      // iPhone: volume writes are ignored, so a timed volume "fade" is
+      // pure theatre — previously BOTH crossfade slots played at full
+      // loudness for the whole fade window («каша» вместо кроссфейда).
+      // Degrade to a clean hard cut: land the END state via `muted`
+      // right away and resolve, so the crossfade orchestration promotes
+      // the incoming slot immediately instead of overlapping audio.
+      audio.muted = toV === 0;
+      return Promise.resolve();
+    }
     audio.volume = fromV;
     return new Promise((resolve) => {
       const start = performance.now();
