@@ -126,8 +126,21 @@ export function FullscreenPlayer() {
   // `flash` decays in ~280ms so even quiet passages with the occasional
   // soft thump still register visibly.
   const { amp, kick } = useBassPulse(Boolean(fullscreen) && isPlaying);
-  const pulse = Math.min(1, Math.sqrt(Math.max(0, amp - 0.05) * 4));
-  const flash = Math.min(1, kick);
+  // Perf fix (iOS jank): `amp`/`kick` are MotionValues now — the bass
+  // signal no longer re-renders this (very large) component at 60 fps.
+  // `pulse`/`flash` are derived MotionValues with the same curves the
+  // old render-time math used; the halo binds them via its `style`
+  // prop so all per-frame work happens inside motion's frame loop.
+  const pulse = useTransform(amp, (a) => Math.min(1, Math.sqrt(Math.max(0, a - 0.05) * 4)));
+  const flash = useTransform(kick, (k) => Math.min(1, k));
+  // Halo breathing — transform + opacity ONLY. The previous version
+  // also animated `filter: blur(56→120px)` per frame, which forces
+  // mobile WebKit to re-rasterize a huge blurred layer on every frame
+  // (the main reason fullscreen felt "рвато" on iOS). The blur is now
+  // a constant mid-range value; scale + opacity carry the breathing
+  // and both run entirely on the compositor.
+  const haloScale = useTransform([pulse, flash], ([p = 0, f = 0]: number[]) => 1.02 + p * 0.18 + f * 0.10);
+  const haloOpacity = useTransform([pulse, flash], ([p = 0, f = 0]: number[]) => 0.35 + p * 0.45 + f * 0.20);
   const { isLiked, toggle } = useToggleLike();
   const liked = currentTrack ? isLiked(currentTrack.id) : false;
   const isAuthed = useAuthStore((s) => Boolean(s.user));
@@ -485,7 +498,12 @@ export function FullscreenPlayer() {
                 mass: 0.9,
               });
             }}
-            style={{ y: sheetY, opacity: sheetOpacity, scale: sheetScale }}
+            // `willChange: transform` pre-promotes the sheet to its own
+            // compositor layer so the very first frame of the
+            // swipe-down-to-dismiss gesture doesn't pay a rasterization
+            // hitch on mobile WebKit (the sheet drags over the blurred
+            // ambience backdrop, which is expensive to re-composite).
+            style={{ y: sheetY, opacity: sheetOpacity, scale: sheetScale, willChange: 'transform' }}
           >
 
           <div
@@ -990,6 +1008,13 @@ export function FullscreenPlayer() {
                   WebkitUserSelect: 'none',
                   userSelect: 'none',
                   WebkitUserDrag: 'none',
+                  // Pre-promote the cover to its own compositor layer.
+                  // It is dragged over multiple blurred layers (ambience
+                  // backdrop + halo); without this, mobile WebKit only
+                  // promotes it on the first dragged frame and that
+                  // rasterization showed up as a hitch at the start of
+                  // every horizontal cover swipe on iOS.
+                  willChange: 'transform',
                 } as React.CSSProperties
               }
               onDragStart={(e) => {
@@ -1008,22 +1033,20 @@ export function FullscreenPlayer() {
                 <motion.div
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -z-10"
-                  animate={reduce ? undefined : {
-                    // Halo around the cover — "обложка-дубликат”
-                    // bass-driven glow. Wider dynamic range than
-                    // before (the user said the previous numbers
-                    // looked "в одном положении"): scale breathes
-                    // 1.02→1.30 instead of 1.04→1.16, opacity 0.35→0.92,
-                    // blur 56→120px. `flash` adds a short brightness +
-                    // scale kick on every detected bass transient so
-                    // even within a sustained bass line you see the
-                    // halo react beat-by-beat.
-                    scale: 1.02 + pulse * 0.18 + flash * 0.10,
-                    opacity: 0.35 + pulse * 0.45 + flash * 0.20,
-                    filter: `blur(${56 + pulse * 64}px) saturate(${1.2 + pulse * 0.5 + flash * 0.4})`,
-                  }}
-                  transition={{ type: 'spring', stiffness: 110, damping: 20, mass: 0.6 }}
+                  // Halo around the cover — "обложка-дубликат” bass-driven
+                  // glow. Scale breathes 1.02→1.30, opacity 0.35→0.92;
+                  // `flash` adds a short kick on every detected bass
+                  // transient. Perf fix (iOS): the bass signal now drives
+                  // MotionValues bound via `style` (no React re-renders,
+                  // no per-frame spring re-targeting), and the blur is a
+                  // CONSTANT — animating `filter: blur(56→120px)` forced
+                  // mobile WebKit to re-rasterize this huge layer every
+                  // frame. Smoothing lives in `useBassPulse`'s envelopes,
+                  // so the motion still feels spring-like.
                   style={{
+                    scale: reduce ? undefined : haloScale,
+                    opacity: reduce ? undefined : haloOpacity,
+                    filter: 'blur(88px) saturate(1.5)',
                     // No backgroundImage here — the cover-specific halo
                     // image lives in the inner AnimatePresence layer
                     // below so it can crossfade with the cover. This
