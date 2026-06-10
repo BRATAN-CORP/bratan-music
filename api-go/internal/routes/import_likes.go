@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -265,15 +264,11 @@ func matchImportRow(ctx context.Context, search importSearchFn, row importRow) (
 	return &t, nil
 }
 
-var importNoiseRe = regexp.MustCompile(`\((?:feat|ft|with|prod)[^)]*\)|\[[^\]]*\]|[^\p{L}\p{N} ]+`)
-
-// normalizeForMatch lowercases, strips feat-credits / bracketed
-// qualifiers / punctuation and collapses whitespace, so «Трек (feat. X)»
-// and "трек" compare equal.
+// normalizeForMatch — thin alias over the shared tidal.NormalizeForMatch
+// (moved into the tidal package so the recording-level dedupe and the
+// lyrics twin-fallback reuse the exact same normalisation).
 func normalizeForMatch(s string) string {
-	s = strings.ToLower(s)
-	s = importNoiseRe.ReplaceAllString(s, " ")
-	return strings.Join(strings.Fields(s), " ")
+	return tidal.NormalizeForMatch(s)
 }
 
 func scoreImportCandidate(row importRow, cand *tidal.TrackRaw) int {

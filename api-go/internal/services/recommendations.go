@@ -619,18 +619,13 @@ func trackKey(t tidal.Track) string {
 	return src + ":" + t.ID
 }
 
+// dedupTracks collapses duplicates at the *recording* level, not just
+// by catalogue id — Tidal carries the same recording under multiple
+// ids (album re-issues, e.g. "XO Tour Llif3" as 81198969 AND
+// 225824679), and id-only dedupe let both twins through into waves /
+// recs / daily mixes, which the user saw as "повторы треков".
 func dedupTracks(in []tidal.Track) []tidal.Track {
-	out := make([]tidal.Track, 0, len(in))
-	seen := map[string]bool{}
-	for _, t := range in {
-		k := trackKey(t)
-		if seen[k] {
-			continue
-		}
-		seen[k] = true
-		out = append(out, t)
-	}
-	return out
+	return tidal.DedupeTracksByRecording(in)
 }
 
 func uniqueStrings(in []string) []string {
