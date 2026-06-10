@@ -35,6 +35,10 @@ export function AddToPlaylistDialog({ open, onClose, track }: AddToPlaylistDialo
       setShowCreate(false);
       setName('');
       setAddedId(null);
+      // Also drop any stale per-playlist error — without this the red
+      // error row from a failed add was still rendered the next time
+      // the dialog opened (for a completely different track).
+      setErrorId(null);
     }
   }, [open]);
 
