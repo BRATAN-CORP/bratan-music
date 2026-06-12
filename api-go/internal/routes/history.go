@@ -93,16 +93,24 @@ func historyRecent(a *app.App) http.HandlerFunc {
 			limit = 20
 		}
 		rows, err := a.DB.Query(r.Context(),
-			`SELECT DISTINCT ON (track_id)
-			        track_id, source, COALESCE(artist_id,''), COALESCE(artist_name,''),
-			        title, COALESCE(album_id,''), COALESCE(cover_url,''), duration,
-			        played_at, COALESCE(artists_json,''),
-			        MAX(explicit) OVER (PARTITION BY track_id) AS exp
-			   FROM play_history
-			  WHERE user_id = $1
-			  ORDER BY track_id, played_at DESC
+			`SELECT track_id, source, artist_id, artist_name,
+			        title, album_id, cover_url, duration,
+			        played_at, artists_json, exp
+			   FROM (
+			     SELECT DISTINCT ON (track_id)
+			            track_id, source, COALESCE(artist_id,'') AS artist_id,
+			            COALESCE(artist_name,'') AS artist_name,
+			            title, COALESCE(album_id,'') AS album_id,
+			            COALESCE(cover_url,'') AS cover_url, duration,
+			            played_at, COALESCE(artists_json,'') AS artists_json,
+			            MAX(explicit) OVER (PARTITION BY track_id) AS exp
+			       FROM play_history
+			      WHERE user_id = $1
+			      ORDER BY track_id, played_at DESC
+			   ) sub
+			  ORDER BY played_at DESC
 			  LIMIT $2`,
-			httpx.UserID(r), limit*4)
+			httpx.UserID(r), limit)
 		if err != nil {
 			httpx.Internal(w, err)
 			return
@@ -163,9 +171,7 @@ func historyRecent(a *app.App) http.HandlerFunc {
 			}
 			out = append(out, item)
 		}
-		if len(out) > limit {
-			out = out[:limit]
-		}
+		// LIMIT is on the outer query, no Go-side trim needed.
 		httpx.JSON(w, http.StatusOK, map[string]any{"items": out})
 	}
 }
