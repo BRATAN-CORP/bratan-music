@@ -231,7 +231,7 @@ func addPlaylistTrack(a *app.App) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		uid := httpx.UserID(r)
 		var body struct {
-			TrackID  string `json:"track_id"`
+			TrackID  string `json:"trackId"`
 			Source   string `json:"source"`
 			Snapshot string `json:"snapshot"`
 		}

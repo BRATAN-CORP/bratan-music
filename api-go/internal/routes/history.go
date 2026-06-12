@@ -16,19 +16,25 @@ import (
 // everything they need without a Tidal round-trip.
 func historyPlay(a *app.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// The frontend (usePlayHistoryLogger → logPlay) sends camelCase
+		// fields matching the PlayLogPayload TS interface. The previous
+		// snake_case tags silently rejected every request because
+		// BindJSON uses DisallowUnknownFields — the camelCase keys were
+		// "unknown" to the decoder, yielding 400 + the swallowed error
+		// in logPlay meant no history was ever recorded.
 		var body struct {
-			TrackID         string `json:"track_id"`
-			Source          string `json:"source"`
-			ArtistID        string `json:"artist_id"`
-			ArtistName      string `json:"artist_name"`
-			Title           string `json:"title"`
-			AlbumID         string `json:"album_id"`
-			CoverURL        string `json:"cover_url"`
-			Duration        int    `json:"duration"`
-			ListenedSeconds int    `json:"listened_seconds"`
-			Completed       bool   `json:"completed"`
-			ArtistsJSON     string `json:"artists_json"`
-			Explicit        bool   `json:"explicit"`
+			TrackID         string                   `json:"trackId"`
+			Source          string                   `json:"source"`
+			ArtistID        string                   `json:"artistId"`
+			ArtistName      string                   `json:"artistName"`
+			Title           string                   `json:"title"`
+			AlbumID         string                   `json:"albumId"`
+			CoverURL        string                   `json:"coverUrl"`
+			Duration        int                      `json:"duration"`
+			ListenedSeconds int                      `json:"listenedSeconds"`
+			Completed       bool                     `json:"completed"`
+			Artists         []map[string]interface{} `json:"artists"`
+			Explicit        bool                     `json:"explicit"`
 		}
 		if err := httpx.BindJSON(r, &body, 8*1024); err != nil {
 			httpx.Err(w, http.StatusBadRequest, "Некорректное тело")
@@ -49,6 +55,13 @@ func historyPlay(a *app.App) http.HandlerFunc {
 		if body.Explicit {
 			explicitInt = 1
 		}
+		// Serialize the artists array to JSON string for DB storage.
+		artistsJSON := ""
+		if len(body.Artists) > 0 {
+			if b, err := json.Marshal(body.Artists); err == nil {
+				artistsJSON = string(b)
+			}
+		}
 		_, err := a.DB.Exec(r.Context(),
 			`INSERT INTO play_history (
 			   user_id, track_id, source, artist_id, artist_name, title,
@@ -59,7 +72,7 @@ func historyPlay(a *app.App) http.HandlerFunc {
 			body.ArtistID, body.ArtistName, body.Title,
 			body.AlbumID, body.CoverURL, body.Duration, body.ListenedSeconds,
 			completedInt, time.Now().UnixMilli(),
-			body.ArtistsJSON, explicitInt,
+			artistsJSON, explicitInt,
 		)
 		if err != nil {
 			httpx.Internal(w, err)
