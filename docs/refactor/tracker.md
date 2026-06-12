@@ -105,6 +105,23 @@
 
 ## Live status
 
+- 2026-06-12T13:25Z — **Glow animation, admin card width, play history
+  recording (PR #500).** Three bug fixes:
+  (A) Fullscreen glow snapped on pause/resume — `useBassPulse` was
+  refactored from `useState` to MotionValues in PR #495, but
+  `amp.set(0)` on deactivation had no transition. Added a rAF decay
+  loop (~500ms, tau=180ms) for smooth fade-out.
+  (B) Admin user detail card was capped at 384px (`max-w-sm`) — added
+  `max-w-none` to `panelClassName` in `AdminUserDetailDialog.tsx`.
+  (C) Play history not recording since Go rewrite — `historyPlay`
+  struct had snake_case JSON tags (`track_id`, `artist_id`, etc.) but
+  frontend sends camelCase (`trackId`, `artistId`). `BindJSON` with
+  `DisallowUnknownFields()` rejected every request as 400; `logPlay`
+  swallowed errors silently. Fixed tags to camelCase, changed
+  `ArtistsJSON string` to `Artists []map[string]interface{}` with JSON
+  marshaling for DB storage. Same `track_id`→`trackId` fix in
+  `playlists.go` add-track handler.
+
 - 2026-06-09T17:15Z — **Quality cache poisoning fix.** Root cause:
   `legacyResolveStream` cached resolved quality with a 30-day TTL
   (`qualityCacheTTL`). When higher quality rungs failed during
