@@ -2933,6 +2933,9 @@ export function useBassPulse(active: boolean): { amp: MotionValue<number>; kick:
     let baseline = 0;
     let kickEnv = 0;
     let lastAt = performance.now();
+    // Fade-in gain: ramps 0→1 over ~400ms so the glow doesn't snap on
+    // instantly when playback resumes (mirrors the fade-out decay above).
+    let fadeIn = 0;
     const tick = (now: number) => {
       analyser.getByteFrequencyData(buffer);
       let sum = 0;
@@ -2944,6 +2947,9 @@ export function useBassPulse(active: boolean): { amp: MotionValue<number>; kick:
       const raw = count > 0 ? sum / count : 0;
       const dt = Math.min(64, now - lastAt);
       lastAt = now;
+      // Ramp fade-in gain toward 1 (tau ≈ 180ms → ~95% after 500ms).
+      fadeIn = fadeIn + (1 - fadeIn) * (1 - Math.exp(-dt / 180));
+      if (fadeIn > 0.995) fadeIn = 1;
       // Asymmetric smoothing for the visible amplitude.
       const attackTau = raw > smoothed ? 25 : 90;
       smoothed = smoothed + (raw - smoothed) * (1 - Math.exp(-dt / attackTau));
@@ -2956,8 +2962,8 @@ export function useBassPulse(active: boolean): { amp: MotionValue<number>; kick:
       // exponential decay back toward zero.
       if (target > kickEnv) kickEnv = target;
       else kickEnv = kickEnv + (0 - kickEnv) * (1 - Math.exp(-dt / 280));
-      amp.set(smoothed);
-      kick.set(kickEnv);
+      amp.set(smoothed * fadeIn);
+      kick.set(kickEnv * fadeIn);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
