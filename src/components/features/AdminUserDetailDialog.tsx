@@ -52,7 +52,7 @@ export function AdminUserDetailDialog({ userId, meId, onClose }: AdminUserDetail
       // identity / actions / storage / library / listening / sub /
       // sessions sections were all stacked. 960 keeps it modal on
       // desktop while still leaving the page readable behind it.
-      panelClassName="flex w-[min(1120px,calc(100vw-24px))] flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
+      panelClassName="flex w-[min(1120px,calc(100vw-24px))] max-w-none flex-col border border-border bg-card max-h-[calc(100dvh-7rem-var(--pwa-safe-bottom))]"
     >
       <DetailHeader
         title={t('admin.detail.title')}

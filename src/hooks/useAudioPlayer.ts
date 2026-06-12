@@ -2902,9 +2902,23 @@ export function useBassPulse(active: boolean): { amp: MotionValue<number>; kick:
   const kick = useMotionValue(0);
   useEffect(() => {
     if (!active) {
-      amp.set(0);
-      kick.set(0);
-      return;
+      // Smooth fade-out: decay amp/kick to 0 over ~500ms instead of
+      // snapping instantly. Without this the halo blinks off on pause
+      // and blinks back on resume — jarring on the fullscreen player.
+      let raf = 0;
+      let lastAt = performance.now();
+      const fade = (now: number) => {
+        const dt = Math.min(64, now - lastAt);
+        lastAt = now;
+        const decay = 1 - Math.exp(-dt / 180);
+        const a = amp.get() * (1 - decay);
+        const k = kick.get() * (1 - decay);
+        amp.set(a < 0.005 ? 0 : a);
+        kick.set(k < 0.005 ? 0 : k);
+        if (a > 0.005 || k > 0.005) raf = requestAnimationFrame(fade);
+      };
+      raf = requestAnimationFrame(fade);
+      return () => cancelAnimationFrame(raf);
     }
     const b = ensureAudioGraph();
     if (!b.analyser || !b.ctx) return;
